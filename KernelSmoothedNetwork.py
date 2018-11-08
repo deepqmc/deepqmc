@@ -22,9 +22,12 @@ class Net(nn.Module):
         self.Lambda=nn.Parameter(torch.Tensor([0]))#eigenvalue
         self.alpha=nn.Parameter(torch.Tensor([1.]))#coefficient for decay
         self.beta=nn.Parameter(torch.Tensor([1.]))#coefficient for decay
-
-    def forward(self,x):
-        return self.NN(x)*torch.exp(-F.softplus(torch.abs(self.alpha*x)-self.beta))
+	
+    def forward(self,x,n=100):
+        eps = np.array([np.random.normal(0,0.001,n) for i in range(len(x))])
+        y = (x[:,None,:] + torch.from_numpy(eps).type(torch.FloatTensor)[:,:,None]).view(len(x)*n,1)
+        res = torch.sum(self.NN(y).view(len(x),n,1),dim=1)
+        return res*torch.exp(-F.softplus(torch.abs(self.alpha*x)-self.beta))
 
 
 def laplacian(net,x,h=0.01):
@@ -44,7 +47,7 @@ def analytical_gs(r,a_0=1):   #actually a=0.52*10**(-10))
 	return 2*a_0**(-3/2)*np.exp(-r/a_0)
 	
 LR=1e-3
-BATCH_SIZE=256
+BATCH_SIZE=64
 
 net = Net()
 params = [p for p in net.parameters()]
@@ -52,16 +55,16 @@ params = [p for p in net.parameters()]
 opt = torch.optim.Adam(params, lr=LR)
 
 plotlist=[] # initialise plotlist
-plotlist.append(make_plot(net)) #append untrained network
+#plotlist.append(make_plot(net)) #append untrained network
 
 
 def Hamiltonian(net,x,l=0):
     return -laplacian(net,x)+(-2*torch.abs(1/x)+(l*(l+1))/x**2)*net(x)
 
 
-for epochs in range(5):
+for epochs in range(8):
     start = time.time()
-    for step in range(20000):
+    for step in range(50):
 
         X_0 = (torch.rand(BATCH_SIZE,1,requires_grad=True))*5+0.1 
 	#create smples in interval [0.1,5.1)
