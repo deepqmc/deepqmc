@@ -22,11 +22,14 @@ class Net(nn.Module):
         self.Lambda=nn.Parameter(torch.Tensor([0]))#eigenvalue
         self.alpha=nn.Parameter(torch.Tensor([1.]))#coefficient for decay
         self.beta=nn.Parameter(torch.Tensor([1.]))#coefficient for decay
-	
-    def forward(self,x,n=100):
-        eps = np.array([np.random.normal(0,0.001,n) for i in range(len(x))])
-        y = (x[:,None,:] + torch.from_numpy(eps).type(torch.FloatTensor)[:,:,None]).view(len(x)*n,1)
-        res = torch.sum(self.NN(y).view(len(x),n,1),dim=1)
+
+    def forward(self,x,n=10):
+        eps = np.array([np.random.normal(0,0.01,n) for i in range(len(x))])
+        neg = np.ones(2*n)
+        neg[1::2] = -1
+        eps = np.repeat(eps,2,axis=1)*neg[None,:]
+        y = (x[:,None,:] + torch.from_numpy(eps).type(torch.FloatTensor)[:,:,None]).view(len(x)*2*n,1)
+        res = torch.sum(self.NN(y).view(len(x),2*n,1),dim=1)
         return res*torch.exp(-F.softplus(torch.abs(self.alpha*x)-self.beta))
 
 
@@ -45,7 +48,7 @@ def make_plot(net):
 
 def analytical_gs(r,a_0=1):   #actually a=0.52*10**(-10))
 	return 2*a_0**(-3/2)*np.exp(-r/a_0)
-	
+
 LR=1e-3
 BATCH_SIZE=64
 
@@ -64,15 +67,15 @@ def Hamiltonian(net,x,l=0):
 
 for epochs in range(8):
     start = time.time()
-    for step in range(50):
+    for step in range(150):
 
-        X_0 = (torch.rand(BATCH_SIZE,1,requires_grad=True))*5+0.1 
+        X_0 = (torch.rand(BATCH_SIZE,1,requires_grad=True))*5+0.1
 	#create smples in interval [0.1,5.1)
 
-        loss = torch.mean((Hamiltonian(net,X_0)-net.Lambda*net(X_0))**2/net(X_0)**2)  
+        loss = torch.mean((Hamiltonian(net,X_0)-net.Lambda*net(X_0))**2/net(X_0)**2)
 	#variance loss
 
-        #loss = torch.mean(net(X_0)*Hamiltonian(net,X_0)/net(X_0)**2) 
+        #loss = torch.mean(net(X_0)*Hamiltonian(net,X_0)/net(X_0)**2)
 	#variational principle
 
         #Psi=net(X_0)
