@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable,grad
 import torch.nn.functional as F
+import copy
 
 class Net(nn.Module):
     def __init__(self):
@@ -46,56 +47,66 @@ def analytical_gs(r,a_0=1):   #actually a=0.52*10**(-10))
 LR=1e-3
 BATCH_SIZE=256
 
-net = Net()
-params = [p for p in net.parameters()]
-#del params[0]
-opt = torch.optim.Adam(params, lr=LR)
+net_all = Net()
+
 
 plotlist=[] # initialise plotlist
-plotlist.append(make_plot(net)) #append untrained network
+#plotlist.append(make_plot(net)) #append untrained network
 
 
 def Hamiltonian(net,x,l=0):
     return -laplacian(net,x)+(-2*torch.abs(1/x)+(l*(l+1))/x**2)*net(x)
 
+net = copy.deepcopy(net_all)
+methods=["variance loss","variational_lap","variational_grad"]
+for method in methods:
+	net = copy.deepcopy(net_all)
+	params = [p for p in net.parameters()]
+	#del params[0]
+	opt = torch.optim.Adam(params, lr=LR)
 
-for epochs in range(5):
-    start = time.time()
-    for step in range(20000):
+	for epochs in range(1):
+		start = time.time()	
+		for step in range(500):
+			X_0 = (torch.rand(BATCH_SIZE,1,requires_grad=True))*5+0.1 
+			#create samples in interval [0.1,5.1)
 
-        X_0 = (torch.rand(BATCH_SIZE,1,requires_grad=True))*5+0.1 
-	#create smples in interval [0.1,5.1)
-
-        loss = torch.mean((Hamiltonian(net,X_0)-net.Lambda*net(X_0))**2/net(X_0)**2)  
-	#variance loss
-
-        #loss = torch.mean(net(X_0)*Hamiltonian(net,X_0)/net(X_0)**2) 
-	#variational principle
-
-        #Psi=net(X_0)
-        #loss = torch.mean(0.5*grad(Psi,X_0,create_graph=True,grad_outputs=torch.ones_like(Psi))[0]**2+net(X_0)*-1/X_0*net(X_0))/torch.mean(net(X_0)**2)
-
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
-
-    print('e # '+str(epochs+1)+'_____________________________________')
-    print('It took', time.time()-start, 'seconds.')
-    print('Lambda = '+str(net.Lambda[0].item()))
-    print('Alpha  = '+str(net.alpha[0].item()))
-    print('Beta   = '+str(net.beta[0].item()))
+			if method=="variance loss":
+				Psi=net(X_0)
+				loss = torch.mean((Hamiltonian(net,X_0)-net.Lambda*Psi)**2/Psi**2)  
 
 
-    plotlist.append(make_plot(net))
+			elif method=="variational_lap":
+				Psi=net(X_0)
+				loss = torch.mean(Psi*Hamiltonian(net,X_0)/Psi**2) 
+
+
+			elif method=="variational_grad":
+				Psi=net(X_0)
+				loss = torch.mean((0.5*grad(Psi,X_0,create_graph=True,grad_outputs=torch.ones_like(Psi))[0]**2+Psi*-1/X_0*Psi)/Psi**2)
+
+			opt.zero_grad()
+			loss.backward()
+			opt.step()
+
+		print('e # '+str(epochs+1)+'_____________________________________')
+		print('It took', time.time()-start, 'seconds.')
+		print('Lambda = '+str(net.Lambda[0].item()))
+		print('Alpha  = '+str(net.alpha[0].item()))
+		print('Beta   = '+str(net.beta[0].item()))
+
+
+		plotlist.append(make_plot(net))
 
 
 plt.figure(figsize=(12,8))
 x_plot=np.linspace(0.1,10,100)
 for i,Psi in enumerate(plotlist):
-    if not (i+1)==len(plotlist):
-        plt.plot(x_plot,Psi,label="Episode: "+str(i),ls=':',linewidth=1.)
-    else:
-        plt.plot(x_plot,Psi,label="Episode: "+str(i))
+    plt.plot(x_plot,Psi,label=methods[i])
+    #if not (i+1)==len(plotlist):
+    #    plt.plot(x_plot,Psi,label="Episode: "+str(i),ls=':',linewidth=1.)
+    #else:
+    #    plt.plot(x_plot,Psi,label="Episode: "+str(i))
 plt.plot(x_plot,x_plot*analytical_gs(x_plot)/max(x_plot*analytical_gs(x_plot)),label='True WF')
 plt.legend(loc='upper right')
 plt.show()
