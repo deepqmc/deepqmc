@@ -42,13 +42,15 @@ class Net(nn.Module):
 
 LR=1e-3
 BATCH_SIZE=128
-H=1
+H=0.1
 
 net = Net()
 params = [p for p in net.parameters()]
 opt = torch.optim.Adam(params, lr=LR)
 
 steps=500
+
+pre = a_0/2*10**12
 for epoch in range(5):
 	start = time.time()
 	for step in range(steps):
@@ -68,18 +70,19 @@ for epoch in range(5):
 		Psi_1_n = net(X-eps_1)
 		Psi_1   = (Psi_1_p + Psi_1_n)/2
 
-		Lap_0 = (hb*10**12)**2/(2*mu)*eps_0*(grad(Psi_0_p,X,create_graph=True,grad_outputs=torch.ones_like(Psi_0_p))[0]-grad(Psi_0_n,X,create_graph=True,grad_outputs=torch.ones_like(Psi_1_p))[0])/(4*H**2)
-		Lap_1 = (hb*10**12)**2/(2*mu)*eps_1*(grad(Psi_1_p,X,create_graph=True,grad_outputs=torch.ones_like(Psi_0_n))[0]-grad(Psi_1_n,X,create_graph=True,grad_outputs=torch.ones_like(Psi_1_n))[0])/(4*H**2)
+		Lap_0 = eps_0*(grad(Psi_0_p,X,create_graph=True,grad_outputs=torch.ones_like(Psi_0_p))[0]-grad(Psi_0_n,X,create_graph=True,grad_outputs=torch.ones_like(Psi_1_p))[0])/(4*H**2)
+		Lap_1 = eps_1*(grad(Psi_1_p,X,create_graph=True,grad_outputs=torch.ones_like(Psi_0_n))[0]-grad(Psi_1_n,X,create_graph=True,grad_outputs=torch.ones_like(Psi_1_n))[0])/(4*H**2)
 
 		Lap_0 = torch.sum(Lap_0,dim=1)
 		Lap_1 = torch.sum(Lap_1,dim=1)
 		r     = torch.norm(X,dim=1)
-		V     = - 1/r * qe**2/(4*pi*e_0)*10**12
+		V     = - 1/r 
 
 		J     = torch.mean((-Lap_0 + (V-net.Lambda)*Psi_0)/qe*(-Lap_1+ (V-net.Lambda)*Psi_1)/qe/(Psi_0*Psi_1))
 		print("_____________________________________")
-		print(V/qe)
-		print(torch.mean((-Lap_0 + (V-net.Lambda)*Psi_0)/qe).item())
+		print(grad(Psi_0_p,X,create_graph=True,grad_outputs=torch.ones_like(Psi_0_p))[0])
+		#print(Lap_0)
+		#print(torch.mean((-Lap_0 + (V-net.Lambda)*Psi_0)/qe).item())
 
 		opt.zero_grad()
 		J.backward()
@@ -88,6 +91,7 @@ for epoch in range(5):
 	print('e # '+str(epoch+1)+'_____________________________________')
 	print('It took', time.time()-start, 'seconds.')
 	print('Lambda = '+str(net.Lambda[0].item()))
+	print('Energy = '+str(net.Lambda[0].item()*(qe**2/(4*pi*e_0)*10**12)))
 	print('Alpha  = '+str(net.alpha[0].item()))
 	print('Beta   = '+str(net.beta[0].item()))
 
