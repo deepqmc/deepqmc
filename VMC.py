@@ -8,6 +8,7 @@ from torch.autograd import Variable,grad
 import torch.nn.functional as F
 import copy
 
+cmap=plt.get_cmap("plasma")
 
 
 def metropolis(distribution,interval,startpoint,maxstepsize,steps,presteps=0):
@@ -84,8 +85,8 @@ class Net(nn.Module):
 
 LR=1e-3
 BATCH_SIZE=2056
-steps=10000
-epochs=14
+steps=1000
+epochs=16
 
 
 H=0.2 #smoothing
@@ -96,7 +97,7 @@ R2    = torch.tensor([-1.5,0,0]).type(torch.FloatTensor)
 R     = torch.norm(R1-R2)
 
 
-gd=6
+gd=6 #number of gridpoints for evaluating symmetry loss
 G=torch.meshgrid([torch.linspace(-5,5,gd),torch.linspace(-5,5,gd),torch.linspace(-5,5,gd)])
 x=G[0].flatten().view(-1,1)
 y=G[1].flatten().view(-1,1)
@@ -110,18 +111,27 @@ S_left.requires_grad=True
 S_right.requires_grad=True
 
 
-for test in range(5):
+for test in range(1):
 
 	net = Net()
 	params = [p for p in net.parameters()]
-	#del params[0]
-	del params[1]
-	del params[1]
+	del params[0]
+	#del params[1]
+	#del params[1]
 	opt = torch.optim.Adam(params, lr=LR)
 	
-	
 	for epoch in range(epochs):
+	
 		print("epoch " +str(1+epoch)+" of "+str(epochs)+":")
+		if (epoch)%4 == 1:
+			print("symmetrize")
+		elif (epoch)%4 == 3:
+			print("minimize energy")
+		else:
+			print("minimize variance of energy")
+			
+		print("Progress {:2.0%}".format(step /steps), end="\r")
+		
 		start = time.time()
 		
 		# with torch.no_grad():
@@ -130,17 +140,38 @@ for test in range(5):
 		#X_all.requires_grad = True
 		
 		for step in range(steps):
-			if (epoch+1)%3 == 0:
+			if (epoch)%4 == 1:
 			
 				symloss=torch.mean(((net(S_left)-net(S_right))/(net(S_left)+net(S_right)))**2)
 			
-			
 				J     = symloss
-			
 				
+			elif (epoch)%4 == 3:
+			
+				X = (torch.rand(BATCH_SIZE,3,requires_grad=True)-0.5)*2*5
+				eps_0 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
+				eps_1 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
+
+				Psi_0_p = net(X+eps_0)
+				Psi_0_n = net(X-eps_0)
+				Psi_0   = (Psi_0_p + Psi_0_n)/2
+				grad_0  = grad(Psi_0,X,create_graph=True,grad_outputs=torch.ones_like(Psi_0))[0]
+
+				Psi_1_p = net(X+eps_1)
+				Psi_1_n = net(X-eps_1)
+				Psi_1   = (Psi_1_p + Psi_1_n)/2
+				grad_1  = grad(Psi_1,X,create_graph=True,grad_outputs=torch.ones_like(Psi_1))[0]
+				
+				r1    = torch.norm(X-R1,dim=1)
+				r2    = torch.norm(X-R2,dim=1)
+				V     = -1/r1 - 1/r2 #+ 1/R  # is constant offset that does not influence the fitting procedure
+				
+				gradloss = torch.sum(0.5*torch.sum(grad_0*grad_1,dim=1)+Psi_0*V*Psi_1)/torch.sum(Psi_0*Psi_1)
+			
+				J = gradloss
 			
 			else:
-			
+				
 				# X = X_all[indx[BATCH_SIZE*step:(BATCH_SIZE*(step+1))]]
 				# Psi_t = Psi_t_all[indx[BATCH_SIZE*step:BATCH_SIZE*(step+1)]]
 			
@@ -171,9 +202,10 @@ for test in range(5):
 				r2    = torch.norm(X-R2,dim=1)
 				V     = -1/r1 - 1/r2 #+ 1/R
 			
-				loss  = torch.mean(((-Lap_0/Psi_0 + V-net.Lambda)*(-Lap_1/Psi_1+ V-net.Lambda)))
+				laploss  = torch.mean(((-Lap_0/Psi_0 + V-net.Lambda)*(-Lap_1/Psi_1+ V-net.Lambda)))
+				
+				J = laploss
 			 
-				J = loss
 			# w     = Psi_0*Psi_1/Psi_t**2
 			# J     = torch.sum(w*(-Lap_0/Psi_0 + (V-net.Lambda))*(-Lap_1/Psi_1+ (V-net.Lambda)))/torch.sum(Psi_0*Psi_1/Psi_t)
 			
@@ -183,7 +215,7 @@ for test in range(5):
 			opt.step()
 			
 			
-			print("Progress {:2.0%}".format(step /steps), end="\r")
+
 
 			
 			
@@ -210,18 +242,18 @@ for test in range(5):
 		print('\n')
 
 
-		#X_plot = torch.from_numpy(np.swapaxes(np.array([np.linspace(-6,6,100),np.zeros(100),np.zeros(100)]).reshape(3,100),0,1)).type(torch.FloatTensor)
-		#Psi_plot = net(X_plot).detach().numpy()
-		#if Psi_plot[np.argmax(np.abs(Psi_plot))] < 0:
-		#	Psi_plot *= -1
-		#plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(epoch),ls=':')
+		X_plot = torch.from_numpy(np.swapaxes(np.array([np.linspace(-6,6,100),np.zeros(100),np.zeros(100)]).reshape(3,100),0,1)).type(torch.FloatTensor)
+		Psi_plot = net(X_plot).detach().numpy()
+		if Psi_plot[np.argmax(np.abs(Psi_plot))] < 0:
+			Psi_plot *= -1
+		plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E.item()*27.2,2)),ls=':',color=cmap(epoch/epochs))
 
 
 	X_plot = torch.from_numpy(np.swapaxes(np.array([np.linspace(-6,6,100),np.zeros(100),np.zeros(100)]).reshape(3,100),0,1)).type(torch.FloatTensor)
 	Psi_plot = net(X_plot).detach().numpy()
 	if Psi_plot[np.argmax(np.abs(Psi_plot))] < 0:
 		Psi_plot *= -1
-	plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E.item()*27.2,2)))
+	plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E.item()*27.2,2)),color='r')
 
 
 plt.axvline(R1.numpy()[0],ls=':',color='k')

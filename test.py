@@ -8,6 +8,15 @@ import torch.nn as nn
 from torch.autograd import Variable,grad
 import torch.nn.functional as F
 
+from matplotlib import cm
+from Combined import *
+
+
+
+fit()
+
+exit(0)
+
 
 G=torch.meshgrid([torch.linspace(-1,1,4),torch.linspace(-1,1,4),torch.linspace(-1,1,4)])
 x=G[0].flatten().view(-1,1)
