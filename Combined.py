@@ -226,7 +226,7 @@ def fit(batch_size=2056,steps=150,epochs=32,R1=1.5,R2=-1.5):
 
 	plt.title("batch_size = "+str(batch_size)+", steps = "+str(steps)+", epochs = "+str(epochs)+", R = "+str(R.item()))
 	plt.legend(loc="lower center",bbox_to_anchor=[0.5, - 0.4], ncol=8)
-	plt.savefig(datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")+".png")
+	plt.savefig(datetime.datetime.now().strftime("%I%M%p%B%d%Y")+".png")
 	
 	return (net,E)
 
