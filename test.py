@@ -13,7 +13,7 @@ from Combined import *
 
 
 
-fit()
+print(np.sum([1,2,3]))
 
 exit(0)
 
