@@ -22,8 +22,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 					torch.nn.ReLU(),
 					torch.nn.Linear(64, 64),
 					torch.nn.ReLU(),
-					#torch.nn.Linear(64, 64),
-					#torch.nn.ReLU(),
+					torch.nn.Linear(64, 64),
+					torch.nn.ReLU(),
 					torch.nn.Linear(64, 1)
 					)
 			self.Lambda=nn.Parameter(torch.Tensor([-1]))	#eigenvalue
@@ -104,10 +104,10 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			elif losses[epoch%len(losses)] == "energy":
 
 				#X = (torch.rand(batch_size,3,requires_grad=True)-0.5)*2*5
-				
+
 				X = torch.from_numpy(np.random.normal(0,1,(batch_size,3))*3/2*R.numpy()).type(torch.FloatTensor)
 				X.requires_grad = True
-				
+
 				eps_0 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
 				eps_1 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
 
@@ -201,7 +201,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 		print('\n')
 
 
-		if E > (savenet[1]+5*(1-epoch/epochs)**2):
+		if E > (savenet[1]+5*(1-epoch/epochs)):#**2):
 			print("undo step as E_new = "+str(E)+" E_old = "+str(savenet[1]))
 
 			Psi_plot = net(X_plot).detach().numpy()

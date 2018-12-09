@@ -1,17 +1,28 @@
 from Combined import *
 
-E_var=[]
+E_var1=[]
+E_var2=[]
+E_var3=[]
+
 E_en=[]
 E_varen=[]
 
 dist = [0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2.0]
 
 for R in dist:
-    E_var.append(fit(steps=2000,epochs=20,losses=["variance"],R1=R,R2=-R)[1])
-    E_en.append(fit(steps=2000,epochs=20,losses=["energy"],R1=R,R2=-R)[1])
-    
+    E_var1.append(fit(batch_size=2000,steps=5000,epochs=10,losses=["variance"],R1=R,R2=-R)[1])
+    E_var2.append(fit(batch_size=1000,steps=10000,epochs=10,losses=["variance"],R1=R,R2=-R)[1])
+    E_var3.append(fit(batch_size=500,steps=20000,epochs=10,losses=["variance"],R1=R,R2=-R)[1])
+    #E_en.append(fit(steps=2000,epochs=20,losses=["energy"],R1=R,R2=-R)[1])
+
 plt.figure()
+plt.plot(dist,E_var1,label="bs2000")
+plt.plot(dist,E_var2,label="bs1000")
+plt.plot(dist,E_var3,label="bs500")
+#plt.plot(dist,E_en)
+plt.savefig("testlosses0912.png")
+E_var=np.mean(np.array([E_var1,E_var2,E_var3]),axis=0)
 plt.plot(dist,E_var)
-plt.plot(dist,E_en)
-plt.savefig("testlosses.png")
+plt.savefig("testlossesmean0912.png")
+
 #plt.show()
