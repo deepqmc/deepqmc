@@ -22,13 +22,13 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 					torch.nn.ReLU(),
 					torch.nn.Linear(64, 64),
 					torch.nn.ReLU(),
-					torch.nn.Linear(64, 64),
-					torch.nn.ReLU(),
+					#torch.nn.Linear(64, 64),
+					#torch.nn.ReLU(),
 					torch.nn.Linear(64, 1)
 					)
 			self.Lambda=nn.Parameter(torch.Tensor([-1]))	#eigenvalue
 			self.alpha=nn.Parameter(torch.Tensor([1]))#coefficient for decay
-			self.beta=nn.Parameter(torch.Tensor([5]))#coefficient for decay
+			self.beta=nn.Parameter(torch.Tensor([8]))#coefficient for decay
 		def forward(self,x):
 			d = torch.zeros(len(x),2)
 			d[:,0] = torch.norm(x-R1,dim=1)
@@ -62,12 +62,13 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 
 	net = Net()
+	net.alpha=nn.Parameter(torch.Tensor([5/R]))
 	params = [p for p in net.parameters()]
-	del params[0]
+	#del params[0]
 	#del params[1]
 	#del params[1]
 	opt = torch.optim.Adam(params, lr=LR)
-	E = 0
+	E = 100
 
 
 	plt.figure(figsize=(12,9))
@@ -76,6 +77,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 		savenet = (copy.deepcopy(net),E)
 
+
 		print("epoch " +str(1+epoch)+" of "+str(epochs)+":")
 		if losses[epoch%len(losses)] == "symmetry":
 			print("symmetrize")
@@ -83,6 +85,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			print("minimize energy")
 		elif losses[epoch%len(losses)] == "variance":
 			print("minimize variance of energy")
+		else:
+			print("loss error, check losses:"+str(losses[epoch%len(losses)] ))
 		start = time.time()
 
 		# with torch.no_grad():
@@ -99,7 +103,11 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 			elif losses[epoch%len(losses)] == "energy":
 
-				X = (torch.rand(batch_size,3,requires_grad=True)-0.5)*2*5
+				#X = (torch.rand(batch_size,3,requires_grad=True)-0.5)*2*5
+				
+				X = torch.from_numpy(np.random.normal(0,1,(batch_size,3))*3/2*R.numpy()).type(torch.FloatTensor)
+				X.requires_grad = True
+				
 				eps_0 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
 				eps_1 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
 
@@ -126,10 +134,10 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 				# X = X_all[indx[batch_size*step:(batch_size*(step+1))]]
 				# Psi_t = Psi_t_all[indx[batch_size*step:batch_size*(step+1)]]
 
-				X = (torch.rand(batch_size,3,requires_grad=True)-0.5)*2*5
+				#X = (torch.rand(batch_size,3,requires_grad=True)-0.5)*2*5
 
-				#X = torch.from_numpy(np.random.normal(0,0.2,(batch_size,3))).type(torch.FloatTensor)
-				#X.requires_grad = True
+				X = torch.from_numpy(np.random.normal(0,1,(batch_size,3))*3/2*R.numpy()).type(torch.FloatTensor)
+				X.requires_grad = True
 
 				eps_0 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
 				eps_1 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
@@ -170,7 +178,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 
 
-		G=torch.meshgrid([torch.linspace(-5,5,50),torch.linspace(-5,5,50),torch.linspace(-5,5,50)])
+		G=torch.meshgrid([torch.linspace(-7,7,100),torch.linspace(-7,7,100),torch.linspace(-7,7,100)])
 		x=G[0].flatten().view(-1,1)
 		y=G[1].flatten().view(-1,1)
 		z=G[2].flatten().view(-1,1)
@@ -193,7 +201,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 		print('\n')
 
 
-		if E > (savenet[1]+5*(1-epoch/epochs)):
+		if E > (savenet[1]+5*(1-epoch/epochs)**2):
 			print("undo step as E_new = "+str(E)+" E_old = "+str(savenet[1]))
 
 			Psi_plot = net(X_plot).detach().numpy()
@@ -226,6 +234,6 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 	plt.title("batch_size = "+str(batch_size)+", steps = "+str(steps)+", epochs = "+str(epochs)+", R = "+str(R.item())+", losses = "+str(losses))
 	plt.legend(loc="lower center",bbox_to_anchor=[0.5, - 0.4], ncol=8)
-	plt.savefig(datetime.datetime.now().strftime("%I%M%p%B%d%Y")+".png")
+	plt.savefig(datetime.datetime.now().strftime("%B%d%Y%I%M%p")+".png")
 
 	return (net,E)
