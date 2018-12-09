@@ -108,23 +108,26 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 				X = torch.from_numpy(np.random.normal(0,1,(batch_size,3))*3/2*R.numpy()).type(torch.FloatTensor)
 				X.requires_grad = True
 
-				eps_0 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
-				eps_1 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
+				#eps_0 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
+				#eps_1 = torch.from_numpy(np.random.normal(0,H,X.shape)).type(torch.FloatTensor)
 
-				Psi_0_p = net(X+eps_0)
-				Psi_0_n = net(X-eps_0)
-				Psi_0   = (Psi_0_p + Psi_0_n)/2
-				grad_0  = grad(Psi_0,X,create_graph=True,grad_outputs=torch.ones_like(Psi_0))[0]
+				#Psi_0_p = net(X+eps_0)
+				#Psi_0_n = net(X-eps_0)
+				#Psi_0   = (Psi_0_p + Psi_0_n)/2
+				#grad_0  = grad(Psi_0,X,create_graph=True,grad_outputs=torch.ones_like(Psi_0))[0]
 
-				Psi_1_p = net(X+eps_1)
-				Psi_1_n = net(X-eps_1)
-				Psi_1   = (Psi_1_p + Psi_1_n)/2
-				grad_1  = grad(Psi_1,X,create_graph=True,grad_outputs=torch.ones_like(Psi_1))[0]
+				#Psi_1_p = net(X+eps_1)
+				#Psi_1_n = net(X-eps_1)
+				#Psi_1   = (Psi_1_p + Psi_1_n)/2
+				#grad_1  = grad(Psi_1,X,create_graph=True,grad_outputs=torch.ones_like(Psi_1))[0]
 
 				r1    = torch.norm(X-R1,dim=1)
 				r2    = torch.norm(X-R2,dim=1)
 				V     = -1/r1 - 1/r2 #+ 1/R  # is constant offset that does not influence the fitting procedure
 
+				Psi = net(X)
+				grad_X = grad(Psi,X,create_graph=True,grad_outputs=torch.ones_like(Psi))[0]
+				#gradloss = torch.sum(0.5*torch.sum(grad_0*grad_1,dim=1)+Psi_0*V*Psi_1)/torch.sum(Psi_0*Psi_1)
 				gradloss = torch.sum(0.5*torch.sum(grad_0*grad_1,dim=1)+Psi_0*V*Psi_1)/torch.sum(Psi_0*Psi_1)
 
 				J = gradloss
