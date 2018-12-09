@@ -127,8 +127,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 				Psi = net(X)
 				grad_X = grad(Psi,X,create_graph=True,grad_outputs=torch.ones_like(Psi))[0]
+				gradloss = torch.sum(0.5*torch.sum(grad_X**2,dim=1)+Psi*V*Psi)/torch.sum(Psi**2)
 				#gradloss = torch.sum(0.5*torch.sum(grad_0*grad_1,dim=1)+Psi_0*V*Psi_1)/torch.sum(Psi_0*Psi_1)
-				gradloss = torch.sum(0.5*torch.sum(grad_0*grad_1,dim=1)+Psi_0*V*Psi_1)/torch.sum(Psi_0*Psi_1)
 
 				J = gradloss
 
