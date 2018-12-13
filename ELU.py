@@ -59,7 +59,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			d = torch.zeros(len(x),2)
 			d[:,0] = torch.norm(x-R1,dim=1)
 			d[:,1] = torch.norm(x-R2,dim=1)
-			return self.NN(d)[:,0]*torch.exp(-F.softplus(torch.abs(self.alpha*torch.norm(x,dim=1))-self.beta))
+			return (self.NN(d)[:,0])*torch.exp(-F.softplus(torch.abs(self.alpha*torch.norm(x,dim=1))-self.beta))
 
 	gd=6 #number of gridpoints for evaluating symmetry loss
 	G=torch.meshgrid([torch.linspace(-5,5,gd),torch.linspace(-5,5,gd),torch.linspace(-5,5,gd)])
@@ -71,7 +71,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 	S_left = S.view(2,gd//2,-1,3)[0].view(-1,3)
 	S_right = torch.flip(S.view(2,gd//2,-1,3)[1],dims=(0,)).view(-1,3)
 	S.requires_grad=True
-	S_left.requires_grad=True
+	S_left.requires_grad=True 
 	S_right.requires_grad=True
 
 
@@ -89,7 +89,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 	net = Net()
 	net.alpha=nn.Parameter(torch.Tensor([5/R]))
 	params = [p for p in net.parameters()]
-	del params[0]
+	#del params[0]
 	#del params[1]
 	#del params[1]
 	opt = torch.optim.Adam(params, lr=LR)
@@ -133,68 +133,69 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 		#for step in range(steps//(epoch+1)):
 		for step in range(steps):
-			opt.zero_grad()
+
 
 			if losses[epoch%len(losses)] == "symmetry":
 
 				symloss=torch.mean(((net(S_left)-net(S_right))/(net(S_left)+net(S_right)))**2)
 
 				J     = symloss
-			else:
-				X=X_all[index[step*batch_size:(step+1)*batch_size]]
-				#X=X_all[index[step*batch_size*(epoch+1):(step+1)*batch_size*(epoch+1)]]
-				#X = torch.from_numpy(np.random.normal(0,1,(batch_size,3))*3/2*R.numpy()).type(torch.FloatTensor)
-				#X.requires_grad = True
+				
 
+			elif losses[epoch%len(losses)] == "energy":
+				X1 = X1_all[index[step*batch_size:(step+1)*batch_size]]
+				X2 = X2_all[index[step*batch_size:(step+1)*batch_size]]
+				X3 = X3_all[index[step*batch_size:(step+1)*batch_size]]
+				X=torch.cat([X1,X2,X3], dim=0).reshape(3,batch_size).transpose(0,1)
+
+				#grad_X = grad(Psi,X,create_graph=True,grad_outputs=torch.ones_like(Psi))[0]
+				#gradloss = torch.sum(0.5*torch.sum(grad_X**2,dim=1)+Psi*V*Psi)/torch.sum(Psi**2)
+
+				#J = gradloss
 				r1    = torch.norm(X-R1,dim=1)
 				r2    = torch.norm(X-R2,dim=1)
-				V     = -1/r1 - 1/r2 #+ 1/R
+				V     = -1/r1 - 1/r2 
+			
+				Psi=net(X).flatten()
+				dx =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
+				dy =torch.autograd.grad(Psi,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
+				dz =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
 
-				if losses[epoch%len(losses)] == "energy":
-					X1 = X1_all[index[step*batch_size:(step+1)*batch_size]]
-					X2 = X2_all[index[step*batch_size:(step+1)*batch_size]]
-					X3 = X3_all[index[step*batch_size:(step+1)*batch_size]]
-					X=torch.cat([X1,X2,X3], dim=0).reshape(3,batch_size).transpose(0,1)
+				J  = torch.sum((0.5*(dx[0]**2+dy[0]**2+dz[0]**2) + Psi**2*(V))/torch.sum(Psi**2)) + (torch.sum(Psi**2)-1)**2
 
-					#grad_X = grad(Psi,X,create_graph=True,grad_outputs=torch.ones_like(Psi))[0]
-					#gradloss = torch.sum(0.5*torch.sum(grad_X**2,dim=1)+Psi*V*Psi)/torch.sum(Psi**2)
+			elif losses[epoch%len(losses)] == "variance":
 
-					#J = gradloss
+				X1 = X1_all[index[step*batch_size:(step+1)*batch_size]]
+				X2 = X2_all[index[step*batch_size:(step+1)*batch_size]]
+				X3 = X3_all[index[step*batch_size:(step+1)*batch_size]]
+				X=torch.cat([X1,X2,X3], dim=0).reshape(3,batch_size).transpose(0,1)
 
-					Psi=net(X).flatten()
-					dx =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
-					dy =torch.autograd.grad(Psi,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
-					dz =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
+				Psi=net(X).flatten()
+				dx =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
+				ddx=torch.autograd.grad(dx[0].flatten(),X1,retain_graph=True,grad_outputs=torch.ones(batch_size))[0]
+				dy =torch.autograd.grad(Psi,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
+				ddy=torch.autograd.grad(dy[0].flatten(),X2,retain_graph=True,grad_outputs=torch.ones(batch_size))[0]
+				dz =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
+				ddz=torch.autograd.grad(dz[0].flatten(),X3,retain_graph=True,grad_outputs=torch.ones(batch_size))[0]
+				lap_X = (ddx+ddy+ddz).flatten()
+			
+				r1    = torch.norm(X-R1,dim=1)
+				r2    = torch.norm(X-R2,dim=1)
+				V     = -1/r1 - 1/r2 
+			
+				#laploss  = torch.sum(( Psi**2*V)/torch.sum(Psi**2))
+				#laploss  = torch.sum(Psi*(-0.5*lap_X + Psi*V))/torch.sum(Psi**2) + (torch.sum(Psi**2)-1)**2
+				#laploss  = torch.sum((-0.5*lap_X + (V-net.Lambda)*Psi)**2)/torch.sum(Psi**2) + (torch.sum(Psi**2)-1)**2
+				
+				
+				#print(min(lap_X))
+				#print(max(lap_X))
 
-					J  = torch.sum((0.5*(dx[0]**2+dy[0]**2+dz[0]**2) + Psi**2*(V))/torch.sum(Psi**2))
+				#laploss  = torch.sum((0.5*lap_X + (V-)*Psi)**2/(Psi**2+0.01))
 
-				elif losses[epoch%len(losses)] == "variance":
+				J = laploss
 
-					X1 = X1_all[index[step*batch_size:(step+1)*batch_size]]
-					X2 = X2_all[index[step*batch_size:(step+1)*batch_size]]
-					X3 = X3_all[index[step*batch_size:(step+1)*batch_size]]
-					X=torch.cat([X1,X2,X3], dim=0).reshape(3,batch_size).transpose(0,1)
-
-					Psi=net(X).flatten()
-					dx =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
-					ddx=torch.autograd.grad(dx[0].flatten(),X1,retain_graph=True,grad_outputs=torch.ones(batch_size))[0]
-					dy =torch.autograd.grad(Psi,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
-					ddy=torch.autograd.grad(dy[0].flatten(),X2,retain_graph=True,grad_outputs=torch.ones(batch_size))[0]
-					dz =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
-					ddz=torch.autograd.grad(dz[0].flatten(),X3,retain_graph=True,grad_outputs=torch.ones(batch_size))[0]
-					lap_X = (ddx+ddy+ddz).flatten()
-					laploss  = torch.sum((-0.5*Psi*lap_X + Psi**2*(V))/torch.sum(Psi**2))
-					print((-1*Psi*lap_X)[:10])
-					print((dx[0]**2+dy[0]**2+dz[0]**2)[:10])
-					exit(0)
-					#laploss  = torch.sum((-0.5*lap_X + (V-net.Lambda)*Psi))**2)
-
-					J = laploss
-
-			# w     = Psi_0*Psi_1/Psi_t**2
-			# J     = torch.sum(w*(-Lap_0/Psi_0 + (V-net.Lambda))*(-Lap_1/Psi_1+ (V-net.Lambda)))/torch.sum(Psi_0*Psi_1/Psi_t)
-
-
+			opt.zero_grad()
 			J.backward()
 			opt.step()
 
@@ -235,7 +236,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 			Psi_plot = net(X_plot).detach().numpy()
 			if Psi_plot[np.argmax(np.abs(Psi_plot))] < 0:
-				Psi_plot *= -1
+				print("negative Psi")
+			#	Psi_plot *= -1
 			plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),ls=':',color='grey',linewidth =1)
 
 			net = savenet[0]
@@ -249,7 +251,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 			Psi_plot = net(X_plot).detach().numpy()
 			if Psi_plot[np.argmax(np.abs(Psi_plot))] < 0:
-				Psi_plot *= -1
+				print("negative Psi")
+				#Psi_plot *= -1
 
 			if epoch<(epochs-1) :
 					plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),ls=':',color=cmap(epoch/epochs),linewidth =2)
@@ -267,7 +270,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 	plt.legend(loc="lower center",bbox_to_anchor=[0.5, - 0.4], ncol=8)
 	#plt.savefig(datetime.datetime.now().strftime("%B%d%Y%I%M%p")+".png")
 	#plt.show()
-	return (Psi_min,E_min)
+	#return (Psi_min,E_min)
 
-fit(batch_size=1000,steps=500,epochs=5,losses=["variance"],R1=1,R2=-1)[1]
+fit(batch_size=2000,steps=500,epochs=3,losses=["variance"],R1=1,R2=-1)
 plt.show()
