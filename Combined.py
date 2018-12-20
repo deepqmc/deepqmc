@@ -179,7 +179,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 			print("Progress {:2.0%}".format(step /steps), end="\r")
 
-
+			plt.plot(X.detach().numpy()[:,0],torch.min((-Lap_0/Psi_0 + V-net.Lambda)*(-Lap_1/Psi_1+ V-net.Lambda),torch.ones_like(Psi_0)*100).detach().numpy(),ls="",marker="x")
+			plt.show()
 
 		G=torch.meshgrid([torch.linspace(-7,7,100),torch.linspace(-7,7,100),torch.linspace(-7,7,100)])
 		x=G[0].flatten().view(-1,1)
@@ -237,6 +238,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 	plt.title("batch_size = "+str(batch_size)+", steps = "+str(steps)+", epochs = "+str(epochs)+", R = "+str(R.item())+", losses = "+str(losses))
 	plt.legend(loc="lower center",bbox_to_anchor=[0.5, - 0.4], ncol=8)
-	plt.savefig(datetime.datetime.now().strftime("%B%d%Y%I%M%p")+".png")
+	#plt.savefig(datetime.datetime.now().strftime("%B%d%Y%I%M%p")+".png")
 
 	return (net,E)
+fit(batch_size=10000,steps=10,epochs=4,R1=1.5,R2=-1.5,losses=["variance"])
+plt.show()
