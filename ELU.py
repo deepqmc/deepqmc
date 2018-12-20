@@ -47,10 +47,10 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 					torch.nn.ELU(),
 					torch.nn.Linear(64, 64),
 					torch.nn.ELU(),
-					#torch.nn.Linear(64, 64),
-					#torch.nn.ELU(),
 					torch.nn.Linear(64, 64),
 					torch.nn.ELU(),
+					#torch.nn.Linear(64, 64),
+					#torch.nn.ELU(),
 					torch.nn.Linear(64, 1)
 					)
 			self.Lambda=nn.Parameter(torch.Tensor([-1]))	#eigenvalue
@@ -72,7 +72,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 	S_left = S.view(2,gd//2,-1,3)[0].view(-1,3)
 	S_right = torch.flip(S.view(2,gd//2,-1,3)[1],dims=(0,)).view(-1,3)
 	S.requires_grad=True
-	S_left.requires_grad=True 
+	S_left.requires_grad=True
 	S_right.requires_grad=True
 
 
@@ -88,7 +88,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 	X_plot = torch.from_numpy(np.swapaxes(np.array([np.linspace(-6,6,100),np.zeros(100),np.zeros(100)]).reshape(3,100),0,1)).type(torch.FloatTensor)
 
 	net = Net()
-	net.alpha=nn.Parameter(torch.Tensor([5/R]))
+	net.alpha=nn.Parameter(torch.Tensor([6/R]))
 	params = [p for p in net.parameters()]
 	#del params[0]
 	#del params[1]
@@ -115,20 +115,20 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 		else:
 			print("loss error, check losses:"+str(losses[epoch%len(losses)] ))
 		start = time.time()
-		
+
 		if epoch>100:
 			with torch.no_grad():
 			 	X_all = metropolis(lambda x :net(x)**2,(-6*np.array([1,1,1]),6*np.array([1,1,1])),np.array([0,0,0]),2,batch_size*steps,presteps=10)
 			X1_all = X_all[:,0]
-			X2_all = X_all[:,1]			 
+			X2_all = X_all[:,1]
 			X3_all = X_all[:,2]
 		else:
-			X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,3))*3/2*R.numpy()).type(torch.FloatTensor)
-			X1_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
-			X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
-			X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
+			X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,3))*(R/2).numpy()).type(torch.FloatTensor)
+			X1_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
+			X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
+			X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
 			X_all=torch.cat([X1_all,X2_all,X3_all], dim=0).reshape(3,batch_size*steps).transpose(0,1)
-			
+
 		index = torch.randperm(steps*batch_size)
 		#X_all.requires_grad = True
 		X1_all.requires_grad = True
@@ -144,7 +144,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 				symloss=torch.mean(((net(S_left)-net(S_right))/(net(S_left)+net(S_right)))**2)
 
 				J     = symloss
-				
+
 
 			elif losses[epoch%len(losses)] == "energy":
 				X1 = X1_all[index[step*batch_size:(step+1)*batch_size]]
@@ -158,15 +158,15 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 				r1    = torch.norm(X-R1,dim=1)
 				r2    = torch.norm(X-R2,dim=1)
-				V     = -1/r1 - 1/r2 
-			
+				V     = -1/r1 - 1/r2
+
 				Psi=net(X).flatten()
 				dx =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
 				dy =torch.autograd.grad(Psi,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
 				dz =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
 
 				gradloss  = torch.sum(0.5*(dx[0]**2+dy[0]**2+dz[0]**2) + Psi**2*(V))
-				
+
 				J = gradloss + (torch.sum(Psi**2)-1)**2
 
 			elif losses[epoch%len(losses)] == "variance":
@@ -184,29 +184,58 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 				dz =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
 				ddz=torch.autograd.grad(dz[0].flatten(),X3,retain_graph=True,grad_outputs=torch.ones(batch_size))[0]
 				lap_X = (ddx+ddy+ddz).flatten()
-			
+
 				r1    = torch.norm(X-R1,dim=1)
 				r2    = torch.norm(X-R2,dim=1)
-				V     = -1/r1 - 1/r2 
-			
+				V     = -1/r1 - 1/r2
+				#if step%10==0:
+				#	plt.plot(X.detach().numpy()[:,0],(torch.min((-0.5*lap_X/Psi + V - net.Lambda)**2,torch.ones_like(lap_X/Psi)*100)).detach().numpy(),ls="",marker="x",label="var")
+					#plt.plot(X.detach().numpy()[:,0],(((-0.5*lap_X/Psi + V - net.Lambda)**2)).detach().numpy(),ls="",marker="x",label="var")
+					#plt.plot(X.detach().numpy()[:,0],(Psi.detach().numpy()),ls="",marker="x",label="psi")
+					#plt.legend()
+				#	plt.show()
+
 				#laploss  = torch.sum(( Psi**2*V)/torch.sum(Psi**2))
 				#laploss  = torch.sum(Psi*(-0.5*lap_X + Psi*V))/torch.sum(Psi**2) + (torch.sum(Psi**2)-1)**2
-				
-				laploss  = torch.sqrt(torch.sum((-0.5*lap_X*Psi + (V-net.Lambda)*Psi**2)**2))*1e1	
-				
-				
+
+
+
+
+				#new = torch.min(torch.ones_like(lap_X/Psi)*m,torch.max(torch.ones_like(lap_X/Psi)*m*(-1),lap_X/Psi))
+				#print(torch.mean(new))
+				#laploss = torch.mean(((-0.5*new + V - net.Lambda)**2))
+				laploss = torch.mean(Psi**2*torch.min((-0.5*lap_X/Psi + V - net.Lambda)**2,torch.ones_like(Psi)*1000))
+				#if laploss > 50:
+				#	plt.plot(X.detach().numpy()[:,0],(torch.min((-0.5*lap_X/Psi + V - net.Lambda)**2,torch.ones_like(lap_X/Psi)*100)).detach().numpy(),ls="",marker="x",label="var")
+				#	plt.show()
+				print(laploss)
+				#laploss = torch.mean(torch.min((-0.5*lap_X/Psi + V - net.Lambda)**2,torch.ones_like(lap_X/Psi)*100))
+				#laploss = torch.mean(((-0.5*lap_X/Psi + V - net.Lambda)**2))
+				#laploss = torch.mean(new)
+				#print(new)
+				#laploss = torch.mean(((-0.5*lap_X/Psi + V - net.Lambda)**2))
+				#print(lap_X/Psi)
+
 				#gradloss  = torch.sum(0.5*(dx[0]**2+dy[0]**2+dz[0]**2) + Psi**2*(V))
-				#laploss  = torch.sum(Psi*(-0.5*lap_X + Psi*V)) * 11000
+				#laploss  = torch.sum(Psi*(-0.5*lap_X + Psi*V))
 				#print(gradloss/laploss)
-				
+
+				#print(laploss)
 
 
 				#laploss  = torch.sum((-0.5*lap_X + (V-net.Lambda)*Psi)**2/(Psi**2))#/torch.sum(Psi**2)
-
-				J = laploss + (torch.sum(Psi**2)-1)**2
+				if laploss<2000:
+					#plt.plot(X.detach().numpy()[:,0],((-0.5*lap_X/Psi + V - net.Lambda)**2).detach().numpy(),ls="",marker="x",label="var")
+					#plt.plot(X.detach().numpy()[:,0],torch.min((-0.5*lap_X/Psi + V - net.Lambda)**2,torch.ones_like(Psi)*1000).detach().numpy(),ls="",marker="x",label="var")
+					#plt.show()
+					J = laploss + (torch.sum(Psi**2)-1)**2
+				else:
+					J =   (torch.sum(Psi**2)-1)**2
 
 			opt.zero_grad()
 			J.backward()
+			#for p in params:
+			#	print(p.grad)
 			opt.step()
 
 
@@ -245,8 +274,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			print("undo step as E_new = "+str(E)+" E_old = "+str(savenet[1]))
 
 			Psi_plot = net(X_plot).detach().numpy()
-			if Psi_plot[np.argmax(np.abs(Psi_plot))] < 0:
-				print("negative Psi")
+			#if Psi_plot[np.argmax(np.abs(Psi_plot))] < 0:
+			#	print("negative Psi")
 			#	Psi_plot *= -1
 			plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),ls=':',color='grey',linewidth =1)
 
@@ -285,5 +314,6 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 #	ax = fig.add_subplot(1, 1, 1, projection='3d')
 #	ax.scatter(X1.detach().numpy(), X2.detach().numpy(), X3.detach().numpy(), c=np.abs(Psi.detach().numpy()), cmap=plt.hot())
 #	plt.show()
-fit(batch_size=5000,steps=1000,epochs=10,losses=["energy","symmetry","energy","energy","energy"],R1=1,R2=-1)
+#fit(batch_size=1000,steps=150,epochs=4,losses=["energy","energy","energy"],R1=1,R2=-1)
+fit(batch_size=1000,steps=2000,epochs=4,losses=["variance","variance","variance"],R1=1,R2=-1)
 plt.show()
