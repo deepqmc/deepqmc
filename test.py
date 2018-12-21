@@ -9,7 +9,7 @@ from torch.autograd import Variable,grad
 import torch.nn.functional as F
 
 from matplotlib import cm
-from Combined import *
+#from Combined import *
 #print(10/1e-30)
 #print(min(1e30,torch.NaN))
 #exit(0)
@@ -109,8 +109,8 @@ from Combined import *
 # exit(0)
 
 xmax=2
-for alpha in [2,3,5,7]:
-    for beta in [8]:
+for alpha in [1,7]:
+    for beta in [2,3,12]:
         d = (torch.rand(100,1,requires_grad=False)-0.5)*2*6
         decay=torch.exp(-F.softplus(torch.abs(alpha*torch.norm(d,dim=1))-beta))
         plt.plot(d.numpy(),decay.numpy(),marker='.',ls='',label='a = '+str(alpha)+'  b = '+str(beta))
