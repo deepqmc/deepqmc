@@ -205,7 +205,7 @@ E_min=[]
 Psi_min=[]
 Rs = np.linspace(1,3,20)
 for R in Rs:
-	psi,e = fit(batch_size=128,steps=10000,epochs=10,losses=["energy","symmetry"],R1=R/2,R2=-R/2)
+	psi,e = fit(batch_size=256,steps=20000,epochs=18,losses=["energy","symmetry","energy","symmetry","energy","symmetry","energy","symmetry","energy","energy","energy","energy","energy","energy","energy","energy","energy"],R1=R/2,R2=-R/2)
 	E_min.append(e)
 	Psi_min.append(psi)
 
