@@ -181,23 +181,15 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			E_min = E
 			Psi_min = copy.deepcopy(net)
 
+		if epoch > 1 and E > (savenet[1]+10*(1-epoch/epochs)**2):
+			print("undo step as E_new = "+str(E)+" E_old = "+str(savenet[1]))
 
-		# else:
-		#
-		# 	Psi_plot = net(X_plot).detach().numpy()
-		#
-		# 	if epoch<(epochs-1) :
-		# 			plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),ls=':',color=cmap(epoch/epochs),linewidth =2)
-		#
-		# 	else:
-		# 		plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),color='k',linewidth =3)
-		#
+			net = savenet[0]
+			E   = savenet[1]
 
-	#plt.axvline(R1.numpy()[0],ls=':',color='k')
-	#plt.axvline(R2.numpy()[0],ls=':',color='k')
-
-	#plt.title("batch_size = "+str(batch_size)+", steps = "+str(steps)+", epochs = "+str(epochs)+", R = "+str(R.item())+", losses = "+str(losses))
-	#plt.legend(loc="lower center",bbox_to_anchor=[0.5, - 0.4], ncol=8)
+			params = [p for p in net.parameters()]
+			del params[0]
+			opt = torch.optim.Adam(params, lr=LR)
 
 	return (Psi_min,E_min)
 
@@ -205,7 +197,7 @@ E_min=[]
 Psi_min=[]
 Rs = np.linspace(1,3,20)
 for R in Rs:
-	psi,e = fit(batch_size=256,steps=20000,epochs=18,losses=["energy","symmetry","energy","symmetry","energy","symmetry","energy","symmetry","energy","energy","energy","energy","energy","energy","energy","energy","energy"],R1=R/2,R2=-R/2)
+	psi,e = fit(batch_size=1000,steps=5000,epochs=40,losses=["energy","symmetry"],R1=R/2,R2=-R/2)
 	E_min.append(e)
 	Psi_min.append(psi)
 
