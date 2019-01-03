@@ -52,7 +52,7 @@ R1    = torch.tensor([1.5,0,0]).type(torch.FloatTensor)
 R2    = torch.tensor([-1.5,0,0]).type(torch.FloatTensor)
 R     = torch.norm(R1-R2)
 
-steps=10000
+steps=1000
 
 for epoch in range(5):
 	#__________________

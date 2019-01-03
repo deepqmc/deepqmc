@@ -164,7 +164,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 				dx =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
 				dy =torch.autograd.grad(Psi,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
 				dz =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))
-	
+
 				gradloss  = torch.mean(0.5*(dx[0]**2+dy[0]**2+dz[0]**2) + Psi**2*(V))
 
 				J = gradloss + (torch.mean(Psi**2)-1)**2
@@ -232,9 +232,9 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			if not losses[epoch%len(losses)] == "energy":
 				for p in params:
 					p.grad = torch.min(torch.max(p.grad,-10/(1+epoch)*torch.ones_like(p.grad)),10/(1+epoch)*torch.ones_like(p.grad))
-					#print(p.grad) 
+					#print(p.grad)
 			opt.step()
-		
+
 
 			print("Progress {:2.0%}".format(step /steps), end="\r")
 		if not losses[epoch%len(losses)] == "energy":
@@ -312,5 +312,5 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 #	ax.scatter(X1.detach().numpy(), X2.detach().numpy(), X3.detach().numpy(), c=np.abs(Psi.detach().numpy()), cmap=plt.hot())
 #	plt.show()
 #fit(batch_size=1000,steps=150,epochs=4,losses=["energy","energy","energy"],R1=1,R2=-1)
-fit(batch_size=200,steps=500,epochs=4,losses=["energy","variance","variance","variance"],R1=1.5,R2=-1.5)
+fit(batch_size=200,steps=500,epochs=4,losses=["energy"],R1=1,R2=-1)
 plt.show()

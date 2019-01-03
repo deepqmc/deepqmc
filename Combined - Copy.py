@@ -148,7 +148,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 
 
-		G=torch.meshgrid([torch.linspace(-7,7,50),torch.linspace(-7,7,50),torch.linspace(-7,7,50)])
+		G=torch.meshgrid([torch.linspace(-7,7,150),torch.linspace(-7,7,150),torch.linspace(-7,7,150)])
 		x=G[0].flatten().view(-1,1)
 		y=G[1].flatten().view(-1,1)
 		z=G[2].flatten().view(-1,1)

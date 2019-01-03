@@ -110,7 +110,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 		start = time.time()
 
 
-		X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,3))*(R/2).numpy()).type(torch.FloatTensor)
+		X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,3))*(3/2*R).numpy()).type(torch.FloatTensor)
 		#X1_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
 		#X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
 		#X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)

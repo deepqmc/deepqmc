@@ -48,9 +48,9 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 					torch.nn.Linear(64, 64),
 					torch.nn.ELU(),
 					torch.nn.Linear(64, 64),
-					torch.nn.ELU(),
-					#torch.nn.Linear(64, 64),
 					#torch.nn.ELU(),
+					#torch.nn.Linear(64, 64),
+					torch.nn.ELU(),
 					torch.nn.Linear(64, 1)
 					)
 			self.Lambda=nn.Parameter(torch.Tensor([-1]))	#eigenvalue
@@ -110,7 +110,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 		start = time.time()
 
 
-		X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,3))*(R/2).numpy()).type(torch.FloatTensor)
+		X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,3))*(3*R/2).numpy()).type(torch.FloatTensor)
 		#X1_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
 		#X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
 		#X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
@@ -146,7 +146,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 				r2    = torch.norm(X-R2,dim=1)
 				V     = -1/r1 - 1/r2
 
-				gradloss = torch.sum(0.5*torch.sum(grad_X**2,dim=1)+Psi*V*Psi)/torch.sum(Psi**2)
+				gradloss = torch.sum(0.5*torch.sum(grad_X**2,dim=1)+Psi*V*Psi)#/torch.sum(Psi**2)
 
 				J = gradloss + (torch.mean(Psi**2)-1)**2
 
@@ -186,22 +186,21 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 
 			print("Progress {:2.0%}".format(step /steps), end="\r")
-		t = time.time()
-		G=torch.meshgrid([torch.linspace(-5,5,150),torch.linspace(-5,5,150),torch.linspace(-5,5,150)])
-		x=G[0].flatten().view(-1,1)
-		y=G[1].flatten().view(-1,1)
-		z=G[2].flatten().view(-1,1)
-		Xe = torch.cat((x, y, z), 1)
-		Xe.requires_grad=True
-		Psi   = net(Xe)
-		gPsi  = grad(Psi,Xe,create_graph=True,grad_outputs=torch.ones(len(Xe)))[0]
-		r1    = torch.norm(Xe-R1,dim=1)
-		r2    = torch.norm(Xe-R2,dim=1)
-		V     = -1/r1 - 1/r2 + 1/R
-		E     = (torch.mean(torch.sum(gPsi**2,dim=1)/2+Psi**2*V)/torch.mean(Psi**2)).item()*27.211386 # should give ~ -0.6023424 (-16.4) for hydrogen ion at (R ~ 2 a.u.)
-		print(E)
-		print(time.time()-t)
-		t = time.time()
+		# t = time.time()
+		# G=torch.meshgrid([torch.linspace(-5,5,150),torch.linspace(-5,5,150),torch.linspace(-5,5,150)])
+		# x=G[0].flatten().view(-1,1)
+		# y=G[1].flatten().view(-1,1)
+		# z=G[2].flatten().view(-1,1)
+		# Xe = torch.cat((x, y, z), 1)
+		# Xe.requires_grad=True
+		# Psi   = net(Xe)
+		# gPsi  = grad(Psi,Xe,create_graph=True,grad_outputs=torch.ones(len(Xe)))[0]
+		# r1    = torch.norm(Xe-R1,dim=1)
+		# r2    = torch.norm(Xe-R2,dim=1)
+		# V     = -1/r1 - 1/r2 + 1/R
+		# E     = (torch.mean(torch.sum(gPsi**2,dim=1)/2+Psi**2*V)/torch.mean(Psi**2)).item()*27.211386 # should give ~ -0.6023424 (-16.4) for hydrogen ion at (R ~ 2 a.u.)
+		# print(E)
+		# print(time.time()-t)
 
 		samples=metropolis(lambda x :net(x)**2,(-6*np.array([1,1,1]),6*np.array([1,1,1])),np.array([0,0,0]),2,20000,presteps=500)
 		X1 = samples[:,0]
@@ -223,9 +222,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 		r1    = torch.norm(X-R1,dim=1)
 		r2    = torch.norm(X-R2,dim=1)
 		V     = -1/r1 - 1/r2 + 1/R
+		E     = (torch.mean(-0.5*lap_X/Psi + V).item()*27.211386)
 
-		print(torch.mean(-0.5*lap_X/Psi + V).item()*27.211386)
-		print(time.time()-t)
 
 		print('___________________________________________')
 		print('It took', time.time()-start, 'seconds.')
@@ -252,7 +250,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 	return (Psi_min,E_min)
 
-fit(batch_size=5000,steps=100,epochs=2,losses=["energy","variance"],R1=1,R2=-1)
+fit(batch_size=1000,steps=1000,epochs=6,losses=["energy","symmetry","energy"],R1=1,R2=-1)
 #
 # E_min=[]
 # Psi_min=[]
