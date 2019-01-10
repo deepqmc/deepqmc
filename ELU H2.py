@@ -11,6 +11,7 @@ import datetime
 
 cmap=plt.get_cmap("plasma")
 
+
 def metropolis(distribution,interval,startpoint,maxstepsize,steps,presteps=0):
 	#initialise list to store walker positions
 	samples = torch.zeros(steps,len(startpoint))
@@ -63,11 +64,11 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			d[:,3] = torch.norm(x[:,3:]-R2,dim=1)
 			d[:,4] = torch.norm(x[:,:3]-x[:,3:],dim=1)
 			d2     = torch.zeros(len(x),5)
-			d2[:,2] = torch.norm(x[:,:3]-R1,dim=1)
-			d2[:,3] = torch.norm(x[:,:3]-R2,dim=1)
-			d2[:,0] = torch.norm(x[:,3:]-R1,dim=1)
-			d2[:,1] = torch.norm(x[:,3:]-R2,dim=1)
-			d2[:,4] = torch.norm(x[:,:3]-x[:,3:],dim=1)
+			d2[:,2] = d[:,0]
+			d2[:,3] = d[:,1]
+			d2[:,0] = d[:,2]
+			d2[:,1] = d[:,3]
+			d2[:,4] = d[:,4]
 			return (self.NN(d)[:,0]+self.NN(d2)[:,0])*torch.exp(-F.softplus(torch.abs(self.alpha*torch.norm(x,dim=1))-self.beta))
 
 	LR=1e-3
@@ -101,9 +102,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 
 		print("epoch " +str(1+epoch)+" of "+str(epochs)+":")
-		if losses[epoch%len(losses)] == "symmetry":
-			print("symmetrize")
-		elif losses[epoch%len(losses)] == "energy":
+
+		if losses[epoch%len(losses)] == "energy":
 			print("minimize energy")
 		elif losses[epoch%len(losses)] == "variance":
 			print("minimize variance of energy")
@@ -118,7 +118,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			X2_all = X_all[:,1]
 			X3_all = X_all[:,2]
 		else:
-			X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,6))*2*R.numpy()).type(torch.FloatTensor)
+			X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,6))*3*R.numpy()).type(torch.FloatTensor)
 			#X1_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
 			#X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
 			#X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
@@ -326,17 +326,17 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			#plt.hist(X_all.detach().numpy()[:,0],density=True)
 			#plt.show()
 
-	#plt.axvline(R1.numpy()[0],ls=':',color='k')
-	#plt.axvline(R2.numpy()[0],ls=':',color='k')
+	plt.axvline(R1.numpy()[0],ls=':',color='k')
+	plt.axvline(R2.numpy()[0],ls=':',color='k')
 
-	#plt.title("batch_size = "+str(batch_size)+", steps = "+str(steps)+", epochs = "+str(epochs)+", R = "+str(R.item())+", losses = "+str(losses))
-	#plt.legend(loc="lower center",bbox_to_anchor=[0.5, - 0.4], ncol=8)
+	plt.title("batch_size = "+str(batch_size)+", steps = "+str(steps)+", epochs = "+str(epochs)+", R = "+str(R.item())+", losses = "+str(losses))
+	plt.legend(loc="lower center",bbox_to_anchor=[0.5, - 0.4], ncol=8)
 	#plt.savefig(datetime.datetime.now().strftime("%B%d%Y%I%M%p")+".png")
-	#plt.show()
+	plt.show()
 	#return (Psi_min,E_min)
 #	fig = plt.figure()
 #	ax = fig.add_subplot(1, 1, 1, projection='3d')
 #	ax.scatter(X1.detach().numpy(), X2.detach().numpy(), X3.detach().numpy(), c=np.abs(Psi.detach().numpy()), cmap=plt.hot())
 #	plt.show()
-fit(batch_size=250,steps=1500,epochs=3,losses=["energy"],R1=0.9,R2=-0.9)
-plt.show()
+fit(batch_size=250,steps=15000,epochs=15,losses=["energy"],R1=0.7,R2=-0.7)
+
