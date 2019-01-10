@@ -53,8 +53,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 					torch.nn.Linear(64, 1)
 					)
 			self.Lambda=nn.Parameter(torch.Tensor([-1]))	#eigenvalue
-			self.alpha=nn.Parameter(torch.Tensor([8]))#coefficient for decay
-			self.beta=nn.Parameter(torch.Tensor([2]))#coefficient for decay
+			self.alpha=nn.Parameter(torch.Tensor([1]))#coefficient for decay
+			self.beta=nn.Parameter(torch.Tensor([8]))#coefficient for decay
 		def forward(self,x):
 			d = torch.zeros(len(x),5)
 			d[:,0] = torch.norm(x[:,:3]-R1,dim=1)
@@ -62,11 +62,18 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			d[:,2] = torch.norm(x[:,3:]-R1,dim=1)
 			d[:,3] = torch.norm(x[:,3:]-R2,dim=1)
 			d[:,4] = torch.norm(x[:,:3]-x[:,3:],dim=1)
-			return (self.NN(d)[:,0])*torch.exp(-F.softplus(torch.abs(self.alpha*torch.norm(x,dim=1))-self.beta))
+			d2     = torch.zeros(len(x),5)
+			d2[:,2] = torch.norm(x[:,:3]-R1,dim=1)
+			d2[:,3] = torch.norm(x[:,:3]-R2,dim=1)
+			d2[:,0] = torch.norm(x[:,3:]-R1,dim=1)
+			d2[:,1] = torch.norm(x[:,3:]-R2,dim=1)
+			d2[:,4] = torch.norm(x[:,:3]-x[:,3:],dim=1)
+			return (self.NN(d)[:,0]+self.NN(d2)[:,0])*torch.exp(-F.softplus(torch.abs(self.alpha*torch.norm(x,dim=1))-self.beta))
 
 	LR=1e-3
 
-
+	def decay(x,net):
+		return torch.exp(-F.softplus(torch.abs(net.alpha*torch.norm(x,dim=1))-net.beta))
 
 	R1    = torch.tensor([R1,0,0]).type(torch.FloatTensor)
 	R2    = torch.tensor([R2,0,0]).type(torch.FloatTensor)
@@ -76,11 +83,11 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 	X_plot2 = torch.from_numpy(np.swapaxes(np.array([3*np.ones(100),np.zeros(100),np.zeros(100),np.linspace(-6,6,100),np.zeros(100),np.zeros(100)]).reshape(6,100),0,1)).type(torch.FloatTensor)
 
 	net = Net()
-	net.alpha=nn.Parameter(torch.Tensor([3/2/R]))
+	net.alpha=nn.Parameter(torch.Tensor([3/R]))
 	params = [p for p in net.parameters()]
 	#del params[0]
-	del params[1]
-	del params[1]
+	#del params[1]
+	#del params[1]
 	opt = torch.optim.Adam(params, lr=LR)
 	E = 100
 	E_min = 100
@@ -111,7 +118,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			X2_all = X_all[:,1]
 			X3_all = X_all[:,2]
 		else:
-			X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,6))*3/2*R.numpy()).type(torch.FloatTensor)
+			X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,6))*2*R.numpy()).type(torch.FloatTensor)
 			#X1_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
 			#X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
 			#X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
@@ -228,7 +235,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 		# V     = -1/r1 - 1/r2 + 1/R -1/r3 - 1/r4 + 1/r5
 		#
 		# E     = (torch.mean(torch.sum(gPsi**2,dim=1)/2+Psi**2*V)/torch.mean(Psi**2)).item()*27.2 # should give ~ -0.6023424 (-16.4) for hydrogen ion at (R ~ 2 a.u.)
-		for m in [10000,25000,50000]:
+		for m in [10000]:#,25000,50000]:
 			t = time.time()
 
 			samples=metropolis(lambda x :net(x)**2,(-6*np.array([1,1,1,1,1,1]),6*np.array([1,1,1,1,1,1])),np.array([0,0,0,0,0,0]),2,m,presteps=500)
@@ -267,8 +274,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			r5    = torch.norm(X[:,:3]-X[:,3:],dim=1)
 			V     = -1/r1 - 1/r2 - 1/r3 - 1/r4 + 1/r5 + 1/R
 
-			print(torch.mean(-0.5*lap_X/Psi + V).item()*27.211386)
-			print(time.time()-t)
+			E = (torch.mean(-0.5*lap_X/Psi + V).item()*27.211386)
+			#print(E,time.time()-t)
 
 		print('___________________________________________')
 		print('It took', time.time()-start, 'seconds.')
@@ -299,23 +306,25 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 		# 	del params[0]
 		# 	opt = torch.optim.Adam(params, lr=LR)
 		#
-	if True:#else:
+		if True:#else:
 
-		Psi_plot = net(X_plot).detach().numpy()
-		Psi_plot2 = net(X_plot2).detach().numpy()
-		if Psi_plot[np.argmax(np.abs(Psi_plot))] < 0:
-			print("negative Psi")
-			#Psi_plot *= -1
+			Psi_plot = net(X_plot).detach().numpy()
+			#Psi_plot2 = net(X_plot2).detach().numpy()
+			Decay = decay(X_plot,net).detach().numpy()
+			if Psi_plot[np.argmax(np.abs(Psi_plot))] < 0:
+				print("negative Psi")
+				#Psi_plot *= -1
 
-		if epoch<(epochs-1) :
+			if epoch<(epochs-1) :
 				plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),ls=':',color=cmap(epoch/epochs),linewidth =2)
-				plt.plot(X_plot[:,0].numpy(),(Psi_plot2/max(np.abs(Psi_plot2)))**2,label=str(np.round(E,2)),ls=':',color=cmap(epoch/epochs),linewidth =2)
+				#plt.plot(X_plot[:,0].numpy(),(Psi_plot2/max(np.abs(Psi_plot2)))**2,label=str(np.round(E,2)),ls=':',color=cmap(epoch/epochs),linewidth =2)
 
-		else:
-			plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),color='k',linewidth =3)
-			plt.plot(X_plot[:,0].numpy(),(Psi_plot2/max(np.abs(Psi_plot2)))**2,label=str(np.round(E,2)),color='k',linewidth =2)
-		#plt.hist(X_all.detach().numpy()[:,0],density=True)
-		#plt.show()
+			else:
+				plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),color='k',linewidth =3)
+				plt.plot(X_plot[:,0].numpy(),Decay/max(Decay))
+				#plt.plot(X_plot[:,0].numpy(),(Psi_plot2/max(np.abs(Psi_plot2)))**2,label=str(np.round(E,2)),color='k',linewidth =2)
+			#plt.hist(X_all.detach().numpy()[:,0],density=True)
+			#plt.show()
 
 	#plt.axvline(R1.numpy()[0],ls=':',color='k')
 	#plt.axvline(R2.numpy()[0],ls=':',color='k')
@@ -329,5 +338,5 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 #	ax = fig.add_subplot(1, 1, 1, projection='3d')
 #	ax.scatter(X1.detach().numpy(), X2.detach().numpy(), X3.detach().numpy(), c=np.abs(Psi.detach().numpy()), cmap=plt.hot())
 #	plt.show()
-fit(batch_size=250,steps=5000,epochs=10,losses=["energy"],R1=0.7,R2=-0.7)
+fit(batch_size=250,steps=1500,epochs=3,losses=["energy"],R1=0.9,R2=-0.9)
 plt.show()

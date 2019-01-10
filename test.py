@@ -9,6 +9,9 @@ from torch.autograd import Variable,grad
 import torch.nn.functional as F
 
 from matplotlib import cm
+
+print(np.load("E_min_save.npy"))
+exit(0)
 #from Combined import *
 #print(10/1e-30)
 #print(min(1e30,torch.NaN))

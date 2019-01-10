@@ -75,7 +75,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 	S_left.requires_grad=True
 	S_right.requires_grad=True
 
-	LR=1e-3
+	LR=5e-3
 
 	R1    = torch.tensor([R1,0,0]).type(torch.FloatTensor)
 	R2    = torch.tensor([R2,0,0]).type(torch.FloatTensor)
@@ -115,12 +115,22 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 		#X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
 		#X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
 		#X_all=torch.cat([X1_all,X2_all,X3_all], dim=0).reshape(3,batch_size*steps).transpose(0,1)
+		if losses[epoch%len(losses)] == "variance":
+			samples_all =metropolis(lambda x :net(x)**2,(-6*np.array([1,1,1]),6*np.array([1,1,1])),np.array([0,0,0]),2,batch_size*steps,presteps=100)
+			X1_all = samples_all[:,0]
+			X2_all = samples_all[:,1]
+			X3_all = samples_all[:,2]
+			X1_all.requires_grad=True
+			X2_all.requires_grad=True
+			X3_all.requires_grad=True
 
 		index = torch.randperm(steps*batch_size)
 		X_all.requires_grad = True
 		#X1_all.requires_grad = True
 		#X2_all.requires_grad = True
 		#X3_all.requires_grad = True
+
+
 
 
 		for step in range(steps):
@@ -145,25 +155,25 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 				r1    = torch.norm(X-R1,dim=1)
 				r2    = torch.norm(X-R2,dim=1)
 				V     = -1/r1 - 1/r2
-
 				gradloss = torch.sum(0.5*torch.sum(grad_X**2,dim=1)+Psi*V*Psi)#/torch.sum(Psi**2)
 
 				J = gradloss + (torch.mean(Psi**2)-1)**2
 
 			elif losses[epoch%len(losses)] == "variance":
-				n = 10000
-				samples=metropolis(lambda x :net(x)**2,(-6*np.array([1,1,1]),6*np.array([1,1,1])),np.array([0,0,0]),2,n,presteps=100)
-				X1 = samples[:,0]
-				X2 = samples[:,1]
-				X3 = samples[:,2]
-				X1.requires_grad=True
-				X2.requires_grad=True
-				X3.requires_grad=True
-				#X1 = X1_all[index[step*batch_size:(step+1)*batch_size]]
-				#X2 = X2_all[index[step*batch_size:(step+1)*batch_size]]
-				#X3 = X3_all[index[step*batch_size:(step+1)*batch_size]]
-				X=torch.cat([X1,X2,X3], dim=0).reshape(3,n).transpose(0,1)
-
+				#n = 10000
+				# samples=metropolis(lambda x :net(x)**2,(-6*np.array([1,1,1]),6*np.array([1,1,1])),np.array([0,0,0]),2,n,presteps=100)
+				# X1 = samples[:,0]
+				# X2 = samples[:,1]
+				# X3 = samples[:,2]
+				# X1.requires_grad=True
+				# X2.requires_grad=True
+				# X3.requires_grad=True
+				#print(X1_all.shape,step*batch_size)
+				X1 = X1_all[index[step*batch_size:(step+1)*batch_size]]
+				X2 = X2_all[index[step*batch_size:(step+1)*batch_size]]
+				X3 = X3_all[index[step*batch_size:(step+1)*batch_size]]
+				X=torch.cat([X1,X2,X3], dim=0).reshape(3,batch_size).transpose(0,1)
+				n = batch_size
 				Psi=net(X).flatten()
 				dx =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n))
 				ddx=torch.autograd.grad(dx[0].flatten(),X1,retain_graph=True,grad_outputs=torch.ones(n))[0]
@@ -250,7 +260,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 	return (Psi_min,E_min)
 
-fit(batch_size=1000,steps=1000,epochs=6,losses=["energy","symmetry","energy"],R1=1,R2=-1)
+fit(batch_size=1000,steps=500,epochs=5,losses=["energy"],R1=1,R2=-1)
 #
 # E_min=[]
 # Psi_min=[]
