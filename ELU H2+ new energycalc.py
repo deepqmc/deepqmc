@@ -53,9 +53,11 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 					torch.nn.ELU(),
 					torch.nn.Linear(64, 1)
 					)
-			self.Lambda=nn.Parameter(torch.Tensor([-1]))	#eigenvalue
+
+			self.Lambda=nn.Parameter(torch.Tensor([-1]))	#energy eigenvalue
 			self.alpha=nn.Parameter(torch.Tensor([1]))#coefficient for decay
 			self.beta=nn.Parameter(torch.Tensor([8]))#coefficient for decay
+
 		def forward(self,x):
 			d = torch.zeros(len(x),2)
 			d[:,0] = torch.norm(x-R1,dim=1)
@@ -196,21 +198,21 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 
 			print("Progress {:2.0%}".format(step /steps), end="\r")
-		# t = time.time()
-		# G=torch.meshgrid([torch.linspace(-5,5,150),torch.linspace(-5,5,150),torch.linspace(-5,5,150)])
-		# x=G[0].flatten().view(-1,1)
-		# y=G[1].flatten().view(-1,1)
-		# z=G[2].flatten().view(-1,1)
-		# Xe = torch.cat((x, y, z), 1)
-		# Xe.requires_grad=True
-		# Psi   = net(Xe)
-		# gPsi  = grad(Psi,Xe,create_graph=True,grad_outputs=torch.ones(len(Xe)))[0]
-		# r1    = torch.norm(Xe-R1,dim=1)
-		# r2    = torch.norm(Xe-R2,dim=1)
-		# V     = -1/r1 - 1/r2 + 1/R
-		# E     = (torch.mean(torch.sum(gPsi**2,dim=1)/2+Psi**2*V)/torch.mean(Psi**2)).item()*27.211386 # should give ~ -0.6023424 (-16.4) for hydrogen ion at (R ~ 2 a.u.)
-		# print(E)
-		# print(time.time()-t)
+		t = time.time()
+		G=torch.meshgrid([torch.linspace(-5,5,150),torch.linspace(-5,5,150),torch.linspace(-5,5,150)])
+		x=G[0].flatten().view(-1,1)
+		y=G[1].flatten().view(-1,1)
+		z=G[2].flatten().view(-1,1)
+		Xe = torch.cat((x, y, z), 1)
+		Xe.requires_grad=True
+		Psi   = net(Xe)
+		gPsi  = grad(Psi,Xe,create_graph=True,grad_outputs=torch.ones(len(Xe)))[0]
+		r1    = torch.norm(Xe-R1,dim=1)
+		r2    = torch.norm(Xe-R2,dim=1)
+		V     = -1/r1 - 1/r2 + 1/R
+		E     = (torch.mean(torch.sum(gPsi**2,dim=1)/2+Psi**2*V)/torch.mean(Psi**2)).item()*27.211386 # should give ~ -0.6023424 (-16.4) for hydrogen ion at (R ~ 2 a.u.)
+		print(E)
+		print(time.time()-t)
 
 		samples=metropolis(lambda x :net(x)**2,(-6*np.array([1,1,1]),6*np.array([1,1,1])),np.array([0,0,0]),2,20000,presteps=500)
 		X1 = samples[:,0]
@@ -260,7 +262,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 	return (Psi_min,E_min)
 
-fit(batch_size=1000,steps=500,epochs=5,losses=["energy"],R1=1,R2=-1)
+fit(batch_size=1000,steps=1000,epochs=5,losses=["energy"],R1=1,R2=-1)
 #
 # E_min=[]
 # Psi_min=[]

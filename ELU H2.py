@@ -12,7 +12,7 @@ import datetime
 cmap=plt.get_cmap("plasma")
 
 
-def metropolis(distribution,interval,startpoint,maxstepsize,steps,presteps=0):
+def metropolis(distribution,startpoint,maxstepsize,steps,presteps=0,interval=None):
 	#initialise list to store walker positions
 	samples = torch.zeros(steps,len(startpoint))
 	#initialise the walker at the startposition
@@ -24,12 +24,15 @@ def metropolis(distribution,interval,startpoint,maxstepsize,steps,presteps=0):
 		if i > (presteps-1):
 			samples[i-presteps]=(walker)
 		#propose new trial position
-		trial = walker + (torch.rand(len(startpoint))-0.5)*maxstepsize
-		#check if in interval
-		inint = torch.tensor(all(torch.tensor(interval[0]).type(torch.FloatTensor)<trial[0]) \
-		and all(torch.tensor(interval[1]).type(torch.FloatTensor)>trial[0])).type(torch.FloatTensor)
+		trial = walker + (torch.rand(6)-0.5)*maxstepsize
 		#calculate acceptance propability
-		disttrial = distribution(trial)*inint
+		disttrial = distribution(trial)
+		#check if in interval
+		if not interval is None:
+			inint = torch.tensor(all(torch.tensor(interval[0]).type(torch.FloatTensor)<trial[0]) \
+			and all(torch.tensor(interval[1]).type(torch.FloatTensor)>trial[0])).type(torch.FloatTensor)
+			disttrial = disttrial*inint
+
 		ratio = disttrial/distwalker
 		#accept trial position with respective propability
 		if ratio > np.random.uniform(0,1):
@@ -69,12 +72,14 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			d2[:,0] = d[:,2]
 			d2[:,1] = d[:,3]
 			d2[:,4] = d[:,4]
-			return (self.NN(d)[:,0]+self.NN(d2)[:,0])*torch.exp(-F.softplus(torch.abs(self.alpha*torch.norm(x,dim=1))-self.beta))
+			r = torch.erf(d/0.1)/d
+			r2 = torch.erf(d2/0.1)/d2
+			return (self.NN(r)[:,0]+self.NN(r2)[:,0])
 
 	LR=1e-3
 
-	def decay(x,net):
-		return torch.exp(-F.softplus(torch.abs(net.alpha*torch.norm(x,dim=1))-net.beta))
+	#def decay(x,net):
+	#	return torch.exp(-F.softplus(torch.abs(net.alpha*torch.norm(x,dim=1))-net.beta))
 
 	R1    = torch.tensor([R1,0,0]).type(torch.FloatTensor)
 	R2    = torch.tensor([R2,0,0]).type(torch.FloatTensor)
@@ -111,21 +116,15 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			print("loss error, check losses:"+str(losses[epoch%len(losses)] ))
 		start = time.time()
 
-		if False:
-			with torch.no_grad():
-			 	X_all = metropolis(lambda x :net(x)**2,(-6*np.array([1,1,1]),6*np.array([1,1,1])),np.array([0,0,0]),2,batch_size*steps,presteps=10)
-			X1_all = X_all[:,0]
-			X2_all = X_all[:,1]
-			X3_all = X_all[:,2]
-		else:
-			X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,6))*3*R.numpy()).type(torch.FloatTensor)
-			#X1_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
-			#X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
-			#X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
-			#X4_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
-			#X5_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
-			#X6_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
-			#XS_all  = torch.cat([X1_all,X2_all,X3_all], dim=0).reshape(3,batch_size*steps).transpose(0,1)
+
+		X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,6))*3*R.numpy()).type(torch.FloatTensor)
+		#X1_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
+		#X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
+		#X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
+		#X4_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
+		#X5_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
+		#X6_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
+		#XS_all  = torch.cat([X1_all,X2_all,X3_all], dim=0).reshape(3,batch_size*steps).transpose(0,1)
 
 		index = torch.randperm(steps*batch_size)
 		X_all.requires_grad = True
@@ -154,9 +153,8 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 				Psi=net(X).flatten()
 
 				g =torch.autograd.grad(Psi,X,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))[0]
-				gradloss  = torch.sum(0.5*(torch.sum(g**2,dim=1)) + Psi**2*(V))
-
-				J = gradloss + (torch.sum(Psi**2)-1)**2
+				gradloss  = torch.sum(0.5*(torch.sum(g**2,dim=1)) + Psi**2*V)/torch.sum(Psi**2)
+				J = gradloss #+ (torch.sum(Psi**2)-1)**2
 
 			# elif losses[epoch%len(losses)] == "variance":
 			#
@@ -214,31 +212,10 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			print("Progress {:2.0%}".format(step /steps), end="\r")
 
 
-
-		# G=torch.meshgrid([torch.linspace(-5,5,10),torch.linspace(-5,5,10),torch.linspace(-5,5,10),torch.linspace(-5.5,5.5,10),torch.linspace(-5.5,5.5,10),torch.linspace(-5.5,5.5,10)])
-		#
-		# x1=G[0].flatten().view(-1,1)
-		# y1=G[1].flatten().view(-1,1)
-		# z1=G[2].flatten().view(-1,1)
-		# x2=G[3].flatten().view(-1,1)
-		# y2=G[4].flatten().view(-1,1)
-		# z2=G[5].flatten().view(-1,1)
-		# Xe = torch.cat((x1, y1, z1, x2, y2, z2), 1)
-		# Xe.requires_grad=True
-		# Psi   = net(Xe)
-		# gPsi  = grad(Psi,Xe,create_graph=True,grad_outputs=torch.ones(len(Xe)))[0]
-		# r1    = torch.norm(Xe[:,:3]-R1,dim=1)
-		# r2    = torch.norm(Xe[:,:3]-R2,dim=1)
-		# r3    = torch.norm(Xe[:,3:]-R1,dim=1)
-		# r4    = torch.norm(Xe[:,3:]-R2,dim=1)
-		# r5    = torch.norm(Xe[:,:3]-Xe[:,3:],dim=1)
-		# V     = -1/r1 - 1/r2 + 1/R -1/r3 - 1/r4 + 1/r5
-		#
-		# E     = (torch.mean(torch.sum(gPsi**2,dim=1)/2+Psi**2*V)/torch.mean(Psi**2)).item()*27.2 # should give ~ -0.6023424 (-16.4) for hydrogen ion at (R ~ 2 a.u.)
 		for m in [10000]:#,25000,50000]:
 			t = time.time()
 
-			samples=metropolis(lambda x :net(x)**2,(-6*np.array([1,1,1,1,1,1]),6*np.array([1,1,1,1,1,1])),np.array([0,0,0,0,0,0]),2,m,presteps=500)
+			samples=metropolis(lambda x :net(x)**2,np.array([0,1,0,0,-1,0]),2,m,presteps=500)
 			X1 = samples[:,0]
 			X2 = samples[:,1]
 			X3 = samples[:,2]
@@ -273,8 +250,13 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 			r4    = torch.norm(X[:,3:]-R2,dim=1)
 			r5    = torch.norm(X[:,:3]-X[:,3:],dim=1)
 			V     = -1/r1 - 1/r2 - 1/r3 - 1/r4 + 1/r5 + 1/R
-
-			E = (torch.mean(-0.5*lap_X/Psi + V).item()*27.211386)
+			E_loc_lap = -0.5*lap_X/Psi
+			# plt.figure()
+			# plt.plot(X1.detach().numpy(),(V).detach().numpy(),ls='',marker='.',label='Potential',color='y',ms=1)
+			# plt.plot(X1.detach().numpy(),(E_loc_lap).detach().numpy(),ls='',marker='.',label='Laplacian/Psi',color='r',ms=1)
+			# plt.plot(X1.detach().numpy(),(E_loc_lap + V).detach().numpy(),ls='',marker='.',label='Local energy (sum)',color='g',ms=1)
+			# plt.show()
+			E = (torch.mean(E_loc_lap + V).item()*27.211386)
 			#print(E,time.time()-t)
 
 		print('___________________________________________')
@@ -310,7 +292,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 			Psi_plot = net(X_plot).detach().numpy()
 			#Psi_plot2 = net(X_plot2).detach().numpy()
-			Decay = decay(X_plot,net).detach().numpy()
+			#Decay = decay(X_plot,net).detach().numpy()
 			if Psi_plot[np.argmax(np.abs(Psi_plot))] < 0:
 				print("negative Psi")
 				#Psi_plot *= -1
@@ -321,7 +303,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 			else:
 				plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),color='k',linewidth =3)
-				plt.plot(X_plot[:,0].numpy(),Decay/max(Decay))
+				#plt.plot(X_plot[:,0].numpy(),Decay/max(Decay))
 				#plt.plot(X_plot[:,0].numpy(),(Psi_plot2/max(np.abs(Psi_plot2)))**2,label=str(np.round(E,2)),color='k',linewidth =2)
 			#plt.hist(X_all.detach().numpy()[:,0],density=True)
 			#plt.show()
@@ -338,5 +320,4 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 #	ax = fig.add_subplot(1, 1, 1, projection='3d')
 #	ax.scatter(X1.detach().numpy(), X2.detach().numpy(), X3.detach().numpy(), c=np.abs(Psi.detach().numpy()), cmap=plt.hot())
 #	plt.show()
-fit(batch_size=250,steps=15000,epochs=15,losses=["energy"],R1=0.7,R2=-0.7)
-
+fit(batch_size=1000,steps=5000,epochs=10,losses=["energy"],R1=0.7,R2=-0.7)
