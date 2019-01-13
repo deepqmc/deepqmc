@@ -12,7 +12,8 @@ import datetime
 
 cmap=plt.get_cmap("plasma")
 
-def metropolis(distribution,interval,startpoint,maxstepsize,steps,presteps=0):
+def metropolis(distribution,startpoint,maxstepsize,steps,\
+	presteps=0,interval=None):
 	#initialise list to store walker positions
 	samples = torch.zeros(steps,len(startpoint))
 	#initialise the walker at the startposition
@@ -25,11 +26,14 @@ def metropolis(distribution,interval,startpoint,maxstepsize,steps,presteps=0):
 			samples[i-presteps]=(walker)
 		#propose new trial position
 		trial = walker + (torch.rand(3)-0.5)*maxstepsize
-		#check if in interval
-		inint = torch.tensor(all(torch.tensor(interval[0]).type(torch.FloatTensor)<trial[0]) \
-		and all(torch.tensor(interval[1]).type(torch.FloatTensor)>trial[0])).type(torch.FloatTensor)
 		#calculate acceptance propability
-		disttrial = distribution(trial)*inint
+		disttrial = distribution(trial)
+		#check if in interval
+		if not interval is None:
+			inint = torch.tensor(all(torch.tensor(interval[0]).type(torch.FloatTensor)<trial[0]) \
+			and all(torch.tensor(interval[1]).type(torch.FloatTensor)>trial[0])).type(torch.FloatTensor)
+			disttrial = disttrial*inint
+
 		ratio = disttrial/distwalker
 		#accept trial position with respective propability
 		if ratio > np.random.uniform(0,1):
@@ -54,8 +58,9 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 					#torch.nn.ELU(),
 					torch.nn.Linear(64, 1)
 					)
+								
 			self.Lambda=nn.Parameter(torch.Tensor([-1]))	#energy eigenvalue
-			
+						
 		def forward(self,x):                #define forward pass
 			d = torch.zeros(len(x),2)       #get distances
 			d[:,0] = torch.norm(x-R1,dim=1)
@@ -63,7 +68,7 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 			r = torch.erf(d/0.01)/d         #get inverse distances
 			return self.NN(r)[:,0]
 
-	LR=1e-3   #learning rate
+	LR=5e-3   #learning rate
 
 	R1    = torch.tensor([R1,0,0]).type(torch.FloatTensor)  #position of atom 1
 	R2    = torch.tensor([R2,0,0]).type(torch.FloatTensor)  #position of atom 2 
@@ -73,6 +78,7 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 	net = Net()                                      #instance object of network class
 	params = [p for p in net.parameters()]           #get list of network parameters 
 	opt = torch.optim.Adam(params, lr=LR)    		 #pass parameters to optimizer (for backpropagation)
+	scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.5)
 	
 	E = 100         #initialise energy variable
 	E_min = 100     #initialise minimal energy variable
@@ -82,7 +88,9 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 
 	
 	for epoch in range(epochs):    #iterate over epochs
+		scheduler.step()
 
+		
 		print("epoch " +str(1+epoch)+" of "+str(epochs)+":")  #some prints to monitor the training
 		if losses[epoch%len(losses)] == "energy":
 			print("minimize energy")
@@ -90,14 +98,16 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 			print("minimize variance of energy")
 		else:
 			print("loss error, check losses:"+str(losses[epoch%len(losses)] ))
+		
+		print("current LR = " + str(opt.state_dict()["param_groups"][0]["lr"]))
 			
 		start = time.time()      #initial time (for monitoring)
 
 
 		
-		X1_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)    #create spacial samples for training 
-		X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
-		X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(R/2).numpy()).type(torch.FloatTensor)
+		X1_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(2*R).numpy()).type(torch.FloatTensor)    #create spacial samples for training 
+		X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(2*R).numpy()).type(torch.FloatTensor)
+		X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*(2*R).numpy()).type(torch.FloatTensor)
 		X_all=torch.cat([X1_all,X2_all,X3_all], dim=0).reshape(3,batch_size*steps).transpose(0,1)
 		
 		X_all.requires_grad = True                  #needed for the derivation
@@ -109,7 +119,7 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 
 
 		for step in range(steps): #iterate over steps per epoch
-
+			
 			if losses[epoch%len(losses)] == "energy":   #choose energy loss
 
 				X=X_all[index[step*batch_size:(step+1)*batch_size]]    #get subset of the training samples
@@ -147,8 +157,12 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 				r1    = torch.norm(X-R1,dim=1)   #compute electron nuclei distances
 				r2    = torch.norm(X-R2,dim=1)
 				V     = -1/r1 - 1/r2 			 #compute potential energy
-
-				laploss = torch.mean((-0.5*lap_X/Psi + V - net.Lambda)**2) #compute variance of energy (as lossfunction)
+				
+				E_loc_lap = -0.5*lap_X/Psi
+				with torch.no_grad():
+					lz = (E_loc_lap > 0).type(torch.FloatTensor)
+					sc = (E_loc_lap < 50).type(torch.FloatTensor)
+				laploss = torch.mean((E_loc_lap*lz*sc + V - net.Lambda)**2) #compute variance of energy (as lossfunction)
 				
 				J = laploss + (torch.mean(Psi**2)-1)**2   #add a loss to keep wavefunction small for increased stability
 				
@@ -167,13 +181,35 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 
 
 			print("Progress {:2.0%}".format(step /steps), end="\r")  #some prints to monitor the training
-		
+			
+		E_mean_grid = 0
+
+		for n in [100,150,200]:   #ACHTUNG BEIM PLOT /4
+			jo=9
+			ts = time.time()
+			G=torch.meshgrid([torch.linspace(-jo,jo,n),torch.linspace(-jo,jo,n),torch.linspace(-jo,jo,n)])
+			x=G[0].flatten().view(-1,1)
+			y=G[1].flatten().view(-1,1)
+			z=G[2].flatten().view(-1,1)
+			Xe = torch.cat((x, y, z), 1)
+			Xe.requires_grad=True
+			Psi   = net(Xe)
+			gPsi  = grad(Psi,Xe,create_graph=True,grad_outputs=torch.ones(len(Xe)))[0]
+			r1    = torch.norm(Xe-R1,dim=1)
+			r2    = torch.norm(Xe-R2,dim=1)
+			V     = -1/r1 - 1/r2 + 1/R
+			E     = (torch.mean(torch.sum(gPsi**2,dim=1)/2+Psi**2*V)/torch.mean(Psi**2)).item()*27.211386 # should give ~ -0.6023424 (-16.4) for hydrogen ion at (R ~ 2 a.u.)
+			E_mean_grid += E
+			print("#gridpoints/dim = "+str(n) + "     energy on grid = " + str(E)+'    time = '+str(np.round((time.time()-ts),2)))
 		
 		#compute energy of wavefunction after each epoch
-		for n_samples in [10**1,10**1,10**1,10**1,10**1]:
+		E_mean = 0
+		E_square = 0
+		ex = 6
+		for n_samples in [5*10**ex for i in range(5)]:
 			#n_samples = 10**6  #number of steps for monte carlo integration
 			ts = time.time()
-			samples=metropolis(lambda x :net(x)**2,(-6*np.array([1,1,1]),6*np.array([1,1,1])),np.array([0,0,0]),2,n_samples,presteps=500) #obtain samples
+			samples=metropolis(lambda x :net(x)**2,np.array([0,0,0]),1,n_samples,presteps=500) #obtain samples
 	
 			#calculate energy
 	
@@ -202,19 +238,24 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 			V     = -1/r1 - 1/r2 + 1/R
 		
 			E_loc_lap = -0.5*lap_X/Psi
-			E    = (torch.mean(E_loc_lap*(E_loc_lap > 0).type(torch.FloatTensor) + V).item()*27.211386) # energy is given by mean of local energy over sampled batch from psi**2
+			with torch.no_grad():
+					lz = (E_loc_lap > 0).type(torch.FloatTensor)
+					sc = (E_loc_lap < 50).type(torch.FloatTensor)
+			E    = (torch.mean(E_loc_lap*lz*sc + V).item()*27.211386) # energy is given by mean of local energy over sampled batch from psi**2
 			print('#samples = '+str(n_samples)+'    energyexpextation = '+str(E)+'    time = '+str(np.round((time.time()-ts),2)))
+			E_mean += E
+			E_square += E**2
 
 			plt.subplot2grid((1,2),(0,0))
 			plt.plot(X1.detach().numpy(),(V).detach().numpy(),ls='',marker='.',label='Potential',color='y')
-			plt.plot(X1.detach().numpy(),(-lap_X/Psi).detach().numpy(),ls='',marker='.',label='Laplacian/Psi',color='r')
-			plt.plot(X1.detach().numpy(),(-lap_X/Psi + V).detach().numpy(),ls='',marker='.',label='Local energy (sum)',color='g')
+			plt.plot(X1.detach().numpy(),(E_loc_lap*lz*sc).detach().numpy(),ls='',marker='.',label='Laplacian/Psi',color='r')
+			plt.plot(X1.detach().numpy(),(E_loc_lap*lz*sc + V).detach().numpy(),ls='',marker='.',label='Local energy (sum)',color='g')
 			plt.legend(loc='lower center')
 
-
+		E = E_mean/5
 		print('___________________________________________')  #some prints to monitor the training
 		print('It took', time.time()-start, 'seconds.')
-		print('Energy = '+str(E))
+		print('Energy = '+str(E_mean/5)+' +- '+str((E_square/5-(E_mean/5)**2)**(1/2)))
 		print('\n')
 
 
@@ -228,19 +269,19 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 		Psi_plot = net(X_plot).detach().numpy()
 		plt.subplot2grid((1,2),(0,1))
 		if epoch<(epochs-1) :
-			plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),ls=':',color=cmap(epoch/epochs),linewidth =2)
+			plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=(str(np.round(E,2))+" / "+str(np.round(E_mean_grid/3,2))),ls=':',color=cmap(epoch/epochs),linewidth =2)
 			#plt.plot(X_plot[:,0].numpy(),(Psi_plot2/max(np.abs(Psi_plot2)))**2,label=str(np.round(E,2)),ls=':',color=cmap(epoch/epochs),linewidth =2)
 
 		else:
-			plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),color='k',linewidth =3)
+			plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=(str(np.round(E,2))+" / "+str(np.round(E_mean_grid/3,2))),color='k',linewidth =3)
 		
-		plt.legend()	
+		plt.legend(loc="lower center")	
 		plt.savefig(datetime.datetime.now().strftime("%B%d%Y%I%M%p")+".png")
 	return (Psi_min,E_min)
 
 
 for i in range(5):
-	psi,e = fit(batch_size=200,steps=50000,epochs=5,losses=["energy"],R1=1,R2=-1)
+	psi,e = fit(batch_size=1000,steps=10000,epochs=7,losses=["energy"],R1=1,R2=-1)
 
 
 
