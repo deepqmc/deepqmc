@@ -64,7 +64,7 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 			d = torch.zeros(len(x),2)       #get distances
 			d[:,0] = torch.norm(x-R1,dim=1)
 			d[:,1] = torch.norm(x-R2,dim=1)
-			r = torch.erf(d/0.01)/d         #get inverse distances
+			r = torch.erf(d/0.1)/d         #get inverse distances
 			return self.NN(r)[:,0]
 
 	LR=2e-3   #learning rate
@@ -158,10 +158,14 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 				V     = -1/r1 - 1/r2 			 #compute potential energy
 
 				E_loc_lap = -0.5*lap_X/Psi
-
+				E_loc_lap = E_loc_lap*(E_loc_lap>0).type(torch.FloatTensor)
+				#plt.figure()
+				#plt.plot(X1.detach().numpy(),(E_loc_lap).detach().numpy(),ls='',marker='.',label='Potential',color='y',ms=1)
+				#plt.show()
 				laploss = torch.mean((E_loc_lap + V - net.Lambda)**2) #compute variance of energy (as lossfunction)
-
-				J = laploss + (torch.mean(Psi**2)-1)**2   #add a loss to keep wavefunction small for increased stability
+				print(laploss)
+				print((torch.mean(Psi**2)-1)**2)
+				J = laploss + 1/100*(torch.mean(Psi**2)-1)**2   #add a loss to keep wavefunction small for increased stability
 
 			opt.zero_grad()  #delete remaining gradients
 			J.backward()     #perform backward pass
@@ -173,7 +177,7 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 		#compute energy of wavefunction after each epoch
 		E_mean = 0     #initialise mean
 		E_square = 0   #initialise square (for var)
-		ex = 5   	   #exponent for number of steps of metropolis algorithm
+		ex = 4   	   #exponent for number of steps of metropolis algorithm
 		n_mean = 5	   #number of times the metropolis algorithm is performt (to indicate convergence)
 		for n_samples in [10**ex for i in range(n_mean)]:
 
@@ -246,4 +250,4 @@ def fit(batch_size,steps,epochs,R1,R2,losses):	# main function
 	return (Psi_min,E_min)
 
 
-psi,e = fit(batch_size=1000,steps=3000,epochs=5,losses=["energy"],R1=1,R2=-1)
+psi,e = fit(batch_size=15000,steps=10,epochs=5,losses=["variance"],R1=1,R2=-1)
