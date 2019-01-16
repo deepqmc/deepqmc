@@ -11,6 +11,43 @@ import datetime
 
 cmap=plt.get_cmap("plasma")
 
+
+def metropolis(distribution,startpoint,maxstepsize,steps,presteps=0,interval=None):
+	#initialise list to store walker positions
+	samples = torch.zeros(steps,len(startpoint))
+	#another list for the ratios
+	ratios = torch.zeros(steps)
+	#initialise the walker at the startposition
+	walker = torch.tensor([startpoint]).type(torch.FloatTensor)
+	distwalker = distribution(walker)
+	#loop over proposal steps
+	for i in range(presteps+steps):
+		#append position of walker to the sample list in case presteps exceeded
+		if i > (presteps-1):
+			samples[i-presteps]=(walker)
+		#propose new trial position
+		#trial = walker + (torch.rand(6)-0.5)*maxstepsize
+		pro = torch.zeros(6)
+		pro[0:6] = (torch.rand(6)-0.5)*maxstepsize
+		trial = walker + pro
+		#calculate acceptance propability
+		disttrial = distribution(trial)
+		#check if in interval
+		if not interval is None:
+			inint = torch.tensor(all(torch.tensor(interval[0]).type(torch.FloatTensor)<trial[0]) \
+			and all(torch.tensor(interval[1]).type(torch.FloatTensor)>trial[0])).type(torch.FloatTensor)
+			disttrial = disttrial*inint
+
+		ratio = disttrial/distwalker
+		ratios[i-presteps] = ratio
+		#accept trial position with respective propability
+		if ratio > np.random.uniform(0,1):
+			walker = trial
+			distwalker = disttrial
+	#return list of samples
+	print("variance of acc-ratios = " + str((torch.sqrt(torch.mean(ratios**2)-torch.mean(ratios)**2)).data))
+	return samples
+
 def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"]):
 	class Net(nn.Module):
 		def __init__(self):
@@ -27,26 +64,30 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 					torch.nn.Linear(64, 1)
 					)
 			self.Lambda=nn.Parameter(torch.Tensor([-1]))	#eigenvalue
-			self.alpha=nn.Parameter(torch.Tensor([8]))#coefficient for decay
-			self.beta=nn.Parameter(torch.Tensor([2]))#coefficient for decay
-		def forward(self,x):
-			d = torch.zeros(len(x),3)
+
+			
+		def forward(self,x):                #define forward pass
+			d = torch.zeros(len(x),3)       #get distances
 			d[:,0] = torch.norm(x[:,:3],dim=1)
 			d[:,1] = torch.norm(x[:,3:],dim=1)
 			d[:,2] = torch.norm(x[:,:3]-x[:,3:],dim=1)
-			return (self.NN(d)[:,0])*torch.exp(-F.softplus(torch.abs(self.alpha*torch.norm(x,dim=1))-self.beta))
+			d2 = torch.zeros(len(x),3)  
+			d2[:,0] = d[:,1]
+			d2[:,1] = d[:,0]
+			d2[:,2] = d[:,2]
+			r = torch.erf(d/0.01)/d         #get inverse distances
+			r2 = torch.erf(d2/0.01)/d2
+			return self.NN(r)[:,0]+self.NN(r2)[:,0]
 
-	LR=1e-3
 
+	LR=1e-4
 
-	X_plot = torch.from_numpy(np.swapaxes(np.array([np.linspace(-6,6,100),np.zeros(100),np.zeros(100),3*np.ones(100),np.zeros(100),np.zeros(100)]).reshape(6,100),0,1)).type(torch.FloatTensor)
+	limits = 10
+	points = 300
+	X_plot = torch.from_numpy(np.swapaxes(np.array([np.linspace(-limits,limits,points),np.zeros(points),np.zeros(points),1*np.ones(points),np.zeros(points),np.zeros(points)]).reshape(6,points),0,1)).type(torch.FloatTensor)
 
 	net = Net()
-	net.alpha=nn.Parameter(torch.Tensor([3/2]))
 	params = [p for p in net.parameters()]
-	#del params[0]
-	del params[1]
-	del params[1]
 	opt = torch.optim.Adam(params, lr=LR)
 	E = 100
 	E_min = 100
@@ -58,7 +99,8 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 
 		savenet = (copy.deepcopy(net),E)
 
-
+		print('___________________________________________')
+		print('___________________________________________')
 		print("epoch " +str(1+epoch)+" of "+str(epochs)+":")
 
 		if losses[epoch%len(losses)] == "energy":
@@ -71,7 +113,8 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 
 
 
-		X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,6))*3/2).type(torch.FloatTensor)
+		X_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,6))*1).type(torch.FloatTensor)
+
 		#X1_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
 		#X2_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
 		#X3_all = torch.from_numpy(np.random.normal(0,1,(batch_size*steps,1))*3/2*R.numpy()).type(torch.FloatTensor)
@@ -105,9 +148,9 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 				Psi=net(X).flatten()
 
 				g =torch.autograd.grad(Psi,X,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))[0]
-				gradloss  = torch.sum(0.5*(torch.sum(g**2,dim=1)) + Psi**2*(V))
+				gradloss  = torch.sum(0.5*(torch.sum(g**2,dim=1)) + Psi**2*(V))/torch.sum(Psi**2)
 
-				J = gradloss + (torch.sum(Psi**2)-1)**2
+				J = gradloss #+ (torch.sum(Psi**2)-1)**2
 
 			# elif losses[epoch%len(losses)] == "variance":
 			#
@@ -165,39 +208,79 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 			print("Progress {:2.0%}".format(step /steps), end="\r")
 
 
-		for i in range(4):
-			G=torch.meshgrid([torch.linspace(-5,5,(i+1)*4),torch.linspace(-5,5,(i+1)*4),torch.linspace(-5,5,(i+1)*4),torch.linspace(-5.5,5.5,(i+1)*4),torch.linspace(-5.5,5.5,(i+1)*4),torch.linspace(-5.5,5.5,(i+1)*4)])
+		#compute energy of wavefunction after each epoch
+		E_mean = 0     #initialise mean
+		E_square = 0   #initialise square (for var)
+		ex = 5	   #exponent for number of steps of metropolis algorithm
+		n_mean = 20	   #number of times the metropolis algorithm is performt (to indicate convergence)
+			
+		for i,n_samples in enumerate([10**ex for i in range(n_mean)]):
 
-			x1=G[0].flatten().view(-1,1)
-			y1=G[1].flatten().view(-1,1)
-			z1=G[2].flatten().view(-1,1)
-			x2=G[3].flatten().view(-1,1)
-			y2=G[4].flatten().view(-1,1)
-			z2=G[5].flatten().view(-1,1)
-			Xe = torch.cat((x1, y1, z1, x2, y2, z2), 1)
-			Xe.requires_grad=True
-			Psi   = net(Xe)
-			gPsi  = grad(Psi,Xe,create_graph=True,grad_outputs=torch.ones(len(Xe)))[0]
-			r1    = torch.norm(Xe[:,:3],dim=1)
-			r2    = torch.norm(Xe[:,3:],dim=1)
-			r3    = torch.norm(Xe[:,:3]-Xe[:,3:],dim=1)
+			ts = time.time()
+			print("Metropolis stepsize = " + str((i+1)*0.3))
+			samples=metropolis(lambda x :net(x)**2,np.array([-0.1,0,0,1,0,0]),0.3*(i+1),n_samples,presteps=500,interval=(-10*np.ones(6),10*np.ones(6))) #obtain samples
+
+			#calculate energy
+
+			X1 = samples[:,0]
+			X2 = samples[:,1]
+			X3 = samples[:,2]
+			X4 = samples[:,3]
+			X5 = samples[:,4]
+			X6 = samples[:,5]
+			X1.requires_grad=True
+			X2.requires_grad=True
+			X3.requires_grad=True
+			X4.requires_grad=True
+			X5.requires_grad=True
+			X6.requires_grad=True
+			X=torch.cat([X1,X2,X3,X4,X5,X6], dim=0).reshape(6,n_samples).transpose(0,1)
+			Psi=net(X).flatten()
+			dx1 =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
+			ddx1=torch.autograd.grad(dx1[0].flatten(),X1,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
+			dy1 =torch.autograd.grad(Psi,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
+			ddy1=torch.autograd.grad(dy1[0].flatten(),X2,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
+			dz1 =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
+			ddz1=torch.autograd.grad(dz1[0].flatten(),X3,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
+			dx2 =torch.autograd.grad(Psi,X4,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
+			ddx2=torch.autograd.grad(dx2[0].flatten(),X4,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
+			dy2 =torch.autograd.grad(Psi,X5,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
+			ddy2=torch.autograd.grad(dy2[0].flatten(),X5,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
+			dz2 =torch.autograd.grad(Psi,X6,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
+			ddz2=torch.autograd.grad(dz2[0].flatten(),X6,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
+			lap_X = (ddx1+ddy1+ddz1+ddx2+ddy2+ddz2).flatten()
+
+			r1    = torch.norm(X[:,:3],dim=1)
+			r2    = torch.norm(X[:,3:],dim=1)
+			r3    = torch.norm(X[:,:3]-X[:,3:],dim=1)
 			V     = -2/r1 - 2/r2 + 1/r3
 
-			E     = (torch.mean(torch.sum(gPsi**2,dim=1)/2+Psi**2*V)/torch.mean(Psi**2)).item()*27.2
-			print(E)
+			E_loc_lap = -0.5*lap_X/Psi
+			E    = (torch.mean(E_loc_lap + V).item()*27.211386) # energy is given by mean of local energy over sampled batch from psi**2
+			print('#samples = '+str(n_samples)+'    energyexpextation = '+str(E)+'    time = '+str(np.round((time.time()-ts),2)))
+			E_mean += E
+			E_square += E**2
+			
+			#print(X1)
+			plt.hist(X1.detach().numpy(),density=True,bins=100)
+			Psi=net(X_plot).detach().numpy()
+			plt.plot(X_plot[:,0].detach().numpy(),Psi**2/np.max(Psi)**2)
+			plt.title("Energyexpectation = "+str(E))
+			plt.savefig(datetime.datetime.now().strftime("%B%d%Y%I%M%p")+".png")
+
+		E = E_mean/n_mean
 
 
-		print('___________________________________________')
+
 		print('It took', time.time()-start, 'seconds.')
-		print('Lambda = '+str(net.Lambda[0].item()*27.2))
-		print('Energy = '+str(E))
-		print('Alpha  = '+str(net.alpha[0].item()))
-		print('Beta   = '+str(net.beta[0].item()))
+		#print('Lambda = '+str(net.Lambda[0].item()*27.2))
+		print('Energy = '+str(E_mean/n_mean)+' +- '+str((E_square/n_mean-(E_mean/n_mean)**2)**(1/2)))
+
 		print('\n')
 
 
 
-		if True:#else:
+		if False:#else:
 
 			Psi_plot = net(X_plot).detach().numpy()
 			#Psi_plot2 = net(X_plot2).detach().numpy()
@@ -212,14 +295,10 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 			else:
 				plt.plot(X_plot[:,0].numpy(),(Psi_plot/max(np.abs(Psi_plot)))**2,label=str(np.round(E,2)),color='k',linewidth =3)
 				#plt.plot(X_plot[:,0].numpy(),(Psi_plot2/max(np.abs(Psi_plot2)))**2,label=str(np.round(E,2)),color='k',linewidth =2)
-		#plt.hist(X_all.detach().numpy()[:,0],density=True)
-		#plt.show()
 
-	#plt.axvline(R1.numpy()[0],ls=':',color='k')
-	#plt.axvline(R2.numpy()[0],ls=':',color='k')
 
-	#plt.title("batch_size = "+str(batch_size)+", steps = "+str(steps)+", epochs = "+str(epochs)+", R = "+str(R.item())+", losses = "+str(losses))
-	#plt.legend(loc="lower center",bbox_to_anchor=[0.5, - 0.4], ncol=8)
+
+	plt.legend(loc="lower center",bbox_to_anchor=[0.5, - 0.4], ncol=8)
 	#plt.savefig(datetime.datetime.now().strftime("%B%d%Y%I%M%p")+".png")
 	#plt.show()
 	#return (Psi_min,E_min)
@@ -227,5 +306,6 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 #	ax = fig.add_subplot(1, 1, 1, projection='3d')
 #	ax.scatter(X1.detach().numpy(), X2.detach().numpy(), X3.detach().numpy(), c=np.abs(Psi.detach().numpy()), cmap=plt.hot())
 #	plt.show()
-fit(batch_size=250,steps=500,epochs=1,losses=["energy"])
+for i in range(5):
+	fit(batch_size=15000,steps=10000,epochs=5,losses=["energy"])
 plt.show()

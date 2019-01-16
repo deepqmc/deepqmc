@@ -10,7 +10,8 @@ import torch.nn.functional as F
 
 from matplotlib import cm
 
-print(np.load("E_min_save.npy"))
+cuda = torch.device('cuda') 
+x = torch.tensor([1., 2.], device=cuda)
 exit(0)
 #from Combined import *
 #print(10/1e-30)
