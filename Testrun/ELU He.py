@@ -12,6 +12,13 @@ import datetime
 cmap=plt.get_cmap("plasma")
 
 
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
+
+
 def metropolis(distribution,startpoint,maxstepsize,steps,presteps=0,interval=None):
 	#initialise list to store walker positions
 	samples = torch.zeros(steps,len(startpoint))
@@ -28,7 +35,7 @@ def metropolis(distribution,startpoint,maxstepsize,steps,presteps=0,interval=Non
 		#propose new trial position
 		#trial = walker + (torch.rand(6)-0.5)*maxstepsize
 		pro = torch.zeros(6)
-		pro[0:6] = (torch.rand(6)-0.5)*maxstepsize
+		pro[0:3] = (torch.rand(3)-0.5)*maxstepsize
 		trial = walker + pro
 		#calculate acceptance propability
 		disttrial = distribution(trial)
@@ -148,9 +155,9 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 				Psi=net(X).flatten()
 
 				g =torch.autograd.grad(Psi,X,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))[0]
-				gradloss  = torch.sum(0.5*(torch.sum(g**2,dim=1)) + Psi**2*(V))/torch.sum(Psi**2)
+				gradloss  = torch.mean(0.5*(torch.sum(g**2,dim=1)) + Psi**2*(V))/torch.mean(Psi**2)
 
-				J = gradloss #+ (torch.sum(Psi**2)-1)**2
+				J = gradloss + (torch.sum(Psi**2)-1)**2
 
 			# elif losses[epoch%len(losses)] == "variance":
 			#
@@ -211,7 +218,7 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 		#compute energy of wavefunction after each epoch
 		E_mean = 0     #initialise mean
 		E_square = 0   #initialise square (for var)
-		ex = 5	   #exponent for number of steps of metropolis algorithm
+		ex = 4	   #exponent for number of steps of metropolis algorithm
 		n_mean = 20	   #number of times the metropolis algorithm is performt (to indicate convergence)
 			
 		for i,n_samples in enumerate([10**ex for i in range(n_mean)]):
@@ -220,6 +227,24 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 			print("Metropolis stepsize = " + str((i+1)*0.3))
 			samples=metropolis(lambda x :net(x)**2,np.array([-0.1,0,0,1,0,0]),0.3*(i+1),n_samples,presteps=500,interval=(-10*np.ones(6),10*np.ones(6))) #obtain samples
 
+
+			
+			def update_line(num, data, line):
+				line.set_data(data[..., :num])
+				return line,
+
+			fig1 = plt.figure()
+
+			data = samples.transpose(dim0=0,dim1=1)[:2].detach().numpy()
+			l, = plt.plot([], [], 'r-',ls='',marker='.')
+			plt.xlim(-5, 5)
+			plt.ylim(-5, 5)
+			plt.xlabel('x')
+			plt.title('test')
+			line_ani = animation.FuncAnimation(fig1, update_line, 1000, fargs=(data, l),
+						                       interval=50, blit=True)
+						                       
+			plt.show()
 			#calculate energy
 
 			X1 = samples[:,0]
@@ -256,6 +281,7 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 			V     = -2/r1 - 2/r2 + 1/r3
 
 			E_loc_lap = -0.5*lap_X/Psi
+
 			E    = (torch.mean(E_loc_lap + V).item()*27.211386) # energy is given by mean of local energy over sampled batch from psi**2
 			print('#samples = '+str(n_samples)+'    energyexpextation = '+str(E)+'    time = '+str(np.round((time.time()-ts),2)))
 			E_mean += E
@@ -264,7 +290,7 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 			#print(X1)
 			plt.hist(X1.detach().numpy(),density=True,bins=100)
 			Psi=net(X_plot).detach().numpy()
-			plt.plot(X_plot[:,0].detach().numpy(),Psi**2/np.max(Psi)**2)
+			plt.plot(X_plot[:,0].detach().numpy(),Psi**2/np.max(Psi**2))
 			plt.title("Energyexpectation = "+str(E))
 			plt.savefig(datetime.datetime.now().strftime("%B%d%Y%I%M%p")+".png")
 
@@ -307,5 +333,5 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 #	ax.scatter(X1.detach().numpy(), X2.detach().numpy(), X3.detach().numpy(), c=np.abs(Psi.detach().numpy()), cmap=plt.hot())
 #	plt.show()
 for i in range(5):
-	fit(batch_size=15000,steps=10000,epochs=5,losses=["energy"])
+	fit(batch_size=1500,steps=50,epochs=5,losses=["energy"])
 plt.show()
