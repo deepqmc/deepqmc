@@ -8,6 +8,7 @@ from torch.autograd import Variable,grad
 import torch.nn.functional as F
 import copy
 import datetime
+from HMC import * 
 
 cmap=plt.get_cmap("plasma")
 
@@ -219,34 +220,16 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 		E_mean = 0     #initialise mean
 		E_square = 0   #initialise square (for var)
 		ex = 4	   #exponent for number of steps of metropolis algorithm
-		n_mean = 20	   #number of times the metropolis algorithm is performt (to indicate convergence)
+		n_mean = 3	   #number of times the metropolis algorithm is performt (to indicate convergence)
 			
-		for i,n_samples in enumerate([10**ex for i in range(n_mean)]):
+		for i,T in enumerate([0.1 * (i+1) for i in range(3)]):
 
 			ts = time.time()
-			print("Metropolis stepsize = " + str((i+1)*0.3))
-			samples=metropolis(lambda x :net(x)**2,np.array([-0.1,0,0,1,0,0]),0.3*(i+1),n_samples,presteps=500,interval=(-10*np.ones(6),10*np.ones(6))) #obtain samples
 
+			samples = HMC(net,0.5,2,10,1000,6,T=T) #obtain samples
+			samples = samples.view(-1,6).detach()
 
 			
-			def update_line(num, data, line):
-				line.set_data(data[..., :num])
-				return line,
-
-			fig1 = plt.figure()
-
-			data = samples.transpose(dim0=0,dim1=1)[:2].detach().numpy()
-			l, = plt.plot([], [], 'r-',ls='',marker='.')
-			plt.xlim(-5, 5)
-			plt.ylim(-5, 5)
-			plt.xlabel('x')
-			plt.title('test')
-			line_ani = animation.FuncAnimation(fig1, update_line, 1000, fargs=(data, l),
-						                       interval=50, blit=True)
-						                       
-			plt.show()
-			#calculate energy
-
 			X1 = samples[:,0]
 			X2 = samples[:,1]
 			X3 = samples[:,2]
@@ -259,20 +242,21 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 			X4.requires_grad=True
 			X5.requires_grad=True
 			X6.requires_grad=True
-			X=torch.cat([X1,X2,X3,X4,X5,X6], dim=0).reshape(6,n_samples).transpose(0,1)
+			X=torch.cat([X1,X2,X3,X4,X5,X6], dim=0).reshape(6,10000).transpose(0,1)
 			Psi=net(X).flatten()
-			dx1 =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
-			ddx1=torch.autograd.grad(dx1[0].flatten(),X1,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
-			dy1 =torch.autograd.grad(Psi,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
-			ddy1=torch.autograd.grad(dy1[0].flatten(),X2,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
-			dz1 =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
-			ddz1=torch.autograd.grad(dz1[0].flatten(),X3,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
-			dx2 =torch.autograd.grad(Psi,X4,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
-			ddx2=torch.autograd.grad(dx2[0].flatten(),X4,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
-			dy2 =torch.autograd.grad(Psi,X5,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
-			ddy2=torch.autograd.grad(dy2[0].flatten(),X5,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
-			dz2 =torch.autograd.grad(Psi,X6,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n_samples))
-			ddz2=torch.autograd.grad(dz2[0].flatten(),X6,retain_graph=True,grad_outputs=torch.ones(n_samples))[0]
+
+			dx1 =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(len(X1)))
+			ddx1=torch.autograd.grad(dx1[0].flatten(),X1,retain_graph=True,grad_outputs=torch.ones(len(X1)))[0]
+			dy1 =torch.autograd.grad(Psi,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(len(X1)))
+			ddy1=torch.autograd.grad(dy1[0].flatten(),X2,retain_graph=True,grad_outputs=torch.ones(len(X1)))[0]
+			dz1 =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(len(X1)))
+			ddz1=torch.autograd.grad(dz1[0].flatten(),X3,retain_graph=True,grad_outputs=torch.ones(len(X1)))[0]
+			dx2 =torch.autograd.grad(Psi,X4,create_graph=True,retain_graph=True,grad_outputs=torch.ones(len(X1)))
+			ddx2=torch.autograd.grad(dx2[0].flatten(),X4,retain_graph=True,grad_outputs=torch.ones(len(X1)))[0]
+			dy2 =torch.autograd.grad(Psi,X5,create_graph=True,retain_graph=True,grad_outputs=torch.ones(len(X1)))
+			ddy2=torch.autograd.grad(dy2[0].flatten(),X5,retain_graph=True,grad_outputs=torch.ones(len(X1)))[0]
+			dz2 =torch.autograd.grad(Psi,X6,create_graph=True,retain_graph=True,grad_outputs=torch.ones(len(X1)))
+			ddz2=torch.autograd.grad(dz2[0].flatten(),X6,retain_graph=True,grad_outputs=torch.ones(len(X1)))[0]
 			lap_X = (ddx1+ddy1+ddz1+ddx2+ddy2+ddz2).flatten()
 
 			r1    = torch.norm(X[:,:3],dim=1)
@@ -283,11 +267,12 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 			E_loc_lap = -0.5*lap_X/Psi
 
 			E    = (torch.mean(E_loc_lap + V).item()*27.211386) # energy is given by mean of local energy over sampled batch from psi**2
-			print('#samples = '+str(n_samples)+'    energyexpextation = '+str(E)+'    time = '+str(np.round((time.time()-ts),2)))
+			print('#samples = '+str(10000)+'    energyexpextation = '+str(E)+'    time = '+str(np.round((time.time()-ts),2)))
 			E_mean += E
 			E_square += E**2
 			
 			#print(X1)
+			plt.figure()
 			plt.hist(X1.detach().numpy(),density=True,bins=100)
 			Psi=net(X_plot).detach().numpy()
 			plt.plot(X_plot[:,0].detach().numpy(),Psi**2/np.max(Psi**2))
@@ -333,5 +318,5 @@ def fit(batch_size=2056,steps=15,epochs=4,losses=["variance","energy","symmetry"
 #	ax.scatter(X1.detach().numpy(), X2.detach().numpy(), X3.detach().numpy(), c=np.abs(Psi.detach().numpy()), cmap=plt.hot())
 #	plt.show()
 for i in range(5):
-	fit(batch_size=1500,steps=50,epochs=5,losses=["energy"])
+	fit(batch_size=1500,steps=5,epochs=5,losses=["energy"])
 plt.show()
