@@ -10,8 +10,20 @@ import torch.nn.functional as F
 
 from matplotlib import cm
 
-cuda = torch.device('cuda') 
-x = torch.tensor([1., 2.], device=cuda)
+cuda = torch.device('cuda')
+#x = torch.tensor([1., 2.], device=cuda)
+
+X=np.linspace(0,4,100)
+plt.plot(X,X**2)
+plt.axhline(1,color='k')
+plt.axhline(4,color='k')
+plt.axhline(9,color='k')
+
+plt.axvline(1,color='k')
+plt.axvline(2,color='k')
+plt.axvline(3,color='k')
+
+plt.show()
 exit(0)
 #from Combined import *
 #print(10/1e-30)
