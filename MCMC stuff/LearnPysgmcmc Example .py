@@ -14,7 +14,7 @@ import datetime
 import scipy as sp
 cmap=plt.get_cmap("plasma")
 
-
+from pysgmcmc.samplers.sghmc import SGHMC
 
 
 
@@ -50,6 +50,9 @@ def test(x):
 def banana_nll(x):
 	ll = -(0.5*(0.01*x[0]**2+(x[1] + 0.1 * x[0]**2 -10)**2))
 	return -ll
+	
+def f(x):
+    return - (- x[0]**2 + 25)*3/500
 
 
 def plot_banana(grid=(np.arange(-25, 25, 0.05),np.arange(-25, 25, 0.05)),):
@@ -68,14 +71,15 @@ def plot_banana(grid=(np.arange(-25, 25, 0.05),np.arange(-25, 25, 0.05)),):
 def plot_samples(sampler_cls=SGHMC, lr=0.1, num_burn_in_steps=3000,num_samples=1000,color="b"):
 
 	rand1 = torch.rand(1, requires_grad=True)
-	rand2 = torch.rand(1, requires_grad=True)
+	#rand2 = torch.rand(1, requires_grad=True)
 	#print(help(sampler_cls))
-	sampler = sampler_cls(params=(tmp,tmp2),lr=lr, negative_log_likelihood=test)
+	sampler = sampler_cls(params=(rand1,),lr=lr, negative_log_likelihood=f)
 	
 	# skip burn-in samples
 	_ = [sample for sample, _ in islice(sampler, num_burn_in_steps)]
 	samples = np.asarray([sample for sample, _ in islice(sampler, num_samples)])
-	plt.scatter(samples[:, 0], samples[:, 1], color=color, label=sampler_cls.__name__)
+	#plt.scatter(samples[:, 0], samples[:, 1], color=color, label=sampler_cls.__name__)
+	plt.hist(samples.flatten())
 	plt.legend()
 	plt.show()
 	

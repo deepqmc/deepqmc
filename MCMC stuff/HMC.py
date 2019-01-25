@@ -33,19 +33,19 @@ def dynamics(dist,pos,stepsize,steps,T):
 	pos = pos.detach().clone()
 	pos.requires_grad=True
 	vel = torch.randn(pos.shape)*T
-	v_te2 = vel - stepsize*torch.autograd.grad(dist(pos),pos,create_graph=True,retain_graph=True,grad_outputs=torch.ones(len(pos)))[0]/2
+	v_te2 = vel - stepsize*torch.autograd.grad(dist(pos),pos,create_graph=True,retain_graph=True,grad_outputs=torch.ones(pos.shape))[0].flatten()/2
 	p_te  = pos + stepsize*v_te2
 	for n in range(1,steps):
-		v_te2 = v_te2 - stepsize*torch.autograd.grad(dist(pos),pos,create_graph=True,retain_graph=True,grad_outputs=torch.ones(len(pos)))[0]
+		v_te2 = v_te2 - stepsize*torch.autograd.grad(dist(pos),pos,create_graph=True,retain_graph=True,grad_outputs=torch.ones(pos.shape))[0].flatten()
 		p_te  = p_te + stepsize*v_te2
-	v_te  = v_te2 - stepsize*torch.autograd.grad(dist(pos),pos,create_graph=True,retain_graph=True,grad_outputs=torch.ones(len(pos)))[0]/2
+	v_te  = v_te2 - stepsize*torch.autograd.grad(dist(pos),pos,create_graph=True,retain_graph=True,grad_outputs=torch.ones(pos.shape))[0].flatten()/2
 	return p_te,vel.detach().numpy()
 
 
 def HMC(dist,stepsize,dysteps,n_walker,steps,dim,startfactor=0.2,T=0.1,presteps=0):
 	samples = torch.zeros(steps,n_walker,dim)
 	walker = torch.randn(n_walker,dim)*startfactor
-	plt.plot(walker.detach().numpy()[:,0],walker.detach().numpy()[:,1],marker='.',ms='1',ls='',color='k')
+	#plt.plot(walker.detach().numpy()[:,0],walker.detach().numpy()[:,1],marker='.',ms='1',ls='',color='k')
 	v_walker = np.random.normal(size=(n_walker,dim))*startfactor
 	distwalker = dist(walker).detach().numpy()
 	for i in range(steps+presteps):
@@ -59,6 +59,7 @@ def HMC(dist,stepsize,dysteps,n_walker,steps,dim,startfactor=0.2,T=0.1,presteps=
 		smaller = torch.from_numpy(smaller_n).type(torch.FloatTensor)
 		larger  = torch.abs(smaller-1)
 		walker = trial*larger[:,None] + walker*smaller[:,None]
+		print(v_walker,larger)
 		v_walker = v_trial*larger_n[:,None] + v_walker*smaller_n[:,None]
 
 	return samples
@@ -107,31 +108,22 @@ def metropolis(distribution,startpoint,stepsize,steps,dim,n_walker,startfactor=0
 	return samples
 
 
-class Net(nn.Module):
-		def __init__(self):
-			super(Net, self).__init__()
-			self.NN=nn.Sequential(
-					torch.nn.Linear(1, 64),
-					torch.nn.ELU(),
-					torch.nn.Linear(64, 64),
-					torch.nn.ELU(),
-					torch.nn.Linear(64, 1)
-					)
-			self.Lambda=nn.Parameter(torch.Tensor([-1]))	#eigenvalue
+
+f = lambda x: (- x**2 + 25)*3/500
+
+X = torch.linspace(-5,5,100)
+plt.plot(X.detach().numpy(),f(X).detach().numpy())
+
+POS=HMC(dist=f,stepsize=0.1,dysteps=5,n_walker=1,steps=100,dim=1,startfactor=0.2,T=0.1,presteps=0)
+
+plt.hist(POS.detach().numpy(),normed=True)
+
+plt.show()
 
 
-		def forward(self,x):
-			if type(x) == tuple:
-				d = ((x[0]**2+x[1]**2)**(1/2)).view(-1,1)
-			else:
-				d = torch.norm(x,dim=1).view(-1,1)              #define forward pass
-			r = torch.erf(d/0.1)/d         #get inverse distances
-			return self.NN(r)[:,0]
+exit(0)
 
-net=Net()
-
-maxmin = 5
-f = lambda x: - net(x)**2
+f = lambda x: - torch.norm(x)**2
 
 x,y = torch.meshgrid([torch.linspace(-maxmin,maxmin,100),torch.linspace(-maxmin,maxmin,100)])
 G=torch.cat((x,y)).view(2,100,100).transpose(0,-1)
@@ -141,11 +133,10 @@ for i in range(100):
 	P[i] = -f(G[i]).detach().numpy()
 
 
-
 plt.figure(figsize=(9,12))
 #_________________________________________________________________
 plt.subplot2grid((2,2),(0,0))
-plt.imshow(P,extent=[-maxmin,maxmin,-maxmin,maxmin],cmap=cmap)
+plt.imshow(P,extent=[-maxmin,maxmin,-maxmin,maxmin],cmap=cmap,normed=True)
 #_________________________________________________________________
 n_walker= 30
 n_steps = 1000
