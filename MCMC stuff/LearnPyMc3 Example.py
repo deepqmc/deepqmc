@@ -20,12 +20,12 @@ class Net(nn.Module):
 			self.NN=nn.Sequential(
 					torch.nn.Linear(1, 64),
 					torch.nn.ELU(),
+					torch.nn.Linear(64, 64),
+					torch.nn.ELU(),
 					#torch.nn.Linear(64, 64),
 					#torch.nn.ELU(),
-					#torch.nn.Linear(64, 64),
-					#torch.nn.ELU(),
-					#torch.nn.Linear(64, 64),
-					#torch.nn.ELU(),
+					torch.nn.Linear(64, 64),
+					torch.nn.ELU(),
 					torch.nn.Linear(64, 1)
 					)
 			self.Lambda=nn.Parameter(torch.Tensor([-1]))	#eigenvalue
