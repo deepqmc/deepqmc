@@ -51,27 +51,43 @@ def dynamics(dist,pos,stepsize,steps,push):
 	return p_te,vel.detach().numpy()
 
 
-
-def HMC(dist,stepsize,dysteps,n_walker,steps,dim,push,startfactor=1,T=1,presteps=200):
-	logdist = lambda x: -torch.log(dist(x))
+def HMC(dist,stepsize,dysteps,n_walker,steps,dim,push,startfactor=1,T=1,presteps=0):
+	#logdist = lambda x: -torch.log(dist(x))
+	acc = 1
 	samples = torch.zeros(steps,n_walker,dim)
 	walker = torch.randn(n_walker,dim)*startfactor
 	#plt.plot(walker.detach().numpy()[:,0],walker.detach().numpy()[:,1],marker='.',ms='1',ls='',color='k')
 	v_walker = np.zeros((n_walker,dim))
-	distwalker = logdist(walker).detach().numpy()
+	#distwalker = logdist(walker).detach().numpy()
+	#print(walker)
+	distwalker = dist(walker).detach().numpy()
+	#print(distwalker)
 	for i in range(steps+presteps):
 		if i>=presteps:
 			samples[i-presteps] = walker
-		trial,v_trial = dynamics(logdist,walker,stepsize,dysteps,push)
-		disttrial = logdist(trial).detach().numpy()
-		ratio = (np.exp(-disttrial+distwalker)/T)*(np.exp(-0.5/T*(np.sum(v_trial**2,axis=-1)-np.sum(v_walker**2,axis=-1))))
+		#trial,v_trial = dynamics(logdist,walker,stepsize,dysteps,push)
+		trial,v_trial = dynamics((lambda x: -dist(x)),walker,stepsize,dysteps,push)
+		#print(trial)
+		#print(trial)
+		#disttrial = logdist(trial).detach().numpy()
+		disttrial = dist(trial).detach().numpy()
+		#print(disttrial)
+		#ratio = (np.exp(-disttrial+distwalker)/T)*(np.exp(-0.5/T*(np.sum(v_trial**2,axis=-1)-np.sum(v_walker**2,axis=-1))))
+		ratio = (disttrial/distwalker)*(np.exp(-0.5*(np.sum(v_trial**2,axis=-1)-np.sum(v_walker**2,axis=-1))))
+		#print(ratio)
+		#print(ratio)
 		smaller_n = (ratio<np.random.uniform(0,1,n_walker)).astype(float)
 		larger_n  = np.abs(smaller_n-1)
 		smaller = torch.from_numpy(smaller_n).type(torch.FloatTensor)
 		larger  = torch.abs(smaller-1)
 		walker = (trial*larger[:,None] + walker*smaller[:,None])
+		#print(np.sum(larger_n))
+		#print(np.sum(smaller_n))
+		acc += np.sum(larger_n)
 		#print(v_walker,larger)
 		#v_walker = v_trial*larger_n[:,None] + v_walker*smaller_n[:,None]
+	print(acc/(n_walker*steps))
+
 	return samples
 
 def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","energy","symmetry"]):
@@ -250,57 +266,65 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 		print(E)
 		print(time.time()-t)
 
-		#samples=metropolis(lambda x :net(x)**2,(-6*np.array([1,1,1]),6*np.array([1,1,1])),np.array([0,0,0]),2,20000,presteps=500)
-		samples = HMC(lambda x :net(x)**2,0.1,3,100,1000,1,0.1,startfactor=1,T=1,presteps=200).detach().reshape(1000,-1)
-		print(samples.shape)
-		X1 = samples[:,0]
-		X2 = samples[:,1]
-		X3 = samples[:,2]
-		X1.requires_grad=True
-		X2.requires_grad=True
-		X3.requires_grad=True
-		X=torch.cat([X1,X2,X3], dim=0).reshape(3,20000).transpose(0,1)
-		Psi=net(X).flatten()
-		dx =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(20000))
-		ddx=torch.autograd.grad(dx[0].flatten(),X1,retain_graph=True,grad_outputs=torch.ones(20000))[0]
-		dy =torch.autograd.grad(Psi,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(20000))
-		ddy=torch.autograd.grad(dy[0].flatten(),X2,retain_graph=True,grad_outputs=torch.ones(20000))[0]
-		dz =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(20000))
-		ddz=torch.autograd.grad(dz[0].flatten(),X3,retain_graph=True,grad_outputs=torch.ones(20000))[0]
-		lap_X = (ddx+ddy+ddz).flatten()
+		for j in [3,6,9]:
+			#dysteps=j
+			#sy=1/dysteps*0.05
+			nw=100
+			samples = HMC(lambda x :net(x)**2,0.01,j,n_walker=nw,steps=1000,dim=3,push=1,presteps=50).detach().reshape(-1,3)
+			n=samples.shape[0]
+			X1 = samples[:,0]
+			X3 = samples[:,2]
+			X2 = samples[:,1]
+			X1.requires_grad=True
+			X2.requires_grad=True
+			X3.requires_grad=True
+			X=torch.cat([X1,X2,X3], dim=0).reshape(3,n).transpose(0,1)
+			Psi=net(X).flatten()
+			dx =torch.autograd.grad(Psi,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n))
+			ddx=torch.autograd.grad(dx[0].flatten(),X1,retain_graph=True,grad_outputs=torch.ones(n))[0]
+			dy =torch.autograd.grad(Psi,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n))
+			ddy=torch.autograd.grad(dy[0].flatten(),X2,retain_graph=True,grad_outputs=torch.ones(n))[0]
+			dz =torch.autograd.grad(Psi,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(n))
+			ddz=torch.autograd.grad(dz[0].flatten(),X3,retain_graph=True,grad_outputs=torch.ones(n))[0]
+			lap_X = (ddx+ddy+ddz).flatten()
 
-		r1    = torch.norm(X-R1,dim=1)
-		r2    = torch.norm(X-R2,dim=1)
-		V     = -1/r1 - 1/r2 + 1/R
-		E     = (torch.mean(-0.5*lap_X/Psi + V).item()*27.211386)
+			r1    = torch.norm(X-R1,dim=1)
+			r2    = torch.norm(X-R2,dim=1)
+			V     = -1/r1 - 1/r2 + 1/R
+			E     = torch.mean(-0.5*lap_X.view(nw,-1)/Psi.view(nw,-1) + V.view(nw,-1),dim=-1).detach().numpy()*27.211386#.item()*27.211386)
+			mean = np.mean(E)
+			var  = np.sqrt(np.mean((E-mean)**2))
+			#print(Es)
+			print("Mean = "+str(mean))
+			print("var = "+str(var))
 
 
 		print('___________________________________________')
 		print('It took', time.time()-start, 'seconds.')
 		print('Lambda = '+str(net.Lambda[0].item()*27.211386))
-		print('Energy = '+str(E))
+		print('Energy = '+str(mean))
 		print('Alpha  = '+str(net.alpha[0].item()))
 		print('Beta   = '+str(net.beta[0].item()))
 		print('\n')
 
 
-		if E < E_min:
-			E_min = E
-			Psi_min = copy.deepcopy(net)
-
-		if epoch > 1 and E > (savenet[1]+10*(1-epoch/epochs)**2):
-			print("undo step as E_new = "+str(E)+" E_old = "+str(savenet[1]))
-
-			net = savenet[0]
-			E   = savenet[1]
-
-			params = [p for p in net.parameters()]
-			del params[0]
-			opt = torch.optim.Adam(params, lr=LR)
+		# if E < E_min:
+		# 	E_min = E
+		# 	Psi_min = copy.deepcopy(net)
+		#
+		# if epoch > 1 and E > (savenet[1]+10*(1-epoch/epochs)**2):
+		# 	print("undo step as E_new = "+str(E)+" E_old = "+str(savenet[1]))
+		#
+		# 	net = savenet[0]
+		# 	E   = savenet[1]
+		#
+		# 	params = [p for p in net.parameters()]
+		# 	del params[0]
+		# 	opt = torch.optim.Adam(params, lr=LR)
 
 	return (Psi_min,E_min)
 
-fit(batch_size=1000,steps=10,epochs=5,losses=["energy"],R1=1,R2=-1)
+fit(batch_size=1000,steps=100,epochs=5,losses=["energy"],R1=1,R2=-1)
 #
 # E_min=[]
 # Psi_min=[]

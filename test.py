@@ -10,6 +10,11 @@ import torch.nn.functional as F
 
 from matplotlib import cm
 
+N = np.random.normal(size=(2,2,3))
+N2 = N.reshape(-1,3)
+print(N)
+print(N2)
+exit(0)
 cuda = torch.device('cuda')
 #x = torch.tensor([1., 2.], device=cuda)
 
