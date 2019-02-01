@@ -10,39 +10,30 @@ import copy
 
 cmap=plt.get_cmap("plasma")
 
+#test = torch.tensor([[-1,-1],[-1,-1],[-1,-1],[-1,-1],[0,0],[0,0],[0,0.1],[1,0],[1,1],[-1,1],[-1,-1]]).type(torch.FloatTensor)
+#obj = [slice(1,10,2), None]
+#obj = [slice(None,None,1)]+[None for i in range(test.shape[-1])]
 
-test = torch.tensor([[-1,-1],[-1,-1],[-1,-1],[-1,-1],[0,0],[0,0],[0,0.1],[1,0],[1,1],[-1,1],[-1,-1]]).type(torch.FloatTensor)
-obj = (slice(1,10,5), slice(None,None,1))
-print(test[obj])
+#print(obj)
+#print(test[obj])
 
-exit(0)
+#exit(0)
 
 
-f = lambda x,a: torch.exp(-1/2*(x-a)**2/0.01)/np.sqrt(2*np.pi)
-f2d = lambda x,a: torch.exp(-1/2*torch.norm(x[:,None,None]-a[None,:,:],dim=-1)**2/0.01)/np.sqrt(2*np.pi)
-fnd = lambda x,a: torch.exp(-1/2*torch.norm(x[:,None,None]-a[None,:,:],dim=-1)**2/0.01)/np.sqrt(2*np.pi)
+
+
 
 #def almost_sigmoid(x,a,x0,x1):
 #	return a*(x-x0)/torch.sqrt(a**2*(x-x0)**2+1)-a*(x-x1)/torch.sqrt(a**2*(x-x1)**2+1)
 
 
 
-def myhist(X,min=-0.5,max=0.5,bins=30):
-	res = torch.zeros(size=(bins,))
-	B=np.linspace(min,max,bins)
-	for i in range(bins):
-		res[i] = torch.sum(f(X,B[i]))
-	return res/torch.sum(res)
-	
-def myhist2D(X,min=-2,max=2,bins=30):
-	B=np.array(np.meshgrid(np.linspace(min,max,bins),np.linspace(min,max,bins))).swapaxes(0,-1)
-	B2 = torch.from_numpy(B).type(torch.FloatTensor)
-	res = torch.sum(f2d(X,B2),dim=0)
-	return res/torch.sum(res)
 
-def myhistND(X,min,max,bins):
+p = lambda x,a: torch.exp(-1/2*torch.norm(x[([slice(None,None,1)]+[None for i in range(x.shape[-1])])]-a[None],dim=-1)**2/0.01)/np.sqrt(2*np.pi)
+
+def myhist(X,min=-2,max=2,bins=30):
 	B=torch.from_numpy(np.array(np.meshgrid(*[np.linspace(min,max,bins) for i in range(X.shape[-1])])).swapaxes(0,-1)).type(torch.FloatTensor)
-	res = torch.sum(fnd(X,B),dim=0)
+	res = torch.sum(p(X,B),dim=0)
 	return res/torch.sum(res)
 
 
@@ -90,6 +81,7 @@ class Wavenet(nn.Module):
 
 
 LR=0.001
+LR2=0.0001
 net  = Samplenet()#
 net2 = Wavenet()
 R1 = torch.tensor([-1,0]).type(torch.FloatTensor)
@@ -99,9 +91,9 @@ params = [p for p in net.parameters()]
 opt = torch.optim.Adam(params, lr=LR)
 
 params2 = [p for p in net2.parameters()]
-opt2 = torch.optim.Adam(params2, lr=LR)
+opt2 = torch.optim.Adam(params2, lr=LR2)
 
-epochs = 3
+epochs = 1
 steps  = 100
 steps2 = 45
 batch_size = 100
@@ -175,8 +167,9 @@ for epoch in range(epochs):
 	
 	P=P/np.sum(P)
 
-	plt.subplot2grid((3,4),(epoch,0))
+	plt.subplot2grid((epochs,4),(epoch,0))
 	plt.imshow(P,extent=[ran[0],ran[1],ran[0],ran[1]],cmap=cmap)
+	plt.title("Ground truth")
 	
 	Z = torch.from_numpy(P).type(torch.FloatTensor)
 	
@@ -187,7 +180,7 @@ for epoch in range(epochs):
 		print("Progress {:2.0%}".format(i /steps2), end="\r")
 		X = torch.rand(2000).view(1,-1)
 		Y = net(X).flatten().reshape(1000,2)
-		Ya = myhist2D(Y.flip(dims=(-1,)),ran[0],ran[1],100)
+		Ya = myhist(Y.flip(dims=(-1,)),ran[0],ran[1],100)
 		#print(torch.sum((Y>ran[1]).type(torch.FloatTensor)*(Y-ran[1])**2))
 
 		ll = torch.sum((Y[:,0]>ran[1]).type(torch.FloatTensor)*(Y[:,0]-ran[1])**2)+torch.sum((Y[:,1]>ran[1]).type(torch.FloatTensor)*(Y[:,1]-ran[1])**2)
@@ -198,9 +191,9 @@ for epoch in range(epochs):
 		opt.step()
 
 		if (i+1)%15==0 and i!=0:
-			plt.subplot2grid((3,4),(j//3,(j%3)+1))
+			plt.subplot2grid((epochs,4),(j//3,(j%3)+1))
 			plt.imshow(Ya.detach().numpy(),extent=[ran[0],ran[1],ran[0],ran[1]],cmap=cmap)
-			plt.title("iterations = "+str(i+1))
+			plt.title("Sampling, iterations = "+str(i+1))
 			j+=1
 			
 			
