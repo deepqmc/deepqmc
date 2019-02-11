@@ -7,133 +7,39 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable,grad
 import torch.nn.functional as F
-
+import tensorboard
 from matplotlib import cm
 
-N = np.random.normal(size=(2,2,3))
-N2 = N.reshape(-1,3)
-print(N)
-print(N2)
-exit(0)
-cuda = torch.device('cuda')
-#x = torch.tensor([1., 2.], device=cuda)
+X = np.random.normal(size=100)
 
-X=np.linspace(0,4,100)
-plt.plot(X,X**2)
-plt.axhline(1,color='k')
-plt.axhline(4,color='k')
-plt.axhline(9,color='k')
+f2 = lambda x: np.exp(-1/2*(x)**2)/np.sqrt(2*np.pi)
 
-plt.axvline(1,color='k')
-plt.axvline(2,color='k')
-plt.axvline(3,color='k')
 
-plt.show()
-exit(0)
-#from Combined import *
-#print(10/1e-30)
-#print(min(1e30,torch.NaN))
-#exit(0)
-# class Net(nn.Module):
-#     def __init__(self):
-#         super(Net, self).__init__()
-#         self.NN=nn.Sequential(
-#                 torch.nn.Linear(3, 64),
-#                 torch.nn.ELU(),
-#                 torch.nn.Linear(64, 64),
-#                 torch.nn.ELU(),
-#                 torch.nn.Linear(64, 64),
-#                 torch.nn.ELU(),
-#                 torch.nn.Linear(64, 1)
-#                 )
-#         self.Lambda=nn.Parameter(torch.Tensor([-1]))	#eigenvalue
-#         self.alpha=nn.Parameter(torch.Tensor([1]))#coefficient for decay
-#         self.beta=nn.Parameter(torch.Tensor([8]))#coefficient for decay
-#     def forward(self,x):
-#         return self.NN(x)
-#         #return self.NN(d)[:,0]*torch.exp(-F.softplus(torch.abs(self.alpha*torch.norm(x,dim=1))-self.beta))
-#
-# net=Net()
-# #x=Variable(torch.tensor([2.,2.,3.]),requires_grad=True)
-# #y = net(x)
-# #grad = torch.autograd.grad(y,x, create_graph=True)#,grad_outputs=torch.ones(2))
-# #lap  = torch.autograd.grad(grad,x,grad_outputs=torch.ones(3))
-# #print(grad,lap)
-#
-#
-# #X1=Variable(torch.tensor([1,2,3,4.]),requires_grad=True)
-# #X2=Variable(2*torch.tensor([1,2,3,4.]),requires_grad=True)
-# #X3=Variable(3*torch.tensor([1,2,3,4.]),requires_grad=True)
-# X1=torch.tensor([1.,2])
-# X1.requires_grad=True
-# X2=torch.tensor([2.,3])
-# X2.requires_grad=True
-# X3=torch.tensor([3.,4])
-# X3.requires_grad=True
-# X=torch.cat([X1,X2,X3], dim=0)
-# X=X.reshape(3,2).transpose(0,1)
-# #X=torch.stack([X1,X2,X3]).transpose(0,1)
-#
-# #n=len(X)
-# #print(X)
-# #print((X**2).type())
-# A=net(X).flatten()
-# #A=X1**2+X2**2+X3**2
-# print(A)
-# #G1 =torch.autograd.grad(A,X1,grad_outputs=torch.ones_like(A),create_graph=True,retain_graph=True)
-#
-# G1 =torch.autograd.grad(A,X1,create_graph=True,retain_graph=True,grad_outputs=torch.ones(2))
-# print(G1)
-# ddx=torch.autograd.grad(G1[0].flatten(),X1,retain_graph=True,grad_outputs=torch.ones(2))
-# print(ddx)
-# G2 =torch.autograd.grad(A,X2,create_graph=True,retain_graph=True,grad_outputs=torch.ones(2))
-# print(G1)
-# ddy=torch.autograd.grad(G2[0].flatten(),X2,retain_graph=True,grad_outputs=torch.ones(2))
-# print(ddy)
-# G3 =torch.autograd.grad(A,X3,create_graph=True,retain_graph=True,grad_outputs=torch.ones(2))
-# print(G3)
-# ddz=torch.autograd.grad(G3[0].flatten(),X3,retain_graph=True,grad_outputs=torch.ones(2))
-# print(ddz)
-#
-# #ddx=torch.autograd.grad(G1,X1,grad_outputs=torch.ones(1,3))
-# #G2 =torch.autograd.grad(A,X2,grad_outputs=torch.ones(n),create_graph=True,retain_graph=True)
-# #ddy=torch.autograd.grad(G2,X2,grad_outputs=torch.ones(n))
-# #G3 =torch.autograd.grad(A,X3,grad_outputs=torch.ones(n),create_graph=True,retain_graph=True)
-# #ddz=torch.autograd.grad(G3,X3,grad_outputs=torch.ones(n))
-#
-#
-#
-#
-# exit(0)
-#
-# #G2=grad(A,X2,create_graph=True,grad_outputs=torch.ones(n))[0]
-# #G3=grad(A,X3,create_graph=True,grad_outputs=torch.ones(n))[0]
-#
-# ddx=grad(torch.sum(G1[0]),X1,allow_unused=True)
-# #ddy=grad(G2,X2,grad_outputs=torch.ones(n), retain_graph=True)
-# #ddz=grad(G3,X3,grad_outputs=torch.ones(n), retain_graph=True)
-# print(ddx)
-# #print(ddx,ddy,ddz)
-# #print(grad(G1[0][:,1],X,grad_outputs=torch.ones(n)))
-# exit(0)
-#
-#
-#
-# L=torch.zeros_like(X)
-# for i in range(3):
-#     print(grad(G[0][:,i],X[:,i],grad_outputs=torch.ones(n)))
-#     L[:,i]=grad(G[0][:,i],X[:,i],grad_outputs=torch.ones(n))[0]
-# L=torch.sum(L,dim=1)
-# print(X)
-# print(A)
-# print(G)
-# exit(0)
+res = np.zeros(shape=(len(X)))
+for i in range(len(X)):
+    #interval = (X[i]+0.1,X[i]-0.1)
+    res[i]=np.sum(f(X,X[i]))
+    order=np.argsort(X)
+    #plt.plot(X[order],f(X,X[i])[order])
+print(res)
+#plt.plot(X[order],res[order]/40)#/(np.sum(res)))
+plt.plot(X[order],res[order]/(np.sum(res)))
+plt.plot(X[order],f2(X[order])/np.sum(f2(X[order])),marker='o',ls='')
+#plt.show()
 
-xmax=2
-for alpha in [1,7]:
-    for beta in [2,3,12]:
-        d = (torch.rand(100,1,requires_grad=False)-0.5)*2*6
-        decay=torch.exp(-F.softplus(torch.abs(alpha*torch.norm(d,dim=1))-beta))
-        plt.plot(d.numpy(),decay.numpy(),marker='.',ls='',label='a = '+str(alpha)+'  b = '+str(beta))
-plt.legend(loc='upper left')
+def myhist2(X,sigma=0.1):
+    f = lambda x,a: np.exp(-1/2*(x-a)**2/sigma)/np.sqrt(2*np.pi)
+    res = torch.zeros(size=(len(X),))
+    for i in range(len(X)):
+        res[i]=torch.sum(f(X,X[i]))
+    return res/torch.sum(res)
+
+def myhist(X,min=-0.5,max=0.5,bins=30):
+	res = torch.zeros(size=(bins,))
+	B=np.linspace(min,max,bins)
+	for i in range(bins):
+		res[i] = torch.sum(f(X,B[i]))
+	return res/torch.sum(res)
+
+#plt.hist(X,density=True)
 plt.show()

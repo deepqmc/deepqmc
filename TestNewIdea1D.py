@@ -89,7 +89,7 @@ for epoch in range(epochs):
 	ax1 = plt.subplot(211)
 	ax2 = plt.subplot(212, sharex = ax1)
 	start = time.time()
-	#check if reintializing is better than keeping (would expect keeping is better in higher dimensions) 
+	#check if reintializing is better than keeping (would expect keeping is better in higher dimensions)
 	net  = Samplenet()
 	params = [p for p in net.parameters()]
 	opt = torch.optim.Adam(params, lr=LR)
@@ -134,7 +134,7 @@ for epoch in range(epochs):
 	ax1.plot(X_plot.detach().numpy(),Y_plot.detach().numpy(),color='k',label='WF')
 
 	Z = (net2(torch.linspace(ran[0],ran[1],batch_size).view(-1,1)).flatten())**2
-	
+
 	for i in range(steps2):
 
 		print("Progress {:2.0%}".format(i /steps2), end="\r")
@@ -143,23 +143,23 @@ for epoch in range(epochs):
 		Ya = myhist(Y,ran[0],ran[1],100)
 		#print(torch.sum((Y>ran[1]).type(torch.FloatTensor)*(Y-ran[1])**2))
 		ll = torch.sum((Y>ran[1]).type(torch.FloatTensor)*(Y-ran[1])**2)
-		ls = torch.sum((Y<ran[0]).type(torch.FloatTensor)*(Y-ran[0])**2)		
+		ls = torch.sum((Y<ran[0]).type(torch.FloatTensor)*(Y-ran[0])**2)
 		J = torch.sum((Ya-Z)**2)+ll+ls
 		opt.zero_grad()
 		J.backward(retain_graph=True)
 		opt.step()
-		
+
 		if (i+1)%100==0 and i!=0:
 			ax1.plot(np.linspace(ran[0],ran[1],100),Ya.detach().numpy(),label=str(i+1),ls=':')
 	ax1.legend()
 	ax2.hist(Y.detach().numpy(),bins=100,density=True)
-	plt.setp(ax1.get_xticklabels(), fontsize=6)	
+	plt.setp(ax1.get_xticklabels(), fontsize=6)
 	plt.show()
 
 	print('___________________________________________')
 	print('It took', time.time()-start, 'seconds.')
 	print('\n')
-	
+
 
 #X_plot = torch.linspace(-5,5,100)
 #Y_plot = net2(X_plot.view(-1,1))**2
@@ -191,9 +191,9 @@ for i in range(steps):
 	X = torch.rand(1000).view(1,-1)
 	Y = net(X).flatten()
 	Ya = myhist(Y,ran[0],ran[1],100)
-	
+
 	J = torch.sum((Ya-Z)**2)
-	
+
 	opt.zero_grad()
 	J.backward(retain_graph=True)
 	opt.step()
