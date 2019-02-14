@@ -25,12 +25,18 @@ def myhist(X,min=-0.5,max=0.5,bins=30):
 		res[i] = torch.sum(f(X,B[i]))
 	return res/torch.sum(res)
 
+# def myhist2(X,sigma=0.1):
+# 	f = lambda x,a: torch.exp(-1/2*(x-a)**2/sigma)/np.sqrt(2*np.pi)
+# 	res = torch.zeros(size=(len(X),))
+# 	for i in range(len(X)):
+# 		res[i]=torch.sum(f(X,X[i]))
+# 	return res/torch.sum(res)
+
 def myhist2(X,sigma=0.1):
-    f = lambda x,a: torch.exp(-1/2*(x-a)**2/sigma)/np.sqrt(2*np.pi)
-    res = torch.zeros(size=(len(X),))
-    for i in range(len(X)):
-        res[i]=torch.sum(f(X,X[i]))
-    return res/torch.sum(res)
+	f = lambda x: torch.exp(-1/2*torch.norm(x[None,:]-x[:,None],dim=-1)**2/sigma)/np.sqrt(2*np.pi)
+	res = torch.sum(f(X),dim=1)
+	return res/torch.sum(res)
+
 
 class Samplenet(nn.Module):
 	def __init__(self):
@@ -150,7 +156,7 @@ for epoch in range(epochs):
 		Y = net(X).flatten()
 		Z = (net2(Y.view(-1,1)).flatten())**2
 		Z = Z/torch.sum(Z)
-		Ya = myhist2(Y)
+		Ya = myhist2(Y.view(-1,1))
 		#print(torch.sum((Y>ran[1]).type(torch.FloatTensor)*(Y-ran[1])**2))
 		ll = torch.sum((Y>ran[1]).type(torch.FloatTensor)*(Y-ran[1])**2)
 		ls = torch.sum((Y<ran[0]).type(torch.FloatTensor)*(Y-ran[0])**2)
@@ -186,45 +192,4 @@ for epoch in range(epochs):
 #plt.plot(X_plot.detach().numpy(),Y_plot.detach().numpy())
 #plt.hist(Y.detach().numpy(),bins=100,density=True)
 
-plt.show()
-
-exit(0)
-
-steps = 100#
-pics = 5
-ran = (-5,5)
-
-Z = (net2(torch.linspace(ran[0],ran[1],100).view(-1,1)).flatten())**2
-plt.plot(np.linspace(ran[0],ran[1],100),Z.detach().numpy())
-Y=np.zeros(100)
-#for i in range(100):
-	#B=np.linspace(-5,5,100)
-	#Y+=f(torch.linspace(ran[0],ran[1],100),B[i]).detach().numpy()
-	#plt.plot(np.linspace(ran[0],ran[1],100),f(torch.linspace(ran[0],ran[1],100),B[i]).detach().numpy())
-#plt.plot(np.linspace(ran[0],ran[1],100),Y)
-plt.show()
-
-for i in range(steps):
-
-	print("Progress {:2.0%}".format(i /steps), end="\r")
-
-	X = torch.rand(1000).view(1,-1)
-	Y = net(X).flatten()
-	Ya = myhist(Y,ran[0],ran[1],100)
-
-	J = torch.sum((Ya-Z)**2)
-
-	opt.zero_grad()
-	J.backward(retain_graph=True)
-	opt.step()
-
-	if (i%(steps//pics))==0:
-		print(i)
-		plt.subplot2grid((steps//(steps//pics),1),(i//(steps//pics),0))
-		plt.plot(np.linspace(ran[0],ran[1],100),Ya.detach().numpy())
-		plt.plot(np.linspace(ran[0],ran[1],100),Z.detach().numpy())
-
-plt.show()
-
-plt.hist(Y.detach().numpy(),bins=100,density=True)
 plt.show()

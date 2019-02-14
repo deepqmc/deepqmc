@@ -251,7 +251,7 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 
 			print("Progress {:2.0%}".format(step /steps), end="\r")
 		t = time.time()
-		G=torch.meshgrid([torch.linspace(-5,5,150),torch.linspace(-5,5,150),torch.linspace(-5,5,150)])
+		G=torch.meshgrid([torch.linspace(-5,5,50),torch.linspace(-5,5,50),torch.linspace(-5,5,50)])
 		x=G[0].flatten().view(-1,1)
 		y=G[1].flatten().view(-1,1)
 		z=G[2].flatten().view(-1,1)
@@ -266,11 +266,12 @@ def fit(batch_size=2056,steps=15,epochs=4,R1=1.5,R2=-1.5,losses=["variance","ene
 		print(E)
 		print(time.time()-t)
 
-		for j in [3,6,9]:
+		for j in [3]:
 			#dysteps=j
 			#sy=1/dysteps*0.05
-			nw=100
-			samples = HMC(lambda x :net(x)**2,0.01,j,n_walker=nw,steps=1000,dim=3,push=1,presteps=50).detach().reshape(-1,3)
+			nw=50
+			samples = HMC(lambda x :net(x)**2,0.01,j,n_walker=nw,steps=5000,dim=3,push=1,presteps=50).detach().reshape(-1,3)
+			print(samples.shape)
 			n=samples.shape[0]
 			X1 = samples[:,0]
 			X3 = samples[:,2]

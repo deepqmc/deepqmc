@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import time
 
 import torch
@@ -17,8 +18,11 @@ cmap=plt.get_cmap("plasma")
 #print(obj)
 #print(test[obj])
 
-#exit(0)
-
+# a = torch.tensor([[2,1],[1,2],[3,3]]).type(torch.FloatTensor)
+# f = lambda x: torch.exp(-1/2*torch.norm(x[None,:]-x[:,None],dim=-1)**2/0.1)/np.sqrt(2*np.pi)
+# print(torch.sum(f(a),dim=1))
+# exit(0)
+#
 
 
 
@@ -37,6 +41,12 @@ def myhist(X,min=-2,max=2,bins=30):
 	return res/torch.sum(res)
 
 
+def myhist2(X,sigma=0.01):
+	f = lambda x: torch.exp(-1/2*torch.norm(x[None,:]-x[:,None],dim=-1)**2/sigma)/np.sqrt(2*np.pi)
+	res = torch.sum(f(X),dim=1)
+	return res/torch.sum(res)
+
+
 #test = torch.tensor([[-1,-1],[-1,-1],[-1,-1],[-1,-1],[0,0],[0,0],[0,0.1],[1,0],[1,1],[-1,1],[-1,-1]]).type(torch.FloatTensor)
 #plt.imshow(myhist2D(test))
 #plt.show()
@@ -46,13 +56,13 @@ class Samplenet(nn.Module):
 	def __init__(self):
 		super(Samplenet, self).__init__()
 		self.NN=nn.Sequential(
-				torch.nn.Linear(2000, 200),
+				torch.nn.Linear(2000, 500),
 				torch.nn.ReLU(),
-				torch.nn.Linear(200, 200),
+				torch.nn.Linear(500, 200),
 				torch.nn.ReLU(),
-				torch.nn.Linear(200, 200),
+				torch.nn.Linear(200, 500),
 				torch.nn.ReLU(),
-				torch.nn.Linear(200, 2000)
+				torch.nn.Linear(500, 2000)
 				)
 
 	def forward(self,x):
@@ -94,10 +104,10 @@ params2 = [p for p in net2.parameters()]
 opt2 = torch.optim.Adam(params2, lr=LR2)
 
 epochs = 1
-steps  = 100
-steps2 = 45
+steps  = 1000
+steps2 = 100
 batch_size = 100
-ran = (-5,5)
+ran = (-4,4)
 
 f = lambda x: net2(x)**2
 
@@ -110,6 +120,7 @@ for i in range(100):
 
 j=0 #delete later just for plots
 
+plt.figure(figsize=(15,3))
 for epoch in range(epochs):
 
 	start = time.time()
@@ -158,6 +169,7 @@ for epoch in range(epochs):
 
 		print("Progress {:2.0%}".format(step /steps), end="\r")
 	print("\n")
+
 	x,y = torch.meshgrid([torch.linspace(ran[0],ran[1],100),torch.linspace(ran[0],ran[1],100)])
 	G=torch.cat((x,y)).view(2,100,100).transpose(0,-1)
 	P=np.zeros((100,100))
@@ -178,9 +190,12 @@ for epoch in range(epochs):
 	for i in range(steps2):
 
 		print("Progress {:2.0%}".format(i /steps2), end="\r")
-		X = torch.rand(2000).view(1,-1)
+		X = torch.rand(2000).view(1,-1)*50
 		Y = net(X).flatten().reshape(1000,2)
-		Ya = myhist(Y.flip(dims=(1,)),ran[0],ran[1],100)
+		Z = (net2(Y)**2).flatten()
+		Z = Z / torch.sum(Z)
+		Ya = myhist2(Y.flip(dims=(1,)))
+		#print(Ya)
 		#print(torch.sum((Y>ran[1]).type(torch.FloatTensor)*(Y-ran[1])**2))
 
 		ll = torch.sum((Y[:,0]>ran[1]).type(torch.FloatTensor)*(Y[:,0]-ran[1])**2)+torch.sum((Y[:,1]>ran[1]).type(torch.FloatTensor)*(Y[:,1]-ran[1])**2)
@@ -190,11 +205,13 @@ for epoch in range(epochs):
 		J.backward(retain_graph=True)
 		opt.step()
 
-		if (i+1)%15==0 and i!=0:
+
+		if (i+1)%(steps2//3)==0 and i!=0:
 			plt.subplot2grid((epochs,4),(j//3,(j%3)+1))
-			plt.imshow(Ya.detach().numpy(),extent=[ran[0],ran[1],ran[0],ran[1]],cmap=cmap)
+			plt.hist2d(Y[:,0].detach().numpy(),Y[:,1].detach().numpy(),bins=50,range=np.array([[-4,4],[-4,4]]))
 			plt.title("Sampling, iterations = "+str(i+1))
 			j+=1
+
 
 
 		#	ax1.plot(np.linspace(ran[0],ran[1],100),Ya.detach().numpy(),label=str(i+1),ls=':')
@@ -207,6 +224,13 @@ for epoch in range(epochs):
 	print('___________________________________________')
 	print('It took', time.time()-start, 'seconds.')
 	print('\n')
+plt.show()
+
+
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+ax.scatter(Y[:,0].detach().numpy(),Y[:,1].detach().numpy() ,Z.detach().numpy() )
+ax.scatter(Y[:,0].detach().numpy(),Y[:,1].detach().numpy() ,Ya.detach().numpy() )
 plt.show()
 
 

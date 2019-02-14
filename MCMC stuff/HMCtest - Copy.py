@@ -157,15 +157,15 @@ plt.figure(figsize=(12,12))
 plt.subplot2grid((2,2),(0,0))
 plt.imshow(P,extent=[-maxmin,maxmin,-maxmin,maxmin],cmap=cmap)
 #_________________________________________________________________
-n_walker= 150
-n_steps = 2000
+n_walker= 250
+n_steps = 200
 
 for i in range(2):
 	for j in range(2):
 		if not i+j==0:
 			plt.subplot2grid((2,2),(i,j))
 			start=time.time()
-			POS=np.array(HMC(f,0.02,5*(2*i+j),n_walker,n_steps,2,push=1).detach())
+			POS=np.array(HMC(f,0.02,5*(2*i+j),n_walker,n_steps,2,T=1,push=0.3).detach())
 			end=time.time()
 			print("HMC done")
 			print(np.round(end-start,1))
