@@ -20,11 +20,10 @@ def Potential(x,R,R_charges):
 	dimension = x.shape[-1]
 	batchsize = x.shape[0]
 
-	d = 1/torch.norm((x[:,None,:]-R.repeat(1,dimension//R.shape[-1])[None,:,:]).view(batchsize,-1,R.shape[-1]),dim=-1)
-	D = 1/torch.norm(R[:,None,:]-R[None,:,:],dim=-1)
+	d = 1/torch.norm((x[:,None,:]-R.repeat(1,dimension//R.shape[-1])[None,:,:]).view(batchsize,-1,R.shape[-1]),dim=-1) * R_charges
+	D = 1/torch.norm(R[:,None,:]-R[None,:,:],dim=-1)*(R_charges[None,:]*R_charges[:,None])
 	ind = np.arange(0,len(R))
 	D[ind,ind] = 0
-	
 	P = torch.sum(D)/2 - torch.sum(d,dim=-1)
 	
 	if dimension//R.shape[-1] != 1:
@@ -70,7 +69,10 @@ def Gradient(x,R,net):
 	
 	return grad,Psi
 	
-def Gridgenerator(dim,sites,interval,zerodim):
+def Gridgenerator(dimensions,sites,interval):
+
+		dim = np.sum(dimensions)
+		zerodim = len(dimensions)-dim
 
 		G = torch.meshgrid([torch.linspace(interval[0],interval[1],sites) for i in range(dim)])
 		X = []
@@ -81,19 +83,32 @@ def Gridgenerator(dim,sites,interval,zerodim):
 		
 		for i in range(zerodim):
 			X = torch.cat((X.transpose(0,1).flatten(),torch.zeros(sites**(dim)))).view(-1,sites**(dim)).transpose(0,1)
+			
+		index = np.append(np.where(np.array(dimensions))[0],np.where(np.logical_not(np.array(dimensions)))[0])
+		Y = torch.zeros_like(X)
+		Y[:,index] = X
 
-		return X.contiguous()
+		return Y.contiguous()  #is cont needed?
 
 	
 
 cmap=plt.get_cmap("plasma")
 
-def fit(batch_size=2056,n_el=1,steps=2500,epochs=4,RR = torch.tensor([[1,0,0],[-1,0,0]]).type(torch.FloatTensor),RR_charges=[1,1]):
+def fit(batch_size=2056,n_el=1,steps=2500,epochs=4,RR=[[1,0,0],[-1,0,0]],RR_charges=None):
+
+	if RR_charges is None:
+		RR_charges = torch.ones(len(RR))
+
+	elif not type(RR_charges)==torch.Tensor:
+		RR_charges = torch.from_numpy(np.array(RR_charges)).type(torch.FloatTensor)
+	
+	if not type(RR)==torch.Tensor:
+		RR = torch.from_numpy(np.array(RR)).type(torch.FloatTensor)
 
 	LR  = 5e-3
 	
 	inputdim = n_el*RR.shape[0]+np.sum(np.arange(0,n_el))
-	net = WaveNet([inputdim,20,20,20,1])
+	net = WaveNet([inputdim,20,20,20,1],eps=0.01)
 	
 	opt = torch.optim.Adam(net.parameters(), lr=LR)
 
@@ -108,7 +123,7 @@ def fit(batch_size=2056,n_el=1,steps=2500,epochs=4,RR = torch.tensor([[1,0,0],[-
 
 			grad_X,Psi = Gradient(X,RR,net)
 
-			V     = Potential(X,RR)
+			V     = Potential(X,RR,RR_charges)
 			
 			loss = torch.mean(0.5*torch.sum(grad_X**2,dim=1)+ V*Psi**2)/torch.mean(Psi**2)
 
@@ -121,38 +136,25 @@ def fit(batch_size=2056,n_el=1,steps=2500,epochs=4,RR = torch.tensor([[1,0,0],[-
 
 			print("Progress {:2.0%}".format(step /steps), end="\r")
 
-
+		#calculate energy on Grid
 		t = time.time()
-		
-
-		X = Gridgenerator(3*n_el,10,(-5,5),0)
-		
+		X = Gridgenerator([True for i in range(3*n_el)],10,(-5,5))
 		grad_X,Psi = Gradient(X,RR,net)
-		
-		
-
-		V     = Potential(X,RR)
-		
-		
+		V     = Potential(X,RR,RR_charges)
 		E     = (torch.mean(torch.sum(grad_X**2,dim=1)/2+Psi**2*V)/torch.mean(Psi**2)).item()#*27.211386 
-
+		print("E_grid = "+str(E))
+		print("time = "+str(time.time()-t))	
 		
-		X = Gridgenerator(2,80,(-5,5),3*n_el-2)
-		#index = torch.LongTensor([0, 3, 2,1,4,5])
-		#y = torch.zeros_like(X)
-		#y[:,index] = X
-		#X = y
-		#print(X)
+		#plot the square of the wavefunction
+		X = Gridgenerator([True,False,False,True,False,False],100,(-4,4))
 		Psi = net(X,RR).flatten()
 		
 		fig = plt.figure()
 		ax = fig.add_subplot(111, projection='3d')
-		ax.scatter(X[:,0].detach().numpy(),X[:,1].detach().numpy(),Psi.detach().numpy()**2,marker='.')
-
+		ax.scatter(X[:,0].detach().numpy(),X[:,3].detach().numpy(),Psi.detach().numpy()**2,marker='.')
 		plt.show()
 
-		print("E = "+str(E))
-		print("time = "+str(time.time()-t))	
+
 		
 		plt.figure(figsize=(10,3))
 
@@ -168,7 +170,7 @@ def fit(batch_size=2056,n_el=1,steps=2500,epochs=4,RR = torch.tensor([[1,0,0],[-
 			plt.hist2d(samples[:,0].detach().numpy(),samples[:,1].detach().numpy(),bins=100,range=[[-5,5],[-5,5]])
 
 			lap_X,Psi = Laplacian(samples,RR,net)
-			V         = Potential(samples,RR)
+			V         = Potential(samples,RR,RR_charges)
 			
 			
 			E     = torch.mean(-0.5*lap_X.view(nw,-1)/Psi.view(nw,-1) + V.view(nw,-1),dim=-1).detach().numpy()#*27.211386
@@ -185,9 +187,11 @@ def fit(batch_size=2056,n_el=1,steps=2500,epochs=4,RR = torch.tensor([[1,0,0],[-
 
 	return
 
-#H2+
-fit(batch_size=10000,n_el=1,steps=500,epochs=5,RR=torch.tensor([[-1,0,0],[1.,0,0]]))
-#H2
+#H2+     Energy = -0.6023424   for R = 1.9972 
+#fit(batch_size=10000,n_el=1,steps=500,epochs=5,RR=[[-1,0,0],[1.,0,0]])
+#H2		 Energy = -1.173427    for R = 1.40 
 #fit(batch_size=10000,n_el=2,steps=100,epochs=5,RR=torch.tensor([[-0.7,0,0],[0.7,0,0]]))
-#He+
-#fit(batch_size=10000,n_el=2,steps=100,epochs=5,RR=torch.tensor([[-0.7,0,0],[0.7,0,0]]))
+#He+	 Energy = 1.9998
+#fit(batch_size=10000,n_el=1,steps=100,epochs=5,RR=torch.tensor([[0.,0,0]]),RR_charges=[2])
+#He		 Energy = −2.90338583
+fit(batch_size=10000,n_el=2,steps=300,epochs=5,RR=torch.tensor([[0.3,0,0]]),RR_charges=[2])
