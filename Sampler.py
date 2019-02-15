@@ -49,7 +49,7 @@ def HMC(dist,stepsize,dysteps,n_walker,steps,dim,push,startfactor=1,T=1,presteps
 		acc += np.sum(larger_n)
 		#print(v_walker,larger)
 		#v_walker = v_trial*larger_n[:,None] + v_walker*smaller_n[:,None]
-	print(acc/(n_walker*steps))
+	print("Acceptanceratio: "+str(np.round(acc/(n_walker*steps)*100,2) )+ "%")
 
 	return samples
 

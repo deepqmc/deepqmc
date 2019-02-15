@@ -71,6 +71,7 @@ def HMC(dist,stepsize,dysteps,n_walker,steps,dim,push,startfactor=1,T=1,presteps
 
 	return samples
 
+
 class Net(nn.Module):
 		def __init__(self):
 			super(Net, self).__init__()
