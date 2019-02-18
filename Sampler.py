@@ -15,19 +15,46 @@ def dynamics(dist,pos,stepsize,steps,push):
 
 	pos = pos.detach().clone()
 	pos.requires_grad = True
-	vel   = torch.randn(pos.shape)*push
+	vel   = torch.randn(pos.shape)*push 
 	v_te2 = vel - stepsize*torch.autograd.grad(dist(pos),pos,create_graph=True,retain_graph=True,grad_outputs=torch.ones(pos.shape[0]))[0]/2
-	p_te  = pos + stepsize*v_te2  #here is something really strange!!!
+	p_te  = pos + stepsize*v_te2  
 	for n in range(1,steps):
 		v_te2 = v_te2 - stepsize*torch.autograd.grad(dist(p_te),p_te,create_graph=True,retain_graph=True,grad_outputs=torch.ones(pos.shape[0]))[0]
 		p_te  = p_te + stepsize*v_te2
-
 	v_te  = v_te2 - stepsize*torch.autograd.grad(dist(p_te),p_te,create_graph=True,retain_graph=True,grad_outputs=torch.ones(pos.shape[0]))[0]/2
 
-	return p_te,vel.detach()
+	return p_te,vel.detach().numpy()
 
 
-def HMC(dist,stepsize,dysteps,n_walker,steps,mean,dim,push,acc,startfactor=1,presteps=200):
+def HMC(dist,stepsize,dysteps,n_walker,steps,dim,push,startfactor=1,T=1,presteps=200):
+
+	acc=0
+	samples = torch.zeros(steps,n_walker,dim)
+	walker = torch.randn(n_walker,dim)*startfactor
+	v_walker = np.zeros((n_walker,dim))
+	distwalker = dist(walker).detach().numpy()
+	
+	for i in range(steps+presteps):
+		if i>=presteps:
+			samples[i-presteps] = walker
+
+		trial,v_trial = dynamics((lambda x: -dist(x)),walker,stepsize,dysteps,push)
+
+		disttrial = dist(trial).detach().numpy()
+
+		ratio = (disttrial/distwalker)*(np.exp(-0.5*(np.sum(v_trial**2,axis=-1)-np.sum(v_walker**2,axis=-1))))
+		smaller_n = (ratio<np.random.uniform(0,1,n_walker)).astype(float)
+		larger_n  = np.abs(smaller_n-1)
+		smaller = torch.from_numpy(smaller_n).type(torch.FloatTensor)
+		larger  = torch.abs(smaller-1)
+		walker = (trial*larger[:,None] + walker*smaller[:,None])
+		v_walker = v_trial*larger_n[:,None] + v_walker*smaller_n[:,None]
+		acc += np.sum(larger_n)
+	print("Acceptanceratio: "+str(np.round(acc/(n_walker*steps)*100,2) )+ "%")
+
+	return samples
+
+def HMC_ad(dist,stepsize,dysteps,n_walker,steps,mean,dim,push,acc,startfactor=1,presteps=200):
 	samples    = torch.zeros(steps,n_walker,dim)
 	#walker     = torch.randn(n_walker,dim)*startfactor
 	#v_walker   = torch.zeros((n_walker,dim))
