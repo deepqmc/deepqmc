@@ -13,7 +13,7 @@ from dlqmc.Examples import fit, Potential, Laplacian, Gradient, Gridgenerator
 
 
 #H2+     Energy = -0.6023424   for R = 1.9972
-fit(batch_size=1000,n_el=1,steps=500,epochs=1,RR=[[-1,0,0],[1.,0,0]])
+fit(batch_size=10000, n_el=1, steps=500, epochs=1, RR=[[-1, 0, 0], [1., 0, 0]])
 #H2		 Energy = -1.173427    for R = 1.40
 #fit(batch_size=10000,n_el=2,steps=100,epochs=5,RR=torch.tensor([[-0.7,0,0],[0.7,0,0]]))
 #He+	 Energy = -1.9998
