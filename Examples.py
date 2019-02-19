@@ -145,14 +145,14 @@ def fit(batch_size=2056,n_el=1,steps=2500,epochs=4,RR=[[1,0,0],[-1,0,0]],RR_char
 		#print("E_grid = "+str(E))
 		#print("time = "+str(time.time()-t))
 
-		#plot the square of the wavefunction
-		X = Gridgenerator([True,True,False],100,(-4,4))
-		Psi = net(X,RR).flatten()
-		
-		fig = plt.figure()
-		ax = fig.add_subplot(111, projection='3d')
-		ax.scatter(X[:,0].detach().numpy(),X[:,1].detach().numpy(),Psi.detach().numpy()**2,marker='.')
-		plt.show()
+		# #plot the square of the wavefunction
+		# X = Gridgenerator([True,True,False],100,(-4,4))
+		# Psi = net(X,RR).flatten()
+		#
+		# fig = plt.figure()
+		# ax = fig.add_subplot(111, projection='3d')
+		# ax.scatter(X[:,0].detach().numpy(),X[:,1].detach().numpy(),Psi.detach().numpy()**2,marker='.')
+		# plt.show()
 
 
 		plt.figure(figsize=(10,3))
@@ -163,10 +163,10 @@ def fit(batch_size=2056,n_el=1,steps=2500,epochs=4,RR=[[1,0,0],[-1,0,0]],RR_char
 			t = time.time()
 
 			nw=100
-			samples = HMC(lambda x :(net(x,RR).flatten())**2,0.1,j,n_walker=nw,steps=5000,dim=3*n_el,push=1,presteps=50).detach().reshape(-1,3*n_el)
+			samples = HMC_ad(lambda x :(net(x,RR).flatten())**2,0.1,j,n_walker=nw,steps=5000,dim=3*n_el,push=1,presteps=50).detach().reshape(-1,3*n_el)
 
 			plt.subplot2grid((1,3),(0,i))
-			plt.hist2d(samples[:,0].detach().numpy(),samples[:,1].detach().numpy(),bins=100,range=[[-5,5],[-5,5]])
+			plt.hist2d(samples[:,0].detach().numpy(),samples[:,1].detach().numpy(),bins=100,range=[[-3,3],[-3,3]])
 
 			lap_X,Psi = Laplacian(samples,RR,net)
 			V         = Potential(samples,RR,RR_charges)
@@ -186,10 +186,10 @@ def fit(batch_size=2056,n_el=1,steps=2500,epochs=4,RR=[[1,0,0],[-1,0,0]],RR_char
 	return
 
 #H2+     Energy = -0.6023424   for R = 1.9972
-fit(batch_size=10000,n_el=1,steps=50,epochs=5,RR=[[-1,0,0],[1.,0,0]])
+fit(batch_size=10000,n_el=1,steps=500,epochs=5,RR=[[-1,0,0],[1.,0,0]])
 #H2		 Energy = -1.173427    for R = 1.40
 #fit(batch_size=10000,n_el=2,steps=100,epochs=5,RR=torch.tensor([[-0.7,0,0],[0.7,0,0]]))
-#He+	 Energy = 1.9998
+#He+	 Energy = -1.9998
 #fit(batch_size=10000,n_el=1,steps=100,epochs=5,RR=torch.tensor([[0.,0,0]]),RR_charges=[2])
 #He		 Energy = −2.90338583
 #fit(batch_size=10000,n_el=2,steps=300,epochs=5,RR=torch.tensor([[0.3,0,0]]),RR_charges=[2])
