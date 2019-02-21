@@ -1,3 +1,4 @@
 *.pyc
 /pip-wheel-metadata/
 /src/*.egg-info/
+/notebooks/.ipynb_checkpoints/
