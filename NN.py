@@ -15,13 +15,15 @@ class Net(nn.Module):
 	def forward(self, x):
 
 		for i, layer in enumerate(self.layers):
-			x = F.elu(layer(x))
+			if i<self.depth:
+				x = F.relu(layer(x))
+			else : layer(x)
 
 			#if not i == (self.depth)-1:
-			#	r = F.elu(layer(r))
+			#	x = F.elu(layer(x))
 			#else:
-			#	r = torch.sigmoid(layer(r))
-		return r
+			#	x = torch.sigmoid(layer(x))
+		return x
 
 
 class WaveNet(nn.Module):
@@ -44,7 +46,7 @@ class WaveNet(nn.Module):
 			for i in range(x.shape[-2]):
 				for j in range(i):
 					d = torch.cat((d,de[:,i,j].view(-1,1)),dim=1)
-					
+
 		r = torch.erf(d/self.eps)/d
 
 		for i, layer in enumerate(self.layers):
