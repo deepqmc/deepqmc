@@ -75,7 +75,7 @@ def HMC(
 
         trial, v_trial = dynamics((lambda x: -dist(x)), walker, stepsize, dysteps, push)
         disttrial = dist(trial).detach().numpy()
-        ratio = (disttrial / distwalker) * (
+        ratio = torch.from_numpy(disttrial / distwalker) * (
             torch.exp(
                 -0.5
                 * (torch.sum(v_trial ** 2, dim=-1) - torch.sum(v_walker ** 2, dim=-1))

@@ -155,7 +155,7 @@ def fit(batch_size=2056, n_el=1, steps=2500, epochs=4, RR=None, RR_charges=None)
 			V = Potential(X, RR, RR_charges)
 
 			px = torch.from_numpy(sps.norm.pdf(np.linalg.norm(X.detach().numpy(),axis=1),scale=3)).type(torch.FloatTensor)
-
+			
 			loss = torch.mean((0.5 * torch.sum(grad_X ** 2, dim=1) + V * Psi ** 2)/px) / torch.mean((Psi ** 2/px))
 
 			J = loss  # + (torch.mean(Psi**2)-1)**2
@@ -202,7 +202,7 @@ def fit(batch_size=2056, n_el=1, steps=2500, epochs=4, RR=None, RR_charges=None)
 				    0.1,
 				    j,
 				    n_walker=nw,
-				    steps=5000,
+				    steps=500,
 				    dim=3 * n_el,
 				    push=1,
 				    presteps=50,
