@@ -3,10 +3,11 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import scipy.stats as sps
+
 
 from .NN import WaveNet
 from .Sampler import HMC_ad
-
 
 def Potential(x, R, R_charges):
     """returns the potential energy (coulomb).
@@ -120,50 +121,50 @@ cmap = plt.get_cmap('plasma')
 
 
 def fit(batch_size=2056, n_el=1, steps=2500, epochs=4, RR=None, RR_charges=None):
-    RR = RR or [[1, 0, 0], [-1, 0, 0]]
 
-    if RR_charges is None:
-        RR_charges = torch.ones(len(RR))
+	#RR = RR or [[1, 0, 0], [-1, 0, 0]]
+	if RR_charges is None:
+		RR_charges = torch.ones(len(RR))
 
-    elif not type(RR_charges) == torch.Tensor:
-        RR_charges = torch.from_numpy(np.array(RR_charges)).type(torch.FloatTensor)
+	elif not type(RR_charges) == torch.Tensor:
+		RR_charges = torch.from_numpy(np.array(RR_charges)).type(torch.FloatTensor)
 
-    if not type(RR) == torch.Tensor:
-        RR = torch.from_numpy(np.array(RR)).type(torch.FloatTensor)
+	if not type(RR) == torch.Tensor:
+		RR = torch.from_numpy(np.array(RR)).type(torch.FloatTensor)
 
-    LR = 5e-3
+	LR = 5e-3
 
-    inputdim = n_el * RR.shape[0] + np.sum(np.arange(0, n_el))
-    net = WaveNet([inputdim, 20, 20, 20, 1], eps=0.01)
+	inputdim = n_el * RR.shape[0] + np.sum(np.arange(0, n_el))
+	net = WaveNet([inputdim, 20, 20, 20, 1], eps=0.01)
 
-    opt = torch.optim.Adam(net.parameters(), lr=LR)
+	opt = torch.optim.Adam(net.parameters(), lr=LR)
 
-    for _ in range(epochs):
+	for _ in range(epochs):
 
-        X_all = torch.from_numpy(
-            np.random.normal(0, 1, (batch_size * steps, 3 * n_el)) * 3
-        ).type(torch.FloatTensor)
-        index = torch.randperm(steps * batch_size)
+		X_all = torch.from_numpy(
+			np.random.normal(0, 1, (batch_size * steps, 3 * n_el)) * 3
+		).type(torch.FloatTensor)
+		index = torch.randperm(steps * batch_size)
 
-        for step in range(steps):
+		for step in range(steps):
 
-            X = X_all[index[step * batch_size : (step + 1) * batch_size]]
+			X = X_all[index[step * batch_size : (step + 1) * batch_size]]
 
-            grad_X, Psi = Gradient(X, RR, net)
+			grad_X, Psi = Gradient(X, RR, net)
 
-            V = Potential(X, RR, RR_charges)
+			V = Potential(X, RR, RR_charges)
 
-            loss = torch.mean(
-                0.5 * torch.sum(grad_X ** 2, dim=1) + V * Psi ** 2
-            ) / torch.mean(Psi ** 2)
+			px = torch.from_numpy(sps.norm.pdf(np.linalg.norm(X.detach().numpy(),axis=1),scale=3)).type(torch.FloatTensor)
 
-            J = loss  # + (torch.mean(Psi**2)-1)**2
+			loss = torch.mean((0.5 * torch.sum(grad_X ** 2, dim=1) + V * Psi ** 2)/px) / torch.mean((Psi ** 2/px))
 
-            opt.zero_grad()
-            J.backward()
-            opt.step()
+			J = loss  # + (torch.mean(Psi**2)-1)**2
 
-            print('Progress {:2.0%}'.format(step / steps), end='\r')
+			opt.zero_grad()
+			J.backward()
+			opt.step()
+
+			print('Progress {:2.0%}'.format(step / steps), end='\r')
 
             # ## calculate energy on Grid
             # t = time.time()
@@ -188,55 +189,55 @@ def fit(batch_size=2056, n_el=1, steps=2500, epochs=4, RR=None, RR_charges=None)
             # )
             # plt.show()
 
-        plt.figure(figsize=(10, 3))
+		plt.figure(figsize=(10, 3))
 
-        for i, j in enumerate([1, 3, 5]):
+		for i, j in enumerate([1, 3, 5]):
 
-            t = time.time()
+			t = time.time()
 
-            nw = 100
-            samples = (
-                HMC_ad(
-                    lambda x: (net(x, RR).flatten()) ** 2,
-                    0.1,
-                    j,
-                    n_walker=nw,
-                    steps=5000,
-                    dim=3 * n_el,
-                    push=1,
-                    presteps=50,
-                )
-                .detach()
-                .reshape(-1, 3 * n_el)
-            )
+			nw = 100
+			samples = (
+				HMC_ad(
+				    lambda x: (net(x, RR).flatten()) ** 2,
+				    0.1,
+				    j,
+				    n_walker=nw,
+				    steps=5000,
+				    dim=3 * n_el,
+				    push=1,
+				    presteps=50,
+				)
+				.detach()
+				.reshape(-1, 3 * n_el)
+			)
 
-            plt.subplot2grid((1, 3), (0, i))
-            plt.hist2d(
-                samples[:, 0].detach().numpy(),
-                samples[:, 1].detach().numpy(),
-                bins=100,
-                range=[[-3, 3], [-3, 3]],
-            )
+			plt.subplot2grid((1, 3), (0, i))
+			plt.hist2d(
+				samples[:, 0].detach().numpy(),
+				samples[:, 1].detach().numpy(),
+				bins=100,
+				range=[[-3, 3], [-3, 3]],
+			)
 
-            lap_X, Psi = Laplacian(samples, RR, net)
-            V = Potential(samples, RR, RR_charges)
+			lap_X, Psi = Laplacian(samples, RR, net)
+			V = Potential(samples, RR, RR_charges)
 
-            E = (
-                torch.mean(
-                    -0.5 * lap_X.view(nw, -1) / Psi.view(nw, -1) + V.view(nw, -1),
-                    dim=-1,
-                )
-                .detach()
-                .numpy()
-            )  # *27.211386
-            mean = np.mean(E)
-            var = np.sqrt(np.mean((E - mean) ** 2))
-            print('Mean = ' + str(mean))
-            print('var = ' + str(var))
-            print('time = ' + str(time.time() - t))
+			E = (
+				torch.mean(
+				    -0.5 * lap_X.view(nw, -1) / Psi.view(nw, -1) + V.view(nw, -1),
+				    dim=-1,
+				)
+				.detach()
+				.numpy()
+			)  # *27.211386
+			mean = np.mean(E)
+			var = np.sqrt(np.mean((E - mean) ** 2))
+			print('Mean = ' + str(mean))
+			print('var = ' + str(var))
+			print('time = ' + str(time.time() - t))
 
-        plt.show()
-        print('___________________________________________')
-        print('\n')
+		plt.show()
+		print('___________________________________________')
+		print('\n')
 
-    return
+	return
