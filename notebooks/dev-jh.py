@@ -38,14 +38,16 @@ from dlqmc.utils import (
 plot_func(np.linspace(1e-3, 1, 100), lambda x: special.erf(x/0.01)/x);
 
 
-# In[28]:
+# In[66]:
 
 
+coords = torch.Tensor([[-1, 0, 0], [1, 0, 0]])
+charges = torch.Tensor([1, 1])
 x_line = torch.cat((torch.linspace(-3, 3, 500)[:, None], torch.zeros((500, 2))), dim=1)
 mesh = get_3d_cube_mesh([(-6, 6), (-4, 4), (-4, 4)], [600, 400, 400])
 
 
-# In[37]:
+# In[5]:
 
 
 mol = gto.M(
@@ -83,8 +85,6 @@ mf.kernel()
 # In[5]:
 
 
-coords = torch.Tensor([[-1, 0, 0], [1, 0, 0]])
-charges = torch.Tensor([1, 1])
 lr = 5e-3
 
 
@@ -170,7 +170,7 @@ E_loc.mean().item()
 
 # ## GTO WF
 
-# In[17]:
+# In[6]:
 
 
 mol = gto.M(
@@ -187,7 +187,7 @@ mf = scf.RHF(mol)
 scf_energy = mf.kernel()
 
 
-# In[18]:
+# In[7]:
 
 
 plt.plot(
@@ -196,22 +196,22 @@ plt.plot(
 );
 
 
-# In[20]:
+# In[136]:
 
 
 (wf_from_mf(mesh, mf, 0)**2).sum()*(12*8*8/mesh.shape[0])
 
 
-# In[21]:
+# In[137]:
 
 
 plt.plot(
     x_line[:, 0].numpy(),
     local_energy(
-        lambda x: wf_from_mf(x, mf, 0),
         x_line,
+        lambda x: wf_from_mf(x, mf, 0),
         coords,
-        charges
+        charges,
     ).detach().numpy()
 )
 plt.ylim((-10, 0))
