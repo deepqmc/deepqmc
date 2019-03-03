@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import time
-
+from NN import *
 import torch
 import torch.nn as nn
 from torch.autograd import Variable,grad
@@ -14,17 +14,6 @@ cmap=plt.get_cmap("plasma")
 #test = torch.tensor([[-1,-1],[-1,-1],[-1,-1],[-1,-1],[0,0],[0,0],[0,0.1],[1,0],[1,1],[-1,1],[-1,-1]]).type(torch.FloatTensor)
 #obj = [slice(1,10,2), None]
 #obj = [slice(None,None,1)]+[None for i in range(test.shape[-1])]
-
-#print(obj)
-#print(test[obj])
-
-# a = torch.tensor([[2,1],[1,2],[3,3]]).type(torch.FloatTensor)
-# f = lambda x: torch.exp(-1/2*torch.norm(x[None,:]-x[:,None],dim=-1)**2/0.1)/np.sqrt(2*np.pi)
-# print(torch.sum(f(a),dim=1))
-# exit(0)
-#
-
-
 
 
 #def almost_sigmoid(x,a,x0,x1):
@@ -47,11 +36,6 @@ def myhist2(X,sigma=0.01):
 	return res/torch.sum(res)
 
 
-#test = torch.tensor([[-1,-1],[-1,-1],[-1,-1],[-1,-1],[0,0],[0,0],[0,0.1],[1,0],[1,1],[-1,1],[-1,-1]]).type(torch.FloatTensor)
-#plt.imshow(myhist2D(test))
-#plt.show()
-#exit(0)
-
 class Samplenet(nn.Module):
 	def __init__(self):
 		super(Samplenet, self).__init__()
@@ -68,35 +52,14 @@ class Samplenet(nn.Module):
 	def forward(self,x):
 		return self.NN(x)
 
-class Wavenet(nn.Module):
-	def __init__(self):
-		super(Wavenet, self).__init__()
-		self.NN=nn.Sequential(
-				torch.nn.Linear(2, 64),
-				torch.nn.ELU(),
-				torch.nn.Linear(64, 64),
-				torch.nn.ELU(),
-				torch.nn.Linear(64, 64),
-				torch.nn.ELU(),
-				torch.nn.Linear(64, 1)
-				)
-		#self.Lambda=nn.Parameter(torch.Tensor([-1]))	#eigenvalue
-
-	def forward(self,x):
-		d = torch.zeros(len(x),2)
-		d[:,0] = torch.norm(x-R1,dim=1)
-		d[:,1] = torch.norm(x-R2,dim=1)
-		r = torch.erf(d/0.5)/d
-		return self.NN(r)
-
 
 LR=0.001
 LR2=0.0001
 net  = Samplenet()#
-net2 = Wavenet()
+net2 = WaveNet([2,64,64,64,1])
 R1 = torch.tensor([-1,0]).type(torch.FloatTensor)
 R2 = torch.tensor([1,0]).type(torch.FloatTensor)
-
+R  = torch.tensor([[-1,0],[1,0.]])
 params = [p for p in net.parameters()]
 opt = torch.optim.Adam(params, lr=LR)
 
@@ -104,12 +67,12 @@ params2 = [p for p in net2.parameters()]
 opt2 = torch.optim.Adam(params2, lr=LR2)
 
 epochs = 1
-steps  = 1000
-steps2 = 100
-batch_size = 100
+steps  = 100
+steps2 = 50
+batch_size = 10000
 ran = (-4,4)
 
-f = lambda x: net2(x)**2
+f = lambda x: net2(x,R)**2
 
 x,y = torch.meshgrid([torch.linspace(ran[0],ran[1],100),torch.linspace(ran[0],ran[1],100)])
 G=torch.cat((x,y)).view(2,100,100).transpose(0,-1)
@@ -120,7 +83,7 @@ for i in range(100):
 
 j=0 #delete later just for plots
 
-plt.figure(figsize=(15,3))
+#plt.figure(figsize=(15,3))
 for epoch in range(epochs):
 
 	start = time.time()
@@ -138,9 +101,9 @@ for epoch in range(epochs):
 
 
 	#check if reintializing is better than keeping (would expect keeping is better in higher dimensions)
-	net  = Samplenet()
-	params = [p for p in net.parameters()]
-	opt = torch.optim.Adam(params, lr=LR)
+	#net  = Samplenet()
+	#params = [p for p in net.parameters()]
+	#opt = torch.optim.Adam(params, lr=LR)
 
 	index = torch.randperm(steps*batch_size)
 	X_all.requires_grad = True
@@ -155,7 +118,7 @@ for epoch in range(epochs):
 
 		V     = -1/r1 -1/r2
 
-		Psi=net2(X).flatten()
+		Psi=net2(X,R).flatten()
 
 		g = torch.autograd.grad(Psi,X,create_graph=True,retain_graph=True,grad_outputs=torch.ones(batch_size))[0]
 		gradloss  = torch.sum(0.5*(torch.sum(g**2,dim=1)) + Psi**2*V)/torch.sum(Psi**2)
@@ -179,9 +142,9 @@ for epoch in range(epochs):
 
 	P=P/np.sum(P)
 
-	plt.subplot2grid((epochs,4),(epoch,0))
-	plt.imshow(P,extent=[ran[0],ran[1],ran[0],ran[1]],cmap=cmap)
-	plt.title("Ground truth")
+	#plt.subplot2grid((epochs,4),(epoch,0))
+	#plt.imshow(P,extent=[ran[0],ran[1],ran[0],ran[1]],cmap=cmap)
+	#plt.title("Ground truth")
 
 	Z = torch.from_numpy(P).type(torch.FloatTensor)
 
@@ -192,7 +155,7 @@ for epoch in range(epochs):
 		print("Progress {:2.0%}".format(i /steps2), end="\r")
 		X = torch.rand(2000).view(1,-1)*50
 		Y = net(X).flatten().reshape(1000,2)
-		Z = (net2(Y)**2).flatten()
+		Z = (net2(Y,R)**2).flatten()
 		Z = Z / torch.sum(Z)
 		Ya = myhist2(Y.flip(dims=(1,)))
 		#print(Ya)
@@ -207,9 +170,9 @@ for epoch in range(epochs):
 
 
 		if (i+1)%(steps2//3)==0 and i!=0:
-			plt.subplot2grid((epochs,4),(j//3,(j%3)+1))
-			plt.hist2d(Y[:,0].detach().numpy(),Y[:,1].detach().numpy(),bins=50,range=np.array([[-4,4],[-4,4]]))
-			plt.title("Sampling, iterations = "+str(i+1))
+			#plt.subplot2grid((epochs,4),(j//3,(j%3)+1))
+			#plt.hist2d(Y[:,0].detach().numpy(),Y[:,1].detach().numpy(),bins=50,range=np.array([[-4,4],[-4,4]]))
+			#plt.title("Sampling, iterations = "+str(i+1))
 			j+=1
 
 
