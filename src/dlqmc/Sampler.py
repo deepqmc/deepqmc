@@ -1,12 +1,13 @@
 import numpy as np
 import torch
+from tqdm import tqdm, trange
 
 
-def dynamics(dist, pos, stepsize, steps, push):
+def dynamics(dist, pos, stepsize, steps):
 
     pos = pos.detach().clone()
     pos.requires_grad = True
-    vel = torch.randn(pos.shape) * push
+    vel = torch.randn(pos.shape)
     v_te2 = (
         vel
         - stepsize
@@ -33,20 +34,19 @@ def dynamics(dist, pos, stepsize, steps, push):
             )[0]
         )
         p_te = p_te + stepsize * v_te2
-    # v_te = (
-    #     v_te2
-    #     - stepsize
-    #     * torch.autograd.grad(
-    #         dist(p_te),
-    #         p_te,
-    #         create_graph=True,
-    #         retain_graph=True,
-    #         grad_outputs=torch.ones(pos.shape[0]),
-    #     )[0]
-    #     / 2
-    # )
+        
+    v_te = (
+        v_te2 
+        - stepsize / 2 
+        * torch.autograd.grad(
+            dist(pos),
+            pos,
+            create_graph=True,
+            retain_graph=True,
+            grad_outputs=torch.ones(pos.shape[0]),
+        )[0])
 
-    return p_te, vel
+    return p_te, v_te, vel
 
 
 def HMC(
@@ -56,29 +56,26 @@ def HMC(
     n_walker,
     steps,
     dim,
-    push,
     startfactor=1,
-    T=1,
     presteps=200,
 ):
 
     acc = 0
     samples = torch.zeros(steps, n_walker, dim)
     walker = torch.randn(n_walker, dim) * startfactor
-    v_walker = torch.zeros((n_walker, dim))
     distwalker = dist(walker).detach().numpy()
 
-    for i in range(steps + presteps):
+    for i in trange(steps + presteps):
 
         if i >= presteps:
             samples[i - presteps] = walker
 
-        trial, v_trial = dynamics((lambda x: -dist(x)), walker, stepsize, dysteps, push)
+        trial, v_trial, v_0 = dynamics((lambda x: -torch.log(dist(x))), walker, stepsize, dysteps)
         disttrial = dist(trial).detach().numpy()
         ratio = torch.from_numpy(disttrial / distwalker) * (
             torch.exp(
                 -0.5
-                * (torch.sum(v_trial ** 2, dim=-1) - torch.sum(v_walker ** 2, dim=-1))
+                * (torch.sum(v_trial ** 2, dim=-1) - torch.sum(v_0 ** 2, dim=-1))
             )
         )
         R = torch.rand(n_walker)
@@ -86,9 +83,9 @@ def HMC(
         larger = torch.abs(smaller - 1)
         ind = torch.nonzero(larger).flatten()
         walker[ind] = trial[ind]
-        v_walker[ind] = v_trial[ind]
         distwalker[ind] = disttrial[ind]
-        acc += torch.sum(larger).item()
+        if i >= presteps:
+            acc += torch.sum(larger).item()
 
     print('Acceptanceratio: ' + str(np.round(acc / (n_walker * steps) * 100, 2)) + '%')
     return samples
@@ -111,15 +108,15 @@ def HMC_ad(
     ac = 0.8
     samples = torch.zeros(steps, n_walker, dim)
     walker = torch.randn(n_walker, dim) * startfactor
-    v_walker = torch.zeros((n_walker, dim))
+    #v_walker = torch.zeros((n_walker, dim))
     distwalker = dist(walker)
     disttrial = torch.zeros(n_walker)
 
-    for i in range(steps + presteps):
+    for i in trange(steps + presteps):
 
         if i >= presteps:
             samples[i - presteps] = walker
-        trial, v_trial = dynamics((lambda x: -dist(x)), walker, stepsize, dysteps, push)
+        trial, v_trial, v_0 = dynamics((lambda x: -dist(x)), walker, stepsize, dysteps, push)
         trial = 2 * trial - walker
         v_trial = v_trial
 
@@ -140,7 +137,7 @@ def HMC_ad(
                     -0.5
                     * (
                         torch.sum(v_trial[na] ** 2, dim=-1)
-                        - torch.sum(v_walker[na] ** 2, dim=-1)
+                        - torch.sum(v_0[na] ** 2, dim=-1)
                     )
                 )
             )
@@ -148,9 +145,10 @@ def HMC_ad(
             larger[na] = torch.abs(smaller[na] - 1)
             ind = torch.nonzero(larger[na]).flatten()
             walker[na[ind]] = trial[na[ind]]
-            v_walker[na[ind]] = v_trial[na[ind]]
+            #v_walker[na[ind]] = v_trial[na[ind]]
             distwalker[na[ind]] = disttrial[ind]
-            acc += torch.sum(larger[na]).item()
+            if i >= presteps:
+                acc += torch.sum(larger[na]).item()
             na = torch.nonzero(smaller[na]).flatten()
     print('Acceptanceratio: ' + str(np.round(acc / (n_walker * steps) * 100, 2)) + '%')
     return samples
@@ -178,7 +176,7 @@ def metropolis(
     #          marker='.',ms='1',ls='',color='k')
     distwalker = distribution(walker)
     # loop over proposal steps
-    for i in range(presteps + steps):
+    for i in trange(presteps + steps):
         # append position of walker to the sample list in case presteps exceeded
         if i > (presteps - 1):
             samples[i - presteps] = walker
