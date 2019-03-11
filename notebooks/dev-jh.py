@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[387]:
 
 
 get_ipython().run_line_magic('load_ext', 'autoreload')
 get_ipython().run_line_magic('autoreload', '1')
-get_ipython().run_line_magic('aimport', 'dlqmc.NN, dlqmc.Sampler, dlqmc.Examples, dlqmc.utils')
+get_ipython().run_line_magic('aimport', 'dlqmc.NN, dlqmc.Sampler, dlqmc.Examples')
+get_ipython().run_line_magic('aimport', 'dlqmc.utils, dlqmc.sampling, dlqmc.analysis, dlqmc.gto, dlqmc.physics')
 get_ipython().run_line_magic('config', "InlineBackend.figure_format = 'svg'")
-get_ipython().run_line_magic('config', "InlineBackend.print_figure_kwargs =     {'bbox_inches': 'tight', 'dpi': 300}")
+get_ipython().run_line_magic('config', "InlineBackend.print_figure_kwargs = {'bbox_inches': 'tight', 'dpi': 300}")
 
 
-# In[2]:
+# In[388]:
 
 
 import numpy as np
@@ -22,23 +23,25 @@ from torch.utils.data import DataLoader, RandomSampler
 from torch.distributions import Normal
 from pyscf import gto, scf
 from pyscf.data.nist import BOHR
-from tqdm import tqdm, trange
+from tqdm import tqdm_notebook, tnrange
 
 from dlqmc.NN import WaveNet
-from dlqmc.Sampler import HMC_ad
+from dlqmc.Sampler import HMC
 from dlqmc.Examples import Potential, Laplacian, Gradient, fit
-from dlqmc.utils import (
-    plot_func, local_energy, wf_from_mf, get_3d_cube_mesh
-)
+from dlqmc.sampling import langevin_monte_carlo
+from dlqmc.utils import plot_func, get_3d_cube_mesh, assign_where
+from dlqmc.physics import local_energy, grad, quantum_force
+from dlqmc.gto import wf_from_mf
+from dlqmc.analysis import autocorr, blocking
 
 
-# In[3]:
+# In[389]:
 
 
 plot_func(np.linspace(1e-3, 1, 100), lambda x: special.erf(x/0.01)/x);
 
 
-# In[66]:
+# In[4]:
 
 
 coords = torch.Tensor([[-1, 0, 0], [1, 0, 0]])
@@ -88,13 +91,13 @@ mf.kernel()
 lr = 5e-3
 
 
-# In[6]:
+# In[58]:
 
 
 net = WaveNet([2, 20, 20, 20, 1], eps=0.01)
 opt = torch.optim.Adam(net.parameters(), lr=lr)
 tape = []
-for i_step in trange(0, 1_000):
+for i_step in tnrange(0, 1_000):
     r = 3*torch.randn(10_000, 3)
     grad_psi, psi = Gradient(r, coords, net)
     V = Potential(r, coords, charges)
@@ -196,13 +199,13 @@ plt.plot(
 );
 
 
-# In[136]:
+# In[8]:
 
 
-(wf_from_mf(mesh, mf, 0)**2).sum()*(12*8*8/mesh.shape[0])
+# (wf_from_mf(mesh, mf, 0)**2).sum()*(12*8*8/mesh.shape[0])
 
 
-# In[137]:
+# In[8]:
 
 
 plt.plot(
@@ -217,48 +220,162 @@ plt.plot(
 plt.ylim((-10, 0))
 
 
-# In[22]:
+# In[367]:
 
 
-samples = HMC_ad(
+samples = HMC(
     dist=lambda x: wf_from_mf(x, mf, 0)**2,
-    stepsize=0.1,
-    dysteps=3,
+    stepsize=np.sqrt(0.1),
+    dysteps=0,
     n_walker=100,
     steps=5000,
     dim=3,
-    push=1,
     startfactor=1,
-    presteps=50,
-).detach().reshape(-1, 3)
+    presteps=100,
+).detach().transpose(0, 1).contiguous()
 
 
-# In[23]:
+# In[390]:
+
+
+tau = 0.1
+n_walker = 100
+n_steps = 5000
+samples, info = langevin_monte_carlo(lambda x: wf_from_mf(x, mf, 0), n_walker, n_steps, tau, range=tnrange)
+info
+
+
+# In[391]:
+
+
+E_loc = local_energy(
+    samples.view(-1, 3), lambda x: wf_from_mf(x, mf, 0), coords, charges
+).view(100, -1)
+
+
+# In[393]:
+
+
+plt.plot(*samples[0][:100, :2].numpy().T)
+plt.gca().set_aspect(1)
+
+
+# In[394]:
 
 
 plt.hist2d(
-    samples[:, 0].numpy(),
-    samples[:, 1].numpy(),
+    *samples.view(-1, 3)[:, :2].numpy().T,
     bins=100,
     range=[[-3, 3], [-3, 3]],
 )                                   
 plt.gca().set_aspect(1)
 
 
-# In[24]:
+# In[395]:
 
 
-E_loc = local_energy(lambda x: wf_from_mf(x, mf, 0), samples, coords, charges)
+plt.plot(E_loc.mean(0).numpy())
+plt.ylim(-0.7, -0.5)
 
 
-# In[25]:
+# In[396]:
 
 
-plt.hist(E_loc.detach().clamp(-1.25, 1).numpy(), bins=100);
+E_loc.mean()
 
 
-# In[26]:
+# In[397]:
 
 
-scf_energy, E_loc.mean().item()
+E_loc.std()
+
+
+# In[398]:
+
+
+E_loc.std().item()/np.sqrt(n_walker*n_steps)
+
+
+# In[399]:
+
+
+(E_loc.mean(dim=-1).std()*np.sqrt(5000)/E_loc.std())**2
+
+
+# In[400]:
+
+
+plt.hist(E_loc.flatten().clamp(-1.25, 0).numpy(), bins=100);
+
+
+# In[401]:
+
+
+scf_energy, E_loc.mean().item(), (E_loc.mean(dim=-1).std()/np.sqrt(100)).item()
+
+
+# In[402]:
+
+
+results = ([], [])
+with open('/storage/mi/jhermann/Research/Projects/nqmc/_dev/test-calc-2/h2+-hf-vmc.qw.log') as f:
+    for l in f:
+        words = l.split()
+        if words and words[0].startswith('total_energy'):
+            i = 1 if words[0].endswith('var') else 0
+            results[i].append(words[2])
+results = torch.tensor(np.array(results, dtype=float).T)
+
+
+# In[135]:
+
+
+avg = results[:, 0].mean()
+avg
+
+
+# In[136]:
+
+
+avgvar = (results[:, 1].view(-1, 1).norm(dim=-1)).mean().item()
+np.sqrt(avgvar)
+
+
+# In[137]:
+
+
+(results[:, 0].var() + results[:, 1].mean()).sqrt().item()
+
+
+# In[139]:
+
+
+err = (results[:, 0].std(unbiased=False).item()/np.sqrt(500))**2
+np.sqrt(err)
+
+
+# In[140]:
+
+
+indep_points = avgvar/err
+indep_points
+
+
+# In[403]:
+
+
+plt.plot(*np.array(list(map(blocking, E_loc))).mean(0).T)
+
+
+# In[404]:
+
+
+plt.plot(np.array(list(map(lambda x: autocorr(range(100), x), E_loc))).mean(0))
+plt.axhline()
+
+
+# In[ ]:
+
+
+
 
