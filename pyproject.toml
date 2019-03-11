@@ -26,6 +26,7 @@ pep8-naming = "^0.7.0"
 isort = "^4.3"
 ipykernel = "^5.1"
 matplotlib = "^3.0"
+ipywidgets = "^7.4"
 
 [tool.black]
 py36 = true
