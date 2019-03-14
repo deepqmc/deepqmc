@@ -1,31 +1,29 @@
 import numpy as np
 
 
-def blocking(x, maxB=None):
+def blocking(x, max_B=None):
     N = len(x)
-    y = []
+    sigmas = []
     sigma = x.std()
-    maxB = maxB or int(np.log2(N))
-    for logB in range(0, maxB):
-        B = 2 ** logB
-        y.append(
-            (
-                logB,
-                x[-(N // B * B) :].view(-1, B).mean(dim=-1).std().item()
-                * np.sqrt(B)
-                / sigma,
-            )
+    max_B = max_B or int(np.log2(N))
+    for log_B in range(0, max_B):
+        B = 2 ** log_B
+        sigma_B = (
+            x[-(N // B * B) :].view(-1, B).mean(dim=-1).std().item()
+            * np.sqrt(B)
+            / sigma
         )
-    return y
+        sigmas.append((log_B, sigma_B))
+    return sigmas
 
 
-def autocorr(ks, x):
+def autocorr_coeff(ks, x):
     Cs = []
     x_mean = x.mean()
+    var = ((x - x_mean) ** 2).sum()
     for k in ks:
         end = -k or x.numel()
-        C = ((x[:end] - x_mean) * (x[k:] - x_mean)).sum() / (
-            (x[:end] - x_mean) ** 2
-        ).sum()
+        autocov = ((x[:end] - x_mean) * (x[k:] - x_mean)).sum()
+        C = autocov / var
         Cs.append(C.item())
     return Cs

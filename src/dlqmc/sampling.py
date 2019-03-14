@@ -19,7 +19,7 @@ def langevin_monte_carlo(wf, r, n_steps, tau, range=range):
         P_acc = torch.exp(log_G_ratio) * psi_new ** 2 / psi ** 2
         accepted = P_acc > torch.rand_like(P_acc)
         n_accepted += accepted.type(torch.int).sum().item()
-        samples[:, i, :] = r
+        samples[:, i] = r
         assign_where((r, psi, force), (r_new, psi_new, force_new), accepted)
     info = {'acceptance': n_accepted / (n_walker * n_steps)}
     return samples, info

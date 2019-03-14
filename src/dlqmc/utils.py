@@ -1,15 +1,53 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 
 
-def plot_func(x, f, plot=plt.plot, **kwargs):
-    return plot(x, f(x), **kwargs)
-
-
-def get_3d_cube_mesh(bounds, npts):
+def get_flat_mesh(bounds, npts):
     edges = [torch.linspace(*b, n) for b, n in zip(bounds, npts)]
     grids = torch.meshgrid(*edges)
-    return torch.stack(grids).view(3, -1).t()
+    return torch.stack(grids).view(len(grids), -1).t(), edges
+
+
+def plot_func(func, bounds, density=0.02, is_torch=True):
+    n_pts = int((bounds[1] - bounds[0]) / density)
+    x = (torch if is_torch else np).linspace(bounds[0], bounds[1], n_pts)
+    y = func(x)
+    if is_torch:
+        x = x.numpy()
+        y = y.detach().numpy()
+    return plt.plot(x, y)
+
+
+def plot_func_x(func, bounds, density=0.02, is_torch=True):
+    n_pts = int((bounds[1] - bounds[0]) / density)
+    x_line = torch.linspace(bounds[0], bounds[1], n_pts)
+    x_line = torch.cat([x_line[:, None], x_line.new_zeros((n_pts, 2))], dim=1)
+    if not is_torch:
+        x_line = x_line.numpy()
+    y = func(x_line)
+    if is_torch:
+        x_line = x_line.numpy()
+        y = y.detach().numpy()
+    return plt.plot(x_line[:, 0], y)
+
+
+def plot_func_xy(func, bounds, density=0.02):
+    ns_pts = [int((bs[1] - bs[0]) / density) for bs in bounds]
+    xy_plane, xy_edges = get_flat_mesh(bounds, ns_pts)
+    xy_plane = torch.cat([xy_plane, xy_plane.new_zeros(len(xy_plane), 1)], dim=1)
+    res = plt.contour(
+        *xy_edges, func(xy_plane).detach().view(len(xy_edges[0]), -1).numpy().T
+    )
+    plt.gca().set_aspect(1)
+    return res
+
+
+def integrate_on_mesh(func, bounds, density=0.02):
+    ns_pts = [int((bs[1] - bs[0]) / density) for bs in bounds]
+    vol = np.array([bs[1] - bs[0] for bs in bounds]).prod()
+    mesh = get_flat_mesh(bounds, ns_pts)[0]
+    return sum(func(x).sum() for x in mesh.chunk(100)) * (vol / mesh.shape[0])
 
 
 def assign_where(xs, ys, where):

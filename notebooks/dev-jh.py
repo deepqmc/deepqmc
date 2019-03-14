@@ -1,118 +1,193 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[387]:
+# In[1]:
 
 
 get_ipython().run_line_magic('load_ext', 'autoreload')
 get_ipython().run_line_magic('autoreload', '1')
 get_ipython().run_line_magic('aimport', 'dlqmc.NN, dlqmc.Sampler, dlqmc.Examples')
-get_ipython().run_line_magic('aimport', 'dlqmc.utils, dlqmc.sampling, dlqmc.analysis, dlqmc.gto, dlqmc.physics')
+get_ipython().run_line_magic('aimport', 'dlqmc.utils, dlqmc.sampling, dlqmc.analysis, dlqmc.gto, dlqmc.physics, dlqmc.nn')
 get_ipython().run_line_magic('config', "InlineBackend.figure_format = 'svg'")
 get_ipython().run_line_magic('config', "InlineBackend.print_figure_kwargs = {'bbox_inches': 'tight', 'dpi': 300}")
 
 
-# In[388]:
+# In[354]:
 
+
+from collections import namedtuple
 
 import numpy as np
 from scipy import special
 import matplotlib.pyplot as plt
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader, RandomSampler
 from torch.distributions import Normal
-from pyscf import gto, scf
+import pyscf
+from pyscf import gto, scf, dft
 from pyscf.data.nist import BOHR
 from tqdm import tqdm_notebook, tnrange
 
-from dlqmc.NN import WaveNet
 from dlqmc.Sampler import HMC
-from dlqmc.Examples import Potential, Laplacian, Gradient, fit
+from dlqmc.nn import WFNet
+import dlqmc.nn
 from dlqmc.sampling import langevin_monte_carlo
-from dlqmc.utils import plot_func, get_3d_cube_mesh, assign_where
-from dlqmc.physics import local_energy, grad, quantum_force
-from dlqmc.gto import wf_from_mf
-from dlqmc.analysis import autocorr, blocking
-
-
-# In[389]:
-
-
-plot_func(np.linspace(1e-3, 1, 100), lambda x: special.erf(x/0.01)/x);
-
-
-# In[4]:
-
-
-coords = torch.Tensor([[-1, 0, 0], [1, 0, 0]])
-charges = torch.Tensor([1, 1])
-x_line = torch.cat((torch.linspace(-3, 3, 500)[:, None], torch.zeros((500, 2))), dim=1)
-mesh = get_3d_cube_mesh([(-6, 6), (-4, 4), (-4, 4)], [600, 400, 400])
-
-
-# In[5]:
-
-
-mol = gto.M(
-    atom=[
-        ['H', (-1, 0, 0)],
-        ['H', (1, 0, 0)]
-    ],
-    unit='bohr',
-    basis='aug-cc-pv5z',
-    charge=1,
-    spin=1,
+from dlqmc.utils import (
+    plot_func, get_flat_mesh, assign_where, plot_func_xy,
+    plot_func_x, integrate_on_mesh
 )
-mf = scf.RHF(mol)
-mf.kernel()
+from dlqmc.physics import (
+    local_energy, grad, quantum_force, nuclear_cusps, Geometry,
+    nuclear_energy
+)
+from dlqmc.gto import GTOWF
+from dlqmc.analysis import autocorr_coeff, blocking
+
+
+# In[207]:
+
+
+h_atom = Geometry([[1., 0., 0.]], [1.])
+he_plus = Geometry([[1., 0., 0.]], [2.])
+h2_plus = Geometry([[-1., 0., 0.], [1., 0., 0.]], [1., 1.])
+he2_3plus = Geometry([[-1., 0., 0.], [1., 0., 0.]], [2., 2.])
 
 
 # ## Net WF
 
-# In[4]:
+# In[373]:
 
 
-#H2+     Energy = -0.6023424   for R = 1.9972
-#fit(batch_size=10000, n_el=1, steps=500, epochs=1, RR=[[-1, 0, 0], [1., 0, 0]])
-
-#H2		 Energy = -1.173427    for R = 1.40
-#fit(batch_size=10000,n_el=2,steps=100,epochs=5,RR=torch.tensor([[-0.7,0,0],[0.7,0,0]]))
-
-#He+	 Energy = -1.9998
-#fit(batch_size=10000,n_el=1,steps=100,epochs=5,RR=torch.tensor([[0.,0,0]]),RR_charges=[2])
-
-#He		 Energy = −2.90338583
-#fit(batch_size=10000,n_el=2,steps=300,epochs=5,RR=torch.tensor([[0.3,0,0]]),RR_charges=[2])
+def cutoff(x, cutoff):
+    x_rel = x/cutoff
+    return 1-6*x_rel**5+15*x_rel**4-10*x_rel**3
+    
+for q in np.linspace(0, 1, 10):
+    plot_func(
+        lambda x: cutoff(x, 10)*np.exp(-(7/(1+10*q))**2*(x-10*q**2)**2),
+        [0, 10]
+    )
 
 
-# In[5]:
+# In[375]:
 
 
-lr = 5e-3
+tau = 0.1
+n_walker = 1_000
+n_steps = 500
+samples, info = langevin_monte_carlo(
+    net,
+    torch.randn(n_walker, 3),
+    n_steps,
+    tau,
+    range=tnrange
+)
+info
 
 
-# In[58]:
+# In[376]:
 
 
-net = WaveNet([2, 20, 20, 20, 1], eps=0.01)
-opt = torch.optim.Adam(net.parameters(), lr=lr)
-tape = []
-for i_step in tnrange(0, 1_000):
-    r = 3*torch.randn(10_000, 3)
-    grad_psi, psi = Gradient(r, coords, net)
-    V = Potential(r, coords, charges)
-    loss = torch.sum(0.5*torch.sum(grad_psi**2, dim=1) + V*psi**2)/torch.sum(psi**2)
-    with torch.autograd.no_grad():
-        tape.append((i_step, loss.item(), net(x_line, coords).squeeze()))
-    loss.backward()
-    opt.step()
-    opt.zero_grad()
+rs_dl = iter(DataLoader(samples.view(-1, 3), batch_size=10_000, shuffle=True))
 
 
-# In[10]:
+# In[380]:
 
 
-plt.plot(x_line[:, 0].numpy(), -net(x_line, coords).detach().numpy());
+plot_func_xy(
+    lambda x: wf._nn(wf._featurize(x)[1]).squeeze(),
+    [[-3, 3], [-2, 2]]
+);
+
+
+# In[669]:
+
+
+plot_func_x(
+    lambda x: torch.exp(wfnet._nn(net._featurize(x)[1])).squeeze(),
+    [-6, 6]
+)
+
+
+# In[383]:
+
+
+plot_func_x(wf, [-3, 3]);
+plt.ylim(0, 1.5);
+
+
+# In[660]:
+
+
+def fit(wf, geom, E_ref, n_steps=100, range=range, lr=0.005):
+    opt = torch.optim.Adam(wf.parameters(), lr=lr)
+    for i in range(n_steps):
+        rs = 3*torch.randn(10_000, 3)
+        Es_loc, psis = local_energy(rs, wf, geom, create_graph=True)
+        ws = psis**2/psis.detach()**2
+        loss = (ws*(Es_loc-E_ref)**2).mean()/ws.mean()
+        print(*(x.item() for x in (
+            loss, Es_loc.mean(), Es_loc.var(), wf._ion_pot
+        )))
+        loss.backward()
+        opt.step()
+        opt.zero_grad()
+
+
+# In[378]:
+
+
+wf = WFNet(h2_plus, ion_pot=0.5)
+
+
+# In[667]:
+
+
+fit(wf, h2_plus, -0.6, n_steps=100)
+
+
+# In[636]:
+
+
+rs = 3*torch.randn(10_000, 3)
+# rs = next(rs_dl)
+E_loc, psi = local_energy(rs, net, h2_plus, create_graph=True)
+# E_loc.mean(), E_loc.var()
+
+
+# In[638]:
+
+
+psi
+
+
+# In[633]:
+
+
+loss = ((E_loc+0.602)**2).sum()
+loss
+
+
+# In[634]:
+
+
+loss.backward()
+opt.step()
+opt.zero_grad()
+
+
+# In[635]:
+
+
+E_loc = local_energy(rs, net, h2_plus)
+E_loc.mean(), E_loc.var(), ((E_loc+0.602)**2).sum()
+
+
+# In[477]:
+
+
+plt.hist(E_loc.detach().clamp(-1.25, 1).numpy(), bins=100);
 
 
 # In[29]:
@@ -173,7 +248,7 @@ E_loc.mean().item()
 
 # ## GTO WF
 
-# In[6]:
+# In[333]:
 
 
 mol = gto.M(
@@ -182,42 +257,126 @@ mol = gto.M(
         ['H', (1, 0, 0)]
     ],
     unit='bohr',
-    basis='6-311g',
+    basis='aug-cc-pv5z',
     charge=1,
+    spin=1,
+)
+mf2 = scf.RHF(mol)
+scf_energy = mf2.kernel()
+gtowf2 = GTOWF(mf2, 0)
+
+
+# In[ ]:
+
+
+gtowf2
+
+
+# In[347]:
+
+
+plt.plot(gtowf._mo_coeffs[:10])
+
+
+# In[372]:
+
+
+(gtowf2._mo_coeffs > 1e-3).nonzero()
+
+
+# In[370]:
+
+
+mol = gto.M(
+    atom=[
+        [1, (-1, 0, 0)],
+    ],
+    unit='bohr',
+    basis='aug-cc-pv5z',
+    charge=0,
     spin=1,
 )
 mf = scf.RHF(mol)
 scf_energy = mf.kernel()
+gtowf = GTOWF(mf, 0)
 
 
-# In[7]:
+# In[364]:
 
 
-plt.plot(
-    x_line[:, 0].numpy(),
-    wf_from_mf(x_line, mf, 0).detach().numpy()
+(gtowf._mo_coeffs > 1e-4).nonzero()
+
+
+# In[ ]:
+
+
+
+plot_func_x(lambda x: pyscf.dft.numint.eval_ao(gtowf._mol, x.numpy()), [-20, 20]);
+
+
+# In[376]:
+
+
+# plot_func_x(lambda x: torch.log(gtowf2(x)), [-20, 20]);
+plot_func_x(lambda x: torch.log(gtowf(x)), [-20, 20]);
+for i in range(6):
+    plot_func_x(lambda x: np.log(gtowf._mo_coeffs[i] * pyscf.dft.numint.eval_ao(gtowf._mol, x)[:, i]), [-20, 20], is_torch=False);
+plt.ylim(-20, 0)
+
+
+# In[377]:
+
+
+wfnet = WFNet(h2_plus, ion_pot=0.5, alpha=100.)
+plot_func_x(lambda x: torch.log(gtowf2(x)), [-15, 15]);
+plot_func_x(
+    lambda x: torch.log(wfnet._asymptote(wfnet._featurize(x)[0])),
+    [-15, 15]
 );
 
 
-# In[8]:
+# In[253]:
 
 
-# (wf_from_mf(mesh, mf, 0)**2).sum()*(12*8*8/mesh.shape[0])
+wfnet = WFNet(h2_plus, ion_pot=0.96, alpha=10)
+plot_func_x(
+    lambda x: gtowf(x)/wfnet._asymptote(wfnet._featurize(x)[0]),
+    [-10, 10]
+);
 
 
-# In[8]:
+# In[42]:
 
 
-plt.plot(
-    x_line[:, 0].numpy(),
-    local_energy(
-        x_line,
-        lambda x: wf_from_mf(x, mf, 0),
-        coords,
-        charges,
-    ).detach().numpy()
-)
-plt.ylim((-10, 0))
+1/2.6
+
+
+# In[37]:
+
+
+plot_func_x(
+    gtowf,
+    [-6, 6,]
+);
+
+
+# In[150]:
+
+
+plot_func_xy(gtowf2, [[-3, 3], [-2, 2]]);
+
+
+# In[33]:
+
+
+integrate_on_mesh(lambda x: gtowf(x)**2, [(-6, 6), (-4, 4), (-4, 4)])
+
+
+# In[10]:
+
+
+plot_func_x(lambda x: local_energy(x, gtowf, h2_plus), [-3, 3])
+plt.ylim((-10, 0));
 
 
 # In[367]:
@@ -235,32 +394,36 @@ samples = HMC(
 ).detach().transpose(0, 1).contiguous()
 
 
-# In[390]:
+# In[61]:
 
 
 tau = 0.1
-n_walker = 100
-n_steps = 5000
-samples, info = langevin_monte_carlo(lambda x: wf_from_mf(x, mf, 0), n_walker, n_steps, tau, range=tnrange)
+n_walker = 1_000
+n_steps = 500
+samples, info = langevin_monte_carlo(
+    gtowf,
+    torch.randn(n_walker, 3),
+    n_steps,
+    tau,
+    range=tnrange
+)
 info
 
 
-# In[391]:
+# In[68]:
 
 
-E_loc = local_energy(
-    samples.view(-1, 3), lambda x: wf_from_mf(x, mf, 0), coords, charges
-).view(100, -1)
+E_loc = local_energy(samples.view(-1, 3), gtowf, h2_plus).view(100, -1)
 
 
-# In[393]:
+# In[69]:
 
 
 plt.plot(*samples[0][:100, :2].numpy().T)
 plt.gca().set_aspect(1)
 
 
-# In[394]:
+# In[76]:
 
 
 plt.hist2d(
@@ -271,50 +434,38 @@ plt.hist2d(
 plt.gca().set_aspect(1)
 
 
-# In[395]:
+# In[75]:
 
 
 plt.plot(E_loc.mean(0).numpy())
 plt.ylim(-0.7, -0.5)
 
 
-# In[396]:
-
-
-E_loc.mean()
-
-
-# In[397]:
+# In[77]:
 
 
 E_loc.std()
 
 
-# In[398]:
-
-
-E_loc.std().item()/np.sqrt(n_walker*n_steps)
-
-
-# In[399]:
+# In[78]:
 
 
 (E_loc.mean(dim=-1).std()*np.sqrt(5000)/E_loc.std())**2
 
 
-# In[400]:
+# In[80]:
 
 
 plt.hist(E_loc.flatten().clamp(-1.25, 0).numpy(), bins=100);
 
 
-# In[401]:
+# In[48]:
 
 
 scf_energy, E_loc.mean().item(), (E_loc.mean(dim=-1).std()/np.sqrt(100)).item()
 
 
-# In[402]:
+# In[57]:
 
 
 results = ([], [])
@@ -327,7 +478,7 @@ with open('/storage/mi/jhermann/Research/Projects/nqmc/_dev/test-calc-2/h2+-hf-v
 results = torch.tensor(np.array(results, dtype=float).T)
 
 
-# In[135]:
+# In[58]:
 
 
 avg = results[:, 0].mean()
@@ -361,16 +512,16 @@ indep_points = avgvar/err
 indep_points
 
 
-# In[403]:
+# In[68]:
 
 
 plt.plot(*np.array(list(map(blocking, E_loc))).mean(0).T)
 
 
-# In[404]:
+# In[69]:
 
 
-plt.plot(np.array(list(map(lambda x: autocorr(range(100), x), E_loc))).mean(0))
+plt.plot(np.array(list(map(lambda x: autocorr_coeff(range(100), x), E_loc))).mean(0))
 plt.axhline()
 
 
