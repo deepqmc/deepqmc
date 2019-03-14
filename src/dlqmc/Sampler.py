@@ -34,13 +34,13 @@ def dynamics(dist, pos, stepsize, steps):
             )[0]
         )
         p_te = p_te + stepsize * v_te2
-        
+
     v_te = (
-        v_te2 
-        - stepsize / 2 
+        v_te2
+        - stepsize / 2
         * torch.autograd.grad(
-            dist(pos),
-            pos,
+            dist(p_te),
+            p_te,
             create_graph=True,
             retain_graph=True,
             grad_outputs=torch.ones(pos.shape[0]),
