@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torch.nn as nn
 
 
 def get_flat_mesh(bounds, npts):
@@ -19,17 +20,19 @@ def plot_func(func, bounds, density=0.02, is_torch=True):
     return plt.plot(x, y)
 
 
-def plot_func_x(func, bounds, density=0.02, is_torch=True):
+def plot_func_x(func, bounds, density=0.02, is_torch=True, device=None, **kwargs):
     n_pts = int((bounds[1] - bounds[0]) / density)
     x_line = torch.linspace(bounds[0], bounds[1], n_pts)
     x_line = torch.cat([x_line[:, None], x_line.new_zeros((n_pts, 2))], dim=1)
     if not is_torch:
         x_line = x_line.numpy()
+    elif device:
+        x_line = x_line.to(device)
     y = func(x_line)
     if is_torch:
-        x_line = x_line.numpy()
-        y = y.detach().numpy()
-    return plt.plot(x_line[:, 0], y)
+        x_line = x_line.cpu().numpy()
+        y = y.detach().cpu().numpy()
+    return plt.plot(x_line[:, 0], y, **kwargs)
 
 
 def plot_func_xy(func, bounds, density=0.02):
@@ -53,3 +56,20 @@ def integrate_on_mesh(func, bounds, density=0.02):
 def assign_where(xs, ys, where):
     for x, y in zip(xs, ys):
         x[where] = y[where]
+
+
+def form_geom(coords, charges):
+    coords = nn.Parameter(
+        torch.as_tensor(coords, dtype=torch.float), requires_grad=False
+    )
+    charges = nn.Parameter(
+        torch.as_tensor(charges, dtype=torch.float), requires_grad=False
+    )
+    return nn.ParameterDict({'coords': coords, 'charges': charges})
+
+
+def as_pyscf_atom(geom):
+    return [
+        (str(int(charge.numpy())), coord.numpy())
+        for charge, coord in zip(*geom.values())
+    ]

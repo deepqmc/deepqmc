@@ -3,30 +3,22 @@ from functools import reduce
 
 import numpy as np
 import torch
-import torch.nn as nn
-
-
-class Geometry(nn.Module):
-    def __init__(self, coords, charges):
-        super().__init__()
-        self.coords = nn.Parameter(torch.tensor(coords), requires_grad=False)
-        self.charges = nn.Parameter(torch.tensor(charges), requires_grad=False)
 
 
 def nuclear_energy(geom):
-    coords, charges = geom.parameters()
+    coords, charges = geom['coords'], geom['charges']
     coul_IJ = charges[:, None] * charges / (coords[:, None] - coords).norm(dim=-1)
     coul_IJ[np.diag_indices(len(coords))] = 0
     return coul_IJ.sum() / 2
 
 
 def nuclear_potential(rs, geom):
-    coords, charges = geom.parameters()
+    coords, charges = geom['coords'], geom['charges']
     return -(charges / (rs[:, None] - coords).norm(dim=-1)).sum(-1)
 
 
 def nuclear_cusps(rs, geom):
-    coords, charges = geom.parameters()
+    coords, charges = geom['coords'], geom['charges']
     return torch.exp(-charges * (rs[:, None] - coords).norm(dim=-1)).sum(dim=-1)
 
 
