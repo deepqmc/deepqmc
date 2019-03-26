@@ -27,19 +27,19 @@ class GTOWF(nn.Module):
 
         def basis_funcs():
             for elem, coord in zip(self._elems, self._coords):
-                r_sq = ((rs - rs.new_tensor(coord)) ** 2).sum(dim=-1)
+                rs_sq = ((rs - rs.new_tensor(coord)) ** 2).sum(dim=-1)
                 for l, *gtos in self._basis[elem]:
-                    yield l, gtos, r_sq
+                    yield l, gtos, rs_sq
 
         def psiis():
-            for (l, gtos, r_sq), mo_coeff in zip(basis_funcs(), self._mo_coeffs):
+            for (l, gtos, rs_sq), mo_coeff in zip(basis_funcs(), self._mo_coeffs):
                 assert l == 0
                 g_exps, g_coeffs = np.array(gtos).T
                 g_norms = pyscf.gto.gto_norm(l, g_exps) / np.sqrt(4 * np.pi)
                 g_exps, g_norms, g_coeffs = (
                     rs.new_tensor(x) for x in (g_exps, g_norms, g_coeffs)
                 )
-                g_contribs = g_coeffs * g_norms * torch.exp(-g_exps * r_sq[:, None])
+                g_contribs = g_coeffs * g_norms * torch.exp(-g_exps * rs_sq[:, None])
                 yield mo_coeff * g_contribs.sum(dim=-1)
 
         return reduce(operator.add, psiis())

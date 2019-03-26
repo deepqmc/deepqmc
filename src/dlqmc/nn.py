@@ -5,19 +5,16 @@ import torch.nn.functional as F
 
 
 class WFNet(nn.Module):
-    def __init__(
-        self, geom, eps=0.01, ion_pot=0.5, cutoff=10, n_dist_basis=10, alpha=1.0
-    ):
+    def __init__(self, geom, ion_pot=0.5, cutoff=10.0, n_dist_basis=10, alpha=1.0):
         super().__init__()
         n_atoms = len(geom.charges)
-        self._eps = eps
         self._alpha = alpha
         self._cutoff = cutoff
         qs = torch.linspace(0, 1, n_dist_basis)
         self._dist_basis = nn.ParameterDict(
             {
-                'mu': nn.Parameter(cutoff * qs ** 2, requires_grad=False),
-                'sigma': nn.Parameter((1 + cutoff * qs) / 7, requires_grad=False),
+                'mus': nn.Parameter(cutoff * qs ** 2, requires_grad=False),
+                'sigmas': nn.Parameter((1 + cutoff * qs) / 7, requires_grad=False),
             }
         )
         self.geom = geom
@@ -39,13 +36,12 @@ class WFNet(nn.Module):
         )
 
     def _featurize(self, rs):
+        sigmas_sq = self._dist_basis.sigmas ** 2
         dists = (rs[:, None] - self.geom.coords).norm(dim=-1)
-        mu = self._dist_basis['mu']
-        sigma_sq = self._dist_basis['sigma'] ** 2
         basis = self._dist_envelope(dists)[..., None] * torch.exp(
-            -(dists[..., None] - mu) ** 2 / sigma_sq
+            -(dists[..., None] - self._dist_basis.mus) ** 2 / sigmas_sq
         )
-        return dists, basis.flatten(1)
+        return dists, basis.flatten(start_dim=1)
 
     def _asymptote(self, dists):
         tail = torch.sqrt(2 * self.ion_pot)
@@ -55,8 +51,8 @@ class WFNet(nn.Module):
         ).sum(dim=-1)
 
     def forward(self, rs):
-        dists, x = self._featurize(rs)
-        return torch.exp(self._nn(x).squeeze()) * self._asymptote(dists)
+        dists, xs = self._featurize(rs)
+        return torch.exp(self._nn(xs).squeeze()) * self._asymptote(dists)
 
 
 def ssp(*args, **kwargs):
