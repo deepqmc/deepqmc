@@ -13,12 +13,8 @@ def nuclear_energy(geom):
 
 
 def nuclear_potential(rs, geom):
-    return -(geom.charges / (rs[:, None] - geom.coords).norm(dim=-1)).sum(-1)
-
-
-def nuclear_cusps(rs, geom):
-    coords, charges = geom.coords, geom.charges
-    return torch.exp(-charges * (rs[:, None] - coords).norm(dim=-1)).sum(dim=-1)
+    dists = (rs[:, :, None] - geom.coords).norm(dim=-1)
+    return -(geom.charges / dists).sum(dim=(-1, -2))
 
 
 def grad(rs, wf, create_graph=False):
@@ -33,8 +29,8 @@ def grad(rs, wf, create_graph=False):
 
 
 def laplacian(rs, wf, create_graph=False):
-    ris = [ri.requires_grad_() for ri in rs.t()]
-    psis = wf(torch.stack(ris).t()).flatten()
+    ris = [ri.requires_grad_() for ri in rs.flatten(start_dim=1).t()]
+    psis = wf(torch.stack(ris, dim=1).view_as(rs))
     ones = torch.ones_like(psis)
 
     def d2psi_dri2_from_ri(ri):
@@ -56,7 +52,7 @@ def laplacian(rs, wf, create_graph=False):
 
 def quantum_force(rs, wf):
     grad_psis, psis = grad(rs, wf)
-    return grad_psis / psis[:, None], psis
+    return grad_psis / psis[:, None, None], psis
 
 
 def local_energy(rs, wf, geom, create_graph=False):

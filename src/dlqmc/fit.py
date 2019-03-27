@@ -45,7 +45,9 @@ def wfnet_fit_driver(
         samples, _ = samples_from(
             sampler, range_sampling(n_sampling_steps), n_discard=n_discard
         )
-        rs_dl = DataLoader(samples.view(-1, 3), batch_size=batch_size, shuffle=True)
+        rs_dl = DataLoader(
+            samples.flatten(end_dim=1), batch_size=batch_size, shuffle=True
+        )
         n_steps = n_epochs * len(rs_dl)
         for _, rs in zip(range_training(n_steps), cycle(rs_dl)):
             yield rs

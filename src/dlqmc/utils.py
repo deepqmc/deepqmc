@@ -7,7 +7,7 @@ import torch.nn as nn
 def get_flat_mesh(bounds, npts):
     edges = [torch.linspace(*b, n) for b, n in zip(bounds, npts)]
     grids = torch.meshgrid(*edges)
-    return torch.stack(grids).view(len(grids), -1).t(), edges
+    return torch.stack(grids).flatten(start_dim=1).t(), edges
 
 
 def plot_func(func, bounds, density=0.02, is_torch=True):

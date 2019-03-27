@@ -21,6 +21,8 @@ class GTOWF(nn.Module):
             self._basis = mol._basis
 
     def forward(self, rs):
+        assert rs.shape[1] == 1
+        rs = rs.squeeze(dim=1)
         if self._use_pyscf:
             aos = pyscf.dft.numint.eval_ao(self._mol, rs.numpy())
             return rs.new_tensor((self._mo_coeffs * aos).sum(-1))

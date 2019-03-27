@@ -18,7 +18,7 @@ def langevin_monte_carlo(wf, rs, *, tau):
         forces_new, psis_new = quantum_force(rs_new, wf)
         log_G_ratios = (
             (forces + forces_new) * ((rs - rs_new) + tau / 2 * (forces - forces_new))
-        ).sum(dim=-1)
+        ).sum(dim=(-1, -2))
         Ps_acc = torch.exp(log_G_ratios) * psis_new ** 2 / psis ** 2
         accepted = Ps_acc > torch.rand_like(Ps_acc)
         info = {'acceptance': accepted.type(torch.int).sum().item() / rs.shape[0]}

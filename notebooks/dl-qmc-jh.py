@@ -42,11 +42,12 @@ from dlqmc.utils import (
 )
 
 
-# In[5]:
+# In[102]:
 
 
 h_atom = form_geom([[1, 0, 0]], [1])
 h2_plus = form_geom([[-1, 0, 0], [1, 0, 0]], [1, 1])
+h2_mol = form_geom([[-1, 0, 0], [1, 0, 0]], [1, 1])
 
 
 # ## GTO WF
@@ -95,83 +96,89 @@ plot_func_x(lambda x: pyscf.dft.numint.eval_ao(gtowf_big._mol, x), [-7, 7], is_t
 plt.ylim(-1, 1)
 
 
-# In[11]:
+# In[218]:
 
 
 integrate_on_mesh(lambda x: gtowf(x.cuda())**2, [(-6, 6), (-4, 4), (-4, 4)])
 
 
-# In[12]:
+# In[222]:
 
 
-plot_func_x(lambda x: local_energy(x, gtowf, h2_plus)[0], [-3, 3])
+torch.randn(100, 2, 3).squeeze(dim=1).shape
+
+
+# In[226]:
+
+
+plot_func_x(lambda x: local_energy(x[:, None], gtowf, h2_plus)[0], [-3, 3])
 plt.ylim((-10, 0));
 
 
-# In[28]:
+# In[228]:
 
 
 n_walker = 1_000
 sampler = langevin_monte_carlo(
     gtowf,
-    torch.randn(n_walker, 3),
+    torch.randn(n_walker, 1, 3),
     tau=0.1,
 )
 samples, info = samples_from(sampler, trange(500))
-E_loc = local_energy(samples.view(-1, 3), gtowf, h2_plus)[0].view(n_walker, -1)
+E_loc = local_energy(samples.flatten(end_dim=1), gtowf, h2_plus)[0].view(n_walker, -1)
 info.acceptance.mean()
 
 
-# In[30]:
+# In[231]:
 
 
-plt.plot(*samples[0][:50, :2].numpy().T)
+plt.plot(*samples[0][:50, 0, :2].numpy().T)
 plt.gca().set_aspect(1)
 
 
-# In[31]:
+# In[232]:
 
 
 plt.plot(E_loc.mean(dim=0).numpy())
 plt.ylim(-0.7, -0.5)
 
 
-# In[32]:
+# In[239]:
 
 
 plt.hist2d(
-    *samples[:, 50:].reshape(-1, 3)[:, :2].numpy().T,
+    *samples[:, 50:].flatten(end_dim=1)[:, 0, :2].numpy().T,
     bins=100,
     range=[[-3, 3], [-3, 3]],
 )                                   
 plt.gca().set_aspect(1)
 
 
-# In[33]:
+# In[240]:
 
 
 plt.hist(E_loc[:, 50:].flatten().clamp(-1.25, 0).numpy(), bins=100);
 
 
-# In[17]:
+# In[241]:
 
 
 E_loc[:, 50:].std()
 
 
-# In[34]:
+# In[242]:
 
 
 scf_energy, E_loc[:, 50:].mean().item(), (E_loc[:, 50:].mean(dim=1).std()/np.sqrt(E_loc.shape[0])).item()
 
 
-# In[35]:
+# In[243]:
 
 
 plt.plot(blocking(E_loc[:, 50:]).numpy())
 
 
-# In[36]:
+# In[244]:
 
 
 plt.plot(autocorr_coeff(range(50), E_loc[:, 50:]).numpy())
@@ -180,28 +187,27 @@ plt.axhline()
 
 # ## Net WF
 
-# In[38]:
+# In[146]:
 
 
-plot_func_x(lambda x: WFNet(h_atom, n_dist_feats=32)._featurize(x)[1], [1, 11]);
+plot_func_x(lambda x: WFNet(h_atom, 1)._featurize(x[:, None])[0], [1, 11]);
 
 
-# In[73]:
+# In[190]:
 
 
-wfnet = WFNet(h2_plus, n_dist_feats=32, ion_pot=0.7, alpha=1.)
-wfnet.cuda()
+wfnet = WFNet(h2_plus, 1, ion_pot=0.7).cuda()
 sampler = langevin_monte_carlo(
     wfnet,
-    torch.randn(1_000, 3, device='cuda'),
+    torch.randn(1_000, 1, 3, device='cuda'),
     tau=0.1,
 )
 
 
-# In[74]:
+# In[191]:
 
 
-exp_label = 'exp21'
+exp_label = 'exp25'
 with SummaryWriter(f'runs/{exp_label}/pretrain') as writer:
     fit_wfnet(
         wfnet,
@@ -239,77 +245,116 @@ with SummaryWriter(f'runs/{exp_label}/variance') as writer:
 wfnet.cpu()
 
 
-# In[75]:
+# In[192]:
 
 
 plot_func_x(
-    lambda x: local_energy(x, wfnet, wfnet.geom)[0],
+    lambda x: local_energy(x[:, None], wfnet, wfnet.geom)[0],
     [-15, 15],
 )
 plt.ylim((-1, 0));
 
 
-# In[76]:
+# In[195]:
 
 
 plot_func_xy(
-    lambda x: wfnet._nn(wfnet._featurize(x)[1]).squeeze(),
+    lambda x: wfnet._nn(wfnet._featurize(x[:, None])[0]).squeeze(),
     [[-10, 10], [-10, 10]]
 );
 
 
-# In[80]:
+# In[196]:
 
 
 n_walker = 1_000
 sampler = langevin_monte_carlo(
     wfnet.cuda(),
-    torch.randn(n_walker, 3, device='cuda'),
+    torch.randn(n_walker, 1, 3, device='cuda'),
     tau=0.1,
 )
 samples, info = samples_from(sampler, trange(500))
-E_loc = local_energy(samples.view(-1, 3), wfnet, wfnet.geom)[0].view(n_walker, -1)
+E_loc = local_energy(samples.flatten(end_dim=1), wfnet, wfnet.geom)[0].view(n_walker, -1)
 samples = samples.cpu()
 E_loc = E_loc.cpu()
 wfnet.cpu()
 info.acceptance.mean()
 
 
-# In[81]:
+# In[197]:
 
 
 plt.plot(E_loc.mean(dim=0).numpy())
 plt.ylim(-0.7, -0.5)
 
 
-# In[82]:
+# In[198]:
 
 
 plt.hist(E_loc[:, 50:].flatten().clamp(-1.25, 0).numpy(), bins=100);
 plt.xlim(-1.25, 0)
 
 
-# In[83]:
+# In[199]:
 
 
 E_loc[:, 50:].std()
 
 
-# In[84]:
+# In[200]:
 
 
 scf_energy_big, E_loc[:, 50:].mean().item(), (E_loc[:, 50:].mean(dim=1).std()/np.sqrt(E_loc.shape[0])).item()
 
 
-# In[87]:
+# In[216]:
 
 
 bounds = [-2, 2]
 plot_func_x(lambda x: torch.log(gtowf_big(x)), bounds, label='~exact WF');
 plot_func_x(lambda x: torch.log(gtowf(x)), bounds, label='small-basis WF');
-plot_func_x(lambda x: torch.log(wfnet(x))-0.67, bounds, label='DL WF');
-plot_func_x(lambda x: torch.log(wfnet._asymptote(wfnet._featurize(x)[0]))-0.85, bounds, label='asymptotics');
-plot_func_x(lambda x: wfnet._nn(wfnet._featurize(x)[1]).squeeze()-0.7, bounds, label='NN');
+plot_func_x(lambda x: torch.log(wfnet(x[:, None]))-0.69, bounds, label='DL WF');
+plot_func_x(lambda x: torch.log(wfnet._asymptote(*wfnet._featurize(x[:, None])[1]))-0.89, bounds, label='asymptotics');
+plot_func_x(lambda x: wfnet._nn(wfnet._featurize(x[:, None])[0]).squeeze()-0.7, bounds, label='NN');
 plt.legend(loc='lower center', bbox_to_anchor=(0.5, -0.35), ncol=2)
 plt.ylim(-1.5, None)
+
+
+# ## H2
+
+# In[109]:
+
+
+rs = torch.randn(100, 4, 3)
+
+
+# In[ ]:
+
+
+rs.pr
+
+
+# In[127]:
+
+
+i, j = np.triu_indices(4, k=1)
+(rs[:, :, None] - rs[:, None, :])[:, i, j].shape
+
+
+# In[130]:
+
+
+(rs[:, :, None] - h2_mol.coords).norm(dim=-1).shape
+
+
+# In[122]:
+
+
+np.triu_indices(4)
+
+
+# In[ ]:
+
+
+
 
