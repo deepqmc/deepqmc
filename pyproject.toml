@@ -20,6 +20,7 @@ matplotlib = "^3.0"
 ipywidgets = "^7.4"
 tensorboardX = "^1.6"
 Pillow = "^5.4"
+certifi = "*"
 
 [tool.poetry.dev-dependencies]
 flake8 = "^3.5"
