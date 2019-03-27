@@ -5,12 +5,12 @@ import torch.nn.functional as F
 
 
 class WFNet(nn.Module):
-    def __init__(self, geom, ion_pot=0.5, cutoff=10.0, n_dist_basis=10, alpha=1.0):
+    def __init__(self, geom, ion_pot=0.5, cutoff=10.0, n_dist_feats=10, alpha=1.0):
         super().__init__()
         n_atoms = len(geom.charges)
         self._alpha = alpha
         self._cutoff = cutoff
-        qs = torch.linspace(0, 1, n_dist_basis)
+        qs = torch.linspace(0, 1, n_dist_feats)
         self._dist_basis = nn.ParameterDict(
             {
                 'mus': nn.Parameter(cutoff * qs ** 2, requires_grad=False),
@@ -20,7 +20,7 @@ class WFNet(nn.Module):
         self.geom = geom
         self.ion_pot = nn.Parameter(torch.tensor(ion_pot))
         self._nn = nn.Sequential(
-            nn.Linear(n_atoms * n_dist_basis, 64),
+            nn.Linear(n_atoms * n_dist_feats, 64),
             SSP(),
             nn.Linear(64, 64),
             SSP(),

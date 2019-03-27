@@ -21,6 +21,7 @@ ipywidgets = "^7.4"
 tensorboardX = "^1.6"
 Pillow = "^5.4"
 certifi = "*"
+pandas = "^0.24.2"
 
 [tool.poetry.dev-dependencies]
 flake8 = "^3.5"
