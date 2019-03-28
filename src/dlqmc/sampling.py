@@ -55,6 +55,36 @@ def dynamics(dist, pos, stepsize, steps):
     return p_te, v_te, vel
 
 
+def hmc_new(wf, rs, *, dysteps, stepsize):
+    #forces, psis = quantum_force(rs, wf)
+    distwalker = wf(rs)
+    while True:
+    
+    	rs_new, v, v_0 = dynamics((lambda x: -2*torch.log(wf(x))), walker, stepsize, dysteps)
+    	#rs_new = rs + forces * tau + torch.randn_like(rs) * np.sqrt(tau)
+        
+        disttrial = wf(rs_new)
+        
+        #forces_new, psis_new = quantum_force(rs_new, wf)
+        
+        #log_G_ratios = (
+        #    (forces + forces_new) * ((rs - rs_new) + tau / 2 * (forces - forces_new))
+        #).sum(dim=(-1, -2))
+        #Ps_acc = torch.exp(log_G_ratios) * psis_new ** 2 / psis ** 2
+        
+        
+        
+        Ps_acc = disttrial ** 2/ distwalker ** 2 * (
+            torch.exp(
+                -0.5 * (torch.sum(v ** 2, dim=-1) - torch.sum(v_0 ** 2, dim=-1))
+            )
+        )
+        
+        accepted = Ps_acc > torch.rand_like(Ps_acc)
+        info = {'acceptance': accepted.type(torch.int).sum().item() / rs.shape[0]}
+        yield rs.clone(), info
+        assign_where((rs, psis, forces), (rs_new, psis_new, forces_new), accepted)
+
 def hmc(dist, stepsize, dysteps, n_walker, steps, dim, startfactor=1, presteps=200):
 
     acc = 0
