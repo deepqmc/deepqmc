@@ -6,158 +6,49 @@ from tqdm import trange
 from .physics import quantum_force
 from .utils import assign_where
 
-
-def dynamics(dist, pos, stepsize, steps):
-
-    pos = pos.detach().clone()
-    pos.requires_grad = True
-    vel = torch.randn(pos.shape)
-    v_te2 = (
-        vel
-        - stepsize
-        * torch.autograd.grad(
-            dist(pos),
-            pos,
-            create_graph=True,
-            retain_graph=True,
-            grad_outputs=torch.ones(pos.shape[0]),
-        )[0]
-        / 2
-    )
-    p_te = pos + stepsize * v_te2
-    for _ in range(1, steps):
-        v_te2 = (
-            v_te2
-            - stepsize
-            * torch.autograd.grad(
-                dist(p_te),
-                p_te,
-                create_graph=True,
-                retain_graph=True,
-                grad_outputs=torch.ones(pos.shape[0]),
-            )[0]
-        )
-        p_te = p_te + stepsize * v_te2
-
-    v_te = (
-        v_te2
-        - stepsize
-        / 2
-        * torch.autograd.grad(
-            dist(p_te),
-            p_te,
-            create_graph=True,
-            retain_graph=True,
-            grad_outputs=torch.ones(pos.shape[0]),
-        )[0]
-    )
-
-    return p_te, v_te, vel
-
-
-def hmc_new(wf, rs, *, dysteps, stepsize):
-    #forces, psis = quantum_force(rs, wf)
-    distwalker = wf(rs)
-    while True:
     
-    	rs_new, v, v_0 = dynamics((lambda x: -2*torch.log(wf(x))), walker, stepsize, dysteps)
-    	#rs_new = rs + forces * tau + torch.randn_like(rs) * np.sqrt(tau)
-        
-        disttrial = wf(rs_new)
-        
-        #forces_new, psis_new = quantum_force(rs_new, wf)
-        
-        #log_G_ratios = (
-        #    (forces + forces_new) * ((rs - rs_new) + tau / 2 * (forces - forces_new))
-        #).sum(dim=(-1, -2))
-        #Ps_acc = torch.exp(log_G_ratios) * psis_new ** 2 / psis ** 2
-        
-        
-        
-        Ps_acc = disttrial ** 2/ distwalker ** 2 * (
-            torch.exp(
-                -0.5 * (torch.sum(v ** 2, dim=-1) - torch.sum(v_0 ** 2, dim=-1))
-            )
-        )
-        
-        accepted = Ps_acc > torch.rand_like(Ps_acc)
-        info = {'acceptance': accepted.type(torch.int).sum().item() / rs.shape[0]}
-        yield rs.clone(), info
-        assign_where((rs, psis, forces), (rs_new, psis_new, forces_new), accepted)
+def dynamics(wf, pos, stepsize, steps):
 
-def hmc(dist, stepsize, dysteps, n_walker, steps, dim, startfactor=1, presteps=200):
+	pos = pos.detach().clone()
+	pos.requires_grad = True
 
-    acc = 0
-    samples = torch.zeros(steps, n_walker, dim)
-    walker = torch.randn(n_walker, dim) * startfactor
-    distwalker = dist(walker).detach().numpy()
+	vel = torch.randn(pos.shape)
+	forces, psis = quantum_force(pos, wf)
 
-    for i in trange(steps + presteps):
+	v_te2 = (vel + stepsize * forces)
+	p_te = pos + stepsize * v_te2
+	
+	for _ in range(1, steps):
+		forces, psis = quantum_force(p_te, wf)
+		v_te2 = (v_te2 + stepsize *2*forces)
+		p_te = p_te + stepsize * v_te2
 
-        if i >= presteps:
-            samples[i - presteps] = walker
+	forces, psis = quantum_force(p_te, wf)
+	v_te = (v_te2 + stepsize * forces)
 
-        trial, v_trial, v_0 = dynamics(
-            (lambda x: -torch.log(dist(x))), walker, stepsize, dysteps
-        )
-        disttrial = dist(trial).detach().numpy()
-        ratio = torch.from_numpy(disttrial / distwalker) * (
-            torch.exp(
-                -0.5 * (torch.sum(v_trial ** 2, dim=-1) - torch.sum(v_0 ** 2, dim=-1))
-            )
-        )
-        R = torch.rand(n_walker)
-        smaller = (ratio < R).type(torch.LongTensor)
-        larger = torch.abs(smaller - 1)
-        ind = torch.nonzero(larger).flatten()
-        walker[ind] = trial[ind]
-        distwalker[ind] = disttrial[ind]
-        if i >= presteps:
-            acc += torch.sum(larger).item()
+	return p_te, v_te, vel
+	
 
-    print('Acceptanceratio: ' + str(np.round(acc / (n_walker * steps) * 100, 2)) + '%')
-    return samples
+def hmc(wf, rs, *, dysteps, stepsize):
 
+	while True:
+		rs_new, v, v_0 = dynamics(wf, rs, stepsize, dysteps)
+		Ps_acc = wf(rs_new)**2/ wf(rs)**2 * (torch.exp(-0.5 * \
+		(torch.sum(v ** 2, dim=[-1,-2]) - torch.sum(v_0 ** 2, dim=[-1,-2]))))
+		accepted = Ps_acc > torch.rand_like(Ps_acc)
+		info = {'acceptance': accepted.type(torch.int).sum().item() / rs.shape[0]}
+		yield rs.clone(), info
+		assign_where((rs,), (rs_new,), accepted)
 
-def metropolis(
-    distribution,
-    startpoint,
-    stepsize,
-    steps,
-    dim,
-    n_walker,
-    startfactor=0.2,
-    presteps=0,
-    interval=None,
-    T=0.2,
-):
+def metropolis(wf, rs, *, stepsize):
 
-    samples = torch.zeros(steps, n_walker, len(startpoint))
-    ratios = np.zeros((steps, n_walker))
-    walker = torch.randn(n_walker, dim) * startfactor
-    distwalker = distribution(walker)
-    for i in trange(presteps + steps):
-        if i > (presteps - 1):
-            samples[i - presteps] = walker
-        pro = (torch.rand(walker.shape) - 0.5) * stepsize
-        trial = walker + pro
-        disttrial = distribution(trial)
-
-        if interval is not None:
-            inint = torch.tensor(
-                all(torch.tensor(interval[0]).type(torch.FloatTensor) < trial[0])
-                and all(torch.tensor(interval[1]).type(torch.FloatTensor) > trial[0])
-            ).type(torch.FloatTensor)
-            disttrial = disttrial * inint
-
-        ratio = np.exp((disttrial.detach().numpy() - distwalker.detach().numpy()) / T)
-        ratios[i - presteps] = ratio
-        smaller_n = (ratio < np.random.uniform(0, 1, n_walker)).astype(float)
-        smaller = torch.from_numpy(smaller_n).type(torch.FloatTensor)
-        larger = torch.abs(smaller - 1)
-        walker = trial * larger[:, None] + walker * smaller[:, None]
-
-    return samples
+	while True:
+		rs_new = torch.randn_like(rs)* stepsize
+		Ps_acc = wf(rs_new)**2/ wf(rs)**2 
+		accepted = Ps_acc > torch.rand_like(Ps_acc)
+		info = {'acceptance': accepted.type(torch.int).sum().item() / rs.shape[0]}
+		yield rs.clone(), info
+		assign_where((rs,), (rs_new,), accepted)
 
 
 def samples_from(sampler, steps, *, n_discard=0):
@@ -166,15 +57,18 @@ def samples_from(sampler, steps, *, n_discard=0):
 
 
 def langevin_monte_carlo(wf, rs, *, tau):
-    forces, psis = quantum_force(rs, wf)
-    while True:
-        rs_new = rs + forces * tau + torch.randn_like(rs) * np.sqrt(tau)
-        forces_new, psis_new = quantum_force(rs_new, wf)
-        log_G_ratios = (
-            (forces + forces_new) * ((rs - rs_new) + tau / 2 * (forces - forces_new))
-        ).sum(dim=(-1, -2))
-        Ps_acc = torch.exp(log_G_ratios) * psis_new ** 2 / psis ** 2
-        accepted = Ps_acc > torch.rand_like(Ps_acc)
-        info = {'acceptance': accepted.type(torch.int).sum().item() / rs.shape[0]}
-        yield rs.clone(), info
-        assign_where((rs, psis, forces), (rs_new, psis_new, forces_new), accepted)
+	forces, psis = quantum_force(rs, wf)
+	while True:
+		rs_new = rs + forces * tau + torch.randn_like(rs) * np.sqrt(tau)
+		forces_new, psis_new = quantum_force(rs_new, wf)
+		log_G_ratios = (
+			(forces + forces_new) * ((rs - rs_new) + tau / 2 * (forces - forces_new))
+		).sum(dim=(-1, -2))
+		Ps_acc = torch.exp(log_G_ratios) * psis_new ** 2 / psis ** 2
+		accepted = Ps_acc > torch.rand_like(Ps_acc)
+		info = {'acceptance': accepted.type(torch.int).sum().item() / rs.shape[0]}
+		yield rs.clone(), info
+		assign_where((rs, psis, forces), (rs_new, psis_new, forces_new), accepted)
+        
+        
+        
