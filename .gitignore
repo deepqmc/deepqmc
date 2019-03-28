@@ -3,3 +3,4 @@
 /src/*.egg-info/
 /notebooks/.ipynb_checkpoints/
 /notebooks/tmp*
+/notebooks/runs/

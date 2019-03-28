@@ -1,29 +1,32 @@
 import numpy as np
+import torch
 
 
-def blocking(x, max_B=None):
-    N = len(x)
-    sigmas = []
-    sigma = x.std()
+def blocking(xs, max_B=None):
+    N = xs.shape[1]
+    x_sigma = xs.std()
     max_B = max_B or int(np.log2(N))
+    sigmas_B = []
     for log_B in range(0, max_B):
         B = 2 ** log_B
-        sigma_B = (
-            x[-(N // B * B) :].view(-1, B).mean(dim=-1).std().item()
+        sigmas_B.append(
+            xs[:, -(N // B * B) :]
+            .view(xs.shape[0], -1, B)
+            .mean(dim=-1)
+            .std(dim=-1)
+            .mean()
             * np.sqrt(B)
-            / sigma
+            / x_sigma
         )
-        sigmas.append((log_B, sigma_B))
-    return sigmas
+    return torch.tensor(sigmas_B)
 
 
-def autocorr_coeff(ks, x):
+def autocorr_coeff(ks, xs):
+    x_mean = xs.mean()
+    x_var = xs.var()
     Cs = []
-    x_mean = x.mean()
-    var = ((x - x_mean) ** 2).sum()
     for k in ks:
-        end = -k or x.numel()
-        autocov = ((x[:end] - x_mean) * (x[k:] - x_mean)).sum()
-        C = autocov / var
-        Cs.append(C.item())
-    return Cs
+        end = -k or xs.shape[1]
+        x_autocov = ((xs[:, :end] - x_mean) * (xs[:, k:] - x_mean)).mean()
+        Cs.append(x_autocov / x_var)
+    return torch.tensor(Cs)
