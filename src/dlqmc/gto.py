@@ -2,7 +2,7 @@ import operator
 from functools import reduce
 
 import numpy as np
-import pyscf
+import pyscf.dft.numint
 import torch
 import torch.nn as nn
 
