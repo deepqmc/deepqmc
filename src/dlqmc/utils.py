@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
 
 
 def get_flat_mesh(bounds, npts):
@@ -56,20 +55,3 @@ def integrate_on_mesh(func, bounds, density=0.02):
 def assign_where(xs, ys, where):
     for x, y in zip(xs, ys):
         x[where] = y[where]
-
-
-def form_geom(coords, charges):
-    coords = nn.Parameter(
-        torch.as_tensor(coords, dtype=torch.float), requires_grad=False
-    )
-    charges = nn.Parameter(
-        torch.as_tensor(charges, dtype=torch.float), requires_grad=False
-    )
-    return nn.ParameterDict({'coords': coords, 'charges': charges})
-
-
-def as_pyscf_atom(geom):
-    return [
-        (str(int(charge.numpy())), coord.numpy())
-        for charge, coord in zip(*geom.values())
-    ]

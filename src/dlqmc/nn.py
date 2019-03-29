@@ -68,11 +68,10 @@ class WFNet(nn.Module):
         self, geom, n_electrons, ion_pot=0.5, cutoff=10.0, n_dist_feats=32, alpha=1.0
     ):
         super().__init__()
+        self.coords = nn.Parameter(geom.coords, requires_grad=False)
         self.dist_basis = DistanceBasis(n_dist_feats)
         self.nuc_asymp = NuclearAsymptotic(geom.charges, ion_pot, alpha=alpha)
-        self.geom = geom
-        n_atoms = len(geom.charges)
-        n_pairs = n_electrons * n_atoms + n_electrons * (n_electrons - 1) // 2
+        n_pairs = n_electrons * len(geom) + n_electrons * (n_electrons - 1) // 2
         self.deep_lin = nn.Sequential(
             nn.Linear(n_pairs * n_dist_feats, 64),
             SSP(),
@@ -82,9 +81,14 @@ class WFNet(nn.Module):
         )
         self._pdist = PairwiseDistance3D()
         self._psdist = PairwiseSelfDistance3D()
+        self._geom = geom
+
+    @property
+    def geom(self):
+        return self._geom
 
     def _featurize(self, rs):
-        dists_nuc = self._pdist(rs, self.geom.coords[None, ...])
+        dists_nuc = self._pdist(rs, self.coords[None, ...])
         dists_el = self._psdist(rs)
         dists = torch.cat([dists_nuc.flatten(start_dim=1), dists_el], dim=1)
         xs = self.dist_basis(dists).flatten(start_dim=1)
