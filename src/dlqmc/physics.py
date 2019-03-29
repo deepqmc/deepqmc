@@ -15,6 +15,11 @@ def nuclear_energy(geom):
 def nuclear_potential(rs, geom):
     dists = (rs[:, :, None] - geom.coords).norm(dim=-1)
     return -(geom.charges / dists).sum(dim=(-1, -2))
+    
+def electronic_potential(rs):
+	i, j = np.triu_indices(rs.shape[-2], k=1)
+	dists = (rs[:,:, None] - rs[:,None, :])[:, i, j].norm(dim=-1)
+	return (1 / dists).sum(dim=(-1, -2))
 
 
 def grad(rs, wf, create_graph=False):
@@ -58,5 +63,6 @@ def quantum_force(rs, wf):
 def local_energy(rs, wf, geom, create_graph=False):
     Es_nuc = nuclear_energy(geom)
     Vs_nuc = nuclear_potential(rs, geom)
+    Vs_el  = electronic_potential(rs)
     lap_psis, psis = laplacian(rs, wf, create_graph=create_graph)
-    return -0.5 * lap_psis / psis + Vs_nuc + Es_nuc, psis
+    return -0.5 * lap_psis / psis + Vs_nuc + Vs_el + Es_nuc, psis
