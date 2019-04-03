@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 
 
 class Geometry:
@@ -23,3 +24,11 @@ class Geometry:
 
     def as_pyscf(self):
         return [(str(int(charge.numpy())), coord.numpy()) for coord, charge in self]
+
+    def as_param_dict(self):
+        return nn.ParameterDict(
+            {
+                'coords': nn.Parameter(self.coords, requires_grad=False),
+                'charges': nn.Parameter(self.charges, requires_grad=False),
+            }
+        )

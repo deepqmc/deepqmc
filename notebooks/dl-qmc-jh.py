@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[3]:
-
-
 get_ipython().run_line_magic('load_ext', 'autoreload')
 get_ipython().run_line_magic('autoreload', '1')
 get_ipython().run_line_magic('config', "InlineBackend.figure_format = 'svg'")
@@ -11,22 +8,17 @@ get_ipython().run_line_magic('config', "InlineBackend.print_figure_kwargs = {'bb
 get_ipython().run_line_magic('matplotlib', 'inline')
 
 
-# In[4]:
+get_ipython().run_line_magic('aimport', 'dlqmc.utils, dlqmc.sampling, dlqmc.analysis, dlqmc.gto,     dlqmc.physics, dlqmc.nn, dlqmc.fit, dlqmc.torchext, dlqmc.geom')
 
 
-get_ipython().run_line_magic('aimport', 'dlqmc.NN, dlqmc.Sampler, dlqmc.Examples')
-get_ipython().run_line_magic('aimport', 'dlqmc.utils, dlqmc.sampling, dlqmc.analysis, dlqmc.gto, dlqmc.physics, dlqmc.nn, dlqmc.fit')
-
-
-# In[79]:
-
-
+import time
 from functools import partial
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import special
 import torch
-import torch.nn as nn
+from torch import nn
 import pyscf
 from pyscf import gto, scf
 from pyscf.data.nist import BOHR
@@ -37,28 +29,25 @@ from dlqmc.nn import WFNet, DistanceBasis
 from dlqmc.fit import fit_wfnet, loss_local_energy, wfnet_fit_driver
 from dlqmc.sampling import samples_from, langevin_monte_carlo
 from dlqmc.physics import local_energy
-from dlqmc.gto import GTOWF
+from dlqmc.gto import TorchGTOSlaterWF, PyscfGTOSlaterWF
 from dlqmc.analysis import autocorr_coeff, blocking
-from dlqmc.utils import (
-    plot_func, plot_func_xy, plot_func_x, integrate_on_mesh, form_geom, as_pyscf_atom
-)
+from dlqmc.geom import Geometry
+from dlqmc.utils import plot_func, plot_func_xy, plot_func_x, integrate_on_mesh
+from dlqmc import torchext
 
 
-# In[14]:
+h_atom = Geometry([[1, 0, 0]], [1])
+h2_plus = Geometry([[-1, 0, 0], [1, 0, 0]], [1, 1])
+h2_mol = Geometry([[0, 0, 0], [0.742/BOHR, 0, 0]], [1, 1])
+be_atom = Geometry([[0, 0, 0]], [4])
 
 
-h_atom = form_geom([[1, 0, 0]], [1])
-h2_plus = form_geom([[-1, 0, 0], [1, 0, 0]], [1, 1])
-h2_mol = form_geom([[0, 0, 0], [0.742/BOHR, 0, 0]], [1, 1])
+# ## H2+
 
-
-# ## GTO WF
-
-# In[73]:
-
+# ### GTO WF
 
 mol = gto.M(
-    atom=as_pyscf_atom(h2_plus),
+    atom=h2_plus.as_pyscf(),
     unit='bohr',
     basis='aug-cc-pv5z',
     charge=1,
@@ -66,14 +55,11 @@ mol = gto.M(
 )
 mf = scf.RHF(mol)
 scf_energy_big = mf.kernel()
-gtowf_big = GTOWF(mf, 0)
-
-
-# In[74]:
+gtowf_big = PyscfGTOSlaterWF(mf)
 
 
 mol = gto.M(
-    atom=as_pyscf_atom(h2_plus),
+    atom=h2_plus.as_pyscf(),
     unit='bohr',
     basis='6-311g',
     charge=1,
@@ -81,43 +67,22 @@ mol = gto.M(
 )
 mf = scf.RHF(mol)
 scf_energy = mf.kernel()
-gtowf = GTOWF(mf, 0, use_pyscf=False)
-
-
-# In[8]:
+gtowf = TorchGTOSlaterWF(mf)
 
 
 plot_func_x(lambda x: pyscf.dft.numint.eval_ao(mol, x), [-7, 7], is_torch=False);
 plt.ylim(-1, 1)
 
 
-# In[9]:
-
-
 plot_func_x(lambda x: pyscf.dft.numint.eval_ao(gtowf_big._mol, x), [-7, 7], is_torch=False);
 plt.ylim(-1, 1)
 
 
-# In[218]:
-
-
-integrate_on_mesh(lambda x: gtowf(x.cuda())**2, [(-6, 6), (-4, 4), (-4, 4)])
-
-
-# In[222]:
-
-
-torch.randn(100, 2, 3).squeeze(dim=1).shape
-
-
-# In[226]:
+integrate_on_mesh(lambda x: gtowf(x.cuda()[:, None])**2, [(-6, 6), (-4, 4), (-4, 4)])
 
 
 plot_func_x(lambda x: local_energy(x[:, None], gtowf, h2_plus)[0], [-3, 3])
 plt.ylim((-10, 0));
-
-
-# In[228]:
 
 
 n_walker = 1_000
@@ -131,21 +96,12 @@ E_loc = local_energy(samples.flatten(end_dim=1), gtowf, h2_plus)[0].view(n_walke
 info.acceptance.mean()
 
 
-# In[231]:
-
-
 plt.plot(*samples[0][:50, 0, :2].numpy().T)
 plt.gca().set_aspect(1)
 
 
-# In[232]:
-
-
 plt.plot(E_loc.mean(dim=0).numpy())
 plt.ylim(-0.7, -0.5)
-
-
-# In[239]:
 
 
 plt.hist2d(
@@ -156,46 +112,25 @@ plt.hist2d(
 plt.gca().set_aspect(1)
 
 
-# In[240]:
-
-
 plt.hist(E_loc[:, 50:].flatten().clamp(-1.25, 0).numpy(), bins=100);
-
-
-# In[241]:
 
 
 E_loc[:, 50:].std()
 
 
-# In[242]:
-
-
 scf_energy, E_loc[:, 50:].mean().item(), (E_loc[:, 50:].mean(dim=1).std()/np.sqrt(E_loc.shape[0])).item()
 
 
-# In[243]:
-
-
 plt.plot(blocking(E_loc[:, 50:]).numpy())
-
-
-# In[244]:
 
 
 plt.plot(autocorr_coeff(range(50), E_loc[:, 50:]).numpy())
 plt.axhline()
 
 
-# ## Net WF
-
-# In[55]:
-
+# ### Net WF
 
 plot_func(DistanceBasis(32), [1, 11]);
-
-
-# In[64]:
 
 
 wfnet = WFNet(h2_plus, 1, ion_pot=0.7).cuda()
@@ -206,10 +141,7 @@ sampler = langevin_monte_carlo(
 )
 
 
-# In[65]:
-
-
-exp_label = 'exp28'
+exp_label = 'exp30'
 with SummaryWriter(f'runs/{exp_label}/pretrain') as writer:
     fit_wfnet(
         wfnet,
@@ -244,10 +176,7 @@ with SummaryWriter(f'runs/{exp_label}/variance') as writer:
         ),
         writer=writer,
     )
-wfnet.cpu()
-
-
-# In[66]:
+wfnet.cpu();
 
 
 plot_func_x(
@@ -257,16 +186,10 @@ plot_func_x(
 plt.ylim((-1, 0));
 
 
-# In[67]:
-
-
 plot_func_xy(
     lambda x: wfnet.deep_lin(wfnet._featurize(x[:, None])[0]).squeeze(),
     [[-10, 10], [-10, 10]]
 );
-
-
-# In[68]:
 
 
 n_walker = 1_000
@@ -283,33 +206,18 @@ wfnet.cpu()
 info.acceptance.mean()
 
 
-# In[69]:
-
-
 plt.plot(E_loc.mean(dim=0).numpy())
 plt.ylim(-0.7, -0.5)
-
-
-# In[70]:
 
 
 plt.hist(E_loc[:, 50:].flatten().clamp(-1.25, 0).numpy(), bins=100);
 plt.xlim(-1.25, 0)
 
 
-# In[71]:
-
-
 E_loc[:, 50:].std()
 
 
-# In[75]:
-
-
 scf_energy_big, E_loc[:, 50:].mean().item(), (E_loc[:, 50:].mean(dim=1).std()/np.sqrt(E_loc.shape[0])).item()
-
-
-# In[87]:
 
 
 bounds = [-2, 2]
@@ -324,13 +232,96 @@ plt.ylim(-1.5, None)
 
 # ## H2
 
-# In[15]:
+# ### GTO WF
+
+mol = gto.M(
+    atom=h2_mol.as_pyscf(),
+    unit='bohr',
+    basis='6-311g',
+    charge=0,
+    spin=0,
+)
+mf = scf.RHF(mol)
+mf.kernel()
+gtowf = PyscfGTOSlaterWF(mf)
+
+
+mol = gto.M(
+    atom=h2_mol.as_pyscf(),
+    unit='bohr',
+    basis='6-311g',
+    charge=0,
+    spin=2,
+)
+mf = scf.RHF(mol)
+mf.kernel()
+gtowf = TorchGTOSlaterWF(mf)
+
+
+rs = torch.randn(100, 2, 3)
+
+
+gtowf(rs)
+
+
+# ### Net WF
+
+mol = gto.M(
+    atom=as_pyscf_atom(h2_mol),
+    unit='bohr',
+    basis='6-311g',
+    charge=1,
+    spin=1,
+)
+mf = scf.RHF(mol)
+scf_energy = mf.kernel()
+gtowf = GTOWF(mf, 0, use_pyscf=False)
 
 
 wfnet = WFNet(h2_mol, 2, ion_pot=0.7).cuda()
+sampler = langevin_monte_carlo(
+    wfnet,
+    torch.randn(1_000, 2, 3, device='cuda'),
+    tau=0.1,
+)
 
 
-# In[16]:
+exp_label = 'H2/exp01'
+with SummaryWriter(f'runs/{exp_label}/pretrain') as writer:
+    fit_wfnet(
+        wfnet,
+        partial(loss_local_energy, E_ref=-1.1),
+        torch.optim.Adam(wfnet.parameters(), lr=0.005),
+        wfnet_fit_driver(
+            sampler,
+            samplings=range(1),
+            n_epochs=5,
+            n_sampling_steps=550,
+            batch_size=10_000,
+            n_discard=50,
+            range_sampling=partial(trange, desc='sampling steps', leave=False),
+            range_training=partial(trange, desc='training steps', leave=False),
+        ),
+        writer=writer,
+    )
+with SummaryWriter(f'runs/{exp_label}/variance') as writer:
+    fit_wfnet(
+        wfnet,
+        loss_local_energy,
+        torch.optim.Adam(wfnet.parameters(), lr=0.005),
+        wfnet_fit_driver(
+            sampler,
+            samplings=trange(10, desc='samplings'),
+            n_epochs=5,
+            n_sampling_steps=550,
+            batch_size=10_000,
+            n_discard=50,
+            range_sampling=partial(trange, desc='sampling steps', leave=False),
+            range_training=partial(trange, desc='training steps', leave=False),
+        ),
+        writer=writer,
+    )
+wfnet.cpu();
 
 
 n_walker = 1_000
@@ -347,14 +338,35 @@ wfnet.cpu()
 info.acceptance.mean()
 
 
-# In[17]:
-
-
 plt.plot(E_loc.mean(dim=0).numpy())
 
 
-# In[ ]:
+def f(loops, steps):
+    for loop in loops:
+        for step in steps:
+            time.sleep(0.1)
 
 
+f(range(2), range(10))
+f(trange(2), trange(10, leave=False))
 
+
+# ## Be atom
+
+mol = gto.M(
+    atom=be_atom.as_pyscf(),
+    unit='bohr',
+    basis='6-311g',
+    charge=0,
+    spin=0,
+)
+mf = scf.RHF(mol)
+mf.kernel()
+gtowf = PyscfGTOSlaterWF(mf)
+
+
+rs = torch.rand(100, 4, 3)
+
+
+gtowf(rs)
 
