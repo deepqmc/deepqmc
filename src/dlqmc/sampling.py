@@ -60,12 +60,19 @@ def samples_from(sampler, steps, *, n_discard=0):
     return torch.stack(samples, dim=1), pd.DataFrame(infos)
 
 
-def langevin_monte_carlo(wf, rs, *, tau):
-    forces, psis = quantum_force(rs, wf)
+def langevin_monte_carlo(wf, rs, cutoff=1.0, *, tau):
+    def cutoff_force(rs, wf):
+        forces, psis = quantum_force(rs, wf)
+        max_force = torch.tensor(cutoff / tau)
+        forces_norm = forces.norm(dim=-1)
+        norm_factors = torch.min(forces_norm, max_force) / forces_norm
+        return (forces * norm_factors[..., None], psis)
+
+    forces, psis = cutoff_force(rs, wf)
     while True:
         rs_new = rs + forces * tau + torch.randn_like(rs) * np.sqrt(tau)
         try:
-            forces_new, psis_new = quantum_force(rs_new, wf)
+            forces_new, psis_new = cutoff_force(rs_new, wf)
         except torchext.LUFactError as e:
             e.info['rs'] = rs[e.info['idxs']]
             raise
