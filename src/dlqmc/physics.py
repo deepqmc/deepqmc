@@ -20,7 +20,7 @@ def nuclear_potential(rs, geom):
 def electronic_potential(rs):
     i, j = np.triu_indices(rs.shape[-2], k=1)
     dists = (rs[:, :, None] - rs[:, None, :])[:, i, j].norm(dim=-1)
-    return (1 / dists).sum(dim=(-1, -2))
+    return (1 / dists).sum(dim=-1)
 
 
 def grad(rs, wf, create_graph=False):
