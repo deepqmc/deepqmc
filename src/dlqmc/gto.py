@@ -17,11 +17,14 @@ def eval_slater(aos, coeffs):
     # for molecular orbitals as linear combinations of atomic orbitals,
     # the Slater matrix can be obtained as a tensor contraction
     # (i_batch, i_elec, i_basis) * (i_basis, j_elec)
-    slater_matrix = aos @ coeffs
-    if aos.shape[1] == 1:
-        return slater_matrix.view(aos.shape[0])
     norm = 1 / np.sqrt(special.factorial(coeffs.shape[-1]))
-    return norm * torchext.bdet(slater_matrix)
+    slater_matrix = aos @ coeffs
+    try:
+        return norm * torchext.bdet(slater_matrix)
+    except torchext.LUFactError as e:
+        e.info['aos'] = aos[e.info['idxs']]
+        e.info['slater'] = slater_matrix[e.info['idxs']]
+        raise
 
 
 class SlaterWF(ABC):

@@ -55,3 +55,9 @@ def integrate_on_mesh(func, bounds, density=0.02):
 def assign_where(xs, ys, where):
     for x, y in zip(xs, ys):
         x[where] = y[where]
+
+
+class InfoException(Exception):
+    def __init__(self, info=None):
+        self.info = info or {}
+        super().__init__(self.info)

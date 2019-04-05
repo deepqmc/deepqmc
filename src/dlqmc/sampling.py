@@ -64,7 +64,11 @@ def langevin_monte_carlo(wf, rs, *, tau):
     forces, psis = quantum_force(rs, wf)
     while True:
         rs_new = rs + forces * tau + torch.randn_like(rs) * np.sqrt(tau)
-        forces_new, psis_new = quantum_force(rs_new, wf)
+        try:
+            forces_new, psis_new = quantum_force(rs_new, wf)
+        except torchext.LUFactError as e:
+            e.info['rs'] = rs[e.info['idxs']]
+            raise
         log_G_ratios = (
             (forces + forces_new) * ((rs - rs_new) + tau / 2 * (forces - forces_new))
         ).sum(dim=(-1, -2))
