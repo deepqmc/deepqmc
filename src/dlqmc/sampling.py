@@ -10,7 +10,7 @@ from .utils import assign_where
 def dynamics(wf, pos, stepsize, steps):
     pos = pos.detach().clone()
     pos.requires_grad = True
-    vel = torch.randn(pos.shape)
+    vel = torch.randn(pos.shape,device=pos.device)
     forces, psis = quantum_force(pos, wf)
     v_te2 = vel + stepsize * forces
     p_te = pos + stepsize * v_te2
@@ -63,7 +63,7 @@ def samples_from(sampler, steps, *, n_discard=0):
 def langevin_monte_carlo(wf, rs, cutoff=1.0, *, tau):
     def cutoff_force(rs, wf):
         forces, psis = quantum_force(rs, wf)
-        max_force = torch.tensor(cutoff / tau)
+        max_force = torch.tensor(cutoff / tau,device=rs.device)
         forces_norm = forces.norm(dim=-1)
         norm_factors = torch.min(forces_norm, max_force) / forces_norm
         return (forces * norm_factors[..., None], psis)
