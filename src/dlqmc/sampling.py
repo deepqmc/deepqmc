@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 import pandas as pd
 import torch
@@ -10,7 +12,7 @@ from .utils import assign_where
 def dynamics(wf, pos, stepsize, steps):
     pos = pos.detach().clone()
     pos.requires_grad = True
-    vel = torch.randn(pos.shape,device=pos.device)
+    vel = torch.randn(pos.shape, device=pos.device)
     forces, psis = quantum_force(pos, wf)
     v_te2 = vel + stepsize * forces
     p_te = pos + stepsize * v_te2
@@ -60,19 +62,13 @@ def samples_from(sampler, steps, *, n_discard=0):
     return torch.stack(samples, dim=1), pd.DataFrame(infos)
 
 
-def langevin_monte_carlo(wf, rs, cutoff=1.0, *, tau):
-    def cutoff_force(rs, wf):
-        forces, psis = quantum_force(rs, wf)
-        max_force = rs.new_tensor(cutoff / tau)
-        forces_norm = forces.norm(dim=-1)
-        norm_factors = torch.min(forces_norm, max_force) / forces_norm
-        return (forces * norm_factors[..., None], psis)
-
-    forces, psis = cutoff_force(rs, wf)
+def langevin_monte_carlo(wf, rs, *, tau, cutoff=1.0):
+    qforce = partial(quantum_force, clamp=cutoff / tau)
+    forces, psis = qforce(rs, wf)
     while True:
         rs_new = rs + forces * tau + torch.randn_like(rs) * np.sqrt(tau)
         try:
-            forces_new, psis_new = cutoff_force(rs_new, wf)
+            forces_new, psis_new = qforce(rs_new, wf)
         except torchext.LUFactError as e:
             e.info['rs'] = rs[e.info['idxs']]
             raise

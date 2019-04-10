@@ -7,9 +7,8 @@ import torch
 
 def nuclear_energy(geom):
     coords, charges = geom.coords, geom.charges
-    coul_IJ = charges[:, None] * charges / (coords[:, None] - coords).norm(dim=-1)
-    coul_IJ[np.diag_indices(len(coords))] = 0
-    return coul_IJ.sum() / 2
+    coulombs = charges[:, None] * charges / (coords[:, None] - coords).norm(dim=-1)
+    return coulombs.triu(1).sum()
 
 
 def nuclear_potential(rs, geom):
@@ -56,9 +55,15 @@ def laplacian(rs, wf, create_graph=False):
     return lap_psis, psis
 
 
-def quantum_force(rs, wf):
+def quantum_force(rs, wf, *, clamp=None):
     grad_psis, psis = grad(rs, wf)
-    return grad_psis / psis[:, None, None], psis
+    forces = grad_psis / psis[:, None, None]
+    if clamp is not None:
+        clamp = rs.new_tensor(clamp)
+        forces_norm = forces.norm(dim=-1)
+        norm_factors = torch.min(forces_norm, clamp) / forces_norm
+        forces *= norm_factors[..., None]
+    return forces, psis
 
 
 def local_energy(rs, wf, geom, create_graph=False):
