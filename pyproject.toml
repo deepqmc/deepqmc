@@ -2,7 +2,8 @@
 name = "dlqmc"
 version = "0.1.0"
 authors = [
-    "Zeno Schätzle <zenoone@physik.fu-berlin.de>"
+    "Zeno Schätzle <zenoone@physik.fu-berlin.de>",
+    "Jan Hermann <jan.hermann@fu-berlin.de>",
 ]
 packages = [
     { include = "dlqmc", from = "src" },
