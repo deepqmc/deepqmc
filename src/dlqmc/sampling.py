@@ -63,7 +63,7 @@ def samples_from(sampler, steps, *, n_discard=0):
 def langevin_monte_carlo(wf, rs, cutoff=1.0, *, tau):
     def cutoff_force(rs, wf):
         forces, psis = quantum_force(rs, wf)
-        max_force = torch.tensor(cutoff / tau,device=rs.device)
+        max_force = rs.new_tensor(cutoff / tau)
         forces_norm = forces.norm(dim=-1)
         norm_factors = torch.min(forces_norm, max_force) / forces_norm
         return (forces * norm_factors[..., None], psis)
