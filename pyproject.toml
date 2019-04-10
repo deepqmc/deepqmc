@@ -32,6 +32,8 @@ flake8-quotes = "^1.0"
 black = "^18.3-alpha.0"
 pep8-naming = "^0.7.0"
 isort = "^4.3"
+pytest = "^4.4"
+
 
 [tool.black]
 py36 = true
