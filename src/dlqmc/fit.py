@@ -1,25 +1,22 @@
 from itertools import cycle
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 
 from .physics import local_energy
 from .sampling import samples_from
 
 
-def loss_local_energy(Es_loc, psis, E_ref=None, correlated_sampling=True):
-    if correlated_sampling:
-        ws = psis ** 2 / psis.detach() ** 2
-        w_mean = ws.mean()
-    else:
-        ws, w_mean = 1.0, 1.0
+def loss_local_energy(Es_loc, weights, E_ref=None):
+    ws, w_mean = (weights, weights.mean()) if weights is not None else (1.0, 1.0)
     E0 = E_ref if E_ref is not None else (Es_loc * ws).mean() / w_mean
     return (ws * (Es_loc - E0) ** 2).mean() / w_mean
 
 
-def fit_wfnet(wfnet, loss_func, opt, sample_gen, writer=None):
-    for step, rs in enumerate(sample_gen):
+def fit_wfnet(wfnet, loss_func, opt, sample_gen, correlated_sampling=True, writer=None):
+    for step, (rs, psi0s) in enumerate(sample_gen):
         Es_loc, psis = local_energy(rs, wfnet, wfnet.geom, create_graph=True)
-        loss = loss_func(Es_loc, psis)
+        weights = psis ** 2 / psi0s ** 2 if correlated_sampling else None
+        loss = loss_func(Es_loc, weights)
         if writer:
             writer.add_scalar('loss', loss, step)
             writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
@@ -42,12 +39,11 @@ def wfnet_fit_driver(
     range_training=range,
 ):
     for _ in samplings:
-        samples, _ = samples_from(
+        rs, psis, _ = samples_from(
             sampler, range_sampling(n_sampling_steps), n_discard=n_discard
         )
-        rs_dl = DataLoader(
-            samples.flatten(end_dim=1), batch_size=batch_size, shuffle=True
-        )
+        samples_ds = TensorDataset(rs.flatten(end_dim=1), psis.flatten(end_dim=1))
+        rs_dl = DataLoader(samples_ds, batch_size=batch_size, shuffle=True)
         n_steps = n_epochs * len(rs_dl)
-        for _, rs in zip(range_training(n_steps), cycle(rs_dl)):
-            yield rs
+        for _, (rs, psis) in zip(range_training(n_steps), cycle(rs_dl)):
+            yield rs, psis
