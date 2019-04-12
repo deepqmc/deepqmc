@@ -5,7 +5,7 @@ geometry
   h 0.742 0 0
 end
 basis
-  * library aug-cc-pv5z
+  * library aug-cc-pvtz
 end
 scf
   print "final vectors"
