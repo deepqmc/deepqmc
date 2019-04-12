@@ -1,0 +1,12 @@
+method {
+    optimize
+    nconfig 500
+}
+
+include geom.qw.sys
+
+trialfunc {
+    slater-jastrow
+    wf1 { include geom.qw.slater }
+    wf2 { include geom.qw.jast2 }
+}
