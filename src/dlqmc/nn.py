@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .geom import Geometry
+
 
 class PairwiseDistance3D(nn.Module):
     def forward(self, coords1, coords2):
@@ -20,8 +22,8 @@ class DistanceBasis(nn.Module):
         super().__init__()
         qs = torch.linspace(0, 1, n_features)
         self.cutoff = cutoff
-        self.mus = nn.Parameter(cutoff * qs ** 2, requires_grad=False)
-        self.sigmas = nn.Parameter((1 + cutoff * qs) / 7, requires_grad=False)
+        self.register_buffer('mus', cutoff * qs ** 2)
+        self.register_buffer('sigmas', (1 + cutoff * qs) / 7)
 
     def forward(self, dists):
         dists_rel = dists / self.cutoff
@@ -38,7 +40,7 @@ class DistanceBasis(nn.Module):
 class NuclearAsymptotic(nn.Module):
     def __init__(self, charges, ion_potential, alpha=1.0):
         super().__init__()
-        self.charges = nn.Parameter(charges, requires_grad=False)
+        self.register_buffer('charges', charges)
         self.ion_potential = nn.Parameter(torch.as_tensor(ion_potential))
         self.alpha = alpha
 
@@ -105,9 +107,10 @@ class WFNet(nn.Module):
         self, geom, n_electrons, ion_pot=0.5, cutoff=10.0, n_dist_feats=32, alpha=1.0
     ):
         super().__init__()
-        self.geom = geom.as_param_dict()
+        self.register_buffer('coords', geom.coords)
+        self.register_buffer('charges', geom.charges)
         self.dist_basis = DistanceBasis(n_dist_feats)
-        self.nuc_asymp = NuclearAsymptotic(geom.charges, ion_pot, alpha=alpha)
+        self.nuc_asymp = NuclearAsymptotic(self.charges, ion_pot, alpha=alpha)
         n_pairs = n_electrons * len(geom) + n_electrons * (n_electrons - 1) // 2
         self.deep_lin = nn.Sequential(
             nn.Linear(n_pairs * n_dist_feats, 64),
@@ -119,8 +122,12 @@ class WFNet(nn.Module):
         self._pdist = PairwiseDistance3D()
         self._psdist = PairwiseSelfDistance3D()
 
+    @property
+    def geom(self):
+        return Geometry(self.coords, self.charges)
+
     def _featurize(self, rs):
-        dists_nuc = self._pdist(rs, self.geom.coords[None, ...])
+        dists_nuc = self._pdist(rs, self.coords[None, ...])
         dists_el = self._psdist(rs)
         dists = torch.cat([dists_nuc.flatten(start_dim=1), dists_el], dim=1)
         xs = self.dist_basis(dists).flatten(start_dim=1)
