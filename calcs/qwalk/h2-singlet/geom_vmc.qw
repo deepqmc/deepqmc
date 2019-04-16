@@ -1,0 +1,9 @@
+method {
+    vmc
+}
+
+include geom.qw.sys
+
+trialfunc {
+    include geom_opt.qw.wfout
+}

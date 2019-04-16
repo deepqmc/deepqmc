@@ -3,16 +3,19 @@ from torch import nn
 
 
 class Geometry:
-    def __init__(self, coords, charges, dtype=torch.float):
+    def __init__(self, coords, charges):
         assert len(coords) == len(charges)
-        self._coords = torch.as_tensor(coords, dtype=dtype)
-        self._charges = torch.as_tensor(charges, dtype=dtype)
+        self._coords = torch.as_tensor(coords).float()
+        self._charges = torch.as_tensor(charges).float()
 
     def __len__(self):
         return len(self._charges)
 
     def __iter__(self):
         yield from zip(self._coords, self._charges)
+
+    def __repr__(self):
+        return f'Geometry(coords={self._coords}, charges={self._charges})'
 
     @property
     def coords(self):
@@ -24,11 +27,3 @@ class Geometry:
 
     def as_pyscf(self):
         return [(str(int(charge.numpy())), coord.numpy()) for coord, charge in self]
-
-    def as_param_dict(self):
-        return nn.ParameterDict(
-            {
-                'coords': nn.Parameter(self.coords, requires_grad=False),
-                'charges': nn.Parameter(self.charges, requires_grad=False),
-            }
-        )
