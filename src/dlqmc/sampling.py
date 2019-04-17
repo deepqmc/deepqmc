@@ -9,25 +9,26 @@ from .physics import quantum_force
 from .utils import assign_where
 
 
-def dynamics(wf, pos, stepsize, steps):
+def dynamics(wf, pos, stepsize, steps, tau, cutoff):
+    qforce = partial(quantum_force, clamp=cutoff / tau)
     pos = pos.detach().clone()
     pos.requires_grad = True
     vel = torch.randn(pos.shape, device=pos.device)
-    forces, psis = quantum_force(pos, wf)
+    forces, psis = qforce(pos, wf)
     v_te2 = vel + stepsize * forces
     p_te = pos + stepsize * v_te2
     for _ in range(1, steps):
-        forces, psis = quantum_force(p_te, wf)
+        forces, psis = qforce(p_te, wf)
         v_te2 = v_te2 + stepsize * 2 * forces
         p_te = p_te + stepsize * v_te2
-    forces, psis = quantum_force(p_te, wf)
+    forces, psis = qforce(p_te, wf)
     v_te = v_te2 + stepsize * forces
     return p_te, v_te, vel
 
 
-def hmc(wf, rs, *, dysteps, stepsize):
+def hmc(wf, rs, *, dysteps, stepsize, tau, cutoff=1.0):
     while True:
-        rs_new, v, v_0 = dynamics(wf, rs, stepsize, dysteps)
+        rs_new, v, v_0 = dynamics(wf, rs, stepsize, dysteps, tau, cutoff)
         psis = wf(rs)
         Ps_acc = (
             wf(rs_new) ** 2
