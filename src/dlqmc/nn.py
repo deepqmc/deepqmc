@@ -36,6 +36,9 @@ class DistanceBasis(nn.Module):
             -(dists[..., None] - self.mus) ** 2 / self.sigmas ** 2
         )
 
+    def extra_repr(self):
+        return f'basis_dim={len(self.mus)}, cutoff={self.cutoff}'
+
 
 class NuclearAsymptotic(nn.Module):
     def __init__(self, charges, ion_potential, alpha=1.0):
@@ -54,6 +57,9 @@ class NuclearAsymptotic(nn.Module):
             .sum(dim=-1)
             .prod(dim=-1)
         )
+
+    def extra_repr(self):
+        return f'alpha={self.alpha}'
 
 
 def ssp(*args, **kwargs):
