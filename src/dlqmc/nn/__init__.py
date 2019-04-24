@@ -14,17 +14,17 @@ from .wfnet import WFNet, WFNetAnti
 
 __all__ = [
     'AntisymmetricPart',
+    'BFNet',
+    'DistanceBasis',
     'NetOdd',
     'NetPairwiseAntisymmetry',
-    'SSP',
-    'DistanceBasis',
     'NuclearAsymptotic',
     'PairwiseDistance3D',
     'PairwiseSelfDistance3D',
+    'SSP',
+    'WFNet',
+    'WFNetAnti',
     'pairwise_distance',
     'pairwise_self_distance',
     'ssp',
-    'WFNet',
-    'WFNetAnti',
-    'BFNet',
 ]

@@ -28,7 +28,7 @@ def quantum_force(rs, wf, *, clamp=None):
         clamp = rs.new_tensor(clamp)
         forces_norm = forces.norm(dim=-1)
         norm_factors = torch.min(forces_norm, clamp) / forces_norm
-        forces *= norm_factors[..., None]
+        forces = forces * norm_factors[..., None]
     return forces, psis
 
 
