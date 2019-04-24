@@ -9,6 +9,7 @@ from .base import (
     pairwise_self_distance,
     ssp,
 )
+from .bfnet import BFNet
 from .wfnet import WFNet, WFNetAnti
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     'ssp',
     'WFNet',
     'WFNetAnti',
+    'BFNet',
 ]
