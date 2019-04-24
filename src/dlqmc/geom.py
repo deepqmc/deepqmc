@@ -1,5 +1,7 @@
 import torch
 
+angstrom = 1 / 0.52917721092
+
 
 class Geometry:
     def __init__(self, coords, charges):
