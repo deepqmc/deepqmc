@@ -6,21 +6,29 @@ import torch.nn.functional as F
 from .geom import Geometry
 
 
+def pairwise_distance(coords1, coords2):
+    return (coords1[:, :, None] - coords2[:, None, :]).norm(dim=-1)
+
+
+def pairwise_self_distance(self, coords):
+    i, j = np.triu_indices(coords.shape[1], k=1)
+    return (coords[:, :, None] - coords[:, None, :])[:, i, j].norm(dim=-1)
+
+
 class PairwiseDistance3D(nn.Module):
     def forward(self, coords1, coords2):
-        return (coords1[:, :, None] - coords2[:, None, :]).norm(dim=-1)
+        return pairwise_distance(coords1, coords2)
 
 
 class PairwiseSelfDistance3D(nn.Module):
     def forward(self, coords):
-        i, j = np.triu_indices(coords.shape[1], k=1)
-        return (coords[:, :, None] - coords[:, None, :])[:, i, j].norm(dim=-1)
+        return pairwise_self_distance(coords)
 
 
 class DistanceBasis(nn.Module):
-    def __init__(self, n_features, cutoff=10.0):
+    def __init__(self, basis_dim, cutoff=10.0):
         super().__init__()
-        qs = torch.linspace(0, 1, n_features)
+        qs = torch.linspace(0, 1, basis_dim)
         self.cutoff = cutoff
         self.register_buffer('mus', cutoff * qs ** 2)
         self.register_buffer('sigmas', (1 + cutoff * qs) / 7)
