@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -5,10 +6,21 @@ from .. import torchext
 from .base import SSP, DistanceBasis, NuclearAsymptotic
 
 
+class ZeroDiagKernel(nn.Module):
+    def forward(self, Ws):
+        Ws = Ws.clone()
+        i, j = np.diag_indices(Ws.shape[1])
+        Ws[:, i, j] = 0
+        return Ws
+
+
 def get_schnet_interaction(kernel_dim, embedding_dim, basis_dim):
     modules = {
         'kernel': nn.Sequential(
-            nn.Linear(basis_dim, kernel_dim), SSP(), nn.Linear(kernel_dim, kernel_dim)
+            nn.Linear(basis_dim, kernel_dim),
+            SSP(),
+            nn.Linear(kernel_dim, kernel_dim),
+            ZeroDiagKernel(),
         ),
         'embed_in': nn.Linear(embedding_dim, kernel_dim, bias=False),
         'embed_out': nn.Sequential(
