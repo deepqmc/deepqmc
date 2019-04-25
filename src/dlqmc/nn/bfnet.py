@@ -4,6 +4,7 @@ import torch.nn as nn
 
 from .. import torchext
 from ..geom import Geomable
+from ..utils import nondiag
 from .base import SSP, DistanceBasis, NuclearAsymptotic, pairwise_distance
 
 
@@ -42,6 +43,16 @@ def get_orbnet(embedding_dim, *, n_layers):
     for k in range(n_layers):
         modules.extend([nn.Linear(dims[k], dims[k + 1]), SSP()])
     return nn.Sequential(*modules[:-1])
+
+
+def schnet_conv(Ws, zs):
+    i, j = np.mask_indices(Ws.shape[2], nondiag)
+    n = Ws.shape[1] * (Ws.shape[2] - 1)
+    i, j = i[:n], j[:n]
+    return (
+        Ws[:, i, j].view(*Ws.shape[:1], Ws.shape[2] - 1, -1)
+        * zs[:, j].view(*Ws.shape[:1], Ws.shape[2] - 1, -1)
+    ).sum(dim=2)
 
 
 class BFNet(nn.Module, Geomable):
