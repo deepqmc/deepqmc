@@ -1,23 +1,11 @@
-import numpy as np
 import torch
 import torch.nn as nn
 
 from .. import torchext
 from ..geom import Geomable
-from .base import SSP, DistanceBasis, NuclearAsymptotic, pairwise_distance
-from .schnet import ElectronicSchnet
-
-
-def get_orbnet(embedding_dim, *, n_layers):
-    modules = []
-    dims = [
-        int(np.round(embedding_dim ** (k / n_layers)))
-        for k in reversed(range(n_layers + 1))
-    ]
-    for k in range(n_layers):
-        modules.extend([nn.Linear(dims[k], dims[k + 1]), SSP()])
-    return nn.Sequential(*modules[:-1])
 from ..utils import dctsel
+from .base import DistanceBasis, NuclearAsymptotic, pairwise_distance
+from .schnet import ElectronicSchnet, get_orbnet
 
 
 class BFNet(nn.Module, Geomable):
