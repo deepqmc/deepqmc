@@ -10,12 +10,14 @@ from .base import (
     ssp,
 )
 from .bfnet import BFNet
+from .hannet import HanNet
 from .wfnet import WFNet, WFNetAnti
 
 __all__ = [
     'AntisymmetricPart',
     'BFNet',
     'DistanceBasis',
+    'HanNet',
     'NetOdd',
     'NetPairwiseAntisymmetry',
     'NuclearAsymptotic',
