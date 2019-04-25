@@ -36,10 +36,9 @@ class BFNet(nn.Module, Geomable):
     ):
         super().__init__()
         self.n_up = n_up
-        self.register_buffer('coords', geom.coords)
-        self.register_buffer('charges', geom.charges)
         self.dist_basis = DistanceBasis(basis_dim)
         self.nuc_asymp = NuclearAsymptotic(self.charges, ion_pot, alpha=alpha)
+        self.register_geom(geom)
         self.schnet = ElectronicSchnet(
             n_up,
             n_down,

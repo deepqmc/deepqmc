@@ -40,3 +40,7 @@ class Geomable:
     @property
     def geom(self):
         return Geometry(self.coords, self.charges)
+
+    def register_geom(self, geom):
+        self.register_buffer('coords', geom.coords)
+        self.register_buffer('charges', geom.charges)
