@@ -11,20 +11,20 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.7"
+certifi = "*"
 numpy = "^1.16"
 torch = "^1.0"
 scipy = "^1.2"
 pyscf = "^1.6"
+pandas = "^0.24.2"
+
+[tool.poetry.dev-dependencies]
 tqdm = "^4.31"
 ipykernel = "^5.1"
 matplotlib = "^3.0"
 ipywidgets = "^7.4"
 tensorboardX = "^1.6"
 Pillow = "^5.4"
-certifi = "*"
-pandas = "^0.24.2"
-
-[tool.poetry.dev-dependencies]
 flake8 = "^3.5"
 flake8-bugbear = "^18.8"
 flake8-comprehensions = "^1.4"
