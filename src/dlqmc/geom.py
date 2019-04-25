@@ -34,3 +34,9 @@ class Geometry:
 
     def as_pyscf(self):
         return [(str(int(charge.numpy())), coord.numpy()) for coord, charge in self]
+
+
+class Geomable:
+    @property
+    def geom(self):
+        return Geometry(self.coords, self.charges)

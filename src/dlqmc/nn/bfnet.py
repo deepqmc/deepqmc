@@ -4,6 +4,7 @@ import torch.nn as nn
 
 from .. import torchext
 from .base import SSP, DistanceBasis, NuclearAsymptotic
+from ..geom import Geomable
 
 
 class ZeroDiagKernel(nn.Module):
@@ -42,7 +43,7 @@ def get_orbnet(embedding_dim):
     )
 
 
-class BFNet(nn.Module):
+class BFNet(nn.Module, Geomable):
     def __init__(
         self,
         geom,

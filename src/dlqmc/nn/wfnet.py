@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ..geom import Geometry
+from ..geom import Geomable
 from .anti import AntisymmetricPart
 from .base import (
     SSP,
@@ -12,7 +12,7 @@ from .base import (
 )
 
 
-class WFNet(nn.Module):
+class WFNet(nn.Module, Geomable):
     def __init__(
         self, geom, n_electrons, ion_pot=0.5, cutoff=10.0, n_dist_feats=32, alpha=1.0
     ):
@@ -31,10 +31,6 @@ class WFNet(nn.Module):
         )
         self._pdist = PairwiseDistance3D()
         self._psdist = PairwiseSelfDistance3D()
-
-    @property
-    def geom(self):
-        return Geometry(self.coords, self.charges)
 
     def _featurize(self, rs):
         dists_nuc = self._pdist(rs, self.coords[None, ...])
