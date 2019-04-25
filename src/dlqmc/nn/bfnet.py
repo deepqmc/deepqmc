@@ -33,14 +33,15 @@ def get_schnet_interaction(kernel_dim, embedding_dim, basis_dim):
     return nn.ModuleDict(modules)
 
 
-def get_orbnet(embedding_dim):
-    return nn.Sequential(
-        nn.Linear(embedding_dim, embedding_dim // 2),
-        SSP(),
-        nn.Linear(embedding_dim // 2, embedding_dim // 4),
-        SSP(),
-        nn.Linear(embedding_dim // 4, 1),
-    )
+def get_orbnet(embedding_dim, *, n_layers):
+    modules = []
+    dims = [
+        int(np.round(embedding_dim ** (k / n_layers)))
+        for k in reversed(range(n_layers + 1))
+    ]
+    for k in range(n_layers):
+        modules.extend([nn.Linear(dims[k], dims[k + 1]), SSP()])
+    return nn.Sequential(*modules[:-1])
 
 
 class BFNet(nn.Module, Geomable):
@@ -53,6 +54,7 @@ class BFNet(nn.Module, Geomable):
         kernel_dim=64,
         embedding_dim=128,
         n_interactions=3,
+        n_orbital_layers=3,
         ion_pot=0.5,
         cutoff=10.0,
         alpha=1.0,
@@ -76,7 +78,10 @@ class BFNet(nn.Module, Geomable):
             ]
         )
         self.orbitals = nn.ModuleList(
-            [get_orbnet(embedding_dim) for _ in range(n_up + n_down)]
+            [
+                get_orbnet(embedding_dim, n_layers=n_orbital_layers)
+                for _ in range(n_up + n_down)
+            ]
         )
 
     def _eval_slater(self, xs, idxs):
