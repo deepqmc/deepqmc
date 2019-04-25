@@ -3,11 +3,17 @@ import torch
 angstrom = 1 / 0.52917721092
 
 
+def ensure_fp(tensor):
+    if tensor.dtype in {torch.half, torch.float, torch.double}:
+        return tensor
+    return tensor.float()
+
+
 class Geometry:
     def __init__(self, coords, charges):
         assert len(coords) == len(charges)
-        self._coords = torch.as_tensor(coords).float()
-        self._charges = torch.as_tensor(charges).float()
+        self._coords = ensure_fp(torch.as_tensor(coords))
+        self._charges = ensure_fp(torch.as_tensor(charges))
 
     def __len__(self):
         return len(self._charges)
