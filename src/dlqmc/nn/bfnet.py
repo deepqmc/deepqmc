@@ -17,6 +17,7 @@ def get_orbnet(embedding_dim, *, n_layers):
     for k in range(n_layers):
         modules.extend([nn.Linear(dims[k], dims[k + 1]), SSP()])
     return nn.Sequential(*modules[:-1])
+from ..utils import dctsel
 
 
 class BFNet(nn.Module, Geomable):
@@ -31,14 +32,15 @@ class BFNet(nn.Module, Geomable):
         n_interactions=3,
         n_orbital_layers=3,
         ion_pot=0.5,
-        cutoff=10.0,
-        alpha=1.0,
+        **kwargs,
     ):
         super().__init__()
         self.n_up = n_up
-        self.dist_basis = DistanceBasis(basis_dim)
-        self.nuc_asymp = NuclearAsymptotic(self.charges, ion_pot, alpha=alpha)
         self.register_geom(geom)
+        self.dist_basis = DistanceBasis(basis_dim, **dctsel(kwargs, 'cutoff'))
+        self.nuc_asymp = NuclearAsymptotic(
+            self.charges, ion_pot, **dctsel(kwargs, 'alpha')
+        )
         self.schnet = ElectronicSchnet(
             n_up,
             n_down,

@@ -51,9 +51,9 @@ class ElectronicSchnet(nn.Module):
         n_down,
         n_nuclei,
         n_interactions,
-        basis_dim=32,
-        kernel_dim=64,
-        embedding_dim=128,
+        basis_dim,
+        kernel_dim,
+        embedding_dim,
     ):
         super().__init__()
         self.embedding_nuc = nn.Parameter(torch.randn(n_nuclei, kernel_dim))

@@ -67,3 +67,9 @@ def nondiag(A, k=None):
     A = A.copy()
     np.fill_diagonal(A, 0)
     return A
+
+
+def dctsel(dct, keys):
+    if isinstance(keys, str):
+        keys = keys.split()
+    return {k: dct[k] for k in keys if k in dct}
