@@ -3,8 +3,8 @@ import torch
 import torch.nn as nn
 
 from .. import torchext
-from .base import SSP, DistanceBasis, NuclearAsymptotic
 from ..geom import Geomable
+from .base import SSP, DistanceBasis, NuclearAsymptotic, pairwise_distance
 
 
 class ZeroDiagKernel(nn.Module):
@@ -62,7 +62,7 @@ class BFNet(nn.Module, Geomable):
         self.register_buffer('coords', geom.coords)
         self.register_buffer('charges', geom.charges)
         self.dist_basis = DistanceBasis(basis_dim)
-        self.asymp_nuc = NuclearAsymptotic(self.charges, ion_pot, alpha=alpha)
+        self.nuc_asymp = NuclearAsymptotic(self.charges, ion_pot, alpha=alpha)
         self.embedding_nuc = nn.Parameter(torch.randn(len(geom), kernel_dim))
         self.embedding_elec = nn.Parameter(
             torch.cat(
@@ -87,8 +87,8 @@ class BFNet(nn.Module, Geomable):
         return torchext.bdet(slaters)
 
     def forward(self, rs):
-        dists_elec = (rs[:, :, None] - rs[:, None, :]).norm(dim=-1)
-        dists_nuc = (rs[:, :, None] - self.coords).norm(dim=-1)
+        dists_elec = pairwise_distance(rs, rs)
+        dists_nuc = pairwise_distance(rs, self.coords[None, ...])
         dists = torch.cat([dists_elec, dists_nuc], dim=2)
         dists_basis = self.dist_basis(dists)
         xs = self.embedding_elec.clone().expand(len(rs), -1, -1)
@@ -100,4 +100,4 @@ class BFNet(nn.Module, Geomable):
             xs = xs + interaction.embed_out(zs)
         anti_up = self._eval_slater(xs, slice(None, self.n_up))
         anti_down = self._eval_slater(xs, slice(self.n_up, None))
-        return anti_up * anti_down * self.asymp_nuc(dists_nuc)
+        return anti_up * anti_down * self.nuc_asymp(dists_nuc)
