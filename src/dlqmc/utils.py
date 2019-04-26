@@ -1,3 +1,6 @@
+from contextlib import contextmanager
+from functools import wraps
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -73,3 +76,43 @@ def dctsel(dct, keys):
     if isinstance(keys, str):
         keys = keys.split()
     return {k: dct[k] for k in keys if k in dct}
+
+
+class DebugContainer(dict):
+    def __init__(self):
+        super().__init__()
+        self._levels = []
+
+    @contextmanager
+    def cd(self, label):
+        self._levels.append(label)
+        try:
+            yield
+        finally:
+            assert label == self._levels.pop()
+
+    def __setitem__(self, key, val):
+        super().__setitem__('.'.join([*self._levels, str(key)]), val)
+
+
+class _NullDebug(DebugContainer):
+    def __setitem__(self, key, val):
+        pass
+
+
+NULL_DEBUG = _NullDebug()
+
+
+def debugged(func, label):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        debug = DebugContainer()
+        func(*args, **kwargs, debug=debug)
+        return debug[label]
+
+    return wrapped
+
+
+class Debuggable:
+    def debug(self, label, *args, **kwargs):
+        return debugged(self, label)(*args, **kwargs)

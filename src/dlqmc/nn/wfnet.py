@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 from ..geom import Geomable
+from ..utils import NULL_DEBUG, Debuggable
 from .anti import AntisymmetricPart
 from .base import (
     SSP,
@@ -12,7 +13,7 @@ from .base import (
 )
 
 
-class WFNet(nn.Module, Geomable):
+class WFNet(nn.Module, Geomable, Debuggable):
     def __init__(
         self, geom, n_electrons, ion_pot=0.5, cutoff=10.0, n_dist_feats=32, alpha=1.0
     ):
@@ -32,17 +33,14 @@ class WFNet(nn.Module, Geomable):
         self._pdist = PairwiseDistance3D()
         self._psdist = PairwiseSelfDistance3D()
 
-    def _featurize(self, rs):
+    def forward(self, rs, debug=NULL_DEBUG):
         dists_nuc = self._pdist(rs, self.coords[None, ...])
         dists_el = self._psdist(rs)
         dists = torch.cat([dists_nuc.flatten(start_dim=1), dists_el], dim=1)
         xs = self.dist_basis(dists).flatten(start_dim=1)
-        return xs, (dists_nuc, dists_el)
-
-    def forward(self, rs):
-        xs, (dists_nuc, dists_el) = self._featurize(rs)
-        ys = self.deep_lin(xs).squeeze(dim=1)
-        return torch.exp(ys) * self.nuc_asymp(dists_nuc)
+        ys = debug['ys'] = self.deep_lin(xs).squeeze(dim=1)
+        asymp = debug['asymp'] = self.nuc_asymp(dists_nuc)
+        return torch.exp(ys) * asymp
 
 
 class WFNetAnti(nn.Module):

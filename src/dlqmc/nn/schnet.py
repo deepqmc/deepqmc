@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 from .. import torchext
-from ..utils import nondiag
+from ..utils import NULL_DEBUG, nondiag
 from .base import SSP
 
 
@@ -76,13 +76,13 @@ class ElectronicSchnet(nn.Module):
         slaters = torch.cat(phis, dim=-1)
         return torchext.bdet(slaters)
 
-    def forward(self, dists_basis):
+    def forward(self, dists_basis, debug=NULL_DEBUG):
         bs = len(dists_basis)  # batch size
-        xs = self.embedding_elec.clone().expand(bs, -1, -1)
-        for interaction in self.interactions:
+        xs = debug[0] = self.embedding_elec.clone().expand(bs, -1, -1)
+        for i, interaction in enumerate(self.interactions):
             Ws = interaction.kernel(dists_basis)
             zs = interaction.embed_in(xs)
             zs = torch.cat([zs, self.embedding_nuc.expand(bs, -1, -1)], dim=1)
             zs = (Ws * zs[:, None, :, :]).sum(dim=2)
-            xs = xs + interaction.embed_out(zs)
+            xs = debug[i + 1] = xs + interaction.embed_out(zs)
         return xs

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from ..geom import Geomable
-from ..utils import dctsel
+from ..utils import NULL_DEBUG, Debuggable, dctsel
 from .anti import LaughlinAnsatz
 from .base import (
     SSP,
@@ -16,7 +16,7 @@ from .base import (
 from .schnet import ElectronicSchnet
 
 
-class HanNet(nn.Module, Geomable):
+class HanNet(nn.Module, Geomable, Debuggable):
     def __init__(
         self,
         geom,
@@ -62,19 +62,22 @@ class HanNet(nn.Module, Geomable):
             for n_elec in (n_up, n_down)
         )
 
-    def forward(self, rs):
+    def forward(self, rs, debug=NULL_DEBUG):
         dists_elec = pairwise_distance(rs, rs)
         dists_nuc = pairwise_distance(rs, self.coords[None, ...])
         dists = torch.cat([dists_elec, dists_nuc], dim=2)
         dists_basis = self.dist_basis(dists)
-        xs = self.schnet(dists_basis)
-        jastrow = self.orbital(xs).squeeze().sum(dim=-1)
-        anti_up, anti_down = (
-            net(rs[:, idxs], dists_elec[:, idxs, idxs, None]) if net else 1.0
+        with debug.cd('schnet'):
+            xs = self.schnet(dists_basis, debug=debug)
+        jastrow = debug['jastrow'] = self.orbital(xs).squeeze().sum(dim=-1)
+        anti_up, anti_down = debug['anti_up'], debug['anti_down'] = [
+            net(rs[:, idxs], dists_elec[:, idxs, idxs, None])
+            if net
+            else torch.tensor(1.0)
             for net, idxs in [
                 (self.anti_up, slice(None, self.n_up)),
                 (self.anti_down, slice(self.n_up, None)),
             ]
-        )
-        asymp = self.nuc_asymp(dists_nuc) * 1.0  # TODO
+        ]
+        asymp = debug['asymp'] = self.nuc_asymp(dists_nuc)  # TODO add electrons
         return anti_up * anti_down * jastrow * asymp
