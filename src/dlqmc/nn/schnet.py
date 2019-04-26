@@ -44,17 +44,6 @@ def schnet_conv(Ws, zs):
     ).sum(dim=2)
 
 
-def get_orbnet(embedding_dim, *, n_layers):
-    modules = []
-    dims = [
-        int(np.round(embedding_dim ** (k / n_layers)))
-        for k in reversed(range(n_layers + 1))
-    ]
-    for k in range(n_layers):
-        modules.extend([nn.Linear(dims[k], dims[k + 1]), SSP()])
-    return nn.Sequential(*modules[:-1])
-
-
 class ElectronicSchnet(nn.Module):
     def __init__(
         self,

@@ -4,8 +4,8 @@ import torch.nn as nn
 from .. import torchext
 from ..geom import Geomable
 from ..utils import dctsel
-from .base import DistanceBasis, NuclearAsymptotic, pairwise_distance
-from .schnet import ElectronicSchnet, get_orbnet
+from .base import SSP, DistanceBasis, NuclearAsymptotic, get_log_dnn, pairwise_distance
+from .schnet import ElectronicSchnet
 
 
 class BFNet(nn.Module, Geomable):
@@ -40,7 +40,7 @@ class BFNet(nn.Module, Geomable):
         )
         self.orbitals = nn.ModuleList(
             [
-                get_orbnet(embedding_dim, n_layers=n_orbital_layers)
+                get_log_dnn(embedding_dim, 1, SSP, n_layers=n_orbital_layers)
                 for _ in range(n_up + n_down)
             ]
         )

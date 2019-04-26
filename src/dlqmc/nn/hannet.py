@@ -4,8 +4,16 @@ import torch.nn as nn
 from ..geom import Geomable
 from ..utils import dctsel
 from .anti import AntisymmetricPart
-from .base import DistanceBasis, NuclearAsymptotic, pairwise_distance
-from .schnet import ElectronicSchnet, get_orbnet
+from .anti import AntisymmetricPart, PairConcat
+from .base import (
+    SSP,
+    DistanceBasis,
+    NuclearAsymptotic,
+    Squeeze,
+    get_log_dnn,
+    pairwise_distance,
+)
+from .schnet import ElectronicSchnet
 
 
 class HanNet(nn.Module, Geomable):
@@ -38,9 +46,9 @@ class HanNet(nn.Module, Geomable):
             kernel_dim,
             embedding_dim,
         )
-        self.orbital = get_orbnet(embedding_dim, n_layers=n_orbital_layers)
         self.anti_up = AntisymmetricPart(...)  # TODO
         self.anti_down = AntisymmetricPart(...)
+        self.orbital = get_log_dnn(embedding_dim, 1, SSP, n_layers=n_orbital_layers)
 
     def forward(self, rs):
         dists_elec = pairwise_distance(rs, rs)
