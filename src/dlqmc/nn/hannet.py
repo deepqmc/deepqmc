@@ -9,7 +9,6 @@ from .base import (
     Concat,
     DistanceBasis,
     NuclearAsymptotic,
-    Squeeze,
     get_log_dnn,
     pairwise_distance,
 )
@@ -53,7 +52,6 @@ class HanNet(nn.Module, Geomable, Debuggable):
                 Concat(get_log_dnn(7, latent_dim, SSP, n_layers=2)),
                 nn.Sequential(
                     *get_log_dnn(latent_dim, 1, SSP, n_layers=2).children(),
-                    Squeeze(),
                     nn.Sigmoid(),
                 ),
             )
@@ -71,7 +69,7 @@ class HanNet(nn.Module, Geomable, Debuggable):
             xs = self.schnet(dists_basis, debug=debug)
         jastrow = debug['jastrow'] = self.orbital(xs).squeeze().sum(dim=-1)
         anti_up, anti_down = debug['anti_up'], debug['anti_down'] = [
-            net(rs[:, idxs], dists_elec[:, idxs, idxs, None])
+            net(rs[:, idxs], dists_elec[:, idxs, idxs, None]).squeeze(dim=-1)
             if net
             else torch.tensor(1.0)
             for net, idxs in [
