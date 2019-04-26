@@ -3,9 +3,10 @@ import torch.nn as nn
 
 from ..geom import Geomable
 from ..utils import dctsel
-from .anti import AntisymmetricPart, PairConcat
+from .anti import LaughlinAnsatz
 from .base import (
     SSP,
+    Concat,
     DistanceBasis,
     NuclearAsymptotic,
     Squeeze,
@@ -48,13 +49,13 @@ class HanNet(nn.Module, Geomable):
         )
         self.orbital = get_log_dnn(embedding_dim, 1, SSP, n_layers=n_orbital_layers)
         self.anti_up, self.anti_down = (
-            AntisymmetricPart(
+            LaughlinAnsatz(
+                Concat(get_log_dnn(7, latent_dim, SSP, n_layers=2)),
                 nn.Sequential(
                     *get_log_dnn(latent_dim, 1, SSP, n_layers=2).children(),
                     Squeeze(),
                     nn.Sigmoid(),
                 ),
-                PairConcat(get_log_dnn(6, latent_dim, SSP, n_layers=2)),
             )
             if n_elec > 1
             else None
@@ -68,7 +69,12 @@ class HanNet(nn.Module, Geomable):
         dists_basis = self.dist_basis(dists)
         xs = self.schnet(dists_basis)
         jastrow = self.orbital(xs).squeeze().sum(dim=-1)
-        anti_up = self.anti_up(rs[:, : self.n_up]) if self.anti_up else 1.0
-        anti_down = self.anti_down(rs[:, self.n_up :]) if self.anti_down else 1.0
+        anti_up, anti_down = (
+            net(rs[:, idxs], dists_elec[:, idxs, idxs, None]) if net else 1.0
+            for net, idxs in [
+                (self.anti_up, slice(None, self.n_up)),
+                (self.anti_down, slice(self.n_up, None)),
+            ]
+        )
         asymp = self.nuc_asymp(dists_nuc) * 1.0  # TODO
         return anti_up * anti_down * jastrow * asymp

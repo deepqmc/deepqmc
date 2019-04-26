@@ -89,3 +89,13 @@ def get_log_dnn(start_dim, end_dim, activation_factory, *, n_layers):
 class Squeeze(nn.Module):
     def forward(self, xs):
         return xs.squeeze(dim=-1)
+
+
+class Concat(nn.Module):
+    def __init__(self, net):
+        super().__init__()
+        self.net = net
+
+    def forward(self, *args):
+        xs = torch.cat(args, dim=-1)
+        return self.net(xs)
