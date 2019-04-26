@@ -80,4 +80,4 @@ class HanNet(nn.Module, Geomable, Debuggable):
             ]
         ]
         asymp = debug['asymp'] = self.nuc_asymp(dists_nuc)  # TODO add electrons
-        return anti_up * anti_down * jastrow * asymp
+        return anti_up * anti_down * torch.exp(jastrow) * asymp
