@@ -3,6 +3,16 @@ import torch
 import torch.nn as nn
 
 
+class PairConcat(nn.Module):
+    def __init__(self, net):
+        super().__init__()
+        self.net = net
+
+    def forward(self, x1s, x2s):
+        xs = torch.cat((x1s, x2s), dim=-1)
+        return self.net(xs)
+
+
 class NetPairwiseAntisymmetry(nn.Module):
     def __init__(self, net_pair):
         super().__init__()

@@ -84,3 +84,8 @@ def get_log_dnn(start_dim, end_dim, activation_factory, *, n_layers):
     for k in range(n_layers):
         modules.extend([nn.Linear(dims[k], dims[k + 1]), activation_factory()])
     return nn.Sequential(*modules[:-1])
+
+
+class Squeeze(nn.Module):
+    def forward(self, xs):
+        return xs.squeeze(dim=-1)
