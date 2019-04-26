@@ -31,7 +31,7 @@ class HanNet(nn.Module, Geomable):
         **kwargs,
     ):
         super().__init__()
-        self.n_up, self.n_down = n_up, n_down
+        self.n_up = n_up
         self.register_geom(geom)
         self.dist_basis = DistanceBasis(basis_dim, **dctsel(kwargs, 'cutoff'))
         self.nuc_asymp = NuclearAsymptotic(
@@ -62,14 +62,13 @@ class HanNet(nn.Module, Geomable):
         )
 
     def forward(self, rs):
-        assert rs.shape[1] == self.n_up + self.n_down
         dists_elec = pairwise_distance(rs, rs)
         dists_nuc = pairwise_distance(rs, self.coords[None, ...])
         dists = torch.cat([dists_elec, dists_nuc], dim=2)
         dists_basis = self.dist_basis(dists)
         xs = self.schnet(dists_basis)
         jastrow = self.orbital(xs).squeeze().sum(dim=-1)
-        anti_up = self.anti_up(rs[:, : self.n_up]) if self.n_up > 1 else 1.0
-        anti_down = self.anti_down(rs[:, self.n_up :]) if self.n_down > 1 else 1.0
+        anti_up = self.anti_up(rs[:, : self.n_up]) if self.anti_up else 1.0
+        anti_down = self.anti_down(rs[:, self.n_up :]) if self.anti_down else 1.0
         asymp = self.nuc_asymp(dists_nuc) * 1.0  # TODO
         return anti_up * anti_down * jastrow * asymp
