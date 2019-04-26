@@ -35,16 +35,9 @@ class AntisymmetricPart(nn.Module):
     def __init__(self, net, net_pair):
         super().__init__()
         self.net_pair_anti = NetPairwiseAntisymmetry(net_pair)
-        self.latentdim = list(net.parameters())[0].shape[1]
         self.net_odd = NetOdd(net)
 
     def forward(self, x):
         i, j = np.triu_indices(x.shape[-2], k=1)
-        return self.net_odd(
-            torch.prod(
-                self.net_pair_anti(x[:, j].view(-1, 3), x[:, i].view(-1, 3)).view(
-                    -1, len(i), self.latentdim
-                ),
-                dim=1,
-            )
-        )
+        zs = self.net_pair_anti(x[:, j], x[:, i]).prod(dim=-2)
+        return self.net_odd(zs)
