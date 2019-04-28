@@ -116,3 +116,7 @@ def debugged(func, label):
 class Debuggable:
     def debug(self, label, *args, **kwargs):
         return debugged(self, label)(*args, **kwargs)
+
+
+def batch_eval(func, bs, xs, *args, **kwargs):
+    return torch.cat([func(xs_batch, *args, **kwargs) for xs_batch in xs.split(bs)])

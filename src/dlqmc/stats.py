@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 
+from .utils import batch_eval
+
 
 class GaussianKDEstimator:
     def __init__(self, xs, max_memory=1.0, weights=None, *, bw):
@@ -13,7 +15,7 @@ class GaussianKDEstimator:
     def __call__(self, xs):
         assert len(xs.shape) == 2
         if len(xs) > self._bs:
-            return torch.cat([self(xs_batch) for xs_batch in xs.split(self._bs)])
+            return batch_eval(self, self._bs, xs)
         kernel = ((xs[:, None] - self._xs) ** 2).sum(dim=-1) / self._width ** 2
         norm = 1 / (len(self._xs) * (np.sqrt(np.pi) * self._width) ** xs.shape[1])
         basis = torch.exp(-kernel)

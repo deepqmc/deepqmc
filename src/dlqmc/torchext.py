@@ -1,6 +1,6 @@
 import torch
 
-from .utils import InfoException
+from .utils import InfoException, batch_eval
 
 
 class LUFactError(InfoException):
@@ -35,7 +35,7 @@ class BDetBackward(torch.autograd.Function):
     def forward(ctx, Xs, vs, ys):
         vys = vs * ys
         # inverse() seems to be limited in batch dimension on CUDA
-        Ks = torch.cat([X_batch.inverse() for X_batch in Xs.split(2 ** 16 - 1)])
+        Ks = batch_eval(lambda x: x.inverse(), 2 ** 16 - 1, Xs)
         ctx.save_for_backward(Xs, Ks, ys, vys)
         return vys[..., None, None] * Ks.transpose(-1, -2)
 
