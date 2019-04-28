@@ -85,3 +85,8 @@ class PyscfGTOSlaterWF(SlaterWF):
 
     def get_aos(self, rs):
         return torch.tensor(pyscf.dft.numint.eval_ao(self._mol, rs), dtype=torch.float)
+
+
+def electron_density_of(mf, rs):
+    aos = pyscf.dft.numint.eval_ao(mf.mol, rs, deriv=0)
+    return pyscf.dft.numint.eval_rho2(mf.mol, aos, mf.mo_coeff, mf.mo_occ, xctype='LDA')
