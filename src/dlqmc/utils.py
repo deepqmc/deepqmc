@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from functools import wraps
+from functools import partial, wraps
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,29 +12,29 @@ def get_flat_mesh(bounds, npts):
     return torch.stack(grids).flatten(start_dim=1).t(), edges
 
 
-def plot_func(func, bounds, density=0.02, is_torch=True):
+def plot_func(
+    func, bounds, density=0.02, x_line=False, is_torch=True, device=None, **kwargs
+):
     n_pts = int((bounds[1] - bounds[0]) / density)
-    x = (torch if is_torch else np).linspace(bounds[0], bounds[1], n_pts)
+    if x_line:
+        x = torch.linspace(bounds[0], bounds[1], n_pts)
+        x = torch.cat([x[:, None], x.new_zeros((n_pts, 2))], dim=1)
+    else:
+        x = torch.linspace(bounds[0], bounds[1], n_pts)
+    if not is_torch:
+        x = x.numpy()
+    elif device:
+        x = x.to(device)
     y = func(x)
     if is_torch:
-        x = x.numpy()
-        y = y.detach().numpy()
-    return plt.plot(x, y)
-
-
-def plot_func_x(func, bounds, density=0.02, is_torch=True, device=None, **kwargs):
-    n_pts = int((bounds[1] - bounds[0]) / density)
-    x_line = torch.linspace(bounds[0], bounds[1], n_pts)
-    x_line = torch.cat([x_line[:, None], x_line.new_zeros((n_pts, 2))], dim=1)
-    if not is_torch:
-        x_line = x_line.numpy()
-    elif device:
-        x_line = x_line.to(device)
-    y = func(x_line)
-    if is_torch:
-        x_line = x_line.cpu().numpy()
+        x = x.cpu().numpy()
         y = y.detach().cpu().numpy()
-    return plt.plot(x_line[:, 0], y, **kwargs)
+    if x_line:
+        x = x[:, 0]
+    return plt.plot(x, y, **kwargs)
+
+
+plot_func_x = partial(plot_func, x_line=True)
 
 
 def plot_func_xy(func, bounds, density=0.02):
