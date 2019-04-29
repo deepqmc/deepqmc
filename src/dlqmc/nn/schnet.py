@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .. import torchext
 from ..utils import NULL_DEBUG, nondiag
 from .base import SSP
 
@@ -68,13 +67,6 @@ class ElectronicSchnet(nn.Module):
                 for _ in range(n_interactions)
             ]
         )
-
-    def _eval_slater(self, xs, idxs):
-        phis = [orb(xs[:, idxs]) for orb in self.orbitals[idxs]]
-        if not phis:
-            return xs.new_ones(len(xs))
-        slaters = torch.cat(phis, dim=-1)
-        return torchext.bdet(slaters)
 
     def forward(self, dists_basis, debug=NULL_DEBUG):
         bs = len(dists_basis)  # batch size
