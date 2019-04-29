@@ -30,6 +30,10 @@ class BaseWFNet(nn.Module, Geomable, Debuggable):
     def tracked_parameters(self):
         return ()
 
+    @property
+    def spin_slices(self):
+        return slice(None, self.n_up), slice(self.n_up, None)
+
 
 class DistanceBasis(nn.Module):
     def __init__(self, basis_dim, cutoff=10.0):
