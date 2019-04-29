@@ -38,7 +38,8 @@ class BaseWFNet(nn.Module, Geomable, Debuggable):
 class DistanceBasis(nn.Module):
     def __init__(self, basis_dim, cutoff=10.0):
         super().__init__()
-        qs = torch.linspace(0, 1, basis_dim)
+        delta = 1 / (2 * basis_dim)
+        qs = torch.linspace(delta, 1 - delta, basis_dim)
         self.cutoff = cutoff
         self.register_buffer('mus', cutoff * qs ** 2)
         self.register_buffer('sigmas', (1 + cutoff * qs) / 7)
