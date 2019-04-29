@@ -1,3 +1,4 @@
+import pandas as pd
 import torch
 import torch.nn as nn
 
@@ -53,3 +54,13 @@ class Geomable:
     def register_geom(self, geom):
         self.register_buffer('coords', geom.coords)
         self.register_buffer('charges', geom.charges)
+
+
+geomdb = pd.Series(
+    {
+        'H': Geometry([[1, 0, 0]], [1]),
+        'H2+': Geometry([[-1, 0, 0], [1, 0, 0]], [1, 1]),
+        'H2': Geometry([[0, 0, 0], [0.742 * angstrom, 0, 0]], [1, 1]),
+        'Be': Geometry([[0, 0, 0]], [4]),
+    }
+)
