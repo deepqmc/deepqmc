@@ -59,7 +59,9 @@ class HanNet(BaseWFNet):
                 # bias is subtracted by antisymmetrization anyway
                 Concat(get_log_dnn(7, latent_dim, SSP, n_layers=2, last_bias=False)),
                 nn.Sequential(
-                    *get_log_dnn(latent_dim, 1, SSP, n_layers=2).children(),
+                    *get_log_dnn(
+                        latent_dim, 1, SSP, n_layers=2, last_bias=False
+                    ).children(),
                     nn.Sigmoid(),
                 ),
             )
