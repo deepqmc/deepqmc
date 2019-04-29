@@ -6,11 +6,11 @@ from .physics import local_energy
 from .sampling import samples_from
 
 
-def loss_local_energy(Es_loc, weights, E_ref=None):
+def loss_local_energy(Es_loc, weights, E_ref=None,p=2):
     ws, w_mean = (weights, weights.mean()) if weights is not None else (1.0, 1.0)
     E0 = E_ref if E_ref is not None else (Es_loc * ws).mean() / w_mean
-    return (ws * (Es_loc - E0) ** 2).mean() / w_mean
-
+    return (ws * (Es_loc - E0).abs()**p).mean() / w_mean
+    
 
 def fit_wfnet(wfnet, loss_func, opt, sample_gen, correlated_sampling=True, writer=None):
     for step, (rs, psi0s) in enumerate(sample_gen):
