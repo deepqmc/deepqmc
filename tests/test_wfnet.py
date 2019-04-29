@@ -57,7 +57,6 @@ def test_grad(wfnet, rs):
     assert rs.grad.sum().abs().item() > 0
 
 
-@pytest.mark.skip(reason="doesn't work with schnet yet")
 def test_loc_ene_backprop(wfnet, rs):
     rs.requires_grad_()
     Es_loc, _ = local_energy(rs, wfnet, wfnet.geom, create_graph=True)

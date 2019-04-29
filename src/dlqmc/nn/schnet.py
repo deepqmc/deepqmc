@@ -17,10 +17,7 @@ class ZeroDiagKernel(nn.Module):
 def get_schnet_interaction(kernel_dim, embedding_dim, basis_dim):
     modules = {
         'kernel': nn.Sequential(
-            nn.Linear(basis_dim, kernel_dim),
-            SSP(),
-            nn.Linear(kernel_dim, kernel_dim),
-            ZeroDiagKernel(),
+            nn.Linear(basis_dim, kernel_dim), SSP(), nn.Linear(kernel_dim, kernel_dim)
         ),
         'embed_in': nn.Linear(embedding_dim, kernel_dim, bias=False),
         'embed_out': nn.Sequential(
@@ -30,17 +27,6 @@ def get_schnet_interaction(kernel_dim, embedding_dim, basis_dim):
         ),
     }
     return nn.ModuleDict(modules)
-
-
-# TODO test if faster than ZeroDiagKernel
-def schnet_conv(Ws, zs):
-    i, j = np.mask_indices(Ws.shape[2], nondiag)
-    n = Ws.shape[1] * (Ws.shape[2] - 1)
-    i, j = i[:n], j[:n]
-    return (
-        Ws[:, i, j].view(*Ws.shape[:1], Ws.shape[2] - 1, -1)
-        * zs[:, j].view(*Ws.shape[:1], Ws.shape[2] - 1, -1)
-    ).sum(dim=2)
 
 
 class ElectronicSchnet(nn.Module):
@@ -69,12 +55,25 @@ class ElectronicSchnet(nn.Module):
         )
 
     def forward(self, dists_basis, debug=NULL_DEBUG):
-        bs = len(dists_basis)  # batch size
-        xs = debug[0] = self.embedding_elec.clone().expand(bs, -1, -1)
+        *batch_dims, n_elec, n_all, basis_dim = dists_basis.shape
+        # from a matrix with dimensions (n_elec, n_all), where n_all = n_elec +
+        # n_nuclei, (c_i, c_j) select all electronic pairs excluding the
+        # diagonal and all electron-nucleus pairs
+        c_i, c_j, c_shape = self._conv_indexing(n_elec, n_all, batch_dims)
+        dists_basis = dists_basis[..., c_i, c_j, :]
+        xs = debug[0] = self.embedding_elec.clone().expand(*batch_dims, -1, -1)
         for i, interaction in enumerate(self.interactions):
             Ws = interaction.kernel(dists_basis)
             zs = interaction.embed_in(xs)
-            zs = torch.cat([zs, self.embedding_nuc.expand(bs, -1, -1)], dim=1)
-            zs = (Ws * zs[:, None, :, :]).sum(dim=2)
+            zs = torch.cat([zs, self.embedding_nuc.expand(*batch_dims, -1, -1)], dim=1)
+            zs = (Ws.view(*c_shape) * zs[:, c_j].view(*c_shape)).sum(dim=2)
             xs = debug[i + 1] = xs + interaction.embed_out(zs)
         return xs
+
+    @staticmethod
+    def _conv_indexing(n_elec, n_all, batch_dims):
+        i, j = np.mask_indices(n_all, nondiag)
+        n = n_elec * (n_all - 1)
+        i, j = i[:n], j[:n]
+        shape = (*batch_dims, n_elec, n_all - 1, -1)
+        return i, j, shape
