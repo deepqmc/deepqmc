@@ -56,7 +56,8 @@ class HanNet(BaseWFNet):
         self.orbital = get_log_dnn(embedding_dim, 1, SSP, n_layers=n_orbital_layers)
         self.anti_up, self.anti_down = (
             LaughlinAnsatz(
-                Concat(get_log_dnn(7, latent_dim, SSP, n_layers=2)),
+                # bias is subtracted by antisymmetrization anyway
+                Concat(get_log_dnn(7, latent_dim, SSP, n_layers=2, last_bias=False)),
                 nn.Sequential(
                     *get_log_dnn(latent_dim, 1, SSP, n_layers=2).children(),
                     nn.Sigmoid(),

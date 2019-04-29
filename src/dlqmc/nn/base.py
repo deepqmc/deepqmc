@@ -98,12 +98,15 @@ class SSP(nn.Softplus):
         return ssp(xs, self.beta, self.threshold)
 
 
-def get_log_dnn(start_dim, end_dim, activation_factory, *, n_layers):
+def get_log_dnn(start_dim, end_dim, activation_factory, last_bias=True, *, n_layers):
     modules = []
     qs = [k / n_layers for k in range(n_layers + 1)]
     dims = [int(np.round(start_dim ** (1 - q) * end_dim ** q)) for q in qs]
     for k in range(n_layers):
-        modules.extend([nn.Linear(dims[k], dims[k + 1]), activation_factory()])
+        bias = k + 1 < n_layers or last_bias
+        modules.extend(
+            [nn.Linear(dims[k], dims[k + 1], bias=bias), activation_factory()]
+        )
     return nn.Sequential(*modules[:-1])
 
 
