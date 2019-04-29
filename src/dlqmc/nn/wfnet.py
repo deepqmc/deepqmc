@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
 
-from ..geom import Geomable
-from ..utils import NULL_DEBUG, Debuggable, dctsel
+from ..utils import NULL_DEBUG, dctsel
 from .anti import AntisymmetricPart
 from .base import (
     SSP,
+    BaseWFNet,
     DistanceBasis,
+    ElectronicAsymptotic,
     NuclearAsymptotic,
     get_log_dnn,
     pairwise_distance,
@@ -14,20 +15,34 @@ from .base import (
 )
 
 
-class WFNet(nn.Module, Geomable, Debuggable):
+class WFNet(BaseWFNet):
     def __init__(
-        self, geom, n_electrons, basis_dim=32, n_orbital_layers=3, ion_pot=0.5, **kwargs
+        self,
+        geom,
+        n_electrons,
+        basis_dim=32,
+        n_orbital_layers=3,
+        ion_pot=0.5,
+        cusp=None,
+        **kwargs,
     ):
         super().__init__()
         self.register_geom(geom)
         self.dist_basis = DistanceBasis(basis_dim, **dctsel(kwargs, 'cutoff'))
-        self.nuc_asymp = NuclearAsymptotic(
+        self.asymp_nuc = NuclearAsymptotic(
             self.charges, ion_pot, **dctsel(kwargs, 'alpha')
         )
+        self.asymp_elec = ElectronicAsymptotic(cusp=cusp) if cusp else None
         n_pairs = n_electrons * len(geom) + n_electrons * (n_electrons - 1) // 2
         self.orbital = get_log_dnn(
             n_pairs * basis_dim, 1, SSP, n_layers=n_orbital_layers
         )
+
+    def tracked_parameters(self):
+        params = [('ion_pot', self.asymp_nuc.ion_potential)]
+        if self.asymp_elec:
+            params.append(('cusp_elec', self.asymp_elec.cusp))
+        return params
 
     def forward(self, rs, debug=NULL_DEBUG):
         dists_elec = pairwise_self_distance(rs)
@@ -35,8 +50,11 @@ class WFNet(nn.Module, Geomable, Debuggable):
         dists = torch.cat([dists_nuc.flatten(start_dim=1), dists_elec], dim=1)
         xs = self.dist_basis(dists).flatten(start_dim=1)
         jastrow = debug['jastrow'] = self.orbital(xs).squeeze(dim=1)
-        asymp = debug['asymp'] = self.nuc_asymp(dists_nuc)
-        return torch.exp(jastrow) * asymp
+        asymp_nuc = debug['asymp_nuc'] = self.asymp_nuc(dists_nuc)
+        asymp_elec = debug['asymp_elec'] = (
+            self.asymp_elec(dists_elec) if self.asymp_elec else 1.0
+        )
+        return torch.exp(jastrow) * asymp_nuc * asymp_elec
 
 
 class WFNetAnti(nn.Module):
@@ -53,7 +71,7 @@ class WFNetAnti(nn.Module):
     ):
         super().__init__()
         self.dist_basis = DistanceBasis(n_dist_feats)
-        self.nuc_asymp = NuclearAsymptotic(geom.charges, ion_pot, alpha=alpha)
+        self.asymp_nuc = NuclearAsymptotic(geom.charges, ion_pot, alpha=alpha)
         self.geom = geom
         n_atoms = len(geom.charges)
         n_pairs = n_electrons * n_atoms + n_electrons * (n_electrons - 1) // 2
@@ -78,4 +96,4 @@ class WFNetAnti(nn.Module):
     def forward(self, rs):
         xs, (dists_nuc, dists_el) = self._featurize(rs)
         ys = self.deep_lin(xs).squeeze(dim=1)
-        return torch.exp(ys) * self.nuc_asymp(dists_nuc) * self.antisym(rs)
+        return torch.exp(ys) * self.asymp_nuc(dists_nuc) * self.antisym(rs)

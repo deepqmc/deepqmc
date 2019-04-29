@@ -21,7 +21,8 @@ def fit_wfnet(wfnet, loss_func, opt, sample_gen, correlated_sampling=True, write
             writer.add_scalar('loss', loss, step)
             writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
             writer.add_scalar('E_loc/var', Es_loc.var(), step)
-            writer.add_scalar('param/ion_pot', wfnet.nuc_asymp.ion_potential, step)
+            for label, value in wfnet.tracked_parameters():
+                writer.add_scalar(f'param/{label}', value, step)
         loss.backward()
         opt.step()
         opt.zero_grad()

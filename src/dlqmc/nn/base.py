@@ -3,6 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ..geom import Geomable
+from ..utils import Debuggable
+
 
 def pairwise_distance(coords1, coords2):
     return (coords1[:, :, None] - coords2[:, None, :]).norm(dim=-1)
@@ -21,6 +24,11 @@ class PairwiseDistance3D(nn.Module):
 class PairwiseSelfDistance3D(nn.Module):
     def forward(self, coords):
         return pairwise_self_distance(coords)
+
+
+class BaseWFNet(nn.Module, Geomable, Debuggable):
+    def tracked_parameters(self):
+        return ()
 
 
 class DistanceBasis(nn.Module):
@@ -66,6 +74,15 @@ class NuclearAsymptotic(nn.Module):
 
     def extra_repr(self):
         return f'alpha={self.alpha}'
+
+
+class ElectronicAsymptotic(nn.Module):
+    def __init__(self, *, cusp):
+        super().__init__()
+        self.cusp = nn.Parameter(torch.as_tensor(cusp))
+
+    def forward(self, dists):
+        return torch.exp(-(self.cusp / (1 + dists)).sum(dim=-1))
 
 
 def ssp(*args, **kwargs):

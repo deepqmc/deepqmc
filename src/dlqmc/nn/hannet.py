@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 
-from ..geom import Geomable
-from ..utils import NULL_DEBUG, Debuggable, dctsel
+from ..utils import NULL_DEBUG, dctsel
 from .anti import LaughlinAnsatz
 from .base import (
     SSP,
+    BaseWFNet,
     Concat,
     DistanceBasis,
     NuclearAsymptotic,
@@ -15,7 +15,7 @@ from .base import (
 from .schnet import ElectronicSchnet
 
 
-class HanNet(nn.Module, Geomable, Debuggable):
+class HanNet(BaseWFNet):
     def __init__(
         self,
         geom,
