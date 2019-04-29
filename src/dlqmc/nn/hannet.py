@@ -41,7 +41,7 @@ class HanNet(BaseWFNet):
             self.charges, ion_pot, **dctsel(kwargs, 'alpha')
         )
         self.asymp_same, self.asymp_anti = (
-            ElectronicAsymptotic(cusp=cusp) if cusp else None
+            ElectronicAsymptotic(cusp=cusp) if cusp is not None else None
             for cusp in (cusp_same, cusp_anti)
         )
         self.schnet = ElectronicSchnet(
