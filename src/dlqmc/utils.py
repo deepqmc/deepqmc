@@ -123,10 +123,10 @@ class Debuggable:
         return debugged(self, label)(*args, **kwargs)
 
 
-def batch_eval(func, bs, xs, *args, **kwargs):
-    return torch.cat([func(xs_batch, *args, **kwargs) for xs_batch in xs.split(bs)])
+def batch_eval(func, batches, *args, **kwargs):
+    return torch.cat([func(batch, *args, **kwargs) for batch in batches])
 
 
-def batch_eval_tuple(func, bs, xs, *args, **kwargs):
-    results = list(zip(*(func(xs_batch, *args, **kwargs) for xs_batch in xs.split(bs))))
+def batch_eval_tuple(func, batches, *args, **kwargs):
+    results = list(zip(*(func(batch, *args, **kwargs) for batch in batches)))
     return tuple(torch.cat(result) for result in results)
