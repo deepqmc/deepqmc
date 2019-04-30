@@ -12,6 +12,12 @@ def loss_local_energy(Es_loc, weights, E_ref=None, p=2):
     return (ws * (Es_loc - E0).abs() ** p).mean() / w_mean
 
 
+def fit_wfnet_multi(wfnet, loss_funcs, opts, gen_factory, gen_kwargs, writers):
+    for loss_func, opt, kwargs, writer in zip(loss_funcs, opts, gen_kwargs, writers):
+        with writer:
+            fit_wfnet(wfnet, loss_func, opt, gen_factory(**kwargs), writer=writer)
+
+
 def fit_wfnet(wfnet, loss_func, opt, sample_gen, correlated_sampling=True, writer=None):
     for step, (rs, psi0s) in enumerate(sample_gen):
         Es_loc, psis = local_energy(rs, wfnet, wfnet.geom, create_graph=True)
