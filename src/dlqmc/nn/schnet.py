@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 from ..utils import NULL_DEBUG, nondiag
-from .base import SSP
+from .base import SSP, get_log_dnn
 
 
 class ZeroDiagKernel(nn.Module):
@@ -16,15 +16,9 @@ class ZeroDiagKernel(nn.Module):
 
 def get_schnet_interaction(kernel_dim, embedding_dim, basis_dim):
     modules = {
-        'kernel': nn.Sequential(
-            nn.Linear(basis_dim, kernel_dim), SSP(), nn.Linear(kernel_dim, kernel_dim)
-        ),
+        'kernel': get_log_dnn(basis_dim, kernel_dim, SSP, n_layers=2),
         'embed_in': nn.Linear(embedding_dim, kernel_dim, bias=False),
-        'embed_out': nn.Sequential(
-            nn.Linear(kernel_dim, embedding_dim),
-            SSP(),
-            nn.Linear(embedding_dim, embedding_dim),
-        ),
+        'embed_out': get_log_dnn(kernel_dim, embedding_dim, SSP, n_layers=2),
     }
     return nn.ModuleDict(modules)
 
