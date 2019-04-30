@@ -15,7 +15,7 @@ class GaussianKDEstimator:
     def __call__(self, xs):
         assert len(xs.shape) == 2
         if len(xs) > self._bs:
-            return batch_eval(self, self._bs, xs)
+            return batch_eval(self, xs.split(self._bs))
         kernel = ((xs[:, None] - self._xs) ** 2).sum(dim=-1) / self._width ** 2
         norm = 1 / (len(self._xs) * (np.sqrt(np.pi) * self._width) ** xs.shape[1])
         basis = torch.exp(-kernel)

@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -58,9 +59,13 @@ class Geomable:
 
 geomdb = pd.Series(
     {
-        'H': Geometry([[1, 0, 0]], [1]),
-        'H2+': Geometry([[-1, 0, 0], [1, 0, 0]], [1, 1]),
-        'H2': Geometry([[0, 0, 0], [0.742 * angstrom, 0, 0]], [1, 1]),
-        'Be': Geometry([[0, 0, 0]], [4]),
+        label: Geometry(np.array(coords, dtype=np.float32) * angstrom, charges)
+        for label, coords, charges in [
+            ('H', [[1, 0, 0]], [1]),
+            ('H2+', [[-1 / angstrom, 0, 0], [1 / angstrom, 0, 0]], [1, 1]),
+            ('H2', [[0, 0, 0], [0.742, 0, 0]], [1, 1]),
+            ('Be', [[0, 0, 0]], [4]),
+            ('LiH', [[0, 0, 0], [1.595, 0, 0]], [3, 1]),
+        ]
     }
 )

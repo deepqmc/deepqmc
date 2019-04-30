@@ -11,8 +11,8 @@ def triu_flat(x):
     return x[:, i, j]
 
 
-def get_flat_mesh(bounds, npts):
-    edges = [torch.linspace(*b, n) for b, n in zip(bounds, npts)]
+def get_flat_mesh(bounds, npts, device=None):
+    edges = [torch.linspace(*b, n, device=device) for b, n in zip(bounds, npts)]
     grids = torch.meshgrid(*edges)
     return torch.stack(grids).flatten(start_dim=1).t(), edges
 
@@ -42,12 +42,13 @@ def plot_func(
 plot_func_x = partial(plot_func, x_line=True)
 
 
-def plot_func_xy(func, bounds, density=0.02):
+def plot_func_xy(func, bounds, density=0.02, device=None):
     ns_pts = [int((bs[1] - bs[0]) / density) for bs in bounds]
-    xy_plane, xy_edges = get_flat_mesh(bounds, ns_pts)
+    xy_plane, xy_edges = get_flat_mesh(bounds, ns_pts, device=device)
     xy_plane = torch.cat([xy_plane, xy_plane.new_zeros(len(xy_plane), 1)], dim=1)
     res = plt.contour(
-        *xy_edges, func(xy_plane).detach().view(len(xy_edges[0]), -1).numpy().T
+        *(edge.cpu().numpy() for edge in xy_edges),
+        func(xy_plane).detach().view(len(xy_edges[0]), -1).cpu().numpy().T,
     )
     plt.gca().set_aspect(1)
     return res
@@ -123,10 +124,10 @@ class Debuggable:
         return debugged(self, label)(*args, **kwargs)
 
 
-def batch_eval(func, bs, xs, *args, **kwargs):
-    return torch.cat([func(xs_batch, *args, **kwargs) for xs_batch in xs.split(bs)])
+def batch_eval(func, batches, *args, **kwargs):
+    return torch.cat([func(batch, *args, **kwargs) for batch in batches])
 
 
-def batch_eval_tuple(func, bs, xs, *args, **kwargs):
-    results = list(zip(*(func(xs_batch, *args, **kwargs) for xs_batch in xs.split(bs))))
+def batch_eval_tuple(func, batches, *args, **kwargs):
+    results = list(zip(*(func(batch, *args, **kwargs) for batch in batches)))
     return tuple(torch.cat(result) for result in results)
