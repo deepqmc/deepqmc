@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from collections import namedtuple
+from functools import lru_cache
 
 import numpy as np
 import pyscf.dft.numint
 import torch
-from scipy import special
+from scipy.special import factorial, factorial2
 
 from . import torchext
 
@@ -17,7 +18,7 @@ def eval_slater(aos, coeffs):
     # for molecular orbitals as linear combinations of atomic orbitals,
     # the Slater matrix can be obtained as a tensor contraction
     # (i_batch, i_elec, i_basis) * (i_basis, j_elec)
-    norm = 1 / np.sqrt(special.factorial(coeffs.shape[-1]))
+    norm = 1 / np.sqrt(factorial(coeffs.shape[-1]))
     slater_matrix = aos @ coeffs
     try:
         return norm * torchext.bdet(slater_matrix)
@@ -34,6 +35,7 @@ class SlaterWF(ABC):
             np.isin(mf.mo_occ, [1, 2]).nonzero()[0],
             np.isin(mf.mo_occ, [2]).nonzero()[0],
         )
+        self._mol = mf.mol
         assert len(self._occs.up) + len(self._occs.down) == mf.mo_occ.sum()
 
     @abstractmethod
@@ -50,41 +52,50 @@ class SlaterWF(ABC):
         return det_up * det_down
 
 
+@lru_cache(maxsize=16)
+def get_cartesian_angulars(l):
+    return [
+        (lx, ly, l - lx - ly) for lx in range(l, -1, -1) for ly in range(l - lx, -1, -1)
+    ]
+
+
 class TorchGTOSlaterWF(SlaterWF):
     def __init__(self, mf):
         SlaterWF.__init__(self, mf)
-        mol = mf.mol
-        self._coords = mol.atom_coords()
-        self._elems = [mol.atom_symbol(i) for i in range(mol.natm)]
-        self._basis = mol._basis
-
-    def _basis_funcs(self, rs):
-        for elem, coord in zip(self._elems, self._coords):
-            rs_sq = ((rs - rs.new_tensor(coord)) ** 2).sum(dim=-1)
-            for l, *gtos in self._basis[elem]:
-                yield l, gtos, rs_sq
+        mol = self._mol
+        self._basis_info = []
+        for i in range(mol.nbas):
+            l = mol.bas_angular(i)
+            ls = get_cartesian_angulars(l)
+            coord = mol.bas_coord(i)
+            zetas = mol.bas_exp(i)
+            coeff_sets = mol.bas_ctr_coeff(i).T
+            ovlps = np.diag(
+                mol.intor('int1e_ovlp_cart', shls_slice=(i, i + 1, i, i + 1))
+            )
+            ovlp_sets = ovlps if len(coeff_sets) > 1 else [ovlps]
+            anorms = 1 / np.sqrt(factorial2(2 * np.array(ls) - 1).prod(-1))
+            rnorms = (2 * zetas / np.pi) ** (3 / 4) * (4 * zetas) ** (l / 2)
+            for coeffs, ovlps in zip(coeff_sets, ovlp_sets):
+                self._basis_info.append(
+                    (ls, anorms * np.sqrt(ovlps), zetas, rnorms * coeffs, coord)
+                )
 
     def get_aos(self, rs):
         aos = []
-        for l, gtos, rs_sq in self._basis_funcs(rs):
-            assert l == 0
-            g_exps, g_coeffs = np.array(gtos).T
-            g_norms = pyscf.gto.gto_norm(l, g_exps) / np.sqrt(4 * np.pi)
-            g_exps, g_norms, g_coeffs = (
-                rs.new_tensor(x) for x in (g_exps, g_norms, g_coeffs)
-            )
-            g_contribs = g_coeffs * g_norms * torch.exp(-g_exps * rs_sq[:, None])
-            aos.append(g_contribs.sum(dim=-1))
-        return torch.stack(aos, dim=1)
+        for ls, *args in self._basis_info:
+            anorms, zetas, coeffs, coord = (rs.new_tensor(arg) for arg in args)
+            xs = rs - coord
+            xs_sq = (xs ** 2).sum(dim=-1)
+            angulars = (xs[:, None, :] ** xs.new_tensor(ls)).prod(dim=-1)
+            radials = (coeffs * torch.exp(-zetas * xs_sq[:, None])).sum(dim=-1)
+            aos.append(anorms * angulars * radials[:, None])
+        return torch.cat(aos, dim=1)
 
 
 class PyscfGTOSlaterWF(SlaterWF):
-    def __init__(self, mf):
-        SlaterWF.__init__(self, mf)
-        self._mol = mf.mol
-
     def get_aos(self, rs):
-        return torch.tensor(pyscf.dft.numint.eval_ao(self._mol, rs), dtype=torch.float)
+        return rs.new_tensor(pyscf.dft.numint.eval_ao(self._mol, rs))
 
 
 def electron_density_of(mf, rs):
