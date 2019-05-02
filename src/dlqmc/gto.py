@@ -16,7 +16,7 @@ SpinTuple = namedtuple('SpinTuple', 'up down')
 
 
 def eval_slater(aos, coeffs):
-    if aos.shape[1] == 0:
+    if coeffs.shape[1] == 0:
         return 1.0
     # for molecular orbitals as linear combinations of atomic orbitals,
     # the Slater matrix can be obtained as a tensor contraction
