@@ -28,7 +28,7 @@ def mf(mol):
 
 @pytest.fixture
 def gtowf(mf):
-    return TorchGTOSlaterWF(mf)
+    return TorchGTOSlaterWF(mf).double()
 
 
 def test_eval_ao_normed(mol, grids):

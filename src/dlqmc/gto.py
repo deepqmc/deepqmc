@@ -6,9 +6,11 @@ import numpy as np
 import pyscf.dft.numint
 import torch
 from scipy.special import factorial, factorial2
+from torch import nn
 
 from . import torchext
 from .errors import DLQMCError
+from .geom import Geomable, Geometry
 
 SpinTuple = namedtuple('SpinTuple', 'up down')
 
@@ -29,16 +31,36 @@ def eval_slater(aos, coeffs):
         raise
 
 
-class SlaterWF(ABC):
+class GTOShell(nn.Module):
+    def __init__(self, center, l, coeffs, zetas):
+        super().__init__()
+        self.ls = get_cartesian_angulars(l)
+        self.register_buffer('center', center)
+        anorms = 1 / np.sqrt(factorial2(2 * np.array(self.ls) - 1).prod(-1))
+        self.register_buffer('anorms', torch.tensor(anorms).float())
+        rnorms = (2 * zetas / np.pi) ** (3 / 4) * (4 * zetas) ** (l / 2)
+        self.register_buffer('coeffs', rnorms * coeffs)
+        self.register_buffer('zetas', zetas)
+
+    def extra_repr(self):
+        return f'l={self.ls[0][0]}, n_primitive={len(self.zetas)}'
+
+
+class SlaterWF(ABC, nn.Module, Geomable):
     def __init__(self, mf):
-        self._coeffs = torch.tensor(mf.mo_coeff, dtype=torch.float)
+        super().__init__()
+        self.register_buffer('mo_coeffs', torch.tensor(mf.mo_coeff).float())
+        self.register_geom(
+            Geometry(mf.mol.atom_coords().astype('float32'), mf.mol.atom_charges())
+        )
         self._occs = SpinTuple(
             np.isin(mf.mo_occ, [1, 2]).nonzero()[0],
             np.isin(mf.mo_occ, [2]).nonzero()[0],
         )
         self._mol = mf.mol
         if mf.mol.cart:
-            self._ovlps = np.sqrt(np.diag(mf.mol.intor('int1e_ovlp_cart')))
+            ovlps = torch.tensor(np.diag(mf.mol.intor('int1e_ovlp_cart'))).sqrt()
+            self.register_buffer('ovlps', ovlps.float())
         assert len(self._occs.up) + len(self._occs.down) == mf.mo_occ.sum()
 
     @abstractmethod
@@ -50,11 +72,10 @@ class SlaterWF(ABC):
         aos = self.get_aos(rs.flatten(end_dim=1)).view(n_samples, n_elec, -1)
         if self._mol.cart:
             # pyscf assumes cartesian basis is not normalized
-            aos = aos * rs.new_tensor(self._ovlps)
+            aos = aos * self.ovlps
         n_up, n_down = map(len, self._occs)
-        coeffs = self._coeffs.to(aos)
-        det_up = eval_slater(aos[:, :n_up, :], coeffs[:, self._occs.up])
-        det_down = eval_slater(aos[:, n_up:, :], coeffs[:, self._occs.down])
+        det_up = eval_slater(aos[:, :n_up, :], self.mo_coeffs[:, self._occs.up])
+        det_down = eval_slater(aos[:, n_up:, :], self.mo_coeffs[:, self._occs.down])
         return det_up * det_down
 
 
@@ -71,27 +92,24 @@ class TorchGTOSlaterWF(SlaterWF):
         mol = self._mol
         if not mol.cart:
             raise DLQMCError('TorchGTOSlaterWF supports only Cartesian basis sets')
-        self._basis_info = []
+        shells = []
         for i in range(mol.nbas):
             l = mol.bas_angular(i)
-            ls = get_cartesian_angulars(l)
-            coord = mol.bas_coord(i)
-            zetas = mol.bas_exp(i)
-            coeff_sets = mol.bas_ctr_coeff(i).T
-            anorms = 1 / np.sqrt(factorial2(2 * np.array(ls) - 1).prod(-1))
-            rnorms = (2 * zetas / np.pi) ** (3 / 4) * (4 * zetas) ** (l / 2)
+            center = torch.tensor(mol.bas_coord(i)).float()
+            zetas = torch.tensor(mol.bas_exp(i)).float()
+            coeff_sets = torch.tensor(mol.bas_ctr_coeff(i).T).float()
             for coeffs in coeff_sets:
-                self._basis_info.append((ls, anorms, zetas, rnorms * coeffs, coord))
+                shells.append(GTOShell(center, l, coeffs, zetas))
+        self.shells = nn.ModuleList(shells)
 
     def get_aos(self, rs):
         aos = []
-        for ls, *args in self._basis_info:
-            anorms, zetas, coeffs, coord = (rs.new_tensor(arg) for arg in args)
-            xs = rs - coord
+        for sh in self.shells:
+            xs = rs - sh.center
             xs_sq = (xs ** 2).sum(dim=-1)
-            angulars = (xs[:, None, :] ** xs.new_tensor(ls)).prod(dim=-1)
-            radials = (coeffs * torch.exp(-zetas * xs_sq[:, None])).sum(dim=-1)
-            aos.append(anorms * angulars * radials[:, None])
+            angulars = (xs[:, None, :] ** xs.new_tensor(sh.ls)).prod(dim=-1)
+            radials = (sh.coeffs * torch.exp(-sh.zetas * xs_sq[:, None])).sum(dim=-1)
+            aos.append(sh.anorms * angulars * radials[:, None])
         return torch.cat(aos, dim=1)
 
 
