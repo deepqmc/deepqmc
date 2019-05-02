@@ -32,7 +32,8 @@ def quantum_force(rs, wf, *, clamp=None):
     return forces, psis
 
 
-def local_energy(rs, wf, geom, create_graph=False):
+def local_energy(rs, wf, geom=None, create_graph=False):
+    geom = geom or wf.geom
     Es_nuc = nuclear_energy(geom)
     Vs_nuc = nuclear_potential(rs, geom)
     Vs_el = electronic_potential(rs)
