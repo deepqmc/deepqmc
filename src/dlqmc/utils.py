@@ -18,12 +18,19 @@ def get_flat_mesh(bounds, npts, device=None):
 
 
 def plot_func(
-    func, bounds, density=0.02, x_line=False, is_torch=True, device=None, **kwargs
+    func,
+    bounds,
+    density=0.02,
+    shift=0,
+    x_line=False,
+    is_torch=True,
+    device=None,
+    **kwargs,
 ):
     n_pts = int((bounds[1] - bounds[0]) / density)
     if x_line:
         x = torch.linspace(bounds[0], bounds[1], n_pts)
-        x = torch.cat([x[:, None], x.new_zeros((n_pts, 2))], dim=1)
+        x = torch.cat([x[:, None], x.new_zeros((n_pts, 2)) + shift], dim=1)
     else:
         x = torch.linspace(bounds[0], bounds[1], n_pts)
     if not is_torch:
@@ -42,10 +49,12 @@ def plot_func(
 plot_func_x = partial(plot_func, x_line=True)
 
 
-def plot_func_xy(func, bounds, density=0.02, device=None):
+def plot_func_xy(func, bounds, density=0.02, shift=0, device=None):
     ns_pts = [int((bs[1] - bs[0]) / density) for bs in bounds]
     xy_plane, xy_edges = get_flat_mesh(bounds, ns_pts, device=device)
-    xy_plane = torch.cat([xy_plane, xy_plane.new_zeros(len(xy_plane), 1)], dim=1)
+    xy_plane = torch.cat(
+        [xy_plane, xy_plane.new_zeros(len(xy_plane), 1) + shift], dim=1
+    )
     res = plt.contour(
         *(edge.cpu().numpy() for edge in xy_edges),
         func(xy_plane).detach().view(len(xy_edges[0]), -1).cpu().numpy().T,
