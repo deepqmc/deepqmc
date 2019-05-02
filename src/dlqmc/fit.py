@@ -1,6 +1,7 @@
 from itertools import cycle
 
 from torch.utils.data import DataLoader, TensorDataset
+from torch.nn.utils import clip_grad_norm_
 
 from .physics import local_energy
 from .sampling import samples_from
@@ -18,7 +19,8 @@ def fit_wfnet_multi(wfnet, loss_funcs, opts, gen_factory, gen_kwargs, writers):
             fit_wfnet(wfnet, loss_func, opt, gen_factory(**kwargs), writer=writer)
 
 
-def fit_wfnet(wfnet, loss_func, opt, sample_gen, correlated_sampling=True, writer=None):
+def fit_wfnet(wfnet, loss_func, opt, sample_gen, correlated_sampling=True, clip_grad=None, writer=None):
+    maxgrad=[]
     for step, (rs, psi0s) in enumerate(sample_gen):
         Es_loc, psis = local_energy(rs, wfnet, wfnet.geom, create_graph=True)
         weights = psis ** 2 / psi0s ** 2 if correlated_sampling else None
@@ -30,6 +32,8 @@ def fit_wfnet(wfnet, loss_func, opt, sample_gen, correlated_sampling=True, write
             for label, value in wfnet.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
         loss.backward()
+        if not clip_grad is None:
+       		clip_grad_norm_(wfnet.parameters(),clip_grad)
         opt.step()
         opt.zero_grad()
 
