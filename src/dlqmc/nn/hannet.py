@@ -87,7 +87,7 @@ class HanNet(BaseWFNet):
         dists_basis = self.dist_basis(dists)
         with debug.cd('schnet'):
             xs = self.schnet(dists_basis, debug=debug)
-        jastrow = debug['jastrow'] = self.orbital(xs).squeeze().sum(dim=-1)
+        jastrow = debug['jastrow'] = self.orbital(xs).squeeze(dim=-1).sum(dim=-1)
         anti_up, anti_down = debug['anti_up'], debug['anti_down'] = [
             net(rs[:, idxs], dists_elec[:, idxs, idxs, None]).squeeze(dim=-1)
             if net
@@ -113,4 +113,4 @@ class HanNet(BaseWFNet):
             else 1.0
         )
         asymp = asymp_nuc * asymp_same * asymp_anti
-        return anti_up * anti_down * torch.exp(jastrow) * asymp
+        return anti_up * anti_down * torch.exp(jastrow) * asymp  
