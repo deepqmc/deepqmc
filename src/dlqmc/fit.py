@@ -28,7 +28,6 @@ def fit_wfnet(
     clip_grad=None,
     writer=None,
 ):
-    maxgrad = []
     for step, (rs, psi0s) in enumerate(sample_gen):
         Es_loc, psis = local_energy(rs, wfnet, create_graph=True)
         weights = psis ** 2 / psi0s ** 2 if correlated_sampling else None
@@ -40,7 +39,7 @@ def fit_wfnet(
             for label, value in wfnet.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
         loss.backward()
-        if not clip_grad is None:
+        if clip_grad:
             clip_grad_norm_(wfnet.parameters(), clip_grad)
         opt.step()
         opt.zero_grad()
