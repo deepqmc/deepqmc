@@ -140,3 +140,7 @@ def batch_eval(func, batches, *args, **kwargs):
 def batch_eval_tuple(func, batches, *args, **kwargs):
     results = list(zip(*(func(batch, *args, **kwargs) for batch in batches)))
     return tuple(torch.cat(result) for result in results)
+
+
+def number_of_parameters(net):
+    return sum(p.numel() for p in net.parameters())

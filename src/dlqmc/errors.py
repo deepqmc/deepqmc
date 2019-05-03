@@ -1,0 +1,2 @@
+class DLQMCError(Exception):
+    pass

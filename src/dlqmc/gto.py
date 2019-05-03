@@ -8,6 +8,7 @@ import torch
 from scipy.special import factorial, factorial2
 
 from . import torchext
+from .errors import DLQMCError
 
 SpinTuple = namedtuple('SpinTuple', 'up down')
 
@@ -36,6 +37,8 @@ class SlaterWF(ABC):
             np.isin(mf.mo_occ, [2]).nonzero()[0],
         )
         self._mol = mf.mol
+        if mf.mol.cart:
+            self._ovlps = np.sqrt(np.diag(mf.mol.intor('int1e_ovlp_cart')))
         assert len(self._occs.up) + len(self._occs.down) == mf.mo_occ.sum()
 
     @abstractmethod
@@ -45,6 +48,9 @@ class SlaterWF(ABC):
     def __call__(self, rs):
         n_samples, n_elec = rs.shape[:2]
         aos = self.get_aos(rs.flatten(end_dim=1)).view(n_samples, n_elec, -1)
+        if self._mol.cart:
+            # pyscf assumes cartesian basis is not normalized
+            aos = aos * rs.new_tensor(self._ovlps)
         n_up, n_down = map(len, self._occs)
         coeffs = self._coeffs.to(aos)
         det_up = eval_slater(aos[:, :n_up, :], coeffs[:, self._occs.up])
@@ -63,6 +69,8 @@ class TorchGTOSlaterWF(SlaterWF):
     def __init__(self, mf):
         SlaterWF.__init__(self, mf)
         mol = self._mol
+        if not mol.cart:
+            raise DLQMCError('TorchGTOSlaterWF supports only Cartesian basis sets')
         self._basis_info = []
         for i in range(mol.nbas):
             l = mol.bas_angular(i)
@@ -70,16 +78,10 @@ class TorchGTOSlaterWF(SlaterWF):
             coord = mol.bas_coord(i)
             zetas = mol.bas_exp(i)
             coeff_sets = mol.bas_ctr_coeff(i).T
-            ovlps = np.diag(
-                mol.intor('int1e_ovlp_cart', shls_slice=(i, i + 1, i, i + 1))
-            )
-            ovlp_sets = ovlps if len(coeff_sets) > 1 else [ovlps]
             anorms = 1 / np.sqrt(factorial2(2 * np.array(ls) - 1).prod(-1))
             rnorms = (2 * zetas / np.pi) ** (3 / 4) * (4 * zetas) ** (l / 2)
-            for coeffs, ovlps in zip(coeff_sets, ovlp_sets):
-                self._basis_info.append(
-                    (ls, anorms * np.sqrt(ovlps), zetas, rnorms * coeffs, coord)
-                )
+            for coeffs in coeff_sets:
+                self._basis_info.append((ls, anorms, zetas, rnorms * coeffs, coord))
 
     def get_aos(self, rs):
         aos = []
@@ -93,11 +95,18 @@ class TorchGTOSlaterWF(SlaterWF):
         return torch.cat(aos, dim=1)
 
 
+def eval_ao_normed(mol, *args, **kwargs):
+    aos = pyscf.dft.numint.eval_ao(mol, *args, **kwargs)
+    if mol.cart:
+        aos /= np.sqrt(np.diag(mol.intor('int1e_ovlp_cart')))
+    return aos
+
+
 class PyscfGTOSlaterWF(SlaterWF):
     def get_aos(self, rs):
-        return rs.new_tensor(pyscf.dft.numint.eval_ao(self._mol, rs))
+        return rs.new_tensor(eval_ao_normed(self._mol, rs))
 
 
 def electron_density_of(mf, rs):
-    aos = pyscf.dft.numint.eval_ao(mf.mol, rs, deriv=0)
+    aos = eval_ao_normed(mf.mol, rs)
     return pyscf.dft.numint.eval_rho2(mf.mol, aos, mf.mo_coeff, mf.mo_occ, xctype='LDA')
