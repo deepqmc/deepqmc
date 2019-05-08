@@ -1,0 +1,11 @@
+method {
+    vmc
+    nblock 5000
+    dynamics { unr }
+}
+
+include geom.qw.sys
+
+trialfunc {
+    include geom.qw.slater
+}

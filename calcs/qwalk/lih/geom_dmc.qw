@@ -1,0 +1,10 @@
+method {
+    dmc
+    timestep .01
+}
+
+include geom.qw.sys
+
+trialfunc {
+    include geom.qw.slater
+}

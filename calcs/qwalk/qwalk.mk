@@ -15,6 +15,9 @@ QWALK = $(QWALK_TOP)/qwalk-$(QWALK_ARCH)
 %_vmc.qw.o: %_vmc.qw %.qw.sys %_opt.qw.wfout
 	$(QWALK) $<
 
+%_hf_vmc.qw.o: %_hf_vmc.qw %.qw.sys %.qw.slater
+	$(QWALK) $<
+
 %_opt.qw.wfout: %_opt.qw %.qw.sys %.qw.slater %.qw.jast2
 	$(QWALK) $<
 
