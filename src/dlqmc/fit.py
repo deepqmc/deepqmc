@@ -1,5 +1,6 @@
 from itertools import cycle
 
+import torch
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -45,6 +46,12 @@ def fit_wfnet(
                 }.items()
             }
         )
+        valid = ~(torch.isnan(Es_loc) | torch.isinf(Es_loc))
+        Es_loc = Es_loc[valid]
+        if correlated_sampling:
+            weights = (psis ** 2 / psi0s ** 2)[valid]
+        else:
+            weights = None
         loss = loss_func(Es_loc, weights)
         if writer:
             writer.add_scalar('loss', loss, step)
