@@ -14,15 +14,6 @@ class ZeroDiagKernel(nn.Module):
         return Ws
 
 
-def get_schnet_interaction(kernel_dim, embedding_dim, basis_dim):
-    modules = {
-        'kernel': get_log_dnn(basis_dim, kernel_dim, SSP, n_layers=2),
-        'embed_in': nn.Linear(embedding_dim, kernel_dim, bias=False),
-        'embed_out': get_log_dnn(kernel_dim, embedding_dim, SSP, n_layers=2),
-    }
-    return nn.ModuleDict(modules)
-
-
 class ElectronicSchnet(nn.Module):
     def __init__(
         self,
@@ -33,7 +24,20 @@ class ElectronicSchnet(nn.Module):
         basis_dim,
         kernel_dim,
         embedding_dim,
+        interaction_factory=None,
     ):
+        if not interaction_factory:
+
+            def interaction_factory(kernel_dim, embedding_dim, basis_dim):
+                modules = {
+                    'kernel': get_log_dnn(basis_dim, kernel_dim, SSP, n_layers=2),
+                    'embed_in': nn.Linear(embedding_dim, kernel_dim, bias=False),
+                    'embed_out': get_log_dnn(
+                        kernel_dim, embedding_dim, SSP, n_layers=2
+                    ),
+                }
+                return nn.ModuleDict(modules)
+
         super().__init__()
         self.embedding_nuc = nn.Parameter(torch.randn(n_nuclei, kernel_dim))
         self.embedding_elec = nn.Parameter(
@@ -43,7 +47,7 @@ class ElectronicSchnet(nn.Module):
         )
         self.interactions = nn.ModuleList(
             [
-                get_schnet_interaction(kernel_dim, embedding_dim, basis_dim)
+                interaction_factory(kernel_dim, embedding_dim, basis_dim)
                 for _ in range(n_interactions)
             ]
         )

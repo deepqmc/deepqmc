@@ -31,8 +31,29 @@ class HanNet(BaseWFNet):
         ion_pot=0.5,
         cusp_same=None,
         cusp_anti=None,
+        interaction_factory=None,
+        orbital_factory=None,
+        pair_factory=None,
+        odd_factory=None,
         **kwargs,
     ):
+        if not orbital_factory:
+
+            def orbital_factory(embedding_dim):
+                return get_log_dnn(embedding_dim, 1, SSP, n_layers=n_orbital_layers)
+
+        if not pair_factory:
+
+            def pair_factory(in_dim, latent_dim):
+                # bias is subtracted by antisymmetrization anyway
+                return get_log_dnn(in_dim, latent_dim, SSP, n_layers=2, last_bias=False)
+
+        if not odd_factory:
+
+            def odd_factory(latent_dim):
+                # bias is subtracted by antisymmetrization anyway
+                return get_log_dnn(latent_dim, 1, SSP, n_layers=2, last_bias=False)
+
         super().__init__()
         self.n_up = n_up
         self.register_geom(geom)
@@ -52,18 +73,13 @@ class HanNet(BaseWFNet):
             basis_dim,
             kernel_dim,
             embedding_dim,
+            interaction_factory=interaction_factory,
         )
-        self.orbital = get_log_dnn(embedding_dim, 1, SSP, n_layers=n_orbital_layers)
+        self.orbital = orbital_factory(embedding_dim)
         self.anti_up, self.anti_down = (
             LaughlinAnsatz(
-                # bias is subtracted by antisymmetrization anyway
-                Concat(get_log_dnn(7, latent_dim, SSP, n_layers=2, last_bias=False)),
-                nn.Sequential(
-                    *get_log_dnn(
-                        latent_dim, 1, SSP, n_layers=2, last_bias=False
-                    ).children(),
-                    nn.Sigmoid(),
-                ),
+                Concat(pair_factory(7, latent_dim)),
+                nn.Sequential(odd_factory(latent_dim), nn.Sigmoid()),
             )
             if n_elec > 1
             else None
