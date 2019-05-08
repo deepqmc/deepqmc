@@ -67,16 +67,26 @@ class SlaterWF(ABC, nn.Module, Geomable):
     def get_aos(self, rs):
         ...
 
-    def __call__(self, rs):
-        n_samples, n_elec = rs.shape[:2]
-        aos = self.get_aos(rs.flatten(end_dim=1)).view(n_samples, n_elec, -1)
+    def _get_normed_aos(self, rs):
+        aos = self.get_aos(rs)
         if self._mol.cart:
             # pyscf assumes cartesian basis is not normalized
             aos = aos * self.ovlps
+        return aos
+
+    def __call__(self, rs):
+        n_samples, n_elec = rs.shape[:2]
+        aos = self._get_normed_aos(rs.flatten(end_dim=1)).view(n_samples, n_elec, -1)
         n_up, n_down = map(len, self._occs)
         det_up = eval_slater(aos[:, :n_up, :], self.mo_coeffs[:, self._occs.up])
         det_down = eval_slater(aos[:, n_up:, :], self.mo_coeffs[:, self._occs.down])
         return det_up * det_down
+
+    def density(self, rs):
+        aos = self._get_normed_aos(rs)
+        return sum(
+            ((aos @ self.mo_coeffs[:, occs]) ** 2).sum(dim=-1) for occs in self._occs
+        )
 
 
 @lru_cache(maxsize=16)
