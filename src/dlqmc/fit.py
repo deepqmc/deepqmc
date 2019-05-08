@@ -7,7 +7,7 @@ from .physics import local_energy
 from .sampling import samples_from
 
 
-def loss_local_energy(Es_loc, weights, E_ref=None, p=2):
+def loss_local_energy(Es_loc, weights, E_ref=None, p=1):
     ws, w_mean = (weights, weights.mean()) if weights is not None else (1.0, 1.0)
     E0 = E_ref if E_ref is not None else (Es_loc * ws).mean() / w_mean
     return (ws * (Es_loc - E0).abs() ** p).mean() / w_mean
