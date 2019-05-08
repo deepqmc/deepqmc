@@ -120,7 +120,11 @@ class DebugContainer(dict):
         return val
 
     def __setitem__(self, key, val):
-        super().__setitem__('.'.join([*self._levels, str(key)]), val)
+        super().__setitem__(self._getkey(key), val)
+
+    def result(self, val):
+        super().__setitem__('.'.join(self._levels), val)
+        return val
 
 
 class _NullDebug(DebugContainer):
