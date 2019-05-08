@@ -28,11 +28,9 @@ def plot_func(
     **kwargs,
 ):
     n_pts = int((bounds[1] - bounds[0]) / density)
+    x = torch.linspace(bounds[0], bounds[1], n_pts)
     if x_line:
-        x = torch.linspace(bounds[0], bounds[1], n_pts)
         x = torch.cat([x[:, None], x.new_zeros((n_pts, 2)) + shift], dim=1)
-    else:
-        x = torch.linspace(bounds[0], bounds[1], n_pts)
     if not is_torch:
         x = x.numpy()
     elif device:
@@ -46,21 +44,21 @@ def plot_func(
     return plt.plot(x, y, **kwargs)
 
 
-plot_func_x = partial(plot_func, x_line=True)
-
-
-def plot_func_xy(func, bounds, density=0.02, shift=0, device=None):
+def plot_func_2d(func, bounds, density=0.02, shift=0, xy_plane=False, device=None):
     ns_pts = [int((bs[1] - bs[0]) / density) for bs in bounds]
-    xy_plane, xy_edges = get_flat_mesh(bounds, ns_pts, device=device)
-    xy_plane = torch.cat(
-        [xy_plane, xy_plane.new_zeros(len(xy_plane), 1) + shift], dim=1
-    )
+    xy, x_y = get_flat_mesh(bounds, ns_pts, device=device)
+    if xy_plane:
+        xy = torch.cat([xy, xy.new_zeros(len(xy), 1) + shift], dim=1)
     res = plt.contour(
-        *(edge.cpu().numpy() for edge in xy_edges),
-        func(xy_plane).detach().view(len(xy_edges[0]), -1).cpu().numpy().T,
+        *(z.cpu().numpy() for z in x_y),
+        func(xy).detach().view(len(x_y[0]), -1).cpu().numpy().T,
     )
     plt.gca().set_aspect(1)
     return res
+
+
+plot_func_x = partial(plot_func, x_line=True)
+plot_func_xy = partial(plot_func_2d, xy_plane=True)
 
 
 def integrate_on_mesh(func, bounds, density=0.02):
