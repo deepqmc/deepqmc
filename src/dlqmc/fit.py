@@ -27,8 +27,9 @@ def fit_wfnet(
     correlated_sampling=True,
     clip_grad=None,
     writer=None,
+    start=0,
 ):
-    for step, (rs, psi0s) in enumerate(sample_gen):
+    for step, (rs, psi0s) in enumerate(sample_gen, start=start):
         Es_loc, psis = local_energy(rs, wfnet, create_graph=True)
         weights = psis ** 2 / psi0s ** 2 if correlated_sampling else None
         loss = loss_func(Es_loc, weights)
