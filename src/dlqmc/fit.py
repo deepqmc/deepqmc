@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from .physics import local_energy
 from .sampling import samples_from
+from .utils import NULL_DEBUG, state_dict_copy
 
 
 def loss_local_energy(Es_loc, weights, E_ref=None, p=1):
@@ -28,10 +29,22 @@ def fit_wfnet(
     clip_grad=None,
     writer=None,
     start=0,
+    debug=NULL_DEBUG,
 ):
     for step, (rs, psi0s) in enumerate(sample_gen, start=start):
-        Es_loc, psis = local_energy(rs, wfnet, create_graph=True)
-        weights = psis ** 2 / psi0s ** 2 if correlated_sampling else None
+        d = debug[step]
+        Es_loc, psis = d['E_loc'], d['psi'] = local_energy(rs, wfnet, create_graph=True)
+        d.update(
+            {
+                lbl: x.detach().cpu()
+                for lbl, x in {
+                    'Es_loc': Es_loc,
+                    'psis': psis,
+                    'psi0s': psi0s,
+                    'rs': rs,
+                }.items()
+            }
+        )
         loss = loss_func(Es_loc, weights)
         if writer:
             writer.add_scalar('loss', loss, step)
@@ -44,6 +57,7 @@ def fit_wfnet(
             clip_grad_norm_(wfnet.parameters(), clip_grad)
         opt.step()
         opt.zero_grad()
+        d['state_dict'] = state_dict_copy(wfnet)
 
 
 def wfnet_fit_driver(
