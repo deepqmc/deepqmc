@@ -88,12 +88,21 @@ class HanNet(BaseWFNet):
         with debug.cd('schnet'):
             xs = self.schnet(dists_basis, debug=debug)
         jastrow = debug['jastrow'] = self.orbital(xs).squeeze(dim=-1).sum(dim=-1)
-        anti_up, anti_down = debug['anti_up'], debug['anti_down'] = [
-            net(rs[:, idxs], dists_elec[:, idxs, idxs, None]).squeeze(dim=-1)
-            if net
-            else torch.tensor(1.0)
-            for net, idxs in zip((self.anti_up, self.anti_down), self.spin_slices)
-        ]
+        antis = [1.0, 1.0]
+        for i, (label, net, idxs) in enumerate(
+            zip(
+                ('anti_up', 'anti_down'),
+                (self.anti_up, self.anti_down),
+                self.spin_slices,
+            )
+        ):
+            if not net:
+                continue
+            with debug.cd(label):
+                antis[i] = net(
+                    rs[:, idxs], dists_elec[:, idxs, idxs, None], debug=debug
+                ).squeeze(dim=-1)
+        anti_up, anti_down = antis
         asymp_nuc = debug['asymp_nuc'] = self.asymp_nuc(dists_nuc)  # TODO add electrons
         asymp_same = debug['asymp_same'] = (
             self.asymp_same(
@@ -113,4 +122,4 @@ class HanNet(BaseWFNet):
             else 1.0
         )
         asymp = asymp_nuc * asymp_same * asymp_anti
-        return anti_up * anti_down * torch.exp(jastrow) * asymp  
+        return anti_up * anti_down * torch.exp(jastrow) * asymp
