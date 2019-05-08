@@ -87,3 +87,9 @@ def wfnet_fit_driver(
         n_steps = n_epochs * len(rs_dl)
         for _, (rs, psis) in zip(range_training(n_steps), cycle(rs_dl)):
             yield rs, psis
+
+
+def wfnet_fit_driver_simple(sampler, *, samplings, n_sampling_steps):
+    for _ in samplings:
+        rs, psis, _ = samples_from(sampler, range(n_sampling_steps))
+        yield rs.flatten(end_dim=1), psis.flatten(end_dim=1)
