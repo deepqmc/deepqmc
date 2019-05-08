@@ -92,8 +92,9 @@ def dctsel(dct, keys):
 
 
 class DebugContainer(dict):
-    def __init__(self):
+    def __init__(self, default_factory=None):
         super().__init__()
+        self._default_factory = default_factory
         self._levels = []
 
     @contextmanager
@@ -103,6 +104,20 @@ class DebugContainer(dict):
             yield
         finally:
             assert label == self._levels.pop()
+
+    def _getkey(self, key):
+        return '.'.join([*self._levels, str(key)])
+
+    def __getitem__(self, key):
+        key = self._getkey(key)
+        try:
+            val = super().__getitem__(key)
+        except KeyError:
+            if self._default_factory is None:
+                raise
+            val = self._default_factory()
+            self.__setitem__(key, val)
+        return val
 
     def __setitem__(self, key, val):
         super().__setitem__('.'.join([*self._levels, str(key)]), val)
