@@ -161,3 +161,11 @@ def batch_eval_tuple(func, batches, *args, **kwargs):
 
 def number_of_parameters(net):
     return sum(p.numel() for p in net.parameters())
+
+
+def state_dict_copy(net):
+    return {name: val.cpu() for name, val in net.state_dict().items()}
+
+
+def shuffle_tensor(x):
+    return x[torch.randperm(len(x))]
