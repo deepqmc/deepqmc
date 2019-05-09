@@ -92,9 +92,8 @@ def dctsel(dct, keys):
 
 
 class DebugContainer(dict):
-    def __init__(self, default_factory=None):
+    def __init__(self):
         super().__init__()
-        self._default_factory = default_factory
         self._levels = []
 
     @contextmanager
@@ -113,13 +112,13 @@ class DebugContainer(dict):
         try:
             val = super().__getitem__(key)
         except KeyError:
-            if self._default_factory is None:
-                raise
-            val = self._default_factory()
+            val = self.__class__()
             self.__setitem__(key, val)
         return val
 
     def __setitem__(self, key, val):
+        if isinstance(val, torch.Tensor):
+            val = val.detach().cpu()
         super().__setitem__(self._getkey(key), val)
 
     def result(self, val):
