@@ -10,7 +10,7 @@ class GaussianKDEstimator:
         self._xs = xs
         self._weights = weights if weights is not None else None
         self._width = np.sqrt(2) * bw
-        self._bs = int(2 ** 30 * max_memory) // (xs.nelement() * xs.element_size())
+        self._bs = int(2 ** 30 * max_memory) // (xs.nelement() * xs.element_size() or 1)
 
     def __call__(self, xs):
         assert len(xs.shape) == 2
