@@ -130,3 +130,11 @@ class Concat(nn.Module):
     def forward(self, *args):
         xs = torch.cat(args, dim=-1)
         return self.net(xs)
+
+
+class Identity(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+    def forward(self, x):
+        return x
