@@ -5,7 +5,7 @@ from pyscf import dft, gto, scf
 from pytest import approx
 from torch.testing import assert_allclose
 
-from dlqmc.gto import TorchGTOSlaterWF, eval_ao_normed
+from dlqmc.gto import GTOSlaterWF, eval_ao_normed
 
 
 @pytest.fixture(scope='module')
@@ -28,7 +28,7 @@ def mf(mol):
 
 @pytest.fixture
 def gtowf(mf):
-    return TorchGTOSlaterWF(mf).double()
+    return GTOSlaterWF.from_pyscf(mf).double()
 
 
 def test_eval_ao_normed(mol, grids):
