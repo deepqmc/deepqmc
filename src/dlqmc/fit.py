@@ -36,17 +36,9 @@ def fit_wfnet(
 ):
     for step, (rs, psi0s) in enumerate(sample_gen, start=start):
         d = debug[step]
-        Es_loc, psis = d['E_loc'], d['psi'] = local_energy(rs, wfnet, create_graph=True)
-        d.update(
-            {
-                lbl: x.detach().cpu()
-                for lbl, x in {
-                    'Es_loc': Es_loc,
-                    'psis': psis,
-                    'psi0s': psi0s,
-                    'rs': rs,
-                }.items()
-            }
+        d['psi0s'], d['rs'] = psi0s, rs
+        Es_loc, psis = d['Es_loc'], d['psis'] = local_energy(
+            rs, wfnet, create_graph=True
         )
         valid = ~(torch.isnan(Es_loc) | torch.isinf(Es_loc))
         Es_loc = Es_loc[valid]
