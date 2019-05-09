@@ -40,12 +40,7 @@ def fit_wfnet(
         Es_loc, psis = d['Es_loc'], d['psis'] = local_energy(
             rs, wfnet, create_graph=True
         )
-        valid = ~(torch.isnan(Es_loc) | torch.isinf(Es_loc))
-        Es_loc = Es_loc[valid]
-        if correlated_sampling:
-            weights = (psis ** 2 / psi0s ** 2)[valid]
-        else:
-            weights = None
+        weights = psis ** 2 / psi0s ** 2 if correlated_sampling else None
         loss = loss_func(Es_loc, weights)
         if writer:
             writer.add_scalar('loss', loss, step)
