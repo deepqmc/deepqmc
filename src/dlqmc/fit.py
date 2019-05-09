@@ -31,6 +31,8 @@ def fit_wfnet(
     writer=None,
     start=0,
     debug=NULL_DEBUG,
+    scheduler=None,
+    epoch_size=100,
 ):
     for step, (rs, psi0s) in enumerate(sample_gen, start=start):
         d = debug[step]
@@ -65,6 +67,8 @@ def fit_wfnet(
         opt.step()
         opt.zero_grad()
         d['state_dict'] = state_dict_copy(wfnet)
+        if scheduler and (step + 1) % epoch_size == 0:
+            scheduler.step()
 
 
 def wfnet_fit_driver(
