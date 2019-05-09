@@ -8,12 +8,13 @@ from ..utils import Debuggable
 
 
 def pairwise_distance(coords1, coords2):
-    return (coords1[:, :, None] - coords2[:, None, :]).norm(dim=-1)
+    return (coords1[..., :, None, :] - coords2[..., None, :, :]).norm(dim=-1)
 
 
 def pairwise_self_distance(coords):
     i, j = np.triu_indices(coords.shape[1], k=1)
-    return (coords[:, :, None] - coords[:, None, :])[:, i, j].norm(dim=-1)
+    diffs = coords[..., :, None, :] - coords[..., None, :, :]
+    return diffs[..., i, j, :].norm(dim=-1)
 
 
 class PairwiseDistance3D(nn.Module):
