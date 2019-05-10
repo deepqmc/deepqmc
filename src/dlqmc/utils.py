@@ -161,3 +161,13 @@ def state_dict_copy(net):
 
 def shuffle_tensor(x):
     return x[torch.randperm(len(x))]
+
+
+def pow_int(xs, exps):
+    batch_dims = xs.shape[: -len(exps.shape)]
+    zs = xs.new_zeros(*batch_dims, *exps.shape)
+    xs_expanded = xs.expand_as(zs)
+    for exp in exps.unique():
+        mask = exps == exp
+        zs[..., mask] = xs_expanded[..., mask] ** exp.item()
+    return zs
