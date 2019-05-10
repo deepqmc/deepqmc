@@ -1,7 +1,16 @@
 import numpy as np
 import torch.nn as nn
+from scipy.special import factorial
 
+from .. import torchext
 from ..utils import NULL_DEBUG
+
+
+def eval_slater(xs):
+    if xs.shape[-1] == 0:
+        return 1.0
+    norm = 1 / np.sqrt(factorial(xs.shape[-1]))
+    return norm * torchext.bdet(xs)
 
 
 class NetPairwiseAntisymmetry(nn.Module):

@@ -10,13 +10,18 @@ from .base import (
     ssp,
 )
 from .bfnet import BFNet
+from .gto import GTOBasis, GTOShell
 from .hannet import HanNet
+from .hfnet import HFNet
 from .wfnet import WFNet, WFNetAnti
 
 __all__ = [
     'AntisymmetricPart',
     'BFNet',
     'DistanceBasis',
+    'GTOBasis',
+    'GTOShell',
+    'HFNet',
     'HanNet',
     'NetOdd',
     'NetPairwiseAntisymmetry',
