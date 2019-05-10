@@ -1,6 +1,5 @@
 from itertools import cycle
 
-import torch
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 

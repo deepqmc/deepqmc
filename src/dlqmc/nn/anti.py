@@ -1,5 +1,5 @@
 import numpy as np
-import torch.nn as nn
+from torch import nn
 from scipy.special import factorial
 
 from .. import torchext

@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn
+from torch import nn
 
 from ..utils import NULL_DEBUG, dctsel
 from .anti import AntisymmetricPart
