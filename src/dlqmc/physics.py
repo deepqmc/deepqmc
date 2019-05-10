@@ -2,6 +2,7 @@ import numpy as np
 import torch
 
 from .grad import grad, laplacian
+from .utils import NULL_DEBUG
 
 
 def nuclear_energy(geom):
@@ -32,10 +33,12 @@ def quantum_force(rs, wf, *, clamp=None):
     return forces, psis
 
 
-def local_energy(rs, wf, geom=None, create_graph=False):
+def local_energy(rs, wf, geom=None, create_graph=False, debug=NULL_DEBUG):
     geom = geom or wf.geom
-    Es_nuc = nuclear_energy(geom)
-    Vs_nuc = nuclear_potential(rs, geom)
-    Vs_el = electronic_potential(rs)
-    lap_psis, psis = laplacian(rs, wf, create_graph=create_graph)
+    Es_nuc = debug['Es_nuc'] = nuclear_energy(geom)
+    Vs_nuc = debug['Vs_nuc'] = nuclear_potential(rs, geom)
+    Vs_el = debug['Vs_el'] = electronic_potential(rs)
+    lap_psis, psis = debug['lap_psis'], debug['psis'] = laplacian(
+        rs, wf, create_graph=create_graph
+    )
     return -0.5 * lap_psis / psis + Vs_nuc + Vs_el + Es_nuc, psis
