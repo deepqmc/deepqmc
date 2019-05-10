@@ -6,6 +6,7 @@ from scipy.special import factorial2
 from torch import nn
 
 from ..errors import DLQMCError
+from ..utils import pow_int
 
 
 @lru_cache(maxsize=16)
@@ -18,9 +19,9 @@ def get_cartesian_angulars(l):
 class GTOShell(nn.Module):
     def __init__(self, center, l, coeffs, zetas):
         super().__init__()
-        self.ls = get_cartesian_angulars(l)
+        self.ls = torch.tensor(get_cartesian_angulars(l))
         self.register_buffer('center', center)
-        anorms = 1 / np.sqrt(factorial2(2 * np.array(self.ls) - 1).prod(-1))
+        anorms = 1 / np.sqrt(factorial2(2 * self.ls - 1).prod(-1))
         self.register_buffer('anorms', torch.tensor(anorms).float())
         rnorms = (2 * zetas / np.pi) ** (3 / 4) * (4 * zetas) ** (l / 2)
         self.register_buffer('coeffs', rnorms * coeffs)
@@ -31,10 +32,10 @@ class GTOShell(nn.Module):
 
     def forward(self, rs):
         xs = rs - self.center
-        eps = rs.new_tensor(torch.finfo(rs.dtype).eps)
-        xs = torch.where(xs.abs() > eps, xs, eps)
+        eps = xs.new_tensor(100 * torch.finfo(xs.dtype).eps)
+        xs = torch.where(xs.abs() < eps, xs + eps * xs.sign(), xs)
         xs_sq = (xs ** 2).sum(dim=-1)
-        angulars = (xs[:, None, :] ** xs.new_tensor(self.ls)).prod(dim=-1)
+        angulars = pow_int(xs[:, None, :], self.ls).prod(dim=-1)
         radials = (self.coeffs * torch.exp(-self.zetas * xs_sq[:, None])).sum(dim=-1)
         return self.anorms * angulars * radials[:, None]
 
