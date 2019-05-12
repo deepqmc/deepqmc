@@ -59,7 +59,7 @@ def test_grad(wfnet, rs):
 
 def test_loc_ene_backprop(wfnet, rs):
     rs.requires_grad_()
-    Es_loc, _ = local_energy(rs, wfnet, wfnet.geom, create_graph=True)
+    Es_loc, _ = local_energy(rs, wfnet, create_graph=True)
     Es_loc.sum().backward()
     assert_alltrue_named(
         (name, param.grad.sum().abs().item() > 0)

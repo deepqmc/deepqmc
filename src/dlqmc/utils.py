@@ -18,21 +18,12 @@ def get_flat_mesh(bounds, npts, device=None):
 
 
 def plot_func(
-    func,
-    bounds,
-    density=0.02,
-    shift=0,
-    x_line=False,
-    is_torch=True,
-    device=None,
-    **kwargs,
+    func, bounds, density=0.02, x_line=False, is_torch=True, device=None, **kwargs
 ):
     n_pts = int((bounds[1] - bounds[0]) / density)
+    x = torch.linspace(bounds[0], bounds[1], n_pts)
     if x_line:
-        x = torch.linspace(bounds[0], bounds[1], n_pts)
-        x = torch.cat([x[:, None], x.new_zeros((n_pts, 2)) + shift], dim=1)
-    else:
-        x = torch.linspace(bounds[0], bounds[1], n_pts)
+        x = torch.cat([x[:, None], x.new_zeros((n_pts, 2))], dim=1)
     if not is_torch:
         x = x.numpy()
     elif device:
@@ -46,21 +37,21 @@ def plot_func(
     return plt.plot(x, y, **kwargs)
 
 
-plot_func_x = partial(plot_func, x_line=True)
-
-
-def plot_func_xy(func, bounds, density=0.02, shift=0, device=None):
+def plot_func_2d(func, bounds, density=0.02, xy_plane=False, device=None):
     ns_pts = [int((bs[1] - bs[0]) / density) for bs in bounds]
-    xy_plane, xy_edges = get_flat_mesh(bounds, ns_pts, device=device)
-    xy_plane = torch.cat(
-        [xy_plane, xy_plane.new_zeros(len(xy_plane), 1) + shift], dim=1
-    )
+    xy, x_y = get_flat_mesh(bounds, ns_pts, device=device)
+    if xy_plane:
+        xy = torch.cat([xy, xy.new_zeros(len(xy), 1)], dim=1)
     res = plt.contour(
-        *(edge.cpu().numpy() for edge in xy_edges),
-        func(xy_plane).detach().view(len(xy_edges[0]), -1).cpu().numpy().T,
+        *(z.cpu().numpy() for z in x_y),
+        func(xy).detach().view(len(x_y[0]), -1).cpu().numpy().T,
     )
     plt.gca().set_aspect(1)
     return res
+
+
+plot_func_x = partial(plot_func, x_line=True)
+plot_func_xy = partial(plot_func_2d, xy_plane=True)
 
 
 def integrate_on_mesh(func, bounds, density=0.02):
@@ -106,8 +97,26 @@ class DebugContainer(dict):
         finally:
             assert label == self._levels.pop()
 
+    def _getkey(self, key):
+        return '.'.join([*self._levels, str(key)])
+
+    def __getitem__(self, key):
+        key = self._getkey(key)
+        try:
+            val = super().__getitem__(key)
+        except KeyError:
+            val = self.__class__()
+            self.__setitem__(key, val)
+        return val
+
     def __setitem__(self, key, val):
-        super().__setitem__('.'.join([*self._levels, str(key)]), val)
+        if isinstance(val, torch.Tensor):
+            val = val.detach().cpu()
+        super().__setitem__(self._getkey(key), val)
+
+    def result(self, val):
+        super().__setitem__('.'.join(self._levels), val)
+        return val
 
 
 class _NullDebug(DebugContainer):
@@ -144,3 +153,21 @@ def batch_eval_tuple(func, batches, *args, **kwargs):
 
 def number_of_parameters(net):
     return sum(p.numel() for p in net.parameters())
+
+
+def state_dict_copy(net):
+    return {name: val.cpu() for name, val in net.state_dict().items()}
+
+
+def shuffle_tensor(x):
+    return x[torch.randperm(len(x))]
+
+
+def pow_int(xs, exps):
+    batch_dims = xs.shape[: -len(exps.shape)]
+    zs = xs.new_zeros(*batch_dims, *exps.shape)
+    xs_expanded = xs.expand_as(zs)
+    for exp in exps.unique():
+        mask = exps == exp
+        zs[..., mask] = xs_expanded[..., mask] ** exp.item()
+    return zs

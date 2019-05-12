@@ -1,5 +1,16 @@
 import numpy as np
 import torch.nn as nn
+from scipy.special import factorial
+
+from .. import torchext
+from ..utils import NULL_DEBUG
+
+
+def eval_slater(xs):
+    if xs.shape[-1] == 0:
+        return 1.0
+    norm = 1 / np.sqrt(factorial(xs.shape[-1]))
+    return norm * torchext.bdet(xs)
 
 
 class NetPairwiseAntisymmetry(nn.Module):
@@ -16,8 +27,12 @@ class PairAntisymmetric(nn.Module):
         super().__init__()
         self.net = net
 
-    def forward(self, x1s, x2s, x12s):
-        return self.net(x1s, x2s, x12s) - self.net(x2s, x1s, x12s)
+    def forward(self, x1s, x2s, x12s, debug=NULL_DEBUG):
+        left, right = debug['left'], debug['right'] = (
+            self.net(x1s, x2s, x12s),
+            self.net(x2s, x1s, x12s),
+        )
+        return debug.result(left - right)
 
 
 class Odd(nn.Module):
@@ -25,8 +40,9 @@ class Odd(nn.Module):
         super().__init__()
         self.net = net
 
-    def forward(self, x):
-        return self.net(x) - self.net(-x)
+    def forward(self, x, debug=NULL_DEBUG):
+        left, right = debug['left'], debug['right'] = self.net(x), self.net(-x)
+        return debug.result(left - right)
 
 
 NetOdd = Odd
@@ -50,7 +66,10 @@ class LaughlinAnsatz(nn.Module):
         self.net_pair = PairAntisymmetric(net_pair)
         self.net_odd = Odd(net_odd)
 
-    def forward(self, xs, xs_pair):
+    def forward(self, xs, xs_pair, debug=NULL_DEBUG):
         i, j = np.triu_indices(xs.shape[-2], k=1)
-        zs = self.net_pair(xs[:, i], xs[:, j], xs_pair[:, i, j]).prod(dim=-2)
-        return self.net_odd(zs)
+        with debug.cd('pair'):
+            zs = self.net_pair(xs[:, i], xs[:, j], xs_pair[:, i, j], debug=debug)
+            zs = zs.prod(dim=-2)
+        with debug.cd('odd'):
+            return debug.result(self.net_odd(zs, debug=debug))

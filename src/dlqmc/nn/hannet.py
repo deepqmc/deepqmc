@@ -31,8 +31,29 @@ class HanNet(BaseWFNet):
         ion_pot=0.5,
         cusp_same=None,
         cusp_anti=None,
+        interaction_factory=None,
+        orbital_factory=None,
+        pair_factory=None,
+        odd_factory=None,
         **kwargs,
     ):
+        if not orbital_factory:
+
+            def orbital_factory(embedding_dim):
+                return get_log_dnn(embedding_dim, 1, SSP, n_layers=n_orbital_layers)
+
+        if not pair_factory:
+
+            def pair_factory(in_dim, latent_dim):
+                # bias is subtracted by antisymmetrization anyway
+                return get_log_dnn(in_dim, latent_dim, SSP, n_layers=2, last_bias=False)
+
+        if not odd_factory:
+
+            def odd_factory(latent_dim):
+                # bias is subtracted by antisymmetrization anyway
+                return get_log_dnn(latent_dim, 1, SSP, n_layers=2, last_bias=False)
+
         super().__init__()
         self.n_up = n_up
         self.register_geom(geom)
@@ -52,18 +73,13 @@ class HanNet(BaseWFNet):
             basis_dim,
             kernel_dim,
             embedding_dim,
+            interaction_factory=interaction_factory,
         )
-        self.orbital = get_log_dnn(embedding_dim, 1, SSP, n_layers=n_orbital_layers)
+        self.orbital = orbital_factory(embedding_dim)
         self.anti_up, self.anti_down = (
             LaughlinAnsatz(
-                # bias is subtracted by antisymmetrization anyway
-                Concat(get_log_dnn(7, latent_dim, SSP, n_layers=2, last_bias=False)),
-                nn.Sequential(
-                    *get_log_dnn(
-                        latent_dim, 1, SSP, n_layers=2, last_bias=False
-                    ).children(),
-                    nn.Sigmoid(),
-                ),
+                Concat(pair_factory(7, latent_dim)),
+                nn.Sequential(odd_factory(latent_dim), nn.Sigmoid()),
             )
             if n_elec > 1
             else None
@@ -88,12 +104,21 @@ class HanNet(BaseWFNet):
         with debug.cd('schnet'):
             xs = self.schnet(dists_basis, debug=debug)
         jastrow = debug['jastrow'] = self.orbital(xs).squeeze(dim=-1).sum(dim=-1)
-        anti_up, anti_down = debug['anti_up'], debug['anti_down'] = [
-            net(rs[:, idxs], dists_elec[:, idxs, idxs, None]).squeeze(dim=-1)
-            if net
-            else torch.tensor(1.0)
-            for net, idxs in zip((self.anti_up, self.anti_down), self.spin_slices)
-        ]
+        antis = [1.0, 1.0]
+        for i, (label, net, idxs) in enumerate(
+            zip(
+                ('anti_up', 'anti_down'),
+                (self.anti_up, self.anti_down),
+                self.spin_slices,
+            )
+        ):
+            if not net:
+                continue
+            with debug.cd(label):
+                antis[i] = net(
+                    rs[:, idxs], dists_elec[:, idxs, idxs, None], debug=debug
+                ).squeeze(dim=-1)
+        anti_up, anti_down = antis
         asymp_nuc = debug['asymp_nuc'] = self.asymp_nuc(dists_nuc)  # TODO add electrons
         asymp_same = debug['asymp_same'] = (
             self.asymp_same(
@@ -113,4 +138,4 @@ class HanNet(BaseWFNet):
             else 1.0
         )
         asymp = asymp_nuc * asymp_same * asymp_anti
-        return anti_up * anti_down * torch.exp(jastrow) * asymp  
+        return anti_up * anti_down * torch.exp(jastrow) * asymp

@@ -5,7 +5,8 @@ from pyscf import dft, gto, scf
 from pytest import approx
 from torch.testing import assert_allclose
 
-from dlqmc.gto import TorchGTOSlaterWF, eval_ao_normed
+from dlqmc.nn import HFNet
+from dlqmc.pyscfext import eval_ao_normed
 
 
 @pytest.fixture(scope='module')
@@ -28,7 +29,7 @@ def mf(mol):
 
 @pytest.fixture
 def gtowf(mf):
-    return TorchGTOSlaterWF(mf)
+    return HFNet.from_pyscf(mf).double()
 
 
 def test_eval_ao_normed(mol, grids):
@@ -38,7 +39,7 @@ def test_eval_ao_normed(mol, grids):
 
 def test_torch_gto_aos(gtowf, grids):
     coords, weights = map(torch.tensor, (grids.coords, grids.weights))
-    ovlps = (gtowf.get_aos(coords) ** 2 * weights[:, None]).sum(dim=0)
+    ovlps = (gtowf.basis(coords) ** 2 * weights[:, None]).sum(dim=0)
     assert_allclose(ovlps, 1)
 
 

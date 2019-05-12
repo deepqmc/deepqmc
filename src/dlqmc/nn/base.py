@@ -8,12 +8,13 @@ from ..utils import Debuggable
 
 
 def pairwise_distance(coords1, coords2):
-    return (coords1[:, :, None] - coords2[:, None, :]).norm(dim=-1)
+    return (coords1[..., :, None, :] - coords2[..., None, :, :]).norm(dim=-1)
 
 
 def pairwise_self_distance(coords):
     i, j = np.triu_indices(coords.shape[1], k=1)
-    return (coords[:, :, None] - coords[:, None, :])[:, i, j].norm(dim=-1)
+    diffs = coords[..., :, None, :] - coords[..., None, :, :]
+    return diffs[..., i, j, :].norm(dim=-1)
 
 
 class PairwiseDistance3D(nn.Module):
@@ -100,9 +101,14 @@ class SSP(nn.Softplus):
 
 
 def get_log_dnn(start_dim, end_dim, activation_factory, last_bias=True, *, n_layers):
-    modules = []
     qs = [k / n_layers for k in range(n_layers + 1)]
     dims = [int(np.round(start_dim ** (1 - q) * end_dim ** q)) for q in qs]
+    return get_custom_dnn(dims, activation_factory, last_bias=last_bias)
+
+
+def get_custom_dnn(dims, activation_factory, last_bias=True):
+    n_layers = len(dims) - 1
+    modules = []
     for k in range(n_layers):
         bias = k + 1 < n_layers or last_bias
         modules.extend(
@@ -124,3 +130,11 @@ class Concat(nn.Module):
     def forward(self, *args):
         xs = torch.cat(args, dim=-1)
         return self.net(xs)
+
+
+class Identity(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+    def forward(self, x):
+        return x

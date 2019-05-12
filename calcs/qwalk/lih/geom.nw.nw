@@ -1,0 +1,14 @@
+charge 0
+geometry
+  symmetry c1
+  li 0 0 0
+  h 1.595 0 0
+end
+basis
+  * library 6-311g
+end
+scf
+  print "final vectors"
+  singlet
+end
+task scf
