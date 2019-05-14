@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 
 from ..utils import NULL_DEBUG, nondiag
 from .base import SSP, get_log_dnn

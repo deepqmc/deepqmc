@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 
 from ..geom import Geomable
@@ -15,16 +15,6 @@ def pairwise_self_distance(coords):
     i, j = np.triu_indices(coords.shape[1], k=1)
     diffs = coords[..., :, None, :] - coords[..., None, :, :]
     return diffs[..., i, j, :].norm(dim=-1)
-
-
-class PairwiseDistance3D(nn.Module):
-    def forward(self, coords1, coords2):
-        return pairwise_distance(coords1, coords2)
-
-
-class PairwiseSelfDistance3D(nn.Module):
-    def forward(self, coords):
-        return pairwise_self_distance(coords)
 
 
 class BaseWFNet(nn.Module, Geomable, Debuggable):

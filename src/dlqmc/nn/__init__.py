@@ -1,10 +1,11 @@
-from .anti import AntisymmetricPart, NetOdd, NetPairwiseAntisymmetry
+from .anti import LaughlinAnsatz, Odd, PairAntisymmetric
 from .base import (
     SSP,
     DistanceBasis,
+    Identity,
     NuclearAsymptotic,
-    PairwiseDistance3D,
-    PairwiseSelfDistance3D,
+    get_custom_dnn,
+    get_log_dnn,
     pairwise_distance,
     pairwise_self_distance,
     ssp,
@@ -16,21 +17,24 @@ from .hfnet import HFNet
 from .wfnet import WFNet, WFNetAnti
 
 __all__ = [
-    'AntisymmetricPart',
     'BFNet',
     'DistanceBasis',
     'GTOBasis',
     'GTOShell',
     'HFNet',
     'HanNet',
-    'NetOdd',
-    'NetPairwiseAntisymmetry',
+    'Identity',
+    'LaughlinAnsatz',
     'NuclearAsymptotic',
+    'Odd',
+    'PairAntisymmetric',
     'PairwiseDistance3D',
     'PairwiseSelfDistance3D',
     'SSP',
     'WFNet',
     'WFNetAnti',
+    'get_custom_dnn',
+    'get_log_dnn',
     'pairwise_distance',
     'pairwise_self_distance',
     'ssp',
