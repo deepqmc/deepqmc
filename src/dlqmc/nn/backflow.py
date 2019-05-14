@@ -17,6 +17,8 @@ class Backflow(nn.Module):
         n_layers,
     ):
         super().__init__()
+        self.n_up = n_up
+        self.n_down = n_down
         self.dist_basis = DistanceBasis(basis_dim)
         self.interactions = nn.ModuleList(
             [
@@ -25,16 +27,19 @@ class Backflow(nn.Module):
             ])
             
     def forward(self,rs, debug=NULL_DEBUG):
-        xs = debug[0] = rs.clone()
-        for i, interaction in enumerate(self.interactions):
-            dists_basis = self.dist_basis(pairwise_distance(xs,xs))
-            *batch_dims, n_elec, n_elec, basis_dim = dists_basis.shape
-            c_i, c_j, c_shape = conv_indexing(n_elec, n_elec, batch_dims)
-            dists_basis = dists_basis[..., c_i, c_j, :]
-            Ws = interaction(dists_basis)
-            zs = (Ws.view(*c_shape) * (xs[:, c_j].view(*c_shape)-xs[:,:,None,:])).sum(dim=2)
-            xs = debug[i + 1] = xs + zs
-        return xs
+        
+        t = []
+        for xs in [rs[:,:self.n_up].clone(),rs[:,self.n_up:].clone()]:
+            for i, interaction in enumerate(self.interactions):
+                dists_basis = self.dist_basis(pairwise_distance(xs,xs))
+                *batch_dims, n_elec, n_elec, basis_dim = dists_basis.shape
+                c_i, c_j, c_shape = conv_indexing(n_elec, n_elec, batch_dims)
+                dists_basis = dists_basis[..., c_i, c_j, :]
+                Ws = interaction(dists_basis)
+                ys = (Ws.view(*c_shape) * (xs[:, c_j].view(*c_shape)-xs[:,:,None,:])).sum(dim=2)
+                xs = debug[i] = xs + ys
+            t.append(xs)
+        return torch.cat(t,dim=1)
     
 
 
