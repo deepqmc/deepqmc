@@ -2,8 +2,8 @@ import numpy as np
 import torch
 from torch import nn
 
-from ..utils import NULL_DEBUG, nondiag
-from .base import SSP, get_log_dnn
+from ..utils import NULL_DEBUG
+from .base import SSP, get_log_dnn,conv_indexing
 
 
 class ZeroDiagKernel(nn.Module):
@@ -57,7 +57,7 @@ class ElectronicSchnet(nn.Module):
         # from a matrix with dimensions (n_elec, n_all), where n_all = n_elec +
         # n_nuclei, (c_i, c_j) select all electronic pairs excluding the
         # diagonal and all electron-nucleus pairs
-        c_i, c_j, c_shape = self._conv_indexing(n_elec, n_all, batch_dims)
+        c_i, c_j, c_shape = conv_indexing(n_elec, n_all, batch_dims)
         dists_basis = dists_basis[..., c_i, c_j, :]
         xs = debug[0] = self.embedding_elec.clone().expand(*batch_dims, -1, -1)
         for i, interaction in enumerate(self.interactions):
@@ -68,10 +68,4 @@ class ElectronicSchnet(nn.Module):
             xs = debug[i + 1] = xs + interaction.embed_out(zs)
         return xs
 
-    @staticmethod
-    def _conv_indexing(n_elec, n_all, batch_dims):
-        i, j = np.mask_indices(n_all, nondiag)
-        n = n_elec * (n_all - 1)
-        i, j = i[:n], j[:n]
-        shape = (*batch_dims, n_elec, n_all - 1, -1)
-        return i, j, shape
+
