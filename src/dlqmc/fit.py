@@ -27,6 +27,7 @@ def fit_wfnet(
     sample_gen,
     correlated_sampling=True,
     clip_grad=None,
+    acc_grad=1,
     writer=None,
     start=0,
     debug=NULL_DEBUG,
@@ -44,14 +45,18 @@ def fit_wfnet(
         if writer:
             writer.add_scalar('loss', loss, step)
             writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
-            writer.add_scalar('E_loc/var', Es_loc.var(), step)
+            writer.add_scalar('E_loc/var', Es_loc.var(), step)            
             for label, value in wfnet.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
         loss.backward()
+        
         if clip_grad:
             clip_grad_norm_(wfnet.parameters(), clip_grad)
-        opt.step()
-        opt.zero_grad()
+        
+        if (step+1)%acc_grad==0:
+        	opt.step()
+        	opt.zero_grad()
+        	
         d['state_dict'] = state_dict_copy(wfnet)
         if scheduler and (step + 1) % epoch_size == 0:
             scheduler.step()
@@ -64,13 +69,14 @@ def wfnet_fit_driver(
     n_epochs,
     n_sampling_steps,
     batch_size=10_000,
-    n_discard=50,
+    n_discard=0,
+    n_decorrelate=0,
     range_sampling=range,
     range_training=range,
 ):
     for _ in samplings:
         rs, psis, _ = samples_from(
-            sampler, range_sampling(n_sampling_steps), n_discard=n_discard
+            sampler, range_sampling(n_sampling_steps), n_discard=n_discard, n_decorrelate=n_decorrelate
         )
         samples_ds = TensorDataset(rs.flatten(end_dim=1), psis.flatten(end_dim=1))
         rs_dl = DataLoader(samples_ds, batch_size=batch_size, shuffle=True)
@@ -79,8 +85,8 @@ def wfnet_fit_driver(
             yield rs, psis
 
 
-def wfnet_fit_driver_simple(sampler, *, samplings, n_sampling_steps):
+def wfnet_fit_driver_simple(sampler, *, samplings, n_sampling_steps,n_discard=0,n_decorrelate=0):
     for _ in samplings:
-        rs, psis, _ = samples_from(sampler, range(n_sampling_steps))
+        rs, psis, _ = samples_from(sampler, range(n_sampling_steps), n_discard=n_discard, n_decorrelate=n_decorrelate)
         samples_ds = TensorDataset(rs.flatten(end_dim=1), psis.flatten(end_dim=1))
         yield from DataLoader(samples_ds, batch_size=len(samples_ds), shuffle=True)

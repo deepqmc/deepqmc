@@ -60,8 +60,8 @@ def metropolis(wf, rs, *, stepsize):
         assign_where((rs,), (rs_new,), accepted)
 
 
-def samples_from(sampler, steps, *, n_discard=0):
-    rs, psis, infos = zip(*(step for step, i in zip(sampler, steps) if i >= n_discard))
+def samples_from(sampler, steps, *, n_discard=0, n_decorrelate=0):
+    rs, psis, infos = zip(*(step for step, i in zip(sampler, steps) if (i >= n_discard)&(i%(n_decorrelate+1)==0)))
     return torch.stack(rs, dim=1), torch.stack(psis, dim=1), pd.DataFrame(infos)
 
 
