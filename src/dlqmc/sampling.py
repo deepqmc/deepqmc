@@ -91,8 +91,8 @@ def take(a,n):
     return np.random.permutation(np.concatenate(l))
 
 def sample_start(geom,n_walker,n_electrons,var=1,cuda=True):
-    ind = np.array([take(np.repeat(np.arange(0,len(hn._charges)),(hn._charges.numpy().astype(int))),n_electrons)for i in range(n_walker)])
-    pos=torch.randn(n_walker,n_electrons,3)*var+torch.from_numpy(hn.coords[None,:,:].numpy().take(ind,axis=1)).view(-1,n_electrons,3)
+    ind = np.array([take(np.repeat(np.arange(0,len(geom._charges)),(geom._charges.numpy().astype(int))),n_electrons)for i in range(n_walker)])
+    pos=torch.randn(n_walker,n_electrons,3)*var+torch.from_numpy(geom.coords[None,:,:].numpy().take(ind,axis=1)).view(-1,n_electrons,3)
     if cuda:
         return pos.cuda()
     else:
