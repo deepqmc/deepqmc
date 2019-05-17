@@ -80,6 +80,23 @@ def langevin_monte_carlo(wf, rs, *, tau, cutoff=1.0):
         ).sum(dim=(-1, -2))
         Ps_acc = torch.exp(log_G_ratios) * psis_new ** 2 / psis ** 2
         accepted = Ps_acc > torch.rand_like(Ps_acc)
+        
+        
+def take(a,n):
+    l=[]
+    while n>len(a):
+        n=n-len(a)
+        l.append(np.random.choice(a,len(a),replace=False))
+    l.append(np.random.choice(a,n,replace=False))
+    return np.random.permutation(np.concatenate(l))
+
+def sample_start(geom,n_walker,n_electrons,var=1,cuda=True):
+    ind = np.array([take(np.repeat(np.arange(0,len(hn._charges)),(hn._charges.numpy().astype(int))),n_electrons)for i in range(n_walker)])
+    pos=torch.randn(n_walker,n_electrons,3)*var+torch.from_numpy(hn.coords[None,:,:].numpy().take(ind,axis=1)).view(-1,n_electrons,3)
+    if cuda:
+        return pos.cuda()
+    else:
+        return pos
         info = {'acceptance': accepted.type(torch.int).sum().item() / rs.shape[0]}
         yield rs.clone(), psis.clone(), info
         assign_where((rs, psis, forces), (rs_new, psis_new, forces_new), accepted)
