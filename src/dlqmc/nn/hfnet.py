@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 import torch
 from torch import nn
@@ -10,14 +12,16 @@ from .gto import GTOBasis
 
 
 class HFNet(BaseWFNet):
-    def __init__(self, geom, n_up, n_down, basis):
+    def __init__(self, geom, n_up, n_down, basis, mo_factory=None):
+        mo_factory = mo_factory or partial(nn.Linear, bias=False)
         super().__init__()
         self.n_up, self.n_down = n_up, n_down
         self.register_geom(geom)
         self.basis = basis
-        self.mo = nn.Linear(basis.dim, max(n_up, n_down), bias=False)
+        self.mo = mo_factory(basis.dim, max(n_up, n_down))
 
     def init_from_pyscf(self, mf):
+        assert isinstance(self.mo, nn.Linear)
         mo_coeff = mf.mo_coeff.copy()
         if mf.mol.cart:
             mo_coeff *= np.sqrt(np.diag(mf.mol.intor('int1e_ovlp_cart')))[:, None]
