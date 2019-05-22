@@ -12,8 +12,10 @@ def loss_local_energy(Es_loc, weights, E_ref=None, p=1):
     ws, w_mean = (weights, weights.mean()) if weights is not None else (1.0, 1.0)
     E0 = E_ref if E_ref is not None else (Es_loc * ws).mean() / w_mean
     return (ws * (Es_loc - E0).abs() ** p).mean() / w_mean
-
-
+    
+def loss_least_squares(y_pred,y_true):
+    return ((y_pred-y_true)**2).mean()
+    
 def fit_wfnet_multi(wfnet, loss_funcs, opts, gen_factory, gen_kwargs, writers):
     for loss_func, opt, kwargs, writer in zip(loss_funcs, opts, gen_kwargs, writers):
         with writer:
@@ -90,3 +92,45 @@ def wfnet_fit_driver_simple(sampler, *, samplings, n_sampling_steps,n_discard=0,
         rs, psis, _ = samples_from(sampler, range(n_sampling_steps), n_discard=n_discard, n_decorrelate=n_decorrelate)
         samples_ds = TensorDataset(rs.flatten(end_dim=1), psis.flatten(end_dim=1))
         yield from DataLoader(samples_ds, batch_size=len(samples_ds), shuffle=True)
+        
+        
+def fit_wfnet_supervised(
+    fit_net,
+    true_net,
+    loss_func,
+    opt,
+    sample_gen,
+    correlated_sampling=True,
+    acc_grad=1,
+    writer=None,
+    start=0,
+    debug=NULL_DEBUG,
+    scheduler=None,
+    epoch_size=100,
+):
+    for step, (rs, psi0s) in enumerate(sample_gen, start=start):
+        d = debug[step]
+        d['psi0s'], d['rs'] = psi0s, rs
+        
+        psis_fit = fit_net(rs)
+        psis_true = true_net(rs)
+        
+        loss = loss_func(psis_fit, psis_true)
+        
+        if writer:
+            writer.add_scalar('loss', loss, step)         
+            for label, value in fit_net.tracked_parameters():
+                writer.add_scalar(f'param/{label}', value, step)
+
+        loss.backward()
+        
+        if (step+1)%acc_grad==0:
+            opt.step()
+            opt.zero_grad()
+
+        d['state_dict'] = state_dict_copy(fit_net)
+        
+        if scheduler and (step + 1) % epoch_size == 0:
+            scheduler.step()
+
+
