@@ -18,7 +18,14 @@ def get_flat_mesh(bounds, npts, device=None):
 
 
 def plot_func(
-    func, bounds, density=0.02, x_line=False, is_torch=True, device=None, **kwargs
+    func,
+    bounds,
+    density=0.02,
+    x_line=False,
+    is_torch=True,
+    device=None,
+    double=False,
+    **kwargs,
 ):
     n_pts = int((bounds[1] - bounds[0]) / density)
     x = torch.linspace(bounds[0], bounds[1], n_pts)
@@ -26,8 +33,11 @@ def plot_func(
         x = torch.cat([x[:, None], x.new_zeros((n_pts, 2))], dim=1)
     if not is_torch:
         x = x.numpy()
-    elif device:
-        x = x.to(device)
+    else:
+        if device:
+            x = x.to(device)
+        if double:
+            x = x.double()
     y = func(x)
     if is_torch:
         x = x.cpu().numpy()
