@@ -17,32 +17,35 @@ def get_cartesian_angulars(l):
 
 
 class GTOShell(nn.Module):
-    def __init__(self, center, l, coeffs, zetas):
+    def __init__(self, l, coeffs, zetas):
         super().__init__()
         self.ls = torch.tensor(get_cartesian_angulars(l))
-        self.register_buffer('center', center)
         anorms = 1 / np.sqrt(factorial2(2 * self.ls - 1).prod(-1))
         self.register_buffer('anorms', torch.tensor(anorms).float())
         rnorms = (2 * zetas / np.pi) ** (3 / 4) * (4 * zetas) ** (l / 2)
         self.register_buffer('coeffs', rnorms * coeffs)
         self.register_buffer('zetas', zetas)
 
-    def extra_repr(self):
-        return f'l={self.ls[0][0]}, n_primitive={len(self.zetas)}'
+    @property
+    def l(self):
+        return self.ls[0][0]
 
-    def forward(self, rs):
-        xs = rs - self.center
-        eps = xs.new_tensor(100 * torch.finfo(xs.dtype).eps)
-        xs = torch.where(xs.abs() < eps, xs + eps * xs.sign(), xs)
-        xs_sq = (xs ** 2).sum(dim=-1)
-        angulars = pow_int(xs[:, None, :], self.ls).prod(dim=-1)
-        radials = (self.coeffs * torch.exp(-self.zetas * xs_sq[:, None])).sum(dim=-1)
-        return self.anorms * angulars * radials[:, None]
+    def extra_repr(self):
+        return f'l={self.l}, n_primitive={len(self.zetas)}'
+
+    def forward(self, rs, rs_2):
+        angulars = pow_int(rs[:, None, :], self.ls).prod(dim=-1)
+        exps = torch.exp(-self.zetas * rs_2[:, None])
+        radials = (self.coeffs * exps).sum(dim=-1)
+        phis = self.anorms * angulars * radials[:, None]
+        return phis
 
 
 class GTOBasis(nn.Module):
-    def __init__(self, shells):
+    def __init__(self, centers, shells):
         super().__init__()
+        self.register_buffer('centers', centers)
+        self.idxs, shells = zip(*shells)
         self.shells = nn.ModuleList(shells)
 
     @property
@@ -53,15 +56,23 @@ class GTOBasis(nn.Module):
     def from_pyscf(cls, mol):
         if not mol.cart:
             raise DLQMCError('GTOBasis supports only Cartesian basis sets')
+        centers = torch.tensor(mol.atom_coords()).float()
         shells = []
         for i in range(mol.nbas):
             l = mol.bas_angular(i)
-            center = torch.tensor(mol.bas_coord(i)).float()
+            idx = mol.bas_atom(i)
             zetas = torch.tensor(mol.bas_exp(i)).float()
             coeff_sets = torch.tensor(mol.bas_ctr_coeff(i).T).float()
             for coeffs in coeff_sets:
-                shells.append(GTOShell(center, l, coeffs, zetas))
-        return cls(shells)
+                shells.append((idx, GTOShell(l, coeffs, zetas))
+        return cls(centers, shells)
 
     def forward(self, rs):
-        return torch.cat([sh(rs) for sh in self.shells], dim=-1)
+        rs = rs[:, None, :] - self.centers
+        eps = rs.new_tensor(100 * torch.finfo(rs.dtype).eps)
+        rs = torch.where(rs.abs() < eps, rs + eps * rs.sign(), rs)
+        rs_2 = (rs ** 2).sum(dim=-1)
+        shells = [
+            sh(rs[:, idx], rs_2[:, idx]) for idx, sh in zip(self.idxs, self.shells)
+        ]
+        return torch.cat(shells, dim=-1)
