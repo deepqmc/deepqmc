@@ -42,7 +42,7 @@ class HFNet(BaseWFNet):
         wf.init_from_pyscf(mf)
         return wf
 
-    def __call__(self, rs, debug=NULL_DEBUG):
+    def forward(self, rs, debug=NULL_DEBUG):
         batch_dim, n_elec = rs.shape[:2]
         xs = debug['aos'] = self.basis(rs.flatten(end_dim=1)).view(
             batch_dim, n_elec, -1
