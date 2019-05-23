@@ -5,7 +5,7 @@ from pyscf import dft, gto, scf
 from pytest import approx
 from torch.testing import assert_allclose
 
-from dlqmc.nn import HFNet
+from dlqmc.nn import HFNet, pairwise_diffs
 from dlqmc.pyscfext import eval_ao_normed
 
 
@@ -39,7 +39,9 @@ def test_eval_ao_normed(mol, grids):
 
 def test_torch_gto_aos(gtowf, grids):
     coords, weights = map(torch.tensor, (grids.coords, grids.weights))
-    ovlps = (gtowf.basis(coords) ** 2 * weights[:, None]).sum(dim=0)
+    ovlps = (
+        gtowf.basis(pairwise_diffs(coords, gtowf.coords)) ** 2 * weights[:, None]
+    ).sum(dim=0)
     assert_allclose(ovlps, 1)
 
 

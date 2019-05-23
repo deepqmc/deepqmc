@@ -1,7 +1,7 @@
 import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 from ..geom import Geomable
 from ..utils import Debuggable
@@ -15,6 +15,18 @@ def pairwise_self_distance(coords):
     i, j = np.triu_indices(coords.shape[1], k=1)
     diffs = coords[..., :, None, :] - coords[..., None, :, :]
     return diffs[..., i, j, :].norm(dim=-1)
+
+
+def pairwise_diffs(coords1, coords2, axes_offset=True):
+    diffs = coords1[..., :, None, :] - coords2[..., None, :, :]
+    if axes_offset:
+        diffs = offset_from_axes(diffs)
+    return torch.cat([diffs, (diffs ** 2).sum(dim=-1, keepdim=True)], dim=-1)
+
+
+def offset_from_axes(rs):
+    eps = rs.new_tensor(100 * torch.finfo(rs.dtype).eps)
+    return torch.where(rs.abs() < eps, rs + eps * rs.sign(), rs)
 
 
 class BaseWFNet(nn.Module, Geomable, Debuggable):

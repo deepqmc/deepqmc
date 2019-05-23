@@ -33,7 +33,8 @@ class GTOShell(nn.Module):
     def extra_repr(self):
         return f'l={self.l}, n_primitive={len(self.zetas)}'
 
-    def forward(self, rs, rs_2):
+    def forward(self, rs):
+        rs, rs_2 = rs[..., :3], rs[..., 3]
         angulars = pow_int(rs[:, None, :], self.ls).prod(dim=-1)
         exps = torch.exp(-self.zetas * rs_2[:, None])
         radials = (self.coeffs * exps).sum(dim=-1)
@@ -52,6 +53,9 @@ class GTOBasis(nn.Module):
     def dim(self):
         return sum(len(sh.ls) for sh in self.shells)
 
+    def items(self):
+        return zip(self.center_idxs, self.shells)
+
     @classmethod
     def from_pyscf(cls, mol):
         if not mol.cart:
@@ -67,12 +71,6 @@ class GTOBasis(nn.Module):
                 shells.append((idx, GTOShell(l, coeffs, zetas))
         return cls(centers, shells)
 
-    def forward(self, rs):
-        rs = rs[:, None, :] - self.centers
-        eps = rs.new_tensor(100 * torch.finfo(rs.dtype).eps)
-        rs = torch.where(rs.abs() < eps, rs + eps * rs.sign(), rs)
-        rs_2 = (rs ** 2).sum(dim=-1)
-        shells = [
-            sh(rs[:, idx], rs_2[:, idx]) for idx, sh in zip(self.idxs, self.shells)
-        ]
+    def forward(self, diffs):
+        shells = [sh(diffs[:, idx]) for idx, sh in self.items()]
         return torch.cat(shells, dim=-1)

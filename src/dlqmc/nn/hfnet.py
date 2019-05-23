@@ -7,7 +7,7 @@ from torch import nn
 from ..geom import Geometry
 from ..utils import NULL_DEBUG
 from .anti import eval_slater
-from .base import BaseWFNet
+from .base import BaseWFNet, pairwise_diffs
 from .gto import GTOBasis
 
 
@@ -44,16 +44,18 @@ class HFNet(BaseWFNet):
 
     def forward(self, rs, debug=NULL_DEBUG):
         batch_dim, n_elec = rs.shape[:2]
-        xs = debug['aos'] = self.basis(rs.flatten(end_dim=1)).view(
-            batch_dim, n_elec, -1
-        )
-        xs = debug['slaters'] = self.mo(xs)
+        assert n_elec == self.n_up + self.n_down
+        xs = self.orbitals(rs.flatten(end_dim=1), debug=debug)
+        xs = debug['slaters'] = xs.view(batch_dim, n_elec, n_elec)
         det_up = debug['det_up'] = eval_slater(xs[:, : self.n_up, : self.n_up])
         det_down = debug['det_down'] = eval_slater(xs[:, self.n_up :, : self.n_down])
         return det_up * det_down
 
-    def orbitals(self, rs):
-        return self.mo(self.basis(rs))
+    def orbitals(self, rs, debug=NULL_DEBUG):
+        rs = pairwise_diffs(rs, self.coords)
+        xs = debug['aos'] = self.basis(rs)
+        mos = self.mo(xs)
+        return mos
 
     def density(self, rs):
         xs = self.orbitals(rs)
