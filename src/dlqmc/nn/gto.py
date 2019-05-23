@@ -26,6 +26,9 @@ class GTOShell(nn.Module):
         self.register_buffer('coeffs', rnorms * coeffs)
         self.register_buffer('zetas', zetas)
 
+    def __len__(self):
+        return len(self.ls)
+
     @property
     def l(self):
         return self.ls[0][0]
@@ -46,7 +49,7 @@ class GTOBasis(nn.Module):
     def __init__(self, centers, shells):
         super().__init__()
         self.register_buffer('centers', centers)
-        self.idxs, shells = zip(*shells)
+        self.center_idxs, shells = zip(*shells)
         self.shells = nn.ModuleList(shells)
 
     @property
@@ -64,11 +67,11 @@ class GTOBasis(nn.Module):
         shells = []
         for i in range(mol.nbas):
             l = mol.bas_angular(i)
-            idx = mol.bas_atom(i)
+            i_atom = mol.bas_atom(i)
             zetas = torch.tensor(mol.bas_exp(i)).float()
             coeff_sets = torch.tensor(mol.bas_ctr_coeff(i).T).float()
             for coeffs in coeff_sets:
-                shells.append((idx, GTOShell(l, coeffs, zetas))
+                shells.append((i_atom, GTOShell(l, coeffs, zetas)))
         return cls(centers, shells)
 
     def forward(self, diffs):
