@@ -36,6 +36,16 @@ class GTOShell(nn.Module):
     def extra_repr(self):
         return f'l={self.l}, n_primitive={len(self.zetas)}'
 
+    def get_cusp_info(self, rc):
+        assert self.l == 0
+        exps = torch.exp(-self.zetas * rc ** 2)
+        phi_0 = self.coeffs.sum()
+        phi_rc = (self.coeffs * exps).sum()
+        czes = self.coeffs * self.zetas * exps
+        dphi_rc_dr = -2 * rc * czes.sum()
+        d2phi_rc_dr2 = 2 * (czes * (2 * self.zetas * rc ** 2 - 1)).sum()
+        return torch.stack([phi_0, phi_rc, dphi_rc_dr, d2phi_rc_dr2])
+
     def forward(self, rs):
         rs, rs_2 = rs[..., :3], rs[..., 3]
         angulars = pow_int(rs[:, None, :], self.ls).prod(dim=-1)
@@ -51,13 +61,24 @@ class GTOBasis(nn.Module):
         self.register_buffer('centers', centers)
         self.center_idxs, shells = zip(*shells)
         self.shells = nn.ModuleList(shells)
+        self.s_center_idxs = torch.tensor(
+            [idx for idx, sh in self.items() if sh.l == 0]
+        )
+        self.is_s_type = torch.cat(
+            [
+                (torch.ones if sh.l == 0 else torch.zeros)(len(sh), dtype=torch.uint8)
+                for sh in self.shells
+            ]
+        )
 
-    @property
-    def dim(self):
-        return sum(len(sh.ls) for sh in self.shells)
+    def __len__(self):
+        return sum(map(len, self.shells))
 
     def items(self):
         return zip(self.center_idxs, self.shells)
+
+    def get_cusp_info(self, rc):
+        return torch.stack([sh.get_cusp_info(rc) for sh in self.shells if sh.l == 0])
 
     @classmethod
     def from_pyscf(cls, mol):
