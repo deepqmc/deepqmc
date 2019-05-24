@@ -11,7 +11,7 @@ from .gto import GTOBasis
 
 
 class HFNet(BaseWFNet):
-    def __init__(self, geom, n_up, n_down, basis, cusp_correction=None):
+    def __init__(self, geom, n_up, n_down, basis, cusp_correction=True, rc_scaling=1.0):
         super().__init__()
         self.n_up, self.n_down = n_up, n_down
         self.register_geom(geom)
@@ -19,10 +19,9 @@ class HFNet(BaseWFNet):
         n_orb = max(n_up, n_down)
         self.mo_coeff = nn.Linear(len(basis), n_orb, bias=False)
         if cusp_correction:
-            self.cusp_corr = CuspCorrection(geom.charges, n_orb, cusp_correction)
-            self.register_buffer(
-                'basis_cusp_info', basis.get_cusp_info(cusp_correction).t()
-            )
+            rc = rc_scaling / self.charges
+            self.cusp_corr = CuspCorrection(geom.charges, n_orb, rc)
+            self.register_buffer('basis_cusp_info', basis.get_cusp_info(rc).t())
         else:
             self.cusp_corr = None
 
@@ -35,7 +34,7 @@ class HFNet(BaseWFNet):
         )
 
     @classmethod
-    def from_pyscf(cls, mf, cusp_correction=None):
+    def from_pyscf(cls, mf, cusp_correction=True):
         n_up = (mf.mo_occ >= 1).sum()
         n_down = (mf.mo_occ == 2).sum()
         assert (mf.mo_occ[:n_down] == 2).all()

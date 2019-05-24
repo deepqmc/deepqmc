@@ -77,8 +77,10 @@ class GTOBasis(nn.Module):
     def items(self):
         return zip(self.center_idxs, self.shells)
 
-    def get_cusp_info(self, rc):
-        return torch.stack([sh.get_cusp_info(rc) for sh in self.shells if sh.l == 0])
+    def get_cusp_info(self, rcs):
+        return torch.stack(
+            [sh.get_cusp_info(rcs[idx]) for idx, sh in self.items() if sh.l == 0]
+        )
 
     @classmethod
     def from_pyscf(cls, mol):

@@ -7,7 +7,7 @@ class CuspCorrection(nn.Module):
         super().__init__()
         self.register_buffer('charges', charges)
         self.shifts = nn.Parameter(torch.zeros(len(charges), n_orbitals))
-        self.rc = rc
+        self.register_buffer('rc', rc)
 
     def fit_cusp_poly(self, phi_gto_boundary, mos0):
         phi0, phi, dphi, d2phi = phi_gto_boundary
@@ -23,12 +23,12 @@ class CuspCorrection(nn.Module):
         X3 = d2phi / phi_m_C
         X4 = -self.charges[:, None] * (mos0 + self.shifts) / (phi0 + self.shifts - C)
         X5 = torch.log(torch.abs(phi0 + self.shifts - C))
-        return C, sgn, fit_cusp_poly(self.rc, X1, X2, X3, X4, X5)
+        return C, sgn, fit_cusp_poly(self.rc[:, None], X1, X2, X3, X4, X5)
 
     def forward(self, rs, phi_gto_boundary, mos0):
         C, sgn, alphas = self.fit_cusp_poly(phi_gto_boundary, mos0)
         rs_2_nearest, center_idx = rs[..., 3].min(dim=-1)
-        mask = rs_2_nearest < self.rc ** 2
+        mask = rs_2_nearest < self.rc[center_idx] ** 2
         center_idx = center_idx[mask]
         rs_1 = rs_2_nearest[mask].sqrt()
         C, sgn, *alphas = torch.stack([C, sgn, *alphas])[:, center_idx]
