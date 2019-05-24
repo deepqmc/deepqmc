@@ -3,7 +3,7 @@ import torch
 from torch import nn
 
 from ..utils import NULL_DEBUG
-from .base import SSP, get_log_dnn,conv_indexing
+from .base import SSP, conv_indexing, get_log_dnn
 
 
 class ZeroDiagKernel(nn.Module):
@@ -67,5 +67,3 @@ class ElectronicSchnet(nn.Module):
             zs = (Ws.view(*c_shape) * zs[:, c_j].view(*c_shape)).sum(dim=2)
             xs = debug[i + 1] = xs + interaction.embed_out(zs)
         return xs
-
-

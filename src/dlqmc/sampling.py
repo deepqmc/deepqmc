@@ -61,7 +61,13 @@ def metropolis(wf, rs, *, stepsize):
 
 
 def samples_from(sampler, steps, *, n_discard=0, n_decorrelate=0):
-    rs, psis, infos = zip(*(step for step, i in zip(sampler, steps) if (i >= n_discard)&(i%(n_decorrelate+1)==0)))
+    rs, psis, infos = zip(
+        *(
+            step
+            for step, i in zip(sampler, steps)
+            if (i >= n_discard) & (i % (n_decorrelate + 1) == 0)
+        )
+    )
     return torch.stack(rs, dim=1), torch.stack(psis, dim=1), pd.DataFrame(infos)
 
 
@@ -83,18 +89,33 @@ def langevin_monte_carlo(wf, rs, *, tau, cutoff=1.0):
         info = {'acceptance': accepted.type(torch.int).sum().item() / rs.shape[0]}
         yield rs.clone(), psis.clone(), info
         assign_where((rs, psis, forces), (rs_new, psis_new, forces_new), accepted)
-        
-def take(a,n):
-    l=[]
-    while n>len(a):
-        n=n-len(a)
-        l.append(np.random.choice(a,len(a),replace=False))
-    l.append(np.random.choice(a,n,replace=False))
+
+
+def take(a, n):
+    l = []
+    while n > len(a):
+        n = n - len(a)
+        l.append(np.random.choice(a, len(a), replace=False))
+    l.append(np.random.choice(a, n, replace=False))
     return np.random.permutation(np.concatenate(l))
 
-def sample_start(geom,n_walker,n_electrons,var=1,cuda=True):
-    ind = np.array([take(np.repeat(np.arange(0,len(geom._charges)),(geom._charges.numpy().astype(int))),n_electrons)for i in range(n_walker)])
-    pos=torch.randn(n_walker,n_electrons,3)*var+torch.from_numpy(geom.coords[None,:,:].numpy().take(ind,axis=1)).view(-1,n_electrons,3)
+
+def sample_start(geom, n_walker, n_electrons, var=1, cuda=True):
+    ind = np.array(
+        [
+            take(
+                np.repeat(
+                    np.arange(0, len(geom._charges)),
+                    (geom._charges.numpy().astype(int)),
+                ),
+                n_electrons,
+            )
+            for i in range(n_walker)
+        ]
+    )
+    pos = torch.randn(n_walker, n_electrons, 3) * var + torch.from_numpy(
+        geom.coords[None, :, :].numpy().take(ind, axis=1)
+    ).view(-1, n_electrons, 3)
     if cuda:
         return pos.cuda()
     else:

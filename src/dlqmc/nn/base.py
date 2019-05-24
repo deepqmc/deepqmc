@@ -3,9 +3,11 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from dlqmc.utils import nondiag
+
 from ..geom import Geomable
 from ..utils import Debuggable
-from dlqmc.utils import nondiag
+
 
 def pairwise_distance(coords1, coords2):
     return (coords1[..., :, None, :] - coords2[..., None, :, :]).norm(dim=-1)
@@ -140,10 +142,11 @@ class Identity(nn.Module):
 
     def forward(self, x):
         return x
-        
+
+
 def conv_indexing(n_elec, n_all, batch_dims):
-        i, j = np.mask_indices(n_all, nondiag)
-        n = n_elec * (n_all - 1)
-        i, j = i[:n], j[:n]
-        shape = (*batch_dims, n_elec, n_all - 1, -1)
-        return i, j, shape
+    i, j = np.mask_indices(n_all, nondiag)
+    n = n_elec * (n_all - 1)
+    i, j = i[:n], j[:n]
+    shape = (*batch_dims, n_elec, n_all - 1, -1)
+    return i, j, shape

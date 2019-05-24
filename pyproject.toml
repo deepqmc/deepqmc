@@ -38,9 +38,8 @@ pysnooper = "^0.0.12"
 
 
 [tool.black]
-py36 = true
+target-version = ["py37"]
 skip-string-normalization = true
-skip-numeric-underscore-normalization = true
 
 [build-system]
 requires = ["poetry>=0.12"]
