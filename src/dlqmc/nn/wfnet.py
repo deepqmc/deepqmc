@@ -28,7 +28,7 @@ class WFNet(BaseWFNet):
     ):
         super().__init__()
         self.register_geom(geom)
-        self.dist_basis = DistanceBasis(basis_dim, **dctsel(kwargs, 'cutoff'))
+        self.dist_basis = DistanceBasis(basis_dim, **dctsel(kwargs, 'cutoff envelope'))
         self.asymp_nuc = NuclearAsymptotic(
             self.charges, ion_pot, **dctsel(kwargs, 'alpha')
         )
