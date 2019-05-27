@@ -28,7 +28,8 @@ def pairwise_diffs(coords1, coords2, axes_offset=True):
 
 def offset_from_axes(rs):
     eps = rs.new_tensor(100 * torch.finfo(rs.dtype).eps)
-    return torch.where(rs.abs() < eps, rs + eps * rs.sign(), rs)
+    offset = torch.where(rs < 0, -eps, eps)
+    return torch.where(rs.abs() < eps, rs + offset, rs)
 
 
 class BaseWFNet(nn.Module, Geomable, Debuggable):
