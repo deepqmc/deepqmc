@@ -50,7 +50,7 @@ class HFNet(BaseWFNet):
         batch_dim, n_elec = rs.shape[:2]
         assert n_elec == self.n_up + self.n_down
         xs = self.orbitals(rs.flatten(end_dim=1), debug=debug)
-        xs = debug['slaters'] = xs.view(batch_dim, n_elec, n_elec)
+        xs = debug['slaters'] = xs.view(batch_dim, n_elec, -1)
         det_up = debug['det_up'] = eval_slater(xs[:, : self.n_up, : self.n_up])
         det_down = debug['det_down'] = eval_slater(xs[:, self.n_up :, : self.n_down])
         return det_up * det_down
