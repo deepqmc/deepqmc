@@ -25,6 +25,7 @@ def plot_func(
     is_torch=True,
     device=None,
     double=False,
+    ax=None,
     **kwargs,
 ):
     n_pts = int((bounds[1] - bounds[0]) / density)
@@ -44,7 +45,8 @@ def plot_func(
         y = y.detach().cpu().numpy()
     if x_line:
         x = x[:, 0]
-    return plt.plot(x, y, **kwargs)
+    ax = ax or plt.gca()
+    return ax.plot(x, y, **kwargs)
 
 
 def plot_func_2d(func, bounds, density=0.02, xy_plane=False, device=None):
