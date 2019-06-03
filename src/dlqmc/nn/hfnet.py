@@ -37,7 +37,7 @@ class HFNet(BaseWFNet):
         else:
             self.orbnet = None
         if cusp_correction:
-            rc = rc_scaling / self.charges
+            rc = rc_scaling / self.charges.float()
             self.cusp_corr = CuspCorrection(geom.charges, n_orb, rc)
             self.register_buffer('basis_cusp_info', basis.get_cusp_info(rc).t())
         else:
@@ -100,13 +100,14 @@ class HFNet(BaseWFNet):
             corrected, center_idx, phi_cusped = self.cusp_corr(
                 diffs_nuc, phi_gto_boundary, mos0
             )
-            aos = aos[corrected][:, self.basis.is_s_type]
-            phi_gto = torch.empty_like(phi_cusped)
-            for idx in range(n_atoms):
-                phi_gto[center_idx == idx] = self.mo_coeff_s_type_at(
-                    idx, aos[center_idx == idx][:, self.basis.s_center_idxs == idx]
-                )
-            mos[corrected] = mos[corrected] + phi_cusped - phi_gto
+            if corrected.any():
+                aos = aos[corrected][:, self.basis.is_s_type]
+                phi_gto = torch.empty_like(phi_cusped)
+                for idx in range(n_atoms):
+                    phi_gto[center_idx == idx] = self.mo_coeff_s_type_at(
+                        idx, aos[center_idx == idx][:, self.basis.s_center_idxs == idx]
+                    )
+                mos[corrected] = mos[corrected] + phi_cusped - phi_gto
         return mos
 
     def density(self, rs):
