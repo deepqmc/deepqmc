@@ -65,7 +65,7 @@ def samples_from(sampler, steps, *, n_discard=0, n_decorrelate=0):
         *(
             step
             for step, i in zip(sampler, steps)
-            if (i >= n_discard) & (i % (n_decorrelate + 1) == 0)
+            if i >= n_discard and i % (n_decorrelate + 1) == 0
         )
     )
     return torch.stack(rs, dim=1), torch.stack(psis, dim=1), pd.DataFrame(infos)

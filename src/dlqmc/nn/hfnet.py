@@ -5,21 +5,39 @@ from torch import nn
 from ..geom import Geometry
 from ..utils import NULL_DEBUG
 from .anti import eval_slater
-from .base import BaseWFNet, pairwise_diffs
+from .base import BaseWFNet, DistanceBasis, pairwise_diffs
 from .cusp import CuspCorrection
 from .gto import GTOBasis
 
 
 class HFNet(BaseWFNet):
-    def __init__(self, geom, n_up, n_down, basis, cusp_correction=True, rc_scaling=1.0):
+    def __init__(
+        self,
+        geom,
+        n_up,
+        n_down,
+        basis,
+        orbnet_factory=None,
+        dist_basis_dim=32,
+        dist_basis_cutoff=10.0,
+        cusp_correction=True,
+        rc_scaling=1.0,
+    ):
         super().__init__()
         self.n_up, self.n_down = n_up, n_down
         self.register_geom(geom)
         self.basis = basis
         n_orb = max(n_up, n_down)
         self.mo_coeff = nn.Linear(len(basis), n_orb, bias=False)
+        if orbnet_factory:
+            self.orbnet = orbnet_factory(len(geom) * dist_basis_dim, n_orb)
+            self.dist_basis = DistanceBasis(
+                dist_basis_dim, cutoff=dist_basis_cutoff, envelope='nocusp'
+            )
+        else:
+            self.orbnet = None
         if cusp_correction:
-            rc = rc_scaling / self.charges
+            rc = rc_scaling / self.charges.float()
             self.cusp_corr = CuspCorrection(geom.charges, n_orb, rc)
             self.register_buffer('basis_cusp_info', basis.get_cusp_info(rc).t())
         else:
@@ -34,7 +52,7 @@ class HFNet(BaseWFNet):
         )
 
     @classmethod
-    def from_pyscf(cls, mf, cusp_correction=True):
+    def from_pyscf(cls, mf, **kwargs):
         n_up = (mf.mo_occ >= 1).sum()
         n_down = (mf.mo_occ == 2).sum()
         assert (mf.mo_occ[:n_down] == 2).all()
@@ -42,7 +60,7 @@ class HFNet(BaseWFNet):
         assert (mf.mo_occ[n_up:] == 0).all()
         geom = Geometry(mf.mol.atom_coords().astype('float32'), mf.mol.atom_charges())
         basis = GTOBasis.from_pyscf(mf.mol)
-        wf = cls(geom, n_up, n_down, basis, cusp_correction=cusp_correction)
+        wf = cls(geom, n_up, n_down, basis, **kwargs)
         wf.init_from_pyscf(mf)
         return wf
 
@@ -58,14 +76,17 @@ class HFNet(BaseWFNet):
     def orbitals(self, rs, debug=NULL_DEBUG):
         if self.cusp_corr:
             rs = torch.cat([self.coords, rs])  # need to know MOs at centers
-        rs = pairwise_diffs(rs, self.coords)
-        xs = debug['aos'] = self.basis(rs)
-        mos = self.mo_coeff(xs)
+        diffs_nuc = pairwise_diffs(rs, self.coords)
+        aos = debug['aos'] = self.basis(diffs_nuc)
+        mos = self.mo_coeff(aos)
+        if self.orbnet:
+            dists = diffs_nuc[:, :, 3].sqrt()
+            mos = self.orbnet(mos, self.dist_basis(dists))
         if self.cusp_corr:
             n_atoms = len(self.coords)
-            rs, xs, mos, mos0 = (
-                rs[n_atoms:],
-                xs[n_atoms:],
+            diffs_nuc, aos, mos, mos0 = (
+                diffs_nuc[n_atoms:],
+                aos[n_atoms:],
                 mos[n_atoms:],
                 mos[:n_atoms],
             )
@@ -77,15 +98,16 @@ class HFNet(BaseWFNet):
                 dim=1,
             )
             corrected, center_idx, phi_cusped = self.cusp_corr(
-                rs, phi_gto_boundary, mos0
+                diffs_nuc, phi_gto_boundary, mos0
             )
-            xs = xs[corrected][:, self.basis.is_s_type]
-            phi_gto = torch.empty_like(phi_cusped)
-            for idx in range(n_atoms):
-                phi_gto[center_idx == idx] = self.mo_coeff_s_type_at(
-                    idx, xs[center_idx == idx][:, self.basis.s_center_idxs == idx]
-                )
-            mos[corrected] = mos[corrected] + phi_cusped - phi_gto
+            if corrected.any():
+                aos = aos[corrected][:, self.basis.is_s_type]
+                phi_gto = torch.empty_like(phi_cusped)
+                for idx in range(n_atoms):
+                    phi_gto[center_idx == idx] = self.mo_coeff_s_type_at(
+                        idx, aos[center_idx == idx][:, self.basis.s_center_idxs == idx]
+                    )
+                mos[corrected] = mos[corrected] + phi_cusped - phi_gto
         return mos
 
     def density(self, rs):

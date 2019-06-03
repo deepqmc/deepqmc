@@ -28,14 +28,14 @@ class WFNet(BaseWFNet):
     ):
         super().__init__()
         self.register_geom(geom)
-        self.dist_basis = DistanceBasis(basis_dim, **dctsel(kwargs, 'cutoff'))
+        self.dist_basis = DistanceBasis(basis_dim, **dctsel(kwargs, 'cutoff envelope'))
         self.asymp_nuc = NuclearAsymptotic(
             self.charges, ion_pot, **dctsel(kwargs, 'alpha')
         )
         self.asymp_elec = ElectronicAsymptotic(cusp=cusp) if cusp is not None else None
         n_pairs = n_electrons * len(geom) + n_electrons * (n_electrons - 1) // 2
         self.orbital = get_log_dnn(
-            n_pairs * basis_dim, 1, SSP, n_layers=n_orbital_layers
+            n_pairs * basis_dim, 1, SSP, n_layers=n_orbital_layers, last_bias=False
         )
 
     def tracked_parameters(self):
