@@ -68,7 +68,14 @@ class DistanceBasis(nn.Module):
         )
 
     def extra_repr(self):
-        return f'basis_dim={len(self.mus)}, cutoff={self.cutoff}'
+        return ', '.join(
+            f'{lbl}={val!r}'
+            for lbl, val in [
+                ('basis_dim', len(self.mus)),
+                ('cutoff', self.cutoff),
+                ('envelope', self.envelope),
+            ]
+        )
 
 
 class NuclearAsymptotic(nn.Module):
