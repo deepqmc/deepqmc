@@ -10,7 +10,7 @@ class LUFactError(InfoException):
 class BDet(torch.autograd.Function):
     @staticmethod
     def forward(ctx, Xs):
-        lus, pivots, is_fail = Xs.btrifact_with_info()
+        lus, pivots, is_fail = Xs.lu(get_infos=True)
         is_fail = is_fail == 1
         if is_fail.any():
             idxs = torch.arange(len(Xs))[is_fail]
