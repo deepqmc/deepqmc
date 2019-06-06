@@ -41,4 +41,10 @@ def local_energy(rs, wf, geom=None, create_graph=False, debug=NULL_DEBUG):
     lap_psis, psis = debug['lap_psis'], debug['psis'] = laplacian(
         rs, wf, create_graph=create_graph
     )
-    return -0.5 * lap_psis / psis + Vs_nuc + Vs_el + Es_nuc, psis
+    return (
+        -0.5 * lap_psis / (psis if create_graph else psis.detach())
+        + Vs_nuc
+        + Vs_el
+        + Es_nuc,
+        psis,
+    )
