@@ -19,8 +19,7 @@ def loss_total_energy_indirect(Es_loc, psis, psi0s):
     ws = psis.detach() ** 2 / psi0s ** 2
     ws = ws / ws.mean()
     E0 = (ws * Es_loc).mean()
-    E0_aux = 2 * (ws * psis / psis.detach() * (Es_loc - E0)).mean()
-    return E0, E0_aux
+    return 2 * (ws * psis / psis.detach() * (Es_loc - E0)).mean()
 
 
 def loss_least_squares(y_pred, y_true):
@@ -54,14 +53,13 @@ def fit_wfnet(
             rs, wfnet, create_graph=not indirect
         )
         loss = loss_func(Es_loc, psis, psi0s)
-        loss, loss_aux = loss if indirect else (loss, loss)
         if writer:
             writer.add_scalar('loss', loss, step)
             writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
             writer.add_scalar('E_loc/var', Es_loc.var(), step)
             for label, value in wfnet.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
-        loss_aux.backward()
+        loss.backward()
         if clip_grad:
             clip_grad_norm_(wfnet.parameters(), clip_grad)
         if (step + 1) % acc_grad == 0:
