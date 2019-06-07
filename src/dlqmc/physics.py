@@ -33,18 +33,20 @@ def quantum_force(rs, wf, *, clamp=None):
     return forces, psis
 
 
-def local_energy(rs, wf, geom=None, create_graph=False, debug=NULL_DEBUG):
+def local_energy(
+    rs, wf, geom=None, create_graph=False, keep_graph=None, debug=NULL_DEBUG
+):
     geom = geom or wf.geom
     Es_nuc = debug['Es_nuc'] = nuclear_energy(geom)
     Vs_nuc = debug['Vs_nuc'] = nuclear_potential(rs, geom)
     Vs_el = debug['Vs_el'] = electronic_potential(rs)
     lap_psis, psis = debug['lap_psis'], debug['psis'] = laplacian(
-        rs, wf, create_graph=create_graph
+        rs, wf, create_graph=create_graph, keep_graph=keep_graph
     )
     return (
         -0.5 * lap_psis / (psis if create_graph else psis.detach())
         + Vs_nuc
         + Vs_el
         + Es_nuc,
-        psis,
+        psis if keep_graph else psis.detach(),
     )

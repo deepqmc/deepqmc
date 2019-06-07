@@ -9,13 +9,15 @@ from .utils import NULL_DEBUG, state_dict_copy
 
 
 def loss_local_energy(Es_loc, psis, psi0s, E_ref=None, p=1):
-    ws = psis.detach() ** 2 / psi0s ** 2
+    assert psis.grad_fn is None
+    ws = psis ** 2 / psi0s ** 2
     ws = ws / ws.mean()
     E0 = E_ref if E_ref is not None else (ws * Es_loc).mean()
     return (ws * (Es_loc - E0).abs() ** p).mean()
 
 
 def loss_total_energy_indirect(Es_loc, psis, psi0s):
+    assert Es_loc.grad_fn is None
     ws = psis.detach() ** 2 / psi0s ** 2
     ws = ws / ws.mean()
     E0 = (ws * Es_loc).mean()
@@ -50,7 +52,7 @@ def fit_wfnet(
         d = debug[step]
         d['psi0s'], d['rs'] = psi0s, rs
         Es_loc, psis = d['Es_loc'], d['psis'] = local_energy(
-            rs, wfnet, create_graph=not indirect
+            rs, wfnet, create_graph=not indirect, keep_graph=indirect
         )
         loss = loss_func(Es_loc, psis, psi0s)
         if writer:
