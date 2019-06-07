@@ -52,7 +52,7 @@ class HFNet(BaseWFNet):
         )
 
     @classmethod
-    def from_pyscf(cls, mf, **kwargs):
+    def from_pyscf(cls, mf, init_mos=True, **kwargs):
         n_up = (mf.mo_occ >= 1).sum()
         n_down = (mf.mo_occ == 2).sum()
         assert (mf.mo_occ[:n_down] == 2).all()
@@ -61,7 +61,8 @@ class HFNet(BaseWFNet):
         geom = Geometry(mf.mol.atom_coords().astype('float32'), mf.mol.atom_charges())
         basis = GTOBasis.from_pyscf(mf.mol)
         wf = cls(geom, n_up, n_down, basis, **kwargs)
-        wf.init_from_pyscf(mf)
+        if init_mos:
+            wf.init_from_pyscf(mf)
         return wf
 
     def forward(self, rs, debug=NULL_DEBUG):
