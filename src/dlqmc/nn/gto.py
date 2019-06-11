@@ -66,7 +66,7 @@ class GTOBasis(nn.Module):
         )
         self.is_s_type = torch.cat(
             [
-                (torch.ones if sh.l == 0 else torch.zeros)(len(sh), dtype=torch.uint8)
+                (torch.ones if sh.l == 0 else torch.zeros)(len(sh), dtype=torch.bool)
                 for sh in self.shells
             ]
         )

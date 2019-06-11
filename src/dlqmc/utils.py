@@ -1,3 +1,4 @@
+import time
 from contextlib import contextmanager
 from functools import partial, wraps
 
@@ -183,3 +184,12 @@ def pow_int(xs, exps):
         mask = exps == exp
         zs[..., mask] = xs_expanded[..., mask] ** exp.item()
     return zs
+
+
+@contextmanager
+def timer():
+    now = np.array(time.time())
+    try:
+        yield now
+    finally:
+        now[...] = time.time() - now

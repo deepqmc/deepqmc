@@ -2,7 +2,6 @@ from .anti import LaughlinAnsatz, Odd, PairAntisymmetric
 from .base import (
     SSP,
     DistanceBasis,
-    Identity,
     NuclearAsymptotic,
     get_custom_dnn,
     get_log_dnn,
@@ -24,7 +23,6 @@ __all__ = [
     'GTOShell',
     'HFNet',
     'HanNet',
-    'Identity',
     'LaughlinAnsatz',
     'NuclearAsymptotic',
     'Odd',

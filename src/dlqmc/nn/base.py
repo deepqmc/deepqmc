@@ -150,14 +150,6 @@ class Concat(nn.Module):
         return self.net(xs)
 
 
-class Identity(nn.Module):
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-
-    def forward(self, x):
-        return x
-
-
 def conv_indexing(n_elec, n_all, batch_dims):
     i, j = np.mask_indices(n_all, nondiag)
     n = n_elec * (n_all - 1)
