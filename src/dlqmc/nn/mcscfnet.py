@@ -8,7 +8,7 @@ from .anti import eval_slater
 from .base import BaseWFNet, DistanceBasis, pairwise_diffs
 from .cusp import CuspCorrection
 from .gto import GTOBasis
-	
+
 
 class MCSCFNet(BaseWFNet):
     def __init__(
@@ -62,15 +62,17 @@ class MCSCFNet(BaseWFNet):
         assert n_elec == self.n_up + self.n_down
         xs = self.orbitals(rs.flatten(end_dim=1), debug=debug)
         xs = debug['slaters'] = xs.view(batch_dim, n_elec, self.activeorb)
-        
-        det = 0
-        for coeff,alpha,beta in self.det_list:
-            
-            det_up = debug['det_up'] = eval_slater(xs[:, : self.n_up, alpha])
-            det_down = debug['det_down'] = eval_slater(xs[:, self.n_up :, beta])
-            det = det + coeff * det_up * det_down
-            
-        return det
+
+		re_list = list(zip(*self.det_list))
+        coeff = torch.tensor(re_list[0]).cuda()
+        up_index = np.array(re_list[1]).flatten()
+        down_index = np.array(re_list[2]).flatten()
+
+        det_up = eval_slater(xs[:, : self.n_up, up_index].view(-1,self.n_up,self.n_up)).view(batch_dim,-1)
+        det_down = eval_slater(xs[:, self.n_up :, down_index].view(-1,self.n_down,self.n_down)).view(batch_dim,-1)
+
+        return torch.sum(coeff * det_up * det_down,dim=-1)
+
 
     def orbitals(self, rs, debug=NULL_DEBUG):
         if self.cusp_corr:
@@ -78,7 +80,7 @@ class MCSCFNet(BaseWFNet):
         diffs_nuc = pairwise_diffs(rs, self.coords)
         aos = debug['aos'] = self.basis(diffs_nuc)
         mos = self.mo_coeff(aos)
-        
+
         if self.cusp_corr:
             n_atoms = len(self.coords)
             diffs_nuc, aos, mos, mos0 = (
