@@ -109,7 +109,18 @@ class MCSCFNet(BaseWFNet):
                 mos[corrected] = mos[corrected] + phi_cusped - phi_gto
         return mos
 
-
+	def density(self, rs):
+		            
+		    xs = self.orbitals(rs)
+		    bs = rs.shape[0]
+		    
+		    re_list = list(zip(*self.det_list))
+		    coeff = torch.tensor(re_list[0]).cuda()
+		    up_index = np.array(re_list[1]).flatten()
+		    down_index = np.array(re_list[2]).flatten()
+		            
+		    return torch.sum(coeff**2 * ((xs[:, up_index]**2).view(bs,len(coeff),self.n_up).sum(dim=-1)+(xs[:, down_index]**2).view(bs,len(coeff),self.n_down).sum(dim=-1)),dim=-1)
+		    
     def mo_coeff_s_type_at(self, idx, xs):
         mo_coeff = self.mo_coeff.weight.t()
         mo_coeff_at = mo_coeff[self.basis.is_s_type][self.basis.s_center_idxs == idx]
