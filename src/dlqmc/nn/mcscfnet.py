@@ -36,22 +36,22 @@ class MCSCFNet(BaseWFNet):
         else:
             self.cusp_corr = None
 
-    def init_from_pyscf(self, mf):
-        mo_coeff = mf.mo_coeff.copy()
-        if mf.mol.cart:
-            mo_coeff *= np.sqrt(np.diag(mf.mol.intor('int1e_ovlp_cart')))[:, None]
+    def init_from_pyscf(self, mc):
+        mo_coeff = mc.mo_coeff.copy()
+        if mc.mol.cart:
+            mo_coeff *= np.sqrt(np.diag(mc.mol.intor('int1e_ovlp_cart')))[:, None]
         self.mo_coeff.weight.detach().copy_(
             torch.from_numpy(mo_coeff[:, : self.activeorb].T)
         )
 
     @classmethod
-    def from_pyscf(cls, mf, cusp_correction=False, mo_cutoff=.0, **kwargs):
+    def from_pyscf(cls, mc, cusp_correction=False, mo_cutoff=.0, **kwargs):
         cls.activeorb = mc.ncas
         cls.activeel  = mc.nelecas
         cls.det_list  = mc.fcisolver.large_ci(mc.ci, mc.ncas, mc.nelecas, tol=mo_cutoff, return_strs=False)
         n_up = len(cls.det_list[0][1])
         n_down =  len(cls.det_list[0][2])
-        geom = Geometry(mc.mol.atom_coords().astype('float32'), mf.mol.atom_charges())
+        geom = Geometry(mc.mol.atom_coords().astype('float32'), mc.mol.atom_charges())
         basis = GTOBasis.from_pyscf(mc.mol)
         wf = cls(geom, n_up, n_down, basis, cusp_correction=cusp_correction)
         wf.init_from_pyscf(mc)
@@ -63,7 +63,7 @@ class MCSCFNet(BaseWFNet):
         xs = self.orbitals(rs.flatten(end_dim=1), debug=debug)
         xs = debug['slaters'] = xs.view(batch_dim, n_elec, self.activeorb)
 
-		re_list = list(zip(*self.det_list))
+        re_list = list(zip(*self.det_list))
         coeff = torch.tensor(re_list[0]).cuda()
         up_index = np.array(re_list[1]).flatten()
         down_index = np.array(re_list[2]).flatten()
@@ -109,18 +109,6 @@ class MCSCFNet(BaseWFNet):
                 mos[corrected] = mos[corrected] + phi_cusped - phi_gto
         return mos
 
-	def density(self, rs):
-		            
-		    xs = self.orbitals(rs)
-		    bs = rs.shape[0]
-		    
-		    re_list = list(zip(*self.det_list))
-		    coeff = torch.tensor(re_list[0]).cuda()
-		    up_index = np.array(re_list[1]).flatten()
-		    down_index = np.array(re_list[2]).flatten()
-		            
-		    return torch.sum(coeff**2 * ((xs[:, up_index]**2).view(bs,len(coeff),self.n_up).sum(dim=-1)+(xs[:, down_index]**2).view(bs,len(coeff),self.n_down).sum(dim=-1)),dim=-1)
-		    
     def mo_coeff_s_type_at(self, idx, xs):
         mo_coeff = self.mo_coeff.weight.t()
         mo_coeff_at = mo_coeff[self.basis.is_s_type][self.basis.s_center_idxs == idx]
