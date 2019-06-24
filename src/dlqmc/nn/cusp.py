@@ -25,9 +25,9 @@ class CuspCorrection(nn.Module):
         X5 = torch.log(torch.abs(phi0 + self.shifts - C))
         return C, sgn, fit_cusp_poly(self.rc[:, None], X1, X2, X3, X4, X5)
 
-    def forward(self, rs, phi_gto_boundary, mos0):
+    def forward(self, rs_2, phi_gto_boundary, mos0):
         C, sgn, alphas = self.fit_cusp_poly(phi_gto_boundary, mos0)
-        rs_2_nearest, center_idx = rs[..., 3].min(dim=-1)
+        rs_2_nearest, center_idx = rs_2.min(dim=-1)
         mask = rs_2_nearest < self.rc[center_idx] ** 2
         center_idx = center_idx[mask]
         rs_1 = rs_2_nearest[mask].sqrt()
