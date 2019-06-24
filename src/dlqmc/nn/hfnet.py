@@ -52,7 +52,7 @@ class HFNet(BaseWFNet):
         )
 
     @classmethod
-    def from_pyscf(cls, mf, init_mos=True, **kwargs):
+    def from_pyscf(cls, mf, init_mos=True, freeze_mos=False, **kwargs):
         n_up = (mf.mo_occ >= 1).sum()
         n_down = (mf.mo_occ == 2).sum()
         assert (mf.mo_occ[:n_down] == 2).all()
@@ -63,6 +63,9 @@ class HFNet(BaseWFNet):
         wf = cls(geom, n_up, n_down, basis, **kwargs)
         if init_mos:
             wf.init_from_pyscf(mf)
+        if freeze_mos:
+            assert init_mos
+            wf.mo_coeff.weight.requires_grad_(False)
         return wf
 
     def forward(self, rs, debug=NULL_DEBUG):
