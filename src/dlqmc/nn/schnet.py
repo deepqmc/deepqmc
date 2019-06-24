@@ -25,6 +25,7 @@ class ElectronicSchnet(nn.Module):
         kernel_dim,
         embedding_dim,
         interaction_factory=None,
+        return_interactions=False,
     ):
         if not interaction_factory:
 
@@ -39,6 +40,7 @@ class ElectronicSchnet(nn.Module):
                 return nn.ModuleDict(modules)
 
         super().__init__()
+        self.return_interactions = return_interactions
         self.embedding_nuc = nn.Parameter(torch.randn(n_nuclei, kernel_dim))
         self.embedding_elec = nn.Parameter(
             torch.cat(
@@ -60,10 +62,14 @@ class ElectronicSchnet(nn.Module):
         c_i, c_j, c_shape = conv_indexing(n_elec, n_all, batch_dims)
         dists_basis = dists_basis[..., c_i, c_j, :]
         xs = debug[0] = self.embedding_elec.clone().expand(*batch_dims, -1, -1)
+        interactions = [] if self.return_interactions else None
         for i, interaction in enumerate(self.interactions):
             Ws = interaction.kernel(dists_basis)
             zs = interaction.embed_in(xs)
             zs = torch.cat([zs, self.embedding_nuc.expand(*batch_dims, -1, -1)], dim=1)
             zs = (Ws.view(*c_shape) * zs[:, c_j].view(*c_shape)).sum(dim=2)
-            xs = debug[i + 1] = xs + interaction.embed_out(zs)
-        return xs
+            vs = interaction.embed_out(zs)
+            if interactions is not None:
+                interactions.append(vs)
+            xs = debug[i + 1] = xs + vs
+        return xs if interactions is None else interactions
