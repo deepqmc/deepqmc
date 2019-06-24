@@ -151,8 +151,8 @@ def debugged(func, label):
 
 
 class Debuggable:
-    def debug(self, label, *args, **kwargs):
-        return debugged(self, label)(*args, **kwargs)
+    def debug(self, label):
+        return debugged(self, label)
 
 
 def batch_eval(func, batches, *args, **kwargs):
