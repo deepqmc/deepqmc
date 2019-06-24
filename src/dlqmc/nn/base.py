@@ -101,12 +101,15 @@ class NuclearAsymptotic(nn.Module):
 
 
 class ElectronicAsymptotic(nn.Module):
-    def __init__(self, *, cusp):
+    def __init__(self, *, cusp, alpha=1.0):
         super().__init__()
-        self.cusp = nn.Parameter(torch.as_tensor(cusp))
+        self.cusp = cusp
+        self.alpha = alpha
 
     def forward(self, dists):
-        return torch.exp(-(self.cusp / (1 + dists)).sum(dim=-1))
+        return torch.exp(
+            -(self.cusp / (self.alpha * (1 + self.alpha * dists))).sum(dim=-1)
+        )
 
 
 def ssp(*args, **kwargs):
