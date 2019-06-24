@@ -9,7 +9,7 @@ import torch
 
 def triu_flat(x):
     i, j = np.triu_indices(x.shape[1], k=1)
-    return x[:, i, j]
+    return x[:, i, j, ...]
 
 
 def get_flat_mesh(bounds, npts, device=None):
