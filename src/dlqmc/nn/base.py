@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -153,7 +155,11 @@ class Concat(nn.Module):
         return self.net(xs)
 
 
+@lru_cache(maxsize=64)
 def conv_indexing(n_elec, n_all, batch_dims):
+    # from a matrix with dimensions (n_elec, n_all), where n_all = n_elec +
+    # n_nuclei, (i, j) select all electronic pairs excluding the
+    # diagonal and all electron-nucleus pairs
     i, j = np.mask_indices(n_all, nondiag)
     n = n_elec * (n_all - 1)
     i, j = i[:n], j[:n]
