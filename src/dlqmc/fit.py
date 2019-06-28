@@ -108,8 +108,7 @@ def wfnet_fit_driver_simple(
             n_discard=n_discard,
             n_decorrelate=n_decorrelate,
         )
-        samples_ds = TensorDataset(rs.flatten(end_dim=1), psis.flatten(end_dim=1))
-        yield from DataLoader(samples_ds, batch_size=len(samples_ds), shuffle=True)
+        yield rs.flatten(end_dim=1), psis.flatten(end_dim=1)
 
 
 def fit_wfnet_supervised(
