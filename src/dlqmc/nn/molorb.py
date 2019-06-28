@@ -3,6 +3,7 @@ import torch
 from torch import nn
 
 from ..utils import NULL_DEBUG
+from .base import pairwise_diffs
 from .cusp import CuspCorrection
 
 
@@ -39,6 +40,10 @@ class MolecularOrbital(nn.Module):
         )
         if freeze_mos:
             self.mo_coeff.weight.requires_grad_(False)
+
+    def forward_from_rs(self, rs, coords):
+        diffs_nuc = pairwise_diffs(torch.cat([coords, rs]), coords)
+        return self(diffs_nuc)
 
     def forward(self, diffs, edges=None, debug=NULL_DEBUG):
         # first n_atoms rows of diffs and edges correspond to electrons on
