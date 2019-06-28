@@ -1,5 +1,6 @@
 import time
 from contextlib import contextmanager
+from datetime import datetime
 from functools import partial, wraps
 
 import matplotlib.pyplot as plt
@@ -193,3 +194,7 @@ def timer():
         yield now
     finally:
         now[...] = time.time() - now
+
+
+def now():
+    return datetime.now().isoformat(timespec='seconds')
