@@ -74,6 +74,7 @@ def samples_from(sampler, steps, *, n_discard=0, n_decorrelate=0):
 def langevin_monte_carlo(wf, rs, *, tau, cutoff=1.0):
     qforce = partial(quantum_force, clamp=cutoff / tau)
     forces, psis = qforce(rs, wf)
+    lifetime = rs.new_zeros(len(rs), dtype=torch.long)
     while True:
         rs_new = rs + forces * tau + torch.randn_like(rs) * np.sqrt(tau)
         try:
@@ -86,7 +87,12 @@ def langevin_monte_carlo(wf, rs, *, tau, cutoff=1.0):
         ).sum(dim=(-1, -2))
         Ps_acc = torch.exp(log_G_ratios) * psis_new ** 2 / psis ** 2
         accepted = Ps_acc > torch.rand_like(Ps_acc)
-        info = {'acceptance': accepted.type(torch.int).sum().item() / rs.shape[0]}
+        lifetime[accepted] = 0
+        lifetime[~accepted] += 1
+        info = {
+            'acceptance': accepted.type(torch.int).sum().item() / rs.shape[0],
+            'lifetime': lifetime.cpu().numpy(),
+        }
         assign_where((rs, psis, forces), (rs_new, psis_new, forces_new), accepted)
         yield rs.clone(), psis.clone(), info
 
