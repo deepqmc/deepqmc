@@ -59,7 +59,7 @@ class ElectronicSchnet(nn.Module):
         # from a matrix with dimensions (n_elec, n_all), where n_all = n_elec +
         # n_nuclei, (c_i, c_j) select all electronic pairs excluding the
         # diagonal and all electron-nucleus pairs
-        c_i, c_j, c_shape = conv_indexing(n_elec, n_all, batch_dims)
+        c_i, c_j, c_shape = conv_indexing(n_elec, n_all, tuple(batch_dims))
         dists_basis = dists_basis[..., c_i, c_j, :]
         xs = debug[0] = self.embedding_elec.clone().expand(*batch_dims, -1, -1)
         interactions = [] if self.return_interactions else None
