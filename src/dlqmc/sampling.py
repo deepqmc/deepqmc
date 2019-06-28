@@ -126,3 +126,19 @@ def sample_start(geom, n_walker, n_electrons, var=1, cuda=True):
         return pos.cuda()
     else:
         return pos
+
+
+def rand_from_mf(mf, bs, charge_std=0.25, elec_std=1.0):
+    mol = mf.mol
+    n_atoms = mol.natm
+    charges = mol.atom_charges()
+    n_electrons = charges.sum() - mol.charge
+    cs = torch.tensor(charges - mf.pop(verbose=0)[1]).float()
+    cs = cs + charge_std * torch.randn(bs, n_atoms)
+    repeats = (cs / cs.sum(dim=-1)[:, None] * n_electrons).round().to(torch.long)
+    idxs = torch.repeat_interleave(
+        torch.arange(n_atoms).expand(bs, -1), repeats.flatten()
+    ).view(bs, n_electrons)
+    centers = torch.tensor(mol.atom_coords()).float()[idxs]
+    rs = centers + elec_std * torch.randn_like(centers)
+    return rs
