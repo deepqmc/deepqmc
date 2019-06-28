@@ -25,8 +25,8 @@ class HFNet(BaseWFNet):
         jastrow_factory=None,
         dist_basis_dim=32,
         dist_basis_cutoff=10.0,
-        cusp_correction=True,
-        cusp_electrons=True,
+        cusp_correction=False,
+        cusp_electrons=False,
         rc_scaling=1.0,
     ):
         super().__init__()
