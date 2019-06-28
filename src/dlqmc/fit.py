@@ -1,10 +1,12 @@
 from itertools import cycle
 
+import torch
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 
 from .physics import local_energy
 from .sampling import samples_from
+from .stats import outlier_mask
 from .utils import NULL_DEBUG, state_dict_copy
 
 
@@ -47,6 +49,9 @@ def fit_wfnet(
     debug=NULL_DEBUG,
     scheduler=None,
     epoch_size=100,
+    skip_outliers=True,
+    p=0.01,
+    q=4,
 ):
     for step, (rs, psi0s) in enumerate(sample_gen, start=start):
         d = debug[step]
@@ -54,11 +59,19 @@ def fit_wfnet(
         Es_loc, psis = d['Es_loc'], d['psis'] = local_energy(
             rs, wfnet, create_graph=not indirect, keep_graph=indirect
         )
-        loss = loss_func(Es_loc, psis, psi0s)
+        outliers = (
+            outlier_mask(Es_loc, p, q)[0]
+            if skip_outliers
+            else torch.zeros_like(Es_loc, dtype=torch.uint8)
+        )
+        loss = loss_func(Es_loc[~outliers], psis[~outliers], psi0s[~outliers])
         if writer:
             writer.add_scalar('loss', loss, step)
             writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
             writer.add_scalar('E_loc/var', Es_loc.var(), step)
+            if skip_outliers:
+                writer.add_scalar('E_loc/mean0', Es_loc[~outliers].mean(), step)
+                writer.add_scalar('E_loc/var0', Es_loc[~outliers].var(), step)
             for label, value in wfnet.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
         loss.backward()

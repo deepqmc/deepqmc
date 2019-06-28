@@ -22,3 +22,15 @@ class GaussianKDEstimator:
         if self._weights is not None:
             basis = self._weights * basis
         return norm * basis.sum(dim=-1)
+
+
+def outlier_mask(x, p, q, dim=None):
+    x = x.detach()
+    dim = dim if dim is not None else -1
+    n = x.shape[dim]
+    lb = x.kthvalue(int(p * n), dim=dim).values
+    ub = x.kthvalue(int((1 - p) * n), dim=dim).values
+    return (
+        (x - (lb + ub).unsqueeze(dim) / 2).abs() > q * (ub - lb).unsqueeze(dim),
+        (lb, ub),
+    )
