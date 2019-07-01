@@ -17,6 +17,7 @@ class MolecularOrbital(nn.Module):
         edge_dim=None,
         cusp_correction=True,
         rc_scaling=1.0,
+        eps=1e-6,
     ):
         super().__init__()
         self.n_atoms = len(geom)
@@ -26,7 +27,7 @@ class MolecularOrbital(nn.Module):
         self.net = net_factory(len(geom), edge_dim, n_orbitals) if net_factory else None
         if cusp_correction:
             rc = rc_scaling / geom.charges.float()
-            self.cusp_corr = CuspCorrection(geom.charges, n_orbitals, rc)
+            self.cusp_corr = CuspCorrection(geom.charges, n_orbitals, rc, eps=eps)
             self.register_buffer('basis_cusp_info', basis.get_cusp_info(rc).t())
         else:
             self.cusp_corr = None
@@ -66,15 +67,15 @@ class MolecularOrbital(nn.Module):
             corrected, center_idx, phi_cusped = self.cusp_corr(
                 dists_2_nuc, phi_gto_boundary, mos0
             )
-            aos = aos[corrected][:, self.basis.is_s_type]
-            phi_gto = torch.empty_like(phi_cusped)
+            aos = aos[:, self.basis.is_s_type]
+            phi_gto = torch.empty_like(mos)
             for idx in range(n_atoms):
                 if not (center_idx == idx).any():
                     continue
                 phi_gto[center_idx == idx] = self.mo_coeff_s_type_at(
                     idx, aos[center_idx == idx][:, self.basis.s_center_idxs == idx]
                 )
-            mos[corrected] = mos[corrected] + phi_cusped - phi_gto
+            mos[corrected] = mos[corrected] + phi_cusped - phi_gto[corrected]
         return mos
 
     def mo_coeff_s_type_at(self, idx, xs):

@@ -3,13 +3,22 @@ from torch import nn
 
 
 class CuspCorrection(nn.Module):
-    def __init__(self, charges, n_orbitals, rc):
+    def __init__(self, charges, n_orbitals, rc, eps=1e-6):
         super().__init__()
         self.register_buffer('charges', charges)
         self.shifts = nn.Parameter(torch.zeros(len(charges), n_orbitals))
         self.register_buffer('rc', rc)
+        self.eps = eps
 
     def fit_cusp_poly(self, phi_gto_boundary, mos0):
+        has_s_part = phi_gto_boundary[0].abs() > self.eps
+        charges, rc = (
+            x[:, None].expand_as(has_s_part) for x in (self.charges, self.rc)
+        )
+        phi_gto_boundary, mos0, shifts, charges, rc = (
+            x[..., has_s_part]
+            for x in (phi_gto_boundary, mos0, self.shifts, charges, rc)
+        )
         phi0, phi, dphi, d2phi = phi_gto_boundary
         sgn = phi0.sign()
         C = torch.where(
@@ -21,18 +30,30 @@ class CuspCorrection(nn.Module):
         X1 = torch.log(torch.abs(phi_m_C))
         X2 = dphi / phi_m_C
         X3 = d2phi / phi_m_C
-        X4 = -self.charges[:, None] * (mos0 + self.shifts) / (phi0 + self.shifts - C)
-        X5 = torch.log(torch.abs(phi0 + self.shifts - C))
-        return C, sgn, fit_cusp_poly(self.rc[:, None], X1, X2, X3, X4, X5)
+        X4 = -charges * (mos0 + shifts) / (phi0 + shifts - C)
+        X5 = torch.log(torch.abs(phi0 + shifts - C))
+        return C, sgn, fit_cusp_poly(rc, X1, X2, X3, X4, X5), has_s_part
 
     def forward(self, rs_2, phi_gto_boundary, mos0):
-        C, sgn, alphas = self.fit_cusp_poly(phi_gto_boundary, mos0)
+        # TODO the indexing here is far from desirable, but I don't have time to
+        # clean it up now
+        C, sgn, alphas, has_s_part = self.fit_cusp_poly(phi_gto_boundary, mos0)
         rs_2_nearest, center_idx = rs_2.min(dim=-1)
-        mask = rs_2_nearest < self.rc[center_idx] ** 2
-        center_idx = center_idx[mask]
-        rs_1 = rs_2_nearest[mask].sqrt()
-        C, sgn, *alphas = torch.stack([C, sgn, *alphas])[:, center_idx]
-        return mask, center_idx, C + sgn * eval_cusp_poly(rs_1[:, None], *alphas)
+        maybe_corrected = rs_2_nearest < self.rc[center_idx] ** 2
+        rs_1 = rs_2_nearest[maybe_corrected].sqrt()
+        corrected = maybe_corrected[:, None] & has_s_part[center_idx]
+        params_idx = torch.empty_like(has_s_part, dtype=torch.long)
+        params_idx[has_s_part] = torch.arange(
+            has_s_part.sum(), device=params_idx.device
+        )
+        rs_1_idx = torch.arange(len(rs_1))[:, None].expand(-1, mos0.shape[-1])[
+            corrected[maybe_corrected]
+        ]
+        C, sgn, *alphas = torch.stack([C, sgn, *alphas])[
+            :, params_idx[center_idx][corrected]
+        ]
+        phi_cusped = C + sgn * eval_cusp_poly(rs_1[rs_1_idx], *alphas)
+        return corrected, center_idx, phi_cusped
 
 
 def fit_cusp_poly(rc, X1, X2, X3, X4, X5):
