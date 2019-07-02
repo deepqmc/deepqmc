@@ -8,7 +8,7 @@ def grad(xs, f, create_graph=False):
         ys, xs, torch.ones_like(ys), create_graph=create_graph
     )
     if not create_graph:
-        ys.detach_()
+        ys = ys.detach()
     return grad_ys, ys
 
 
@@ -25,5 +25,5 @@ def laplacian(xs, f, create_graph=False, keep_graph=None):
         for xi, dy_dxi in zip(xis, (dy_dxs[..., i] for i in range(len(xis))))
     )
     if not (create_graph if keep_graph is None else keep_graph):
-        ys.detach_()
+        ys = ys.detach()
     return lap_ys, ys
