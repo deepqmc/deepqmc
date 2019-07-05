@@ -106,7 +106,7 @@ def take(a, n):
     return np.random.permutation(np.concatenate(l))
 
 
-def sample_start(geom, n_walker, n_electrons, var=1, cuda=True):
+def sample_start(geom, n_walker, n_electrons, order=None, var=1, cuda=True):
     ind = np.array(
         [
             take(
@@ -118,7 +118,7 @@ def sample_start(geom, n_walker, n_electrons, var=1, cuda=True):
             )
             for i in range(n_walker)
         ]
-    )
+    ) if order is None else order
     pos = torch.randn(n_walker, n_electrons, 3) * var + torch.from_numpy(
         geom.coords[None, :, :].numpy().take(ind, axis=1)
     ).view(-1, n_electrons, 3)
