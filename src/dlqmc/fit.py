@@ -57,22 +57,23 @@ def fit_wfnet(
     for step, (rs, psi0s) in enumerate(sample_gen, start=start):
         d = debug[step]
         d['psi0s'], d['rs'] = psi0s, rs
-        Es_loc, loss = torch.tensor([],device=rs.device),0  
+        Es_loc,outliers,loss = torch.tensor([],device=rs.device),torch.tensor([],dtype=torch.uint8,device=rs.device),0  
         for (rs_sub, psi0s_sub) in zip(*map(partial(torch.split,split_size_or_sections=sub_batch_size,dim=0),(rs,psi0s))):
             Es_loc_sub, psis_sub = local_energy(
                 rs_sub, wfnet, create_graph=not indirect, keep_graph=indirect
             )
-            outliers = (
+            outliers_sub = (
                 outlier_mask(Es_loc_sub, p, q)[0]
                 if skip_outliers
                 else torch.zeros_like(Es_loc_sub, dtype=torch.uint8)
             )
-            loss_sub = loss_func(Es_loc_sub[~outliers], psis_sub[~outliers], psi0s_sub[~outliers])
+            loss_sub = loss_func(Es_loc_sub[~outliers_sub], psis_sub[~outliers_sub], psi0s_sub[~outliers_sub])
             loss_sub.backward()
 
             loss += loss_sub.detach()
             Es_loc = torch.cat((Es_loc,Es_loc_sub.detach()))
-        d['Es_loc'] = E_loc
+            outliers = torch.cat((outliers,outliers_sub))
+        d['Es_loc'] = Es_loc
         del Es_loc_sub, loss_sub, psis_sub
 		    
         if writer:
