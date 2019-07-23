@@ -2,6 +2,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from functools import partial, wraps
+from collections import UserDict
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -98,7 +99,7 @@ def dctsel(dct, keys):
     return {k: dct[k] for k in keys if k in dct}
 
 
-class DebugContainer(dict):
+class DebugContainer(UserDict):
     def __init__(self):
         super().__init__()
         self._levels = []
