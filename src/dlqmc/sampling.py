@@ -69,49 +69,22 @@ class LangevinSampler():
     def recompute_forces(self):
         self.forces, self.psis = self.qforce(self.rs)
 
-
-def take(a, n):
-    l = []
-    while n > len(a):
-        n = n - len(a)
-        l.append(np.random.choice(a, len(a), replace=False))
-    l.append(np.random.choice(a, n, replace=False))
-    return np.random.permutation(np.concatenate(l))
-
-
-def sample_start(geom, n_walker, n_electrons, order=None, var=1, cuda=True):
-    ind = np.array(
-        [
-            take(
-                np.repeat(
-                    np.arange(0, len(geom._charges)),
-                    (geom._charges.numpy().astype(int)),
-                ),
-                n_electrons,
-            )
-            for i in range(n_walker)
-        ]
-    ) if order is None else order
-    pos = torch.randn(n_walker, n_electrons, 3) * var + torch.from_numpy(
-        geom.coords[None, :, :].numpy().take(ind, axis=1)
-    ).view(-1, n_electrons, 3)
-    if cuda:
-        return pos.cuda()
-    else:
-        return pos
-
-
-def rand_from_mf(mf, bs, charge_std=0.25, elec_std=1.0):
+def rand_from_mf(mf, bs, charge_std=0.25, elec_std=1.0, idxs=None):
     mol = mf.mol
     n_atoms = mol.natm
     charges = mol.atom_charges()
     n_electrons = charges.sum() - mol.charge
-    cs = torch.tensor(charges - mf.pop(verbose=0)[1]).float()
-    cs = cs + charge_std * torch.randn(bs, n_atoms)
-    repeats = (cs / cs.sum(dim=-1)[:, None] * n_electrons).round().to(torch.long)
-    idxs = torch.repeat_interleave(
-        torch.arange(n_atoms).expand(bs, -1), repeats.flatten()
-    ).view(bs, n_electrons)
+    while idxs is None:
+        cs = torch.tensor(charges - mf.pop(verbose=0)[1]).float()
+        cs = cs + charge_std * torch.randn(bs, n_atoms)
+        repeats = (cs / cs.sum(dim=-1)[:, None] * n_electrons).round().to(torch.long)
+        try:
+            idxs = torch.repeat_interleave(
+            torch.arange(n_atoms).expand(bs, -1), repeats.flatten()
+        ).view(bs, n_electrons)
+        except RuntimeError: continue
+    idxs = torch.stack([idxs[i,torch.randperm(idxs.shape[-1])] for i in range(bs)])
+
     centers = torch.tensor(mol.atom_coords()).float()[idxs]
     rs = centers + elec_std * torch.randn_like(centers)
     return rs
