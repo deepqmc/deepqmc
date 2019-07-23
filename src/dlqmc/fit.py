@@ -109,6 +109,7 @@ def wfnet_fit_driver(
     range_training=range,
 ):
     for _ in samplings:
+        sampler.recompute_forces()
         rs, psis, _ = samples_from(
             sampler,
             range_sampling(n_sampling_steps),
