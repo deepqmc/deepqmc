@@ -46,7 +46,9 @@ class SlaterJastrowNet(BaseWFNet):
             self.conf_coeff = nn.Linear(len(configurations), 1, bias=False)
         else:
             n_orbitals = max(n_up, n_down)
-            self.confs = torch.cat([torch.arange(n_up), torch.arange(n_down)]).view(1,-1)
+            self.confs = torch.cat([torch.arange(n_up), torch.arange(n_down)]).view(
+                1, -1
+            )
             self.conf_coeff = nn.Identity()
         self.mo = MolecularOrbital(
             geom,

@@ -1,5 +1,5 @@
-from itertools import cycle
 from functools import partial
+from itertools import cycle
 
 import torch
 from torch.nn.utils import clip_grad_norm_
@@ -52,13 +52,22 @@ def fit_wfnet(
     skip_outliers=True,
     p=0.01,
     q=4,
-    sub_batch_size=int(1e18)
+    sub_batch_size=int(1e18),
 ):
     for step, (rs, psi0s) in enumerate(sample_gen, start=start):
         d = debug[step]
         d['psi0s'], d['rs'] = psi0s, rs
-        Es_loc,outliers,loss = torch.tensor([],device=rs.device),torch.tensor([],dtype=torch.uint8,device=rs.device),0  
-        for (rs_sub, psi0s_sub) in zip(*map(partial(torch.split,split_size_or_sections=sub_batch_size,dim=0),(rs,psi0s))):
+        Es_loc, outliers, loss = (
+            torch.tensor([], device=rs.device),
+            torch.tensor([], dtype=torch.uint8, device=rs.device),
+            0,
+        )
+        for (rs_sub, psi0s_sub) in zip(
+            *map(
+                partial(torch.split, split_size_or_sections=sub_batch_size, dim=0),
+                (rs, psi0s),
+            )
+        ):
             Es_loc_sub, psis_sub = local_energy(
                 rs_sub, wfnet, create_graph=not indirect, keep_graph=indirect
             )
@@ -67,15 +76,17 @@ def fit_wfnet(
                 if skip_outliers
                 else torch.zeros_like(Es_loc_sub, dtype=torch.uint8)
             )
-            loss_sub = loss_func(Es_loc_sub[~outliers_sub], psis_sub[~outliers_sub], psi0s_sub[~outliers_sub])
+            loss_sub = loss_func(
+                Es_loc_sub[~outliers_sub],
+                psis_sub[~outliers_sub],
+                psi0s_sub[~outliers_sub],
+            )
             loss_sub.backward()
-
             loss += loss_sub.detach()
-            Es_loc = torch.cat((Es_loc,Es_loc_sub.detach()))
-            outliers = torch.cat((outliers,outliers_sub))
+            Es_loc = torch.cat((Es_loc, Es_loc_sub.detach()))
+            outliers = torch.cat((outliers, outliers_sub))
         d['Es_loc'] = Es_loc
         del Es_loc_sub, loss_sub, psis_sub
-		    
         if writer:
             writer.add_scalar('loss', loss, step)
             writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
@@ -85,10 +96,8 @@ def fit_wfnet(
                 writer.add_scalar('E_loc/var0', Es_loc[~outliers].var(), step)
             for label, value in wfnet.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
-        
         if clip_grad:
             clip_grad_norm_(wfnet.parameters(), clip_grad)
-
         opt.step()
         opt.zero_grad()
         d['state_dict'] = state_dict_copy(wfnet)

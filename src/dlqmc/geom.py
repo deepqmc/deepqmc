@@ -26,12 +26,12 @@ class Geometry:
 
     def __repr__(self):
         return f'Geometry(coords={self._coords}, charges={self._charges})'
-        
+
     def cpu(self):
-        return Geometry(self._coords.cpu(),self._charges.cpu())
-        
+        return Geometry(self._coords.cpu(), self._charges.cpu())
+
     def cuda(self):
-        return Geometry(self._coords.cuda(),self._charges.cuda())
+        return Geometry(self._coords.cuda(), self._charges.cuda())
 
     @property
     def coords(self):
