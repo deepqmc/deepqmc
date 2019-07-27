@@ -113,6 +113,8 @@ class DebugContainer(UserDict):
             assert label == self._levels.pop()
 
     def _getkey(self, key):
+        if isinstance(key, int) and not self._levels:
+            return key
         return '.'.join([*self._levels, str(key)])
 
     def __getitem__(self, key):
