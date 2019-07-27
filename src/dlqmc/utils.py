@@ -203,3 +203,9 @@ def now():
 
 def normalize_mean(x):
     return x / x.mean()
+
+
+def weighted_mean_var(xs, ws):
+    ws = normalize_mean(ws)
+    mean = (ws * xs).mean()
+    return mean, (ws * (xs - mean) ** 2).mean()

@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from .physics import clean_force, local_energy
 from .sampling import samples_from
 from .stats import outlier_mask
-from .utils import NULL_DEBUG, normalize_mean, state_dict_copy
+from .utils import NULL_DEBUG, normalize_mean, state_dict_copy, weighted_mean_var
 
 
 def loss_local_energy(Es_loc, psis, ws, E_ref=None, p=1):
@@ -83,19 +83,21 @@ def fit_wfnet(
             loss = loss_func(Es_loc_loss, psis, normalize_mean(total_ws))
             loss.backward()
             subbatches.append(
-                (loss.detach().view(1), Es_loc.detach(), psis.detach())
+                (
+                    loss.detach().view(1),
+                    Es_loc.detach(),
+                    Es_loc_loss.detach(),
+                    psis.detach(),
+                    ws,
+                    force_ws,
+                    total_ws,
+                )
             )
-        loss, Es_loc, psis = _, d['Es_loc'], d['psis'] = (
+        loss, Es_loc, Es_loc_loss, psis, ws, forces_ws, total_ws = (
             torch.cat(xs) for xs in zip(*subbatches)
         )
-        if writer:
-            writer.add_scalar('loss', loss.sum(), step)
-            writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
-            writer.add_scalar('E_loc/var', Es_loc.var(), step)
-            writer.add_scalar('E_loc/mean0', Es_loc_loss.mean(), step)
-            writer.add_scalar('E_loc/var0', Es_loc_loss.var(), step)
-            for label, value in wfnet.tracked_parameters():
-                writer.add_scalar(f'param/{label}', value, step)
+        loss = d['loss'] = loss.sum()
+        d['Es_loc'], d['psis'] = Es_loc, psis
         if clip_grad:
             clip_grad_norm_(wfnet.parameters(), clip_grad)
         opt.step()
@@ -103,6 +105,26 @@ def fit_wfnet(
         d['state_dict'] = state_dict_copy(wfnet)
         if scheduler and (step + 1) % epoch_size == 0:
             scheduler.step()
+        if writer:
+            E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, ws)
+            writer.add_scalar('E_loc/mean', E_loc_mean, step)
+            writer.add_scalar('E_loc/var', E_loc_var, step)
+            E_loc_loss_mean, E_loc_loss_var = weighted_mean_var(Es_loc_loss, total_ws)
+            writer.add_scalar('E_loc_loss/mean', E_loc_loss_mean, step)
+            writer.add_scalar('E_loc_loss/var', E_loc_loss_var, step)
+            writer.add_scalar('psi/sq_mean', (psis ** 2).mean(), step)
+            writer.add_scalar('loss', loss, step)
+            writer.add_scalar('weights/mean', ws.mean(), step)
+            writer.add_scalar('weights/median', ws.median(), step)
+            writer.add_scalar('weights/var', ws.var(), step)
+            writer.add_scalar('force_weights/min', force_ws.min(), step)
+            writer.add_scalar('force_weights/max', force_ws.max(), step)
+            grads = torch.cat(
+                [p.grad.flatten() for p in wfnet.parameters() if p.grad is not None]
+            )
+            writer.add_scalar('grad/norm', grads.norm(), step)
+            for label, value in wfnet.tracked_parameters():
+                writer.add_scalar(f'param/{label}', value, step)
 
 
 def wfnet_fit_driver(
