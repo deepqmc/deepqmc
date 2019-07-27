@@ -2,6 +2,7 @@ import numpy as np
 import torch
 
 from .grad import grad, laplacian
+from .nn.base import diffs_to_nearest_nuc
 from .utils import NULL_DEBUG
 
 
@@ -22,15 +23,36 @@ def electronic_potential(rs):
     return (1 / dists).sum(dim=-1)
 
 
-def quantum_force(rs, wf, *, clamp=None):
+def quantum_force(rs, wf):
     grad_psis, psis = grad(rs, wf)
     forces = grad_psis / psis[:, None, None]
-    if clamp is not None:
-        clamp = rs.new_tensor(clamp)
-        forces_norm = forces.norm(dim=-1)
-        norm_factors = torch.min(forces_norm, clamp) / forces_norm
-        forces = forces * norm_factors[..., None]
     return forces, psis
+
+
+def crossover_parameter(zs, fs, charges):
+    zs, zs_2 = zs[..., :3], zs[..., 3]
+    zs_unit = zs / zs.norm(dim=-1)[..., None]
+    fs_unit = fs / fs.norm(dim=-1)[..., None]
+    Z2z2 = charges ** 2 * zs_2
+    return (1 + (fs_unit * zs_unit).sum(dim=-1)) / 2 + Z2z2 / (10 * (4 + Z2z2))
+
+
+def clean_force(forces, rs, geom, *, tau, return_a=False):
+    zs = diffs_to_nearest_nuc(rs.flatten(end_dim=1), geom.coords).view(len(rs), -1, 4)
+    a = crossover_parameter(
+        zs.flatten(end_dim=1), forces.flatten(end_dim=1), geom.charges
+    ).view(len(rs), -1)
+    av2tau = a * (forces ** 2).sum(dim=-1) * tau
+    factors = (torch.sqrt(1 + 2 * av2tau) - 1) / av2tau
+    # TODO actual eps
+    factors = torch.where(av2tau < 1e-7, a.new_tensor(1.0), factors)
+    forces = factors[..., None] * forces
+    forces_norm = forces.norm(dim=-1)
+    norm_factors = torch.min(forces_norm, zs[..., -1].sqrt() / tau) / forces_norm
+    forces = forces * norm_factors[..., None]
+    if return_a:
+        return forces, a
+    return forces
 
 
 def local_energy(

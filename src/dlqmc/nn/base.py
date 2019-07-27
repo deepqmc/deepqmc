@@ -28,6 +28,11 @@ def pairwise_diffs(coords1, coords2, axes_offset=True):
     return torch.cat([diffs, (diffs ** 2).sum(dim=-1, keepdim=True)], dim=-1)
 
 
+def diffs_to_nearest_nuc(rs, coords):
+    zs = pairwise_diffs(rs, coords)
+    return zs[torch.arange(len(rs)), zs[..., -1].min(dim=-1).indices]
+
+
 def offset_from_axes(rs):
     eps = rs.new_tensor(100 * torch.finfo(rs.dtype).eps)
     offset = torch.where(rs < 0, -eps, eps)

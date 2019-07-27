@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 
 from . import torchext
-from .physics import quantum_force
+from .physics import clean_force, quantum_force
 from .utils import assign_where
 
 
@@ -19,7 +19,7 @@ def samples_from(sampler, steps, *, n_discard=0, n_decorrelate=0):
 
 
 class LangevinSampler:
-    def __init__(self, wf, rs, *, tau, wf_threshold=None, cutoff=1.0):
+    def __init__(self, wf, rs, *, tau, wf_threshold=None):
         self.wf, self.rs, self.tau = wf, rs, tau
         self.cutoff = cutoff
         self.wf_threshold = wf_threshold
@@ -38,10 +38,12 @@ class LangevinSampler:
 
     def qforce(self, rs):
         try:
-            return quantum_force(rs, self.wf, clamp=self.cutoff / self.tau)
+            forces, psis = quantum_force(rs, self.wf)
         except torchext.LUFactError as e:
             e.info['rs'] = rs[e.info['idxs']]
             raise
+        forces = clean_force(forces, rs, self.wf.geom, tau=self.tau)
+        return forces, psis
 
     def __next__(self):
         rs_new = self._walker_step()
