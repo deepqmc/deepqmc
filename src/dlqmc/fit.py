@@ -52,7 +52,7 @@ def fit_wfnet(
 ):
     for step, (rs, psi0s) in enumerate(sample_gen, start=start):
         d = debug[step]
-        d['psi0s'], d['rs'] = psi0s, rs
+        d['psi0s'], d['rs'], d['state_dict'] = psi0s, rs, state_dict_copy(wfnet)
         subbatch_size = subbatch_size or len(rs)
         subbatches = []
         for rs, psi0s in DataLoader(TensorDataset(rs, psi0s), batch_size=subbatch_size):
@@ -102,7 +102,6 @@ def fit_wfnet(
             clip_grad_norm_(wfnet.parameters(), clip_grad)
         opt.step()
         opt.zero_grad()
-        d['state_dict'] = state_dict_copy(wfnet)
         if scheduler and (step + 1) % epoch_size == 0:
             scheduler.step()
         if writer:
