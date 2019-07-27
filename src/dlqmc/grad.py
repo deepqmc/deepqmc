@@ -12,7 +12,7 @@ def grad(xs, f, create_graph=False):
     return grad_ys, ys
 
 
-def laplacian(xs, f, create_graph=False, keep_graph=None):
+def laplacian(xs, f, create_graph=False, keep_graph=None, return_grad=False):
     xis = [xi.requires_grad_() for xi in xs.flatten(start_dim=1).t()]
     xs_flat = torch.stack(xis, dim=1)
     ys = f(xs_flat.view_as(xs))
@@ -26,4 +26,7 @@ def laplacian(xs, f, create_graph=False, keep_graph=None):
     )
     if not (create_graph if keep_graph is None else keep_graph):
         ys = ys.detach()
-    return lap_ys, ys
+    result = lap_ys, ys
+    if return_grad:
+        result += (dy_dxs.detach().view_as(xs),)
+    return result
