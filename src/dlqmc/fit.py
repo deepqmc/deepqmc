@@ -4,7 +4,7 @@ import torch
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 
-from .physics import local_energy
+from .physics import clean_force, local_energy
 from .sampling import samples_from
 from .stats import outlier_mask
 from .utils import NULL_DEBUG, normalize_mean, state_dict_copy
@@ -44,10 +44,11 @@ def fit_wfnet(
     debug=NULL_DEBUG,
     scheduler=None,
     epoch_size=100,
-    skip_outliers=True,
+    skip_outliers=False,
     p=0.01,
     q=4,
     subbatch_size=None,
+    tau=None,
 ):
     for step, (rs, psi0s) in enumerate(sample_gen, start=start):
         d = debug[step]
@@ -55,20 +56,31 @@ def fit_wfnet(
         subbatch_size = subbatch_size or len(rs)
         subbatches = []
         for rs, psi0s in DataLoader(TensorDataset(rs, psi0s), batch_size=subbatch_size):
-            Es_loc, psis = local_energy(
-                rs, wfnet, create_graph=not indirect, keep_graph=indirect
+            Es_loc, psis, forces = local_energy(
+                rs,
+                wfnet,
+                create_graph=not indirect,
+                keep_graph=indirect,
+                return_grad=True,
+            )
+            forces = forces / psis.detach()[:, None, None]
+            forces_clean = clean_force(forces, rs, wfnet.geom, tau=tau)
+            forces, forces_clean = (
+                x.flatten(start_dim=-2).norm(dim=-1) for x in (forces, forces_clean)
             )
             ws = (psis.detach() / psi0s) ** 2
+            force_ws = forces_clean / forces
+            total_ws = ws * force_ws
             if skip_outliers:
                 outliers = outlier_mask(Es_loc, p, q)[0]
-                Es_loc_loss, psis, ws = (
+                Es_loc_loss, psis, total_ws = (
                     Es_loc[~outliers],
                     psis[~outliers],
-                    ws[~outliers],
+                    total_ws[~outliers],
                 )
             else:
                 Es_loc_loss = Es_loc
-            loss = loss_func(Es_loc_loss, psis, normalize_mean(ws))
+            loss = loss_func(Es_loc_loss, psis, normalize_mean(total_ws))
             loss.backward()
             subbatches.append(
                 (loss.detach().view(1), Es_loc.detach(), psis.detach())
