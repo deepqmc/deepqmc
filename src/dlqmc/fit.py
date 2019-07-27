@@ -7,21 +7,17 @@ from torch.utils.data import DataLoader, TensorDataset
 from .physics import local_energy
 from .sampling import samples_from
 from .stats import outlier_mask
-from .utils import NULL_DEBUG, state_dict_copy
+from .utils import NULL_DEBUG, normalize_mean, state_dict_copy
 
 
-def loss_local_energy(Es_loc, psis, psi0s, E_ref=None, p=1):
+def loss_local_energy(Es_loc, psis, ws, E_ref=None, p=1):
     assert psis.grad_fn is None
-    ws = psis ** 2 / psi0s ** 2
-    ws = ws / ws.mean()
     E0 = E_ref if E_ref is not None else (ws * Es_loc).mean()
     return (ws * (Es_loc - E0).abs() ** p).mean()
 
 
-def loss_total_energy_indirect(Es_loc, psis, psi0s):
+def loss_total_energy_indirect(Es_loc, psis, ws):
     assert Es_loc.grad_fn is None
-    ws = psis.detach() ** 2 / psi0s ** 2
-    ws = ws / ws.mean()
     E0 = (ws * Es_loc).mean()
     return 2 * (ws * psis / psis.detach() * (Es_loc - E0)).mean()
 
@@ -62,12 +58,13 @@ def fit_wfnet(
             Es_loc, psis = local_energy(
                 rs, wfnet, create_graph=not indirect, keep_graph=indirect
             )
+            ws = normalize_mean((psis.detach() / psi0s) ** 2)
             outliers = (
                 outlier_mask(Es_loc, p, q)[0]
                 if skip_outliers
                 else torch.zeros_like(Es_loc, dtype=torch.uint8)
             )
-            loss = loss_func(Es_loc[~outliers], psis[~outliers], psi0s[~outliers])
+            loss = loss_func(Es_loc[~outliers], psis[~outliers], ws[~outliers])
             loss.backward()
             subbatches.append(
                 (loss.detach().view(1), Es_loc.detach(), outliers, psis.detach())

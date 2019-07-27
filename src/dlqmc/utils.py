@@ -199,3 +199,7 @@ def timer():
 
 def now():
     return datetime.now().isoformat(timespec='seconds')
+
+
+def normalize_mean(x):
+    return x / x.mean()
