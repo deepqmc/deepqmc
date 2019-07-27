@@ -19,11 +19,13 @@ def samples_from(sampler, steps, *, n_discard=0, n_decorrelate=0):
 
 
 class LangevinSampler:
-    def __init__(self, wf, rs, *, tau, wf_threshold=None):
-        self.wf, self.rs, self.tau = wf, rs, tau
-        self.cutoff = cutoff
+    def __init__(
+        self, wf, rs, *, tau, max_lifetime=None, n_first_certain=0, wf_threshold=None
+    ):
+        self.wf, self.rs, self.tau = wf, rs.clone(), tau
+        self.max_lifetime = max_lifetime
+        self.n_first_certain = n_first_certain
         self.wf_threshold = wf_threshold
-        self._lifetime = rs.new_zeros(len(rs), dtype=torch.long)
         self.recompute_forces()
 
     def __iter__(self):
@@ -54,11 +56,15 @@ class LangevinSampler:
         ).sum(dim=(-1, -2))
         Ps_acc = torch.exp(log_G_ratios) * psis_new ** 2 / self.psis ** 2
         accepted = Ps_acc > torch.rand_like(Ps_acc)
-        accepted = (
-            accepted & (torch.abs(psis_new) > self.wf_threshold)
-            if self.wf_threshold is not None
-            else accepted
-        )
+        if self.wf_threshold is not None:
+            accepted = accepted & (psis_new.abs() > self.wf_threshold) | (
+                (self.psis.abs() < self.wf_threshold)
+                & (psis_new.abs() > self.psis.abs())
+            )
+        if self.max_lifetime is not None:
+            accepted = accepted | (self._lifetime >= self.max_lifetime)
+        if self._step < self.n_first_certain:
+            accepted = torch.ones_like(accepted)
         self._lifetime[accepted] = 0
         self._lifetime[~accepted] += 1
         info = {
@@ -68,6 +74,7 @@ class LangevinSampler:
         assign_where(
             (self.rs, self.psis, self.forces), (rs_new, psis_new, forces_new), accepted
         )
+        self._step += 1
         return self.rs.clone(), self.psis.clone(), info
 
     def __repr__(self):
@@ -81,7 +88,9 @@ class LangevinSampler:
         self.recompute_forces()
 
     def recompute_forces(self):
+        self._step = 0
         self.forces, self.psis = self.qforce(self.rs)
+        self._lifetime = torch.zeros_like(self.psis, dtype=torch.long)
 
 
 def rand_from_mf(mf, bs, charge_std=0.25, elec_std=1.0, idxs=None):
