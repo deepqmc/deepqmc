@@ -19,7 +19,7 @@ def samples_from(sampler, steps, *, n_discard=0, n_decorrelate=0):
 
 
 class LangevinSampler:
-    def __init__(self, wf, rs, tau, wf_threshold=None, cutoff=1.0):
+    def __init__(self, wf, rs, *, tau, wf_threshold=None, cutoff=1.0):
         self.wf, self.rs, self.tau = wf, rs, tau
         self.cutoff = cutoff
         self.wf_threshold = wf_threshold
@@ -69,10 +69,10 @@ class LangevinSampler:
         return self.rs.clone(), self.psis.clone(), info
 
     def __repr__(self):
-        return f'Object of class Sampler.\nn_walker = {self.rs.shape[0]}, n_electrons = {self.rs.shape[1]}, tau = {self.tau}'
-
-    def __str__(self):
-        return f'Object of class Sampler.\nn_walker = {self.rs.shape[0]}, n_electrons = {self.rs.shape[1]}, tau = {self.tau}'
+        return (
+            f'<LangevinSampler n_walker={self.rs.shape[0]} '
+            'n_electrons={self.rs.shape[1]} tau={self.tau}>'
+        )
 
     def propagate_all(self):
         self.rs = self._walker_step()
