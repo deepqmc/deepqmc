@@ -58,27 +58,30 @@ def fit_wfnet(
             Es_loc, psis = local_energy(
                 rs, wfnet, create_graph=not indirect, keep_graph=indirect
             )
-            ws = normalize_mean((psis.detach() / psi0s) ** 2)
-            outliers = (
-                outlier_mask(Es_loc, p, q)[0]
-                if skip_outliers
-                else torch.zeros_like(Es_loc, dtype=torch.uint8)
-            )
-            loss = loss_func(Es_loc[~outliers], psis[~outliers], ws[~outliers])
+            ws = (psis.detach() / psi0s) ** 2
+            if skip_outliers:
+                outliers = outlier_mask(Es_loc, p, q)[0]
+                Es_loc_loss, psis, ws = (
+                    Es_loc[~outliers],
+                    psis[~outliers],
+                    ws[~outliers],
+                )
+            else:
+                Es_loc_loss = Es_loc
+            loss = loss_func(Es_loc_loss, psis, normalize_mean(ws))
             loss.backward()
             subbatches.append(
-                (loss.detach().view(1), Es_loc.detach(), outliers, psis.detach())
+                (loss.detach().view(1), Es_loc.detach(), psis.detach())
             )
-        loss, Es_loc, outliers, psis = _, d['Es_loc'], _, d['psis'] = (
+        loss, Es_loc, psis = _, d['Es_loc'], d['psis'] = (
             torch.cat(xs) for xs in zip(*subbatches)
         )
         if writer:
             writer.add_scalar('loss', loss.sum(), step)
             writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
             writer.add_scalar('E_loc/var', Es_loc.var(), step)
-            if skip_outliers:
-                writer.add_scalar('E_loc/mean0', Es_loc[~outliers].mean(), step)
-                writer.add_scalar('E_loc/var0', Es_loc[~outliers].var(), step)
+            writer.add_scalar('E_loc/mean0', Es_loc_loss.mean(), step)
+            writer.add_scalar('E_loc/var0', Es_loc_loss.var(), step)
             for label, value in wfnet.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
         if clip_grad:
