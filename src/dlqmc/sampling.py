@@ -28,6 +28,9 @@ class LangevinSampler:
         self.wf_threshold = wf_threshold
         self.recompute_forces()
 
+    def __len__(self):
+        return len(self.rs)
+
     def __iter__(self):
         return self
 

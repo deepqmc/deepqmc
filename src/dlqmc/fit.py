@@ -1,4 +1,4 @@
-from itertools import cycle
+import math
 
 import torch
 from torch.nn.utils import clip_grad_norm_
@@ -37,6 +37,7 @@ def fit_wfnet(
     loss_func,
     opt,
     sample_gen,
+    steps,
     indirect=False,
     clip_grad=None,
     writer=None,
@@ -50,7 +51,7 @@ def fit_wfnet(
     subbatch_size=None,
     tau=None,
 ):
-    for step, (rs, psi0s) in enumerate(sample_gen, start=start):
+    for step, (rs, psi0s) in zip(steps, sample_gen):
         d = debug[step]
         d['psi0s'], d['rs'], d['state_dict'] = psi0s, rs, state_dict_copy(wfnet)
         subbatch_size = subbatch_size or len(rs)
@@ -129,16 +130,17 @@ def fit_wfnet(
 def wfnet_fit_driver(
     sampler,
     *,
-    samplings,
-    n_epochs,
-    n_sampling_steps,
-    batch_size=10_000,
+    batch_size,
+    sample_every,
     n_discard=0,
     n_decorrelate=0,
     range_sampling=range,
-    range_training=range,
 ):
-    for _ in samplings:
+    n_sampling_steps = (
+        math.ceil(sample_every * batch_size / len(sampler)) * (1 + n_decorrelate)
+        + n_discard
+    )
+    while True:
         sampler.recompute_forces()
         rs, psis, _ = samples_from(
             sampler,
@@ -147,21 +149,16 @@ def wfnet_fit_driver(
             n_decorrelate=n_decorrelate,
         )
         samples_ds = TensorDataset(rs.flatten(end_dim=1), psis.flatten(end_dim=1))
-        rs_dl = DataLoader(samples_ds, batch_size=batch_size, shuffle=True)
-        n_steps = n_epochs * len(rs_dl)
-        for _, (rs, psis) in zip(range_training(n_steps), cycle(rs_dl)):
-            yield rs, psis
+        rs_dl = DataLoader(
+            samples_ds, batch_size=batch_size, shuffle=True, drop_last=True
+        )
+        yield from rs_dl
 
 
-def wfnet_fit_driver_simple(
-    sampler, *, samplings, n_sampling_steps, n_discard=0, n_decorrelate=0
-):
-    for _ in samplings:
+def wfnet_fit_driver_simple(sampler, *, n_discard=0, n_decorrelate=0):
+    while True:
         rs, psis, _ = samples_from(
-            sampler,
-            range(n_sampling_steps),
-            n_discard=n_discard,
-            n_decorrelate=n_decorrelate,
+            sampler, range(1), n_discard=n_discard, n_decorrelate=n_decorrelate
         )
         yield rs.flatten(end_dim=1), psis.flatten(end_dim=1)
 
