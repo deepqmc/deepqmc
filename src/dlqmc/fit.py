@@ -1,4 +1,3 @@
-from functools import partial
 from itertools import cycle
 
 import torch
@@ -52,43 +51,32 @@ def fit_wfnet(
     skip_outliers=True,
     p=0.01,
     q=4,
-    sub_batch_size=int(1e18),
+    subbatch_size=None,
 ):
     for step, (rs, psi0s) in enumerate(sample_gen, start=start):
         d = debug[step]
         d['psi0s'], d['rs'] = psi0s, rs
-        Es_loc, outliers, loss = (
-            torch.tensor([], device=rs.device),
-            torch.tensor([], dtype=torch.uint8, device=rs.device),
-            0,
-        )
-        for (rs_sub, psi0s_sub) in zip(
-            *map(
-                partial(torch.split, split_size_or_sections=sub_batch_size, dim=0),
-                (rs, psi0s),
+        subbatch_size = subbatch_size or len(rs)
+        subbatches = []
+        for rs, psi0s in DataLoader(TensorDataset(rs, psi0s), batch_size=subbatch_size):
+            Es_loc, psis = local_energy(
+                rs, wfnet, create_graph=not indirect, keep_graph=indirect
             )
-        ):
-            Es_loc_sub, psis_sub = local_energy(
-                rs_sub, wfnet, create_graph=not indirect, keep_graph=indirect
-            )
-            outliers_sub = (
-                outlier_mask(Es_loc_sub, p, q)[0]
+            outliers = (
+                outlier_mask(Es_loc, p, q)[0]
                 if skip_outliers
-                else torch.zeros_like(Es_loc_sub, dtype=torch.uint8)
+                else torch.zeros_like(Es_loc, dtype=torch.uint8)
             )
-            loss_sub = loss_func(
-                Es_loc_sub[~outliers_sub],
-                psis_sub[~outliers_sub],
-                psi0s_sub[~outliers_sub],
+            loss = loss_func(Es_loc[~outliers], psis[~outliers], psi0s[~outliers])
+            loss.backward()
+            subbatches.append(
+                (loss.detach().view(1), Es_loc.detach(), outliers, psis.detach())
             )
-            loss_sub.backward()
-            loss += loss_sub.detach()
-            Es_loc = torch.cat((Es_loc, Es_loc_sub.detach()))
-            outliers = torch.cat((outliers, outliers_sub))
-        d['Es_loc'] = Es_loc
-        del Es_loc_sub, loss_sub, psis_sub
+        loss, Es_loc, outliers, psis = _, d['Es_loc'], _, d['psis'] = (
+            torch.cat(xs) for xs in zip(*subbatches)
+        )
         if writer:
-            writer.add_scalar('loss', loss, step)
+            writer.add_scalar('loss', loss.sum(), step)
             writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
             writer.add_scalar('E_loc/var', Es_loc.var(), step)
             if skip_outliers:
