@@ -141,7 +141,7 @@ def wfnet_fit_driver(
         + n_discard
     )
     while True:
-        sampler.recompute_forces()
+        sampler.restart()
         rs, psis, _ = samples_from(
             sampler,
             range_sampling(n_sampling_steps),

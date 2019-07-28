@@ -76,7 +76,7 @@ class MolecularOrbital(nn.Module):
                     idx, aos[center_idx == idx][:, self.basis.s_center_idxs == idx]
                 )
             mos[corrected] = mos[corrected] + phi_cusped - phi_gto[corrected]
-        return mos
+        return debug.result(mos)
 
     def mo_coeff_s_type_at(self, idx, xs):
         mo_coeff = self.mo_coeff.weight.t()

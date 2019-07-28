@@ -1,8 +1,8 @@
 import time
+from collections import UserDict
 from contextlib import contextmanager
 from datetime import datetime
 from functools import partial, wraps
-from collections import UserDict
 
 import matplotlib.pyplot as plt
 import numpy as np

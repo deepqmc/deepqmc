@@ -10,8 +10,8 @@ from .utils import assign_where
 def samples_from(sampler, steps, *, n_discard=0, n_decorrelate=0):
     rs, psis, infos = zip(
         *(
-            step
-            for i, step in zip(steps, sampler)
+            samples
+            for i, samples in zip(steps, sampler)
             if i >= n_discard and i % (n_decorrelate + 1) == 0
         )
     )
@@ -20,13 +20,13 @@ def samples_from(sampler, steps, *, n_discard=0, n_decorrelate=0):
 
 class LangevinSampler:
     def __init__(
-        self, wf, rs, *, tau, max_lifetime=None, n_first_certain=0, wf_threshold=None
+        self, wf, rs, *, tau, max_age=None, n_first_certain=0, psi_threshold=None
     ):
         self.wf, self.rs, self.tau = wf, rs.clone(), tau
-        self.max_lifetime = max_lifetime
+        self.max_age = max_age
         self.n_first_certain = n_first_certain
-        self.wf_threshold = wf_threshold
-        self.recompute_forces()
+        self.psi_threshold = psi_threshold
+        self.restart()
 
     def __len__(self):
         return len(self.rs)
@@ -57,22 +57,22 @@ class LangevinSampler:
             (self.forces + forces_new)
             * ((self.rs - rs_new) + self.tau / 2 * (self.forces - forces_new))
         ).sum(dim=(-1, -2))
-        Ps_acc = torch.exp(log_G_ratios) * psis_new ** 2 / self.psis ** 2
+        Ps_acc = torch.exp(log_G_ratios) * (psis_new / self.psis) ** 2
         accepted = Ps_acc > torch.rand_like(Ps_acc)
-        if self.wf_threshold is not None:
-            accepted = accepted & (psis_new.abs() > self.wf_threshold) | (
-                (self.psis.abs() < self.wf_threshold)
+        if self.psi_threshold is not None:
+            accepted = accepted & (psis_new.abs() > self.psi_threshold) | (
+                (self.psis.abs() < self.psi_threshold)
                 & (psis_new.abs() > self.psis.abs())
             )
-        if self.max_lifetime is not None:
-            accepted = accepted | (self._lifetime >= self.max_lifetime)
+        if self.max_age is not None:
+            accepted = accepted | (self._ages >= self.max_age)
         if self._step < self.n_first_certain:
             accepted = torch.ones_like(accepted)
-        self._lifetime[accepted] = 0
-        self._lifetime[~accepted] += 1
+        self._ages[accepted] = 0
+        self._ages[~accepted] += 1
         info = {
             'acceptance': accepted.type(torch.int).sum().item() / self.rs.shape[0],
-            'lifetime': self._lifetime.cpu().numpy(),
+            'age': self._ages.cpu().numpy(),
         }
         assign_where(
             (self.rs, self.psis, self.forces), (rs_new, psis_new, forces_new), accepted
@@ -88,12 +88,12 @@ class LangevinSampler:
 
     def propagate_all(self):
         self.rs = self._walker_step()
-        self.recompute_forces()
+        self.restart()
 
-    def recompute_forces(self):
+    def restart(self):
         self._step = 0
         self.forces, self.psis = self.qforce(self.rs)
-        self._lifetime = torch.zeros_like(self.psis, dtype=torch.long)
+        self._ages = torch.zeros_like(self.psis, dtype=torch.long)
 
 
 def rand_from_mf(mf, bs, charge_std=0.25, elec_std=1.0, idxs=None):

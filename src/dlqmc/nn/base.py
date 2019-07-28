@@ -118,6 +118,9 @@ class ElectronicAsymptotic(nn.Module):
             -(self.cusp / (self.alpha * (1 + self.alpha * dists))).sum(dim=-1)
         )
 
+    def extra_repr(self):
+        return f'cusp={self.cusp}, alpha={self.alpha}'
+
 
 def ssp(*args, **kwargs):
     return F.softplus(*args, **kwargs) - np.log(2)
