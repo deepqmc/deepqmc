@@ -8,7 +8,7 @@ from ..utils import NULL_DEBUG
 
 def eval_slater(xs):
     if xs.shape[-1] == 0:
-        return 1.0
+        return xs.new_ones(len(xs))
     norm = 1 / np.sqrt(factorial(xs.shape[-1]))
     return norm * torchext.bdet(xs)
 
