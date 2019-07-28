@@ -3,8 +3,15 @@ import torch
 from torch.testing import assert_allclose
 
 from dlqmc.geom import geomdb
-from dlqmc.nn import BFNet, HanNet
+from dlqmc.nn import BFNet, GTOBasis, HanNet, SlaterJastrowNet
 from dlqmc.physics import local_energy
+
+try:
+    import pyscf.gto
+except ImportError:
+    pyscf_marks = [pytest.mark.skip(reason='Pyscf not installed')]
+else:
+    pyscf_marks = []
 
 
 def assert_alltrue_named(items):
@@ -22,14 +29,21 @@ def geom():
     return geomdb['H2']
 
 
-@pytest.fixture(params=[BFNet, HanNet])
+@pytest.fixture(
+    params=[BFNet, HanNet, pytest.param(SlaterJastrowNet, marks=pyscf_marks)]
+)
 def net_factory(request):
     return request.param
 
 
 @pytest.fixture
 def wfnet(net_factory, geom):
-    return net_factory(geom, 3, 0)
+    args = (geom, 3, 0)
+    if net_factory is SlaterJastrowNet:
+        mol = pyscf.gto.M(atom=geom.as_pyscf(), unit='bohr', basis='6-311g', cart=True)
+        basis = GTOBasis.from_pyscf(mol)
+        args += (basis,)
+    return net_factory(*args)
 
 
 def test_batching(wfnet, rs):
