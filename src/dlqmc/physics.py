@@ -29,6 +29,15 @@ def quantum_force(rs, wf):
     return forces, psis
 
 
+# The two following functions implement the techniques from
+# https://aip.scitation.org/doi/10.1063/1.465195. 'crossover_parameter'
+# implements directly eq. 36 from there. 'clean_force' implements eq. 35 and a
+# simplified version of the treatment of the force close to nuclei. Rather than
+# projecting the force to cylindrical coordinates, we clamp the norm of the
+# force such that f*tau is never longer than the distance to the closest
+# nucleus.
+
+
 def crossover_parameter(zs, fs, charges):
     zs, zs_2 = zs[..., :3], zs[..., 3]
     zs_unit = zs / zs.norm(dim=-1)[..., None]
