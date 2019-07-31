@@ -34,3 +34,13 @@ def outlier_mask(x, p, q, dim=None):
         (x - (lb + ub).unsqueeze(dim) / 2).abs() > q * (ub - lb).unsqueeze(dim),
         (lb, ub),
     )
+
+
+def clip_outliers(x, p, q):
+    x = x.detach()
+    n = len(x)
+    lb = x.kthvalue(int(p * n)).values
+    ub = x.kthvalue(int((1 - p) * n)).values
+    mids = x[(x > lb) & (x < ub)]
+    mean, std = mids.mean(), mids.std()
+    return x.clamp(mean - q * std, mean + q * std)
