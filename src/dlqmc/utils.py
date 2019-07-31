@@ -203,6 +203,12 @@ def now():
     return datetime.now().isoformat(timespec='seconds')
 
 
+def expand_1d(r, x, k, i):
+    rs = r.repeat(len(x), 1, 1)
+    rs[:, k, i] += x
+    return rs
+
+
 def normalize_mean(x):
     return x / x.mean()
 
