@@ -90,9 +90,12 @@ class LangevinSampler:
         self.rs = self._walker_step()
         self.restart()
 
+    def recompute_force(self):
+        self.forces, self.psis = self.qforce(self.rs)
+
     def restart(self):
         self._step = 0
-        self.forces, self.psis = self.qforce(self.rs)
+        self.recompute_force()
         self._ages = torch.zeros_like(self.psis, dtype=torch.long)
 
 
