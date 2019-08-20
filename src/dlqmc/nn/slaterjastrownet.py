@@ -102,7 +102,7 @@ class SlaterJastrowNet(BaseWFNet):
             wf.mo.init_from_pyscf(mf, freeze_mos=freeze_mos)
             if confs is not None:
                 wf.conf_coeff.weight.detach().copy_(conf_coeff)
-                if freeze_mos:
+                if freeze_confs:
                     wf.conf_coeff.weight.requires_grad_(False)
         return wf
 
