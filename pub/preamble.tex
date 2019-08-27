@@ -1,0 +1,47 @@
+\documentclass[twocolumn]{article}
+\usepackage[margin=0.6in,columnsep=0.15in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[lcgreekalpha,upint]{stix}
+\usepackage[usenames,dvipsnames]{xcolor}
+\usepackage[colorlinks,citecolor=Gray,urlcolor=Gray,linkcolor=Blue]{hyperref}
+\usepackage[small]{titlesec}
+
+\usepackage[normal]{caption}
+\DeclareCaptionLabelSeparator{pipe}{ $|$ }
+\captionsetup{labelsep=pipe}
+\renewcommand{\captionfont}{\small}
+\renewcommand{\captionlabelfont}{\bfseries}
+
+\usepackage[colon]{natbib}
+\bibliographystyle{abbrvnat}
+\usepackage{doi}
+
+\usepackage{graphicx}
+\usepackage{mathtools}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{tikz}
+\usepackage{siunitx}
+\usepackage[export]{adjustbox}
+
+\makeatletter
+\def\mathcolor#1#{\@mathcolor{#1}}
+\def\@mathcolor#1#2#3{%
+  \protect\leavevmode
+  \begingroup
+    \color#1{#2}#3%
+  \endgroup
+}
+\makeatother
+
+% \usepackage{authblk}
+% \renewcommand\Affilfont{\itshape\small} % chktex 6
+
+% \author[1,2]{Jan Hermann}
+% \author[1]{Zeno Schätzle}
+% \author[1]{Frank Noé}
+% \affil[1]{}
+
+\date{}
+
+\setcounter{secnumdepth}{0}
