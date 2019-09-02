@@ -24,35 +24,39 @@ class ElectronicSchnet(nn.Module):
         basis_dim,
         kernel_dim,
         embedding_dim,
-        interaction_factory=None,
+        subnet_factories=None,
         return_interactions=False,
     ):
-        if not interaction_factory:
+        if not subnet_factories:
 
-            def interaction_factory(kernel_dim, embedding_dim, basis_dim):
-                modules = {
-                    'kernel': get_log_dnn(basis_dim, kernel_dim, SSP, n_layers=2),
-                    'embed_in': nn.Linear(embedding_dim, kernel_dim, bias=False),
-                    'embed_out': get_log_dnn(
-                        kernel_dim, embedding_dim, SSP, n_layers=2
-                    ),
-                }
-                return nn.ModuleDict(modules)
+            def subnet_factories(kernel_dim, embedding_dim, basis_dim):
+                return (
+                    lambda: get_log_dnn(basis_dim, kernel_dim, SSP, n_layers=2),
+                    lambda: nn.Linear(embedding_dim, kernel_dim, bias=False),
+                    lambda: get_log_dnn(kernel_dim, embedding_dim, SSP, n_layers=2),
+                )
 
+        w_factory, h_factory, g_factory = subnet_factories(
+            kernel_dim, embedding_dim, basis_dim
+        )
         super().__init__()
+        self.n_interactions = n_interactions
         self.return_interactions = return_interactions
-        self.embedding_nuc = nn.Parameter(torch.randn(n_nuclei, kernel_dim))
-        self.embedding_elec = nn.Parameter(
+        self.Y = nn.Parameter(torch.randn(n_nuclei, kernel_dim))
+        self.X = nn.Parameter(
             torch.cat(
-                [torch.randn(embedding_dim).expand(n_el, -1) for n_el in (n_up, n_down)]
+                [
+                    torch.randn(embedding_dim).expand(n_el, -1)
+                    for n_el in ((n_up + n_down,) if n_up == n_down else (n_up, n_down))
+                ]
             )
         )
-        self.interactions = nn.ModuleList(
-            [
-                interaction_factory(kernel_dim, embedding_dim, basis_dim)
-                for _ in range(n_interactions)
-            ]
-        )
+        w, h, g = {}, {}, {}
+        for i in range(n_interactions):
+            w[f'{i}'] = w_factory()
+            g[f'{i}'] = g_factory()
+            h[f'{i}'] = h_factory()
+        self.w, self.h, self.g = map(nn.ModuleDict, [w, h, g])
 
     def forward(self, dists_basis, debug=NULL_DEBUG):
         *batch_dims, n_elec, n_all, basis_dim = dists_basis.shape
@@ -61,15 +65,15 @@ class ElectronicSchnet(nn.Module):
         # diagonal and all electron-nucleus pairs
         c_i, c_j, c_shape = conv_indexing(n_elec, n_all, tuple(batch_dims))
         dists_basis = dists_basis[..., c_i, c_j, :]
-        xs = debug[0] = self.embedding_elec.clone().expand(*batch_dims, -1, -1)
+        x = debug[0] = self.X.clone().expand(*batch_dims, -1, -1)
         interactions = [] if self.return_interactions else None
-        for i, interaction in enumerate(self.interactions):
-            Ws = interaction.kernel(dists_basis)
-            zs = interaction.embed_in(xs)
-            zs = torch.cat([zs, self.embedding_nuc.expand(*batch_dims, -1, -1)], dim=1)
-            zs = (Ws.view(*c_shape) * zs[:, c_j].view(*c_shape)).sum(dim=2)
-            vs = interaction.embed_out(zs)
+        for i in range(self.n_interactions):
+            w = self.w[f'{i}'](dists_basis)
+            z = self.h[f'{i}'](x)
+            z = torch.cat([z, self.Y.expand(*batch_dims, -1, -1)], dim=1)
+            z = (w.view(*c_shape) * z[:, c_j].view(*c_shape)).sum(dim=2)
+            z = self.g[f'{i}'](z)
             if interactions is not None:
-                interactions.append(vs)
-            xs = debug[i + 1] = xs + vs
-        return xs if interactions is None else interactions
+                interactions.append(z)
+            x = debug[i + 1] = x + z
+        return x if interactions is None else interactions
