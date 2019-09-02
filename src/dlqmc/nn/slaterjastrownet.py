@@ -25,6 +25,7 @@ class SlaterJastrowNet(BaseWFNet):
         mo_factory=None,
         jastrow_factory=None,
         backflow_factory=None,
+        omni_factory=None,
         dist_basis_dim=32,
         dist_basis_cutoff=10.0,
         cusp_correction=False,
@@ -37,7 +38,7 @@ class SlaterJastrowNet(BaseWFNet):
         self.register_geom(geom)
         self.dist_basis = (
             DistanceBasis(dist_basis_dim, cutoff=dist_basis_cutoff, envelope='nocusp')
-            if mo_factory or jastrow_factory or backflow_factory
+            if mo_factory or jastrow_factory or backflow_factory or omni_factory
             else None
         )
         if configurations is not None:
@@ -75,6 +76,13 @@ class SlaterJastrowNet(BaseWFNet):
             if backflow_factory
             else None
         )
+        if omni_factory:
+            assert not backflow_factory and not jastrow_factory
+            self.omni = omni_factory(
+                len(geom), dist_basis_dim, n_up, n_down, n_orbitals
+            )
+            self.backflow = self.omni.forward_backflow
+            self.jastrow = self.omni.forward_jastrow
 
     @classmethod
     def from_pyscf(
