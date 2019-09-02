@@ -99,21 +99,21 @@ class LangevinSampler:
         self._ages = torch.zeros_like(self.psis, dtype=torch.long)
 
 
-def rand_from_mf(mf, bs, charge_std=0.25, elec_std=1.0, idxs=None):
+def rand_from_mf(mf, bs, elec_std=1.0, idxs=None):
     mol = mf.mol
     n_atoms = mol.natm
     charges = mol.atom_charges()
     n_electrons = charges.sum() - mol.charge
-    while idxs is None:
-        cs = torch.tensor(charges - mf.pop(verbose=0)[1]).float()
-        cs = cs + charge_std * torch.randn(bs, n_atoms)
-        repeats = (cs / cs.sum(dim=-1)[:, None] * n_electrons).round().to(torch.long)
-        try:
-            idxs = torch.repeat_interleave(
-                torch.arange(n_atoms).expand(bs, -1), repeats.flatten()
-            ).view(bs, n_electrons)
-        except RuntimeError:
-            continue
+    cs = torch.tensor(charges - mf.pop(verbose=0)[1]).float()
+    base = cs.floor()
+    rem = cs - base
+    rem_size = int(n_electrons - base.sum())
+    samples = torch.multinomial(rem.expand(bs, -1), rem_size)
+    repeats = base.to(torch.long)[None, :].repeat(bs, 1)
+    repeats[torch.arange(bs, dtype=torch.long).expand(rem_size, -1).t(), samples] += 1
+    idxs = torch.repeat_interleave(
+        torch.arange(n_atoms).expand(bs, -1), repeats.flatten()
+    ).view(bs, n_electrons)
     idxs = torch.stack([idxs[i, torch.randperm(idxs.shape[-1])] for i in range(bs)])
     centers = torch.tensor(mol.atom_coords()).float()[idxs]
     rs = centers + elec_std * torch.randn_like(centers)
