@@ -24,6 +24,7 @@ class SlaterJastrowNet(BaseWFNet):
         basis,
         mo_factory=None,
         jastrow_factory=None,
+        backflow_factory=None,
         dist_basis_dim=32,
         dist_basis_cutoff=10.0,
         cusp_correction=False,
@@ -36,7 +37,7 @@ class SlaterJastrowNet(BaseWFNet):
         self.register_geom(geom)
         self.dist_basis = (
             DistanceBasis(dist_basis_dim, cutoff=dist_basis_cutoff, envelope='nocusp')
-            if mo_factory or jastrow_factory
+            if mo_factory or jastrow_factory or backflow_factory
             else None
         )
         if configurations is not None:
@@ -67,6 +68,11 @@ class SlaterJastrowNet(BaseWFNet):
         self.jastrow = (
             jastrow_factory(len(geom), dist_basis_dim, n_up, n_down)
             if jastrow_factory
+            else None
+        )
+        self.backflow = (
+            backflow_factory(len(geom), dist_basis_dim, n_up, n_down, n_orbitals)
+            if backflow_factory
             else None
         )
 
@@ -118,8 +124,17 @@ class SlaterJastrowNet(BaseWFNet):
             if self.jastrow or self.mo.net
             else None
         )
-        xs = debug['mos'] = self.mo(diffs_nuc, edges_nuc, debug=debug)
+        with debug.cd('mos'):
+            xs = self.mo(diffs_nuc, edges_nuc, debug=debug)
         xs = debug['slaters'] = xs.view(batch_dim, n_elec, -1)
+        if self.backflow or self.cusp_same or self.jastrow:
+            dists_elec = pairwise_distance(rs, rs)
+        if self.backflow or self.jastrow:
+            edges_nuc = edges_nuc[n_atoms:].view(batch_dim, n_elec, n_atoms, -1)
+            edges = torch.cat([self.dist_basis(dists_elec), edges_nuc], dim=2)
+        if self.backflow:
+            with debug.cd('backflow'):
+                xs = self.backflow(xs, edges, debug=debug)
         conf_up, conf_down = self.confs[:, : self.n_up], self.confs[:, self.n_up :]
         det_up = debug['det_up'] = eval_slater(
             xs[:, : self.n_up, conf_up].permute(0, 2, 1, 3).flatten(end_dim=1)
@@ -142,7 +157,6 @@ class SlaterJastrowNet(BaseWFNet):
             )
             psi = psi * cusp_same * cusp_anti
         if self.jastrow:
-            edges_nuc = edges_nuc[n_atoms:].view(batch_dim, n_elec, n_atoms, -1)
-            edges = torch.cat([self.dist_basis(dists_elec), edges_nuc], dim=2)
-            psi = psi * torch.exp(self.jastrow(edges))
+            with debug.cd('jastrow'):
+                psi = psi * torch.exp(self.jastrow(edges, debug=debug))
         return psi
