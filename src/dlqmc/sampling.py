@@ -106,11 +106,14 @@ def rand_from_mf(mf, bs, elec_std=1.0, idxs=None):
     n_electrons = charges.sum() - mol.charge
     cs = torch.tensor(charges - mf.pop(verbose=0)[1]).float()
     base = cs.floor()
+    repeats = base.to(torch.long)[None, :].repeat(bs, 1)
     rem = cs - base
     rem_size = int(n_electrons - base.sum())
-    samples = torch.multinomial(rem.expand(bs, -1), rem_size)
-    repeats = base.to(torch.long)[None, :].repeat(bs, 1)
-    repeats[torch.arange(bs, dtype=torch.long).expand(rem_size, -1).t(), samples] += 1
+    if rem_size > 0:
+        samples = torch.multinomial(rem.expand(bs, -1), rem_size)
+        repeats[
+            torch.arange(bs, dtype=torch.long).expand(rem_size, -1).t(), samples
+        ] += 1
     idxs = torch.repeat_interleave(
         torch.arange(n_atoms).expand(bs, -1), repeats.flatten()
     ).view(bs, n_electrons)
