@@ -30,7 +30,8 @@ def pairwise_diffs(coords1, coords2, axes_offset=True):
 
 def diffs_to_nearest_nuc(rs, coords):
     zs = pairwise_diffs(rs, coords)
-    return zs[torch.arange(len(rs)), zs[..., -1].min(dim=-1).indices]
+    idxs = zs[..., -1].min(dim=-1).indices
+    return zs[torch.arange(len(rs)), idxs], idxs
 
 
 def offset_from_axes(rs):

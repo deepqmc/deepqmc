@@ -47,9 +47,10 @@ def crossover_parameter(zs, fs, charges):
 
 
 def clean_force(forces, rs, geom, *, tau, return_a=False):
-    zs = diffs_to_nearest_nuc(rs.flatten(end_dim=1), geom.coords).view(len(rs), -1, 4)
+    zs, idxs = diffs_to_nearest_nuc(rs.flatten(end_dim=1), geom.coords)
+    zs = zs.view(len(rs), -1, 4)
     a = crossover_parameter(
-        zs.flatten(end_dim=1), forces.flatten(end_dim=1), geom.charges
+        zs.flatten(end_dim=1), forces.flatten(end_dim=1), geom.charges[idxs]
     ).view(len(rs), -1)
     av2tau = a * (forces ** 2).sum(dim=-1) * tau
     factors = (torch.sqrt(1 + 2 * av2tau) - 1) / av2tau
