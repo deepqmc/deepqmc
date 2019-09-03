@@ -1,11 +1,7 @@
-from functools import lru_cache
-
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-
-from dlqmc.utils import nondiag
 
 from ..geom import Geomable
 from ..utils import Debuggable
@@ -162,15 +158,3 @@ class Concat(nn.Module):
     def forward(self, *args):
         xs = torch.cat(args, dim=-1)
         return self.net(xs)
-
-
-@lru_cache(maxsize=64)
-def conv_indexing(n_elec, n_all, batch_dims):
-    # from a matrix with dimensions (n_elec, n_all), where n_all = n_elec +
-    # n_nuclei, (i, j) select all electronic pairs excluding the
-    # diagonal and all electron-nucleus pairs
-    i, j = np.mask_indices(n_all, nondiag)
-    n = n_elec * (n_all - 1)
-    i, j = i[:n], j[:n]
-    shape = (*batch_dims, n_elec, n_all - 1, -1)
-    return i, j, shape
