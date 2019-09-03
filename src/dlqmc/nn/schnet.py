@@ -2,8 +2,8 @@ import numpy as np
 import torch
 from torch import nn
 
-from ..utils import NULL_DEBUG
-from .base import SSP, conv_indexing, get_log_dnn
+from ..utils import NULL_DEBUG, nondiag
+from .base import SSP, get_log_dnn
 
 
 class ZeroDiagKernel(nn.Module):
@@ -58,21 +58,22 @@ class ElectronicSchnet(nn.Module):
             h[f'{i}'] = h_factory()
         self.w, self.h, self.g = map(nn.ModuleDict, [w, h, g])
 
-    def forward(self, dists_basis, debug=NULL_DEBUG):
-        *batch_dims, n_elec, n_all, basis_dim = dists_basis.shape
-        # from a matrix with dimensions (n_elec, n_all), where n_all = n_elec +
-        # n_nuclei, (c_i, c_j) select all electronic pairs excluding the
-        # diagonal and all electron-nucleus pairs
-        c_i, c_j, c_shape = conv_indexing(n_elec, n_all, tuple(batch_dims))
-        dists_basis = dists_basis[..., c_i, c_j, :]
+    def forward(self, edges, debug=NULL_DEBUG):
+        edges_elec, edges_nuc = edges
+        *batch_dims, n_elec, n_atoms, basis_dim = edges_nuc.shape
+        assert edges_elec.shape == (*batch_dims, n_elec, n_elec, basis_dim)
+        i, j = np.mask_indices(n_elec, nondiag)  # nondiagonal elements
+        edges_elec = edges_elec[..., i, j, :]
         x = debug[0] = self.X.clone().expand(*batch_dims, -1, -1)
         interactions = [] if self.return_interactions else None
         for i in range(self.n_interactions):
-            w = self.w[f'{i}'](dists_basis)
-            z = self.h[f'{i}'](x)
-            z = torch.cat([z, self.Y.expand(*batch_dims, -1, -1)], dim=1)
-            z = (w.view(*c_shape) * z[:, c_j].view(*c_shape)).sum(dim=2)
-            z = self.g[f'{i}'](z)
+            z_elec = (
+                (self.w[f'{i}'](edges_elec) * self.h[f'{i}'](x)[:, j])
+                .view(*batch_dims, n_elec, n_elec - 1, -1)
+                .sum(dim=-2)
+            )
+            z_nuc = (self.w[f'{i}'](edges_nuc) * self.Y[..., None, :, :]).sum(dim=-2)
+            z = self.g[f'{i}'](z_elec + z_nuc)
             if interactions is not None:
                 interactions.append(z)
             x = debug[i + 1] = x + z

@@ -139,7 +139,7 @@ class SlaterJastrowNet(BaseWFNet):
             dists_elec = pairwise_distance(rs, rs)
         if self.backflow or self.jastrow:
             edges_nuc = edges_nuc[n_atoms:].view(batch_dim, n_elec, n_atoms, -1)
-            edges = torch.cat([self.dist_basis(dists_elec), edges_nuc], dim=2)
+            edges = self.dist_basis(dists_elec), edges_nuc
         if self.backflow:
             with debug.cd('backflow'):
                 xs = self.backflow(xs, edges, debug=debug)
