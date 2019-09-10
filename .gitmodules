@@ -1,0 +1,3 @@
+[submodule "pub"]
+	path = pub
+	url = git@github.com:noegroup/dl-qmc-pub.git

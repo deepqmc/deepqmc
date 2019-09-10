@@ -1,7 +1,0 @@
-DashExcpt = {
-    Hartree--Fock
-    Slater--Jastrow
-    Slater--Jastrow--backflow
-}
-CmdLine = {
-}
