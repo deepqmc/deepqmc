@@ -49,7 +49,7 @@ def fit_wfnet(
     p=0.01,
     q=4,
     subbatch_size=None,
-    tau=None,
+    clean_tau=None,
 ):
     for step, (rs, psi0s) in zip(steps, sample_gen):
         d = debug[step]
@@ -65,7 +65,11 @@ def fit_wfnet(
                 return_grad=True,
             )
             forces = forces / psis.detach()[:, None, None]
-            forces_clean = clean_force(forces, rs, wfnet.geom, tau=tau)
+            forces_clean = (
+                clean_force(forces, rs, wfnet.geom, tau=clean_tau)
+                if clean_tau is not None
+                else forces
+            )
             forces, forces_clean = (
                 x.flatten(start_dim=-2).norm(dim=-1) for x in (forces, forces_clean)
             )
