@@ -121,3 +121,69 @@ def rand_from_mf(mf, bs, elec_std=1.0, idxs=None):
     centers = torch.tensor(mol.atom_coords()).float()[idxs]
     rs = centers + elec_std * torch.randn_like(centers)
     return rs
+    
+class MetropolisSampler:
+    def __init__(
+        self, wf, rs, *, tau, max_age=None, n_first_certain=0, psi_threshold=None
+    ):
+        self.wf, self.rs, self.tau = wf, rs.clone(), tau
+        self.max_age = max_age
+        self.n_first_certain = n_first_certain
+        self.psi_threshold = psi_threshold
+        self.restart()
+
+    def __len__(self):
+        return len(self.rs)
+
+    def __iter__(self):
+        return self
+
+    def _walker_step(self):
+        return (
+            self.rs
+            + torch.randn_like(self.rs) * self.tau
+        )
+
+    def __next__(self):
+        rs_new = self._walker_step()
+        psis_new = self.wf(rs_new).detach()
+        Ps_acc = (psis_new / self.psis) ** 2
+        accepted = Ps_acc > torch.rand_like(Ps_acc)
+        if self.psi_threshold is not None:
+            accepted = accepted & (psis_new.abs() > self.psi_threshold) | (
+                (self.psis.abs() < self.psi_threshold)
+                & (psis_new.abs() > self.psis.abs())
+            )
+        if self.max_age is not None:
+            accepted = accepted | (self._ages >= self.max_age)
+        if self._step < self.n_first_certain:
+            accepted = torch.ones_like(accepted)
+        self._ages[accepted] = 0
+        self._ages[~accepted] += 1
+        info = {
+            'acceptance': accepted.type(torch.int).sum().item() / self.rs.shape[0],
+            'age': self._ages.cpu().numpy(),
+        }
+        assign_where(
+            (self.rs, self.psis), (rs_new, psis_new), accepted
+        )
+        self._step += 1
+        return self.rs.clone(), self.psis.clone(), info
+
+    def __repr__(self):
+        return (
+            f'<MetropolisSampler n_walker={self.rs.shape[0]} '
+            'n_electrons={self.rs.shape[1]} tau={self.tau}>'
+        )
+
+    def propagate_all(self):
+        self.rs = self._walker_step()
+        self.restart()
+
+    def recompute_psi(self):
+        self.psis = self.wf(self.rs)
+
+    def restart(self):
+        self._step = 0
+        self.recompute_psi()
+        self._ages = torch.zeros_like(self.psis, dtype=torch.long)
