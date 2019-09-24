@@ -49,14 +49,7 @@ class ElectronicSchnet(nn.Module):
         self.n_interactions = n_interactions
         self.return_interactions = return_interactions
         self.Y = nn.Parameter(torch.randn(n_nuclei, kernel_dim))
-        self.X = nn.Parameter(
-            torch.cat(
-                [
-                    torch.randn(embedding_dim).expand(n_el, -1)
-                    for n_el in ((n_up + n_down,) if n_up == n_down else (n_up, n_down))
-                ]
-            )
-        )
+        self.X = nn.Parameter(torch.randn(1 if n_up == n_down else 2, embedding_dim))
         w, h, g = {}, {}, {}
         for n in range(n_interactions):
             if version == 1:
@@ -84,7 +77,13 @@ class ElectronicSchnet(nn.Module):
                 ij[~spin_mask.any(axis=1)].T,
             ]  # indexes for up-up, up-down, down-up, down-down
             n_el = {'u': self.n_up, 'd': n_elec - self.n_up}
-        x = debug[0] = self.X.clone().expand(*batch_dims, -1, -1)
+        x = debug[0] = torch.cat(
+            [
+                self.X[i].clone().expand(n, -1)
+                for i,n in enumerate([self.n_up, n_elec-self.n_up]
+                if 2*self.n_up != n_elec else [n_elec])
+            ]
+        ).expand(*batch_dims,-1,-1)
         for n in range(self.n_interactions):
             h = self.h[f'{n}'](x)
             if self.version == 1:
