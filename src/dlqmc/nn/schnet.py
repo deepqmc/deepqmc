@@ -79,11 +79,13 @@ class ElectronicSchnet(nn.Module):
             n_el = {'u': self.n_up, 'd': n_elec - self.n_up}
         x = debug[0] = torch.cat(
             [
-                self.X[i].clone().expand(n, -1)
-                for i,n in enumerate([self.n_up, n_elec-self.n_up]
-                if 2*self.n_up != n_elec else [n_elec])
+                X.clone().expand(n, -1)
+                for X, n in zip(
+                    self.X,
+                    [self.n_up, n_elec - self.n_up] if len(self.X) == 2 else [n_elec],
+                )
             ]
-        ).expand(*batch_dims,-1,-1)
+        ).expand(*batch_dims, -1, -1)
         for n in range(self.n_interactions):
             h = self.h[f'{n}'](x)
             if self.version == 1:

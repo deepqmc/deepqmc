@@ -121,7 +121,8 @@ def rand_from_mf(mf, bs, elec_std=1.0, idxs=None):
     centers = torch.tensor(mol.atom_coords()).float()[idxs]
     rs = centers + elec_std * torch.randn_like(centers)
     return rs
-    
+
+
 class MetropolisSampler:
     def __init__(
         self, wf, rs, *, tau, max_age=None, n_first_certain=0, psi_threshold=None
@@ -139,10 +140,7 @@ class MetropolisSampler:
         return self
 
     def _walker_step(self):
-        return (
-            self.rs
-            + torch.randn_like(self.rs) * self.tau
-        )
+        return self.rs + torch.randn_like(self.rs) * self.tau
 
     def __next__(self):
         rs_new = self._walker_step()
@@ -164,9 +162,7 @@ class MetropolisSampler:
             'acceptance': accepted.type(torch.int).sum().item() / self.rs.shape[0],
             'age': self._ages.cpu().numpy(),
         }
-        assign_where(
-            (self.rs, self.psis), (rs_new, psis_new), accepted
-        )
+        assign_where((self.rs, self.psis), (rs_new, psis_new), accepted)
         self._step += 1
         return self.rs.clone(), self.psis.clone(), info
 
