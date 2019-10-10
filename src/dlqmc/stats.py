@@ -36,11 +36,20 @@ def outlier_mask(x, p, q, dim=None):
     )
 
 
-def clip_outliers(x, p, q):
+# taken from Pfau et al.
+def clipped_outliers(x, q):
     x = x.detach()
-    n = len(x)
-    lb = x.kthvalue(int(p * n)).values
-    ub = x.kthvalue(int((1 - p) * n)).values
-    mids = x[(x > lb) & (x < ub)]
-    mean, std = mids.mean(), mids.std()
-    return x.clamp(mean - q * std, mean + q * std)
+    median = x.median()
+    std = (x - median).abs().mean()
+    return x.clamp(median - q * std, median + q * std)
+
+
+def log_clipped_outliers(x, q):
+    x = x.detach()
+    median = x.median()
+    x = x - median
+    a = q * x.abs().mean()
+    x = torch.where(
+        x.abs() <= a, x, x.sign() * a * (1 + torch.log((1 + (x.abs() / a) ** 2) / 2))
+    )
+    return median + x

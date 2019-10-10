@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from .physics import clean_force, local_energy
 from .sampling import samples_from
-from .stats import outlier_mask
+from .stats import log_clipped_outliers, outlier_mask
 from .utils import NULL_DEBUG, normalize_mean, state_dict_copy, weighted_mean_var
 
 
@@ -46,11 +46,13 @@ def fit_wfnet(
     scheduler=None,
     epoch_size=100,
     skip_outliers=False,
+    clip_outliers=False,
     p=0.01,
-    q=4,
+    q=5,
     subbatch_size=None,
     clean_tau=None,
 ):
+    assert not (skip_outliers and clip_outliers)
     for step, (rs, psi0s) in zip(steps, sample_gen):
         d = debug[step]
         d['psi0s'], d['rs'], d['state_dict'] = psi0s, rs, state_dict_copy(wfnet)
@@ -83,6 +85,8 @@ def fit_wfnet(
                     psis[~outliers],
                     total_ws[~outliers],
                 )
+            elif clip_outliers:
+                Es_loc_loss = log_clipped_outliers(Es_loc, q)
             else:
                 Es_loc_loss = Es_loc
             loss = loss_func(Es_loc_loss, psis, normalize_mean(total_ws))
