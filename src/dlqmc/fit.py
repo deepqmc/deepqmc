@@ -109,10 +109,6 @@ def fit_wfnet(
         d['Es_loc'], d['psis'] = Es_loc, psis
         if clip_grad:
             clip_grad_norm_(wfnet.parameters(), clip_grad)
-        opt.step()
-        opt.zero_grad()
-        if scheduler and (step + 1) % epoch_size == 0:
-            scheduler.step()
         if writer:
             E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, ws)
             writer.add_scalar('E_loc/mean', E_loc_mean, step)
@@ -133,6 +129,10 @@ def fit_wfnet(
             writer.add_scalar('grad/norm', grads.norm(), step)
             for label, value in wfnet.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
+        opt.step()
+        opt.zero_grad()
+        if scheduler and (step + 1) % epoch_size == 0:
+            scheduler.step()
 
 
 def wfnet_fit_driver(
