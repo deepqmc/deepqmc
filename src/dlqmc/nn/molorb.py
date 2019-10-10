@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from ..torchext import merge_tensors
 from ..utils import NULL_DEBUG
 from .base import pairwise_diffs
 from .cusp import CuspCorrection
@@ -75,7 +76,11 @@ class MolecularOrbital(nn.Module):
                 phi_gto[center_idx == idx] = self.mo_coeff_s_type_at(
                     idx, aos[center_idx == idx][:, self.basis.s_center_idxs == idx]
                 )
-            mos[corrected] = mos[corrected] + phi_cusped - phi_gto[corrected]
+            mos = merge_tensors(
+                corrected,
+                mos[corrected] + phi_cusped - phi_gto[corrected],
+                mos[~corrected],
+            )
         return debug.result(mos)
 
     def mo_coeff_s_type_at(self, idx, xs):

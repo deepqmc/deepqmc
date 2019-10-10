@@ -3,6 +3,13 @@ import torch
 from .utils import InfoException, batch_eval
 
 
+def merge_tensors(mask, source_true, source_false):
+    x = torch.empty_like(mask, dtype=source_false.dtype)
+    x[mask] = source_true
+    x[~mask] = source_false
+    return x
+
+
 class LUFactError(InfoException):
     pass
 
