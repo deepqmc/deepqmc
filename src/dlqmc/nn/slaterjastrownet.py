@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 from ..geom import Geometry
@@ -166,5 +167,5 @@ class SlaterJastrowNet(BaseWFNet):
             psi = psi * cusp_same * cusp_anti
         if self.jastrow:
             with debug.cd('jastrow'):
-                psi = psi * torch.exp(self.jastrow(edges, debug=debug))
+                psi = psi * F.softplus(self.jastrow(edges, debug=debug))
         return psi
