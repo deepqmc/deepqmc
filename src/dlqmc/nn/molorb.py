@@ -1,10 +1,12 @@
+from logging import warn
+
 import numpy as np
 import torch
 from torch import nn
 
 from ..torchext import merge_tensors
 from ..utils import NULL_DEBUG
-from .base import pairwise_diffs
+from .base import pairwise_diffs, pairwise_distance
 from .cusp import CuspCorrection
 
 
@@ -28,6 +30,12 @@ class MolecularOrbital(nn.Module):
         self.net = net_factory(len(geom), edge_dim, n_orbitals) if net_factory else None
         if cusp_correction:
             rc = rc_scaling / geom.charges.float()
+            dists = pairwise_distance(geom.coords, geom.coords)
+            eye = torch.eye(len(geom), out=torch.empty_like(dists))
+            factors = (eye + dists / (rc + rc[:, None])).min(dim=-1).values
+            if (factors < 0.99).any():
+                warn('Reducing cusp-correction cutoffs due to overlaps')
+            rc = rc * factors
             self.cusp_corr = CuspCorrection(geom.charges, n_orbitals, rc, eps=eps)
             self.register_buffer('basis_cusp_info', basis.get_cusp_info(rc).t())
         else:
