@@ -716,7 +716,7 @@ setuptools = "*"
 six = ">=1.10.0"
 
 [package.dependencies.more-itertools]
-python = ">2.7"
+python = ">=2.8"
 version = ">=4.0.0"
 
 [[package]]
@@ -847,6 +847,22 @@ numpy = "*"
 
 [[package]]
 category = "dev"
+description = ""
+name = "torch-kfac"
+optional = false
+python-versions = "^3.7"
+version = "0.1.0"
+
+[package.dependencies]
+torch = ">0.4"
+
+[package.source]
+reference = ""
+type = "directory"
+url = "vendor/torch-kfac"
+
+[[package]]
+category = "dev"
 description = "Tornado is a Python web framework and asynchronous networking library, originally developed at FriendFeed."
 name = "tornado"
 optional = false
@@ -919,7 +935,7 @@ version = "3.4.2"
 notebook = ">=4.4.1"
 
 [metadata]
-content-hash = "15bb7eeeb4aeabd8a41f4611e48d9ba88c73afa58e903db8769e5c24a989f9cc"
+content-hash = "afc1bdb8258377bb05f6bd09404688e92977d8f82edea1abeee00acc866b0dcd"
 python-versions = "^3.7"
 
 [metadata.hashes]
@@ -1001,6 +1017,7 @@ terminado = ["55abf9ade563b8f9be1f34e4233c7b7bde726059947a593322e8a553cc4c067a",
 testpath = ["46c89ebb683f473ffe2aab0ed9f12581d4d078308a3cb3765d79c6b2317b0109", "b694b3d9288dbd81685c5d2e7140b81365d46c29f5db4bc659de5aa6b98780f8"]
 toml = ["229f81c57791a41d65e399fc06bf0848bab550a9dfd5ed66df18ce5f05e73d5c", "235682dd292d5899d361a811df37e04a8828a5b1da3115886b73cf81ebc9100e", "f1db651f9657708513243e61e6cc67d101a39bad662eaa9b5546f789338e07a3"]
 torch = ["0698d0a48014b9b8f36d93e69901eca2e7ec712cd2033908f7a77e7d86a4f0d7", "2ac8e58b069232f079bd289aa160366a9367ae1a4616a2c1007dceed19ff9bfa", "43a0e28c448ddeea65fb9e956bc743389592afac824095bdbc08e8a87364c639", "661ad06b4616663149bd504e8c0271196d0386712e21a92619d95ba88138794a", "880a0c22692eaebbce808a5bf2255ab7d345ab43c40795be0a421c6250ba0fb4", "a13bf6f78a49d844b85c142b8cd62d2e1833a11ed21ea0bc6b1ac73d24c76415", "a8c21f82fd03b67927078ea917040478c3263753fe1906fc19d0f5f0c7d9aa10", "b87fd224a7de3bc01ce87eb947698797b4514e27115b0aa60a56991515dd9dd6", "f63d489c54b4f170ce8335727bbb196ceb9acd0e7805477bbef8fabc914bc0f9"]
+torch-kfac = []
 tornado = ["0662d28b1ca9f67108c7e3b77afabfb9c7e87bde174fbda78186ecedc2499a9d", "4e5158d97583502a7e2739951553cbd88a72076f152b4b11b64b9a10c4c49409", "732e836008c708de2e89a31cb2fa6c0e5a70cb60492bee6f1ea1047500feaf7f", "8154ec22c450df4e06b35f131adc4f2f3a12ec85981a203301d310abf580500f", "8e9d728c4579682e837c92fdd98036bd5cdefa1da2aaf6acf26947e6dd0c01c5", "d4b3e5329f572f055b587efc57d29bd051589fb5a43ec8898c77a47ec2fa2bbb", "e5f2585afccbff22390cddac29849df463b252b711aa2ce7c5f3f342a5b3b444"]
 tqdm = ["d385c95361699e5cf7622485d9b9eae2d4864b21cd5a2374a9c381ffed701021", "e22977e3ebe961f72362f6ddfb9197cc531c9737aaf5f607ef09740c849ecd05"]
 traitlets = ["9c4bd2d267b7153df9152698efb1050a5d84982d3384a37b2c1f7723ba3e7835", "c6cb5e6f57c5a9bdaa40fa71ce7b4af30298fbab9ece9815b5d995ab6217c7d9"]

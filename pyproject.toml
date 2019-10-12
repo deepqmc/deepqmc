@@ -35,6 +35,7 @@ pytest = "^4.4"
 nbstripout = "^0.3.5"
 pysnooper = "^0.0.12"
 tensorboard = "^2.0"
+torch-kfac = { path = "vendor/torch-kfac", develop = true }
 
 [tool.black]
 target-version = ["py37"]
