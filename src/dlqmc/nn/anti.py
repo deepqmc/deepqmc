@@ -4,11 +4,16 @@ from torch import nn
 
 from ..utils import NULL_DEBUG
 
+if torch.__version__ >= '1.2.0':
+    from torch import det
+else:
+    from ..torchext import bdet as det
+
 
 def eval_slater(xs):
     if xs.shape[-1] == 0:
         return xs.new_ones(len(xs))
-    return torch.det(xs)
+    return det(xs)
 
 
 class NetPairwiseAntisymmetry(nn.Module):
