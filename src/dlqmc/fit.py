@@ -19,7 +19,7 @@ def loss_local_energy(Es_loc, psis, ws, E_ref=None, p=1):
 def loss_total_energy_indirect(Es_loc, psis, ws):
     assert Es_loc.grad_fn is None
     E0 = (ws * Es_loc).mean()
-    return 2 * (ws * psis / psis.detach() * (Es_loc - E0)).mean()
+    return 2 * (ws * (Es_loc - E0) * psis.abs().log()).mean()
 
 
 def loss_least_squares(y_pred, y_true):
