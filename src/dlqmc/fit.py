@@ -38,7 +38,8 @@ def fit_wfnet(
     opt,
     sample_gen,
     steps,
-    indirect=False,
+    require_energy_gradient=False,
+    require_psi_gradient=True,
     clip_grad=None,
     writer=None,
     start=0,
@@ -62,8 +63,8 @@ def fit_wfnet(
             Es_loc, psis, forces = local_energy(
                 rs,
                 wfnet,
-                create_graph=not indirect,
-                keep_graph=indirect,
+                create_graph=require_energy_gradient,
+                keep_graph=require_psi_gradient,
                 return_grad=True,
             )
             forces = forces / psis.detach()[:, None, None]
