@@ -16,10 +16,11 @@ def loss_local_energy(Es_loc, psis, ws, E_ref=None, p=1):
     return (ws * (Es_loc - E0).abs() ** p).mean()
 
 
-def loss_total_energy_indirect(Es_loc, psis, ws):
-    assert Es_loc.grad_fn is None
-    E0 = (ws * Es_loc).mean()
-    return 2 * (ws * (Es_loc - E0) * psis.abs().log()).mean()
+class LossWeightedLogProb:
+    def __call__(self, Es_loc, psis, ws):
+        assert Es_loc.grad_fn is None
+        self.weights = ws * (Es_loc - (ws * Es_loc).mean())
+        return 2 * (self.weights * torch.log(psis.abs())).mean()
 
 
 def loss_least_squares(y_pred, y_true):
