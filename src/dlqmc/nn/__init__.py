@@ -13,7 +13,7 @@ from .base import (
 from .bfnet import BFNet
 from .gto import GTOBasis, GTOShell
 from .hannet import HanNet
-from .slaterjastrownet import SlaterJastrowNet
+from .paulinet import PauliNet
 from .wfnet import WFNet, WFNetAnti
 
 __all__ = [
@@ -29,7 +29,7 @@ __all__ = [
     'PairwiseDistance3D',
     'PairwiseSelfDistance3D',
     'SSP',
-    'SlaterJastrowNet',
+    'PauliNet',
     'WFNet',
     'WFNetAnti',
     'get_custom_dnn',

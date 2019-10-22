@@ -16,7 +16,7 @@ from .gto import GTOBasis
 from .molorb import MolecularOrbital
 
 
-class SlaterJastrowNet(BaseWFNet):
+class PauliNet(BaseWFNet):
     def __init__(
         self,
         geom,
