@@ -5,7 +5,7 @@ from pyscf import dft, gto, scf
 from pytest import approx
 from torch.testing import assert_allclose
 
-from dlqmc.nn import SlaterJastrowNet, pairwise_diffs
+from dlqmc.nn import PauliNet, pairwise_diffs
 from dlqmc.pyscfext import eval_ao_normed
 
 
@@ -29,7 +29,7 @@ def mf(mol):
 
 @pytest.fixture
 def gtowf(mf):
-    return SlaterJastrowNet.from_pyscf(mf).double()
+    return PauliNet.from_pyscf(mf).double()
 
 
 def test_eval_ao_normed(mol, grids):

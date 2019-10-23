@@ -2,9 +2,9 @@ import pytest
 import torch
 from torch import nn
 
-from dlqmc.fit import fit_wfnet, loss_total_energy_indirect, wfnet_fit_driver_simple
+from dlqmc.fit import fit_wfnet, LossWeightedLogProb, wfnet_fit_driver_simple
 from dlqmc.geom import geomdb
-from dlqmc.nn import GTOBasis, SlaterJastrowNet
+from dlqmc.nn import GTOBasis, PauliNet
 from dlqmc.nn.schnet import ElectronicSchnet
 from dlqmc.physics import local_energy
 from dlqmc.sampling import LangevinSampler
@@ -32,7 +32,7 @@ def geom():
     return geomdb['H2']
 
 
-@pytest.fixture(params=[pytest.param(SlaterJastrowNet, marks=pyscf_marks)])
+@pytest.fixture(params=[pytest.param(PauliNet, marks=pyscf_marks)])
 def net_factory(request):
     return request.param
 
@@ -54,7 +54,7 @@ class JastrowNet(nn.Module):
 def wfnet(net_factory, geom):
     args = (geom, 3, 0)
     kwargs = {}
-    if net_factory is SlaterJastrowNet:
+    if net_factory is PauliNet:
         mol = pyscf.gto.M(atom=geom.as_pyscf(), unit='bohr', basis='6-311g', cart=True)
         basis = GTOBasis.from_pyscf(mol)
         args += (basis,)
@@ -81,11 +81,10 @@ def test_antisymmetry_trained(wfnet, rs):
     sampler = LangevinSampler(wfnet, torch.rand_like(rs), tau=0.1)
     fit_wfnet(
         wfnet,
-        loss_total_energy_indirect,
+        LossWeightedLogProb(),
         torch.optim.Adam(wfnet.parameters(), lr=1e-2),
         wfnet_fit_driver_simple(sampler),
         range(10),
-        indirect=True,
     )
     assert torch.allclose(wfnet(rs[:, [0, 2, 1]]), -wfnet(rs), atol=0)
 

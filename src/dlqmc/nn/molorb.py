@@ -1,4 +1,4 @@
-from logging import warn
+from logging import warning
 
 import numpy as np
 import torch
@@ -34,7 +34,7 @@ class MolecularOrbital(nn.Module):
             eye = torch.eye(len(geom), out=torch.empty_like(dists))
             factors = (eye + dists / (rc + rc[:, None])).min(dim=-1).values
             if (factors < 0.99).any():
-                warn('Reducing cusp-correction cutoffs due to overlaps')
+                warning('Reducing cusp-correction cutoffs due to overlaps')
             rc = rc * factors
             self.cusp_corr = CuspCorrection(geom.charges, n_orbitals, rc, eps=eps)
             self.register_buffer('basis_cusp_info', basis.get_cusp_info(rc).t())
