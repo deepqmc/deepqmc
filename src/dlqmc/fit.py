@@ -49,8 +49,6 @@ def fit_wfnet(
     writer=None,
     start=0,
     debug=NULL_DEBUG,
-    scheduler=None,
-    epoch_size=100,
     skip_outliers=False,
     clip_outliers=False,
     p=0.01,
@@ -139,8 +137,7 @@ def fit_wfnet(
                 writer.add_scalar(f'param/{label}', value, step)
         opt.step()
         opt.zero_grad()
-        if scheduler and (step + 1) % epoch_size == 0:
-            scheduler.step()
+        yield step
 
 
 def wfnet_fit_driver(
