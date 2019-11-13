@@ -4,7 +4,8 @@ import numpy as np
 import torch
 from torch import nn
 
-from ..utils import NULL_DEBUG, nondiag
+from ..indexing import pair_idxs, spin_pair_idxs
+from ..utils import NULL_DEBUG
 from .base import SSP, get_log_dnn
 
 
@@ -45,7 +46,7 @@ class ElectronicSchnet(nn.Module):
         )
         super().__init__()
         self.version = version
-        self.n_up = n_up
+        self.n_up, self.n_down = n_up, n_down
         self.n_interactions = n_interactions
         self.return_interactions = return_interactions
         self.Y = nn.Parameter(torch.randn(n_nuclei, kernel_dim))
@@ -66,30 +67,20 @@ class ElectronicSchnet(nn.Module):
         edges_elec, edges_nuc = edges
         *batch_dims, n_elec = edges_nuc.shape[:-2]
         assert edges_elec.shape[:-1] == (*batch_dims, n_elec, n_elec)
+        assert n_elec == self.n_up + self.n_down
         interactions = [] if self.return_interactions else None
-        ij = np.vstack(np.mask_indices(n_elec, nondiag)).T  # nondiagonal elements
-        if self.version == 2:
-            spin_mask = ij < self.n_up
-            ijs_spin = [
-                ij[spin_mask.all(axis=1)].T,
-                ij[np.diff(spin_mask.astype(int))[:, 0] == -1].T,
-                ij[np.diff(spin_mask.astype(int))[:, 0] == 1].T,
-                ij[~spin_mask.any(axis=1)].T,
-            ]  # indexes for up-up, up-down, down-up, down-down
-            n_el = {'u': self.n_up, 'd': n_elec - self.n_up}
         x = debug[0] = torch.cat(
             [
                 X.clone().expand(n, -1)
                 for X, n in zip(
-                    self.X,
-                    [self.n_up, n_elec - self.n_up] if len(self.X) == 2 else [n_elec],
+                    self.X, [self.n_up, self.n_down] if len(self.X) == 2 else [n_elec]
                 )
             ]
         ).expand(*batch_dims, -1, -1)
         for n in range(self.n_interactions):
             h = self.h[f'{n}'](x)
             if self.version == 1:
-                i, j = ij.T
+                i, j = pair_idxs(n_elec).T
                 z_elec = (
                     (self.w[f'{n}'](edges_elec[..., i, j, :]) * h[..., j, :])
                     .view(*batch_dims, n_elec, -1, h.shape[-1])
@@ -102,9 +93,13 @@ class ElectronicSchnet(nn.Module):
             elif self.version == 2:
                 z_elec_uu, z_elec_ud, z_elec_du, z_elec_dd = (
                     (self.w[f'{n},{si == sj}'](edges_elec[..., i, j, :]) * h[..., j, :])
-                    .view(*batch_dims, n_el[si], -1, h.shape[-1])
+                    .view(*batch_dims, n_si, -1, h.shape[-1])
                     .sum(dim=-2)
-                    for (si, sj), (i, j) in zip(product('ud', repeat=2), ijs_spin)
+                    for (si, sj), (i, j), n_si in zip(
+                        product('ud', repeat=2),
+                        spin_pair_idxs(self.n_up, self.n_down, transposed=True),
+                        [self.n_up, self.n_up, self.n_down, self.n_down],
+                    )
                 )
                 z_elec_same = torch.cat([z_elec_uu, z_elec_dd], dim=-2)
                 z_elec_anti = torch.cat([z_elec_ud, z_elec_du], dim=-2)
@@ -112,8 +107,8 @@ class ElectronicSchnet(nn.Module):
                     dim=-2
                 )
                 z = (
-                    self.g[f'{n},True'](z_elec_same)
-                    + self.g[f'{n},False'](z_elec_anti)
+                    self.g[f'{n},{True}'](z_elec_same)
+                    + self.g[f'{n},{False}'](z_elec_anti)
                     + self.g[f'{n},n'](z_nuc)
                 )
             if interactions is not None:
