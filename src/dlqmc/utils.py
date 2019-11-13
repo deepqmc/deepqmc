@@ -217,3 +217,17 @@ def weighted_mean_var(xs, ws):
     ws = normalize_mean(ws)
     mean = (ws * xs).mean()
     return mean, (ws * (xs - mean) ** 2).mean()
+
+
+class AttrDict(dict):
+    def __getattr__(self, key):
+        try:
+            return super().__getattr__(self, key)
+        except AttributeError as e:
+            try:
+                return self[key]
+            except KeyError:
+                raise e
+
+    def __setattr__(self, key, val):
+        super().__setitem__(key, val)

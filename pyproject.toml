@@ -1,6 +1,7 @@
 [tool.poetry]
 name = "dlqmc"
 version = "0.1.0"
+description = "Deep-learning quantum Monte Carlo"
 authors = [
     "Zeno Schätzle <zenoone@physik.fu-berlin.de>",
     "Jan Hermann <jan.hermann@fu-berlin.de>",
@@ -17,9 +18,18 @@ torch = "~1.2"
 scipy = "^1.2"
 pyscf = "^1.6"
 pandas = "^0.24.2"
+pytest = { version = "^4.4", optional = true }
+tensorboard = { version = "^2.0", optional = true }
+tqdm = { version = "^4.31", optional = true }
+toml = { version = "^0.10.0", optional = true }
+click = { version = "^7.0", optional = true }
+
+[tool.poetry.extras]
+test = ["pytest"]
+train = ["tensorboard", "tqdm", "toml", "click"]
+cli = ["click"]
 
 [tool.poetry.dev-dependencies]
-tqdm = "^4.31"
 ipykernel = "^5.1"
 matplotlib = "^3.0"
 ipywidgets = "^7.4"
@@ -31,11 +41,11 @@ flake8-quotes = "^1.0"
 black = "^19-beta.0"
 pep8-naming = "^0.7.0"
 isort = "^4.3"
-pytest = "^4.4"
 nbstripout = "^0.3.5"
 pysnooper = "^0.0.12"
-tensorboard = "^2.0"
-torch-kfac = { path = "vendor/torch-kfac", develop = true }
+
+[tool.poetry.scripts]
+dlqmc-train = "dlqmc.train:train_from_file"
 
 [tool.black]
 target-version = ["py37"]
@@ -44,4 +54,3 @@ skip-string-normalization = true
 [build-system]
 requires = ["poetry>=0.12"]
 build-backend = "poetry.masonry.api"
-

@@ -1,0 +1,43 @@
+# version 0.4.0
+
+[model_kwargs]
+geomname = ""
+charge = 0
+spin = 0
+basis = "6-311g"
+
+[model_kwargs.pauli_kwargs]
+dist_basis_dim = 32
+freeze_mos = true
+
+[model_kwargs.omni_kwargs]
+embedding_dim = 128
+n_jastrow_layers = 3
+n_backflow_layers = 3
+with_jastrow = true
+with_backflow = true
+with_r_backflow = false
+
+[model_kwargs.omni_kwargs.schnet_kwargs]
+n_interactions = 3
+kernel_dim = 64
+version = 2
+
+[model_kwargs.omni_kwargs.schnet_subnet_kwargs]
+n_filter_layers = 2
+n_kernel_in_layers = 1
+n_kernel_out_layers = 1
+
+[train_kwargs]
+learning_rate = 0.01
+sampler_size = 2_000
+tau = 0.05
+n_steps = 2_000
+clip_outliers = true
+cuda = true
+
+[train_kwargs.driver_kwargs]
+batch_size = 10_000
+sample_every = 100
+n_discard = 50
+n_decorrelate = 1

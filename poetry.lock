@@ -1,8 +1,8 @@
 [[package]]
-category = "dev"
+category = "main"
 description = "Abseil Python Common Libraries, see https://github.com/abseil/abseil-py."
 name = "absl-py"
-optional = false
+optional = true
 python-versions = "*"
 version = "0.8.1"
 
@@ -27,15 +27,15 @@ python-versions = "*"
 version = "0.1.0"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "Atomic file writes."
 name = "atomicwrites"
-optional = false
+optional = true
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 version = "1.3.0"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "Classes Without Boilerplate"
 name = "attrs"
 optional = false
@@ -85,7 +85,7 @@ python-versions = "*"
 version = "2019.3.9"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "Composable command line interface toolkit"
 name = "click"
 optional = false
@@ -93,7 +93,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 version = "7.0"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "Cross-platform colored terminal text."
 marker = "python_version >= \"3.3\" and sys_platform == \"win32\" or sys_platform == \"win32\""
 name = "colorama"
@@ -142,7 +142,7 @@ description = "the modular source code checker: pep8, pyflakes and co"
 name = "flake8"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
-version = "3.7.6"
+version = "3.7.8"
 
 [package.dependencies]
 entrypoints = ">=0.3.0,<0.4.0"
@@ -204,10 +204,10 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 version = "0.17.1"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "HTTP/2-based RPC framework"
 name = "grpcio"
-optional = false
+optional = true
 python-versions = "*"
 version = "1.24.1"
 
@@ -369,10 +369,10 @@ version = "1.0.1"
 setuptools = "*"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "Python implementation of Markdown."
 name = "markdown"
-optional = false
+optional = true
 python-versions = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*"
 version = "3.1.1"
 
@@ -419,11 +419,11 @@ python-versions = "*"
 version = "0.8.4"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "More routines for operating on iterables, beyond itertools"
 marker = "python_version > \"2.7\""
 name = "more-itertools"
-optional = false
+optional = true
 python-versions = ">=3.4"
 version = "7.0.0"
 
@@ -573,10 +573,10 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 version = "5.4.1"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "plugin and hook calling mechanisms for python"
 name = "pluggy"
-optional = false
+optional = true
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 version = "0.9.0"
 
@@ -601,10 +601,10 @@ six = ">=1.9.0"
 wcwidth = "*"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "Protocol Buffers"
 name = "protobuf"
-optional = false
+optional = true
 python-versions = "*"
 version = "3.7.0"
 
@@ -622,10 +622,10 @@ python-versions = "*"
 version = "0.6.0"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "library with cross-python path, ini-parsing, io, code, log facilities"
 name = "py"
-optional = false
+optional = true
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 version = "1.8.0"
 
@@ -699,10 +699,10 @@ future = "*"
 six = "*"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "pytest: simple powerful testing with Python"
 name = "pytest"
-optional = false
+optional = true
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 version = "4.4.0"
 
@@ -783,10 +783,10 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*"
 version = "1.12.0"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "TensorBoard lets you watch Tensors Flow"
 name = "tensorboard"
-optional = false
+optional = true
 python-versions = ">= 2.7, != 3.0.*, != 3.1.*"
 version = "2.0.0"
 
@@ -826,7 +826,7 @@ python-versions = "*"
 version = "0.4.2"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "Python Library for Tom's Obvious, Minimal Language"
 name = "toml"
 optional = false
@@ -847,22 +847,6 @@ numpy = "*"
 
 [[package]]
 category = "dev"
-description = ""
-name = "torch-kfac"
-optional = false
-python-versions = "^3.7"
-version = "0.1.0"
-
-[package.dependencies]
-torch = ">0.4"
-
-[package.source]
-reference = ""
-type = "directory"
-url = "vendor/torch-kfac"
-
-[[package]]
-category = "dev"
 description = "Tornado is a Python web framework and asynchronous networking library, originally developed at FriendFeed."
 name = "tornado"
 optional = false
@@ -870,10 +854,10 @@ python-versions = ">= 2.7, !=3.0.*, !=3.1.*, !=3.2.*, != 3.3.*"
 version = "5.1.1"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "Fast, Extensible Progress Meter"
 name = "tqdm"
-optional = false
+optional = true
 python-versions = ">=2.6, !=3.0.*, !=3.1.*"
 version = "4.31.1"
 
@@ -907,19 +891,19 @@ python-versions = "*"
 version = "0.5.1"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "The comprehensive WSGI web application library."
 name = "werkzeug"
-optional = false
+optional = true
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 version = "0.16.0"
 
 [[package]]
-category = "dev"
+category = "main"
 description = "A built-package format for Python."
 marker = "python_version >= \"3\""
 name = "wheel"
-optional = false
+optional = true
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 version = "0.33.6"
 
@@ -934,8 +918,13 @@ version = "3.4.2"
 [package.dependencies]
 notebook = ">=4.4.1"
 
+[extras]
+cli = ["click"]
+test = ["pytest"]
+train = ["tensorboard", "tqdm", "toml", "click"]
+
 [metadata]
-content-hash = "afc1bdb8258377bb05f6bd09404688e92977d8f82edea1abeee00acc866b0dcd"
+content-hash = "8da76dec6225cae004e1bdebc8962273c36590fe444063dbea9de3a8ee4281c6"
 python-versions = "^3.7"
 
 [metadata.hashes]
@@ -954,7 +943,7 @@ cycler = ["1d8a5ae1ff6c5cf9b93e8811e581232ad8920aeec647c37316ceac982b08cb2d", "c
 decorator = ["33cd704aea07b4c28b3eb2c97d288a06918275dac0ecebdaf1bc8a48d98adb9e", "cabb249f4710888a2fc0e13e9a16c343d932033718ff62e1e9bc93a9d3a9122b"]
 defusedxml = ["24d7f2f94f7f3cb6061acb215685e5125fbcdc40a857eff9de22518820b0a4f4", "702a91ade2968a82beb0db1e0766a6a273f33d4616a6ce8cde475d8e09853b20"]
 entrypoints = ["589f874b313739ad35be6e0cd7efde2a4e9b6fea91edcc34e58ecbb8dbe56d19", "c70dd71abe5a8c85e55e12c19bd91ccfeec11a6e99044204511f9ed547d48451"]
-flake8 = ["6d8c66a65635d46d54de59b027a1dda40abbe2275b3164b634835ac9c13fd048", "6eab21c6e34df2c05416faa40d0c59963008fff29b6f0ccfe8fa28152ab3e383"]
+flake8 = ["19241c1cbc971b9962473e4438a2ca19749a7dd002dd1a946eaba171b4114548", "8e9dfa3cecb2400b3738a42c54c3043e821682b9c840b0448c0503f781130696"]
 flake8-bugbear = ["07b6e769d7f4e168d590f7088eae40f6ddd9fa4952bed31602def65842682c83", "0ccf56975f4db1d69dc1cf3598c99d768ebf95d0cad27d76087954aa399b515a"]
 flake8-comprehensions = ["b83891fec0e680b07aa1fd92e53eb6993be29a0f3673a09badbe8da307c445e0", "e4ccf1627f75f192eb7fde640f5edb81c98d04b1390df9d4145ffd7710bb1ef2"]
 flake8-polyfill = ["12be6a34ee3ab795b19ca73505e7b55826d5f6ad7230d31b18e106400169b9e9", "e44b087597f6da52ec6393a709e7108b2905317d0c0b744cdca6208e670d8eda"]
@@ -1017,7 +1006,6 @@ terminado = ["55abf9ade563b8f9be1f34e4233c7b7bde726059947a593322e8a553cc4c067a",
 testpath = ["46c89ebb683f473ffe2aab0ed9f12581d4d078308a3cb3765d79c6b2317b0109", "b694b3d9288dbd81685c5d2e7140b81365d46c29f5db4bc659de5aa6b98780f8"]
 toml = ["229f81c57791a41d65e399fc06bf0848bab550a9dfd5ed66df18ce5f05e73d5c", "235682dd292d5899d361a811df37e04a8828a5b1da3115886b73cf81ebc9100e", "f1db651f9657708513243e61e6cc67d101a39bad662eaa9b5546f789338e07a3"]
 torch = ["0698d0a48014b9b8f36d93e69901eca2e7ec712cd2033908f7a77e7d86a4f0d7", "2ac8e58b069232f079bd289aa160366a9367ae1a4616a2c1007dceed19ff9bfa", "43a0e28c448ddeea65fb9e956bc743389592afac824095bdbc08e8a87364c639", "661ad06b4616663149bd504e8c0271196d0386712e21a92619d95ba88138794a", "880a0c22692eaebbce808a5bf2255ab7d345ab43c40795be0a421c6250ba0fb4", "a13bf6f78a49d844b85c142b8cd62d2e1833a11ed21ea0bc6b1ac73d24c76415", "a8c21f82fd03b67927078ea917040478c3263753fe1906fc19d0f5f0c7d9aa10", "b87fd224a7de3bc01ce87eb947698797b4514e27115b0aa60a56991515dd9dd6", "f63d489c54b4f170ce8335727bbb196ceb9acd0e7805477bbef8fabc914bc0f9"]
-torch-kfac = []
 tornado = ["0662d28b1ca9f67108c7e3b77afabfb9c7e87bde174fbda78186ecedc2499a9d", "4e5158d97583502a7e2739951553cbd88a72076f152b4b11b64b9a10c4c49409", "732e836008c708de2e89a31cb2fa6c0e5a70cb60492bee6f1ea1047500feaf7f", "8154ec22c450df4e06b35f131adc4f2f3a12ec85981a203301d310abf580500f", "8e9d728c4579682e837c92fdd98036bd5cdefa1da2aaf6acf26947e6dd0c01c5", "d4b3e5329f572f055b587efc57d29bd051589fb5a43ec8898c77a47ec2fa2bbb", "e5f2585afccbff22390cddac29849df463b252b711aa2ce7c5f3f342a5b3b444"]
 tqdm = ["d385c95361699e5cf7622485d9b9eae2d4864b21cd5a2374a9c381ffed701021", "e22977e3ebe961f72362f6ddfb9197cc531c9737aaf5f607ef09740c849ecd05"]
 traitlets = ["9c4bd2d267b7153df9152698efb1050a5d84982d3384a37b2c1f7723ba3e7835", "c6cb5e6f57c5a9bdaa40fa71ce7b4af30298fbab9ece9815b5d995ab6217c7d9"]
