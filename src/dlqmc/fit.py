@@ -135,6 +135,8 @@ def fit_wfnet(
             writer.add_scalar('grad/norm', grads.norm(), step)
             for label, value in wfnet.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
+            lr = opt.state_dict()['param_groups'][0]['lr']
+            writer.add_scalar('learning_rate', lr, step)
         opt.step()
         opt.zero_grad()
         yield step
