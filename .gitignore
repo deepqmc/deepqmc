@@ -4,3 +4,6 @@
 /notebooks/.ipynb_checkpoints/
 /notebooks/tmp*
 /notebooks/runs/
+/runs
+/dist/
+/init.sh
