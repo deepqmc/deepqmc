@@ -25,28 +25,32 @@ class TOMLParam(click.ParamType):
             self.fail(f'{value!r} is not a valid TOML expression', param, ctx)
 
 
-def merge_into_defaults(options):
-    params = get_default_params()
-    for option in options:
-        target = params
-        while True:
-            key, option = next(iter(option.items()))
-            if not isinstance(option, dict):
-                break
-            target = target[key]
-        print(f'Updating {key!r} from {target[key]!r} to {option!r}')
-        target[key] = option
-    return params
+def merge_into(left, right):
+    for key, val in right.items():
+        assert key in left
+        if isinstance(val, dict):
+            assert isinstance(left[key], dict)
+            merge_into(left[key], val)
+        else:
+            assert type(left[key]) is type(val)
+            if left[key] != val:
+                print(f'Updating {key!r} from {left[key]!r} to {val!r}')
+                left[key] = val
 
 
 @click.command()
 @click.option('--basedir', default='runs')
 @click.option('--label')
+@click.option('--conf', type=click.File())
 @click.option('options', '-o', '--option', multiple=True, type=TOMLParam())
-def prepare(basedir, label, options):
+def prepare(basedir, label, options, conf):
     basedir = Path(basedir)
     label = label or datetime.now().isoformat(timespec='seconds')
-    params = merge_into_defaults(options)
+    params = get_default_params()
+    if conf:
+        merge_into(params, toml.load(conf))
+    for option in options:
+        merge_into(params, option)
     path = basedir / label
     metadata = toml.loads((ROOT / 'pyproject.toml').read_text())['tool']['poetry']
     pacakge_file = f'{metadata["name"]}-{metadata["version"]}.tar.gz'
