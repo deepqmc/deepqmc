@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -10,7 +10,9 @@ from dlqmc.train import get_default_params
 
 INIT_FILE = 'init.sh'
 PARAM_FILE = 'params.toml'
-ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_FILE = 'dlqmc.tar.gz'
+UTIL_DIR = Path(__file__).resolve().parent
+ROOT = UTIL_DIR.parent
 
 
 class TOMLParam(click.ParamType):
@@ -49,9 +51,9 @@ def prepare(basedir, label, options):
     metadata = toml.loads((ROOT / 'pyproject.toml').read_text())['tool']['poetry']
     pacakge_file = f'{metadata["name"]}-{metadata["version"]}.tar.gz'
     path.mkdir(parents=True)
-    shutil.copy(ROOT / 'dist' / pacakge_file, path)
+    shutil.copy(ROOT / 'dist' / pacakge_file, path / PACKAGE_FILE)
     (path / PARAM_FILE).write_text(toml.dumps(params))
-    shutil.copy(ROOT / 'scripts/init-run.sh', path / INIT_FILE)
+    shutil.copy(UTIL_DIR / 'init-run.sh', path / INIT_FILE)
 
 
 if __name__ == '__main__':
