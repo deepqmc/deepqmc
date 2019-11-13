@@ -80,7 +80,7 @@ def train(
             clip_outliers=clip_outliers,
         ):
             if cwd and step % 100 == 50:
-                torch.save(wfnet, Path(cwd) / 'wfnet.pt')
+                torch.save(wfnet, Path(cwd) / f'wfnet-{step}.pt')
 
 
 @click.command('train')
