@@ -26,6 +26,7 @@ class PauliNet(BaseWFNet):
         mo_factory=None,
         jastrow_factory=None,
         backflow_factory=None,
+        r_backflow_factory=None,
         omni_factory=None,
         dist_basis_dim=32,
         dist_basis_cutoff=10.0,
@@ -77,12 +78,12 @@ class PauliNet(BaseWFNet):
             if backflow_factory
             else None
         )
+        self.r_backflow = None
         if omni_factory:
             assert not backflow_factory and not jastrow_factory
-            self.omni = omni_factory(
-                len(geom), dist_basis_dim, n_up, n_down, n_orbitals
-            )
+            self.omni = omni_factory(geom, dist_basis_dim, n_up, n_down, n_orbitals)
             self.backflow = self.omni.forward_backflow
+            self.r_backflow = self.omni.forward_r_backflow
             self.jastrow = self.omni.forward_jastrow
 
     @classmethod
@@ -133,14 +134,19 @@ class PauliNet(BaseWFNet):
             if self.jastrow or self.mo.net
             else None
         )
+        if self.r_backflow or self.backflow or self.cusp_same or self.jastrow:
+            dists_elec = pairwise_distance(rs, rs)
+        if self.r_backflow or self.backflow or self.jastrow:
+            edges_nuc = edges_nuc[n_atoms:].view(batch_dim, n_elec, n_atoms, -1)
+            edges = self.dist_basis(dists_elec), edges_nuc
+        if self.r_backflow:
+            rs_flowed = self.r_backflow(rs, edges, debug=debug)
+            diffs_nuc = pairwise_diffs(
+                torch.cat([self.coords, rs_flowed.flatten(end_dim=1)]), self.coords
+            )
         with debug.cd('mos'):
             xs = self.mo(diffs_nuc, edges_nuc, debug=debug)
         xs = debug['slaters'] = xs.view(batch_dim, n_elec, -1)
-        if self.backflow or self.cusp_same or self.jastrow:
-            dists_elec = pairwise_distance(rs, rs)
-        if self.backflow or self.jastrow:
-            edges_nuc = edges_nuc[n_atoms:].view(batch_dim, n_elec, n_atoms, -1)
-            edges = self.dist_basis(dists_elec), edges_nuc
         if self.backflow:
             with debug.cd('backflow'):
                 xs = self.backflow(xs, edges, debug=debug)
