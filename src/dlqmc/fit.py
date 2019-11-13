@@ -33,6 +33,10 @@ def fit_wfnet_multi(wfnet, loss_funcs, opts, gen_factory, gen_kwargs, writers):
             fit_wfnet(wfnet, loss_func, opt, gen_factory(**kwargs), writer=writer)
 
 
+class NanLoss(Exception):
+    pass
+
+
 def fit_wfnet(
     wfnet,
     loss_func,
@@ -108,6 +112,8 @@ def fit_wfnet(
             torch.cat(xs) for xs in zip(*subbatches)
         )
         loss = d['loss'] = loss.sum()
+        if torch.isnan(loss).any():
+            raise NanLoss()
         d['Es_loc'], d['psis'] = Es_loc, psis
         if clip_grad:
             clip_grad_norm_(wfnet.parameters(), clip_grad)
