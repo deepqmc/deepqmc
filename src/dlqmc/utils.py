@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from datetime import datetime
 from functools import partial, wraps
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -31,6 +30,10 @@ def plot_func(
     ax=None,
     **kwargs,
 ):
+    if not ax:
+        import matplotlib.pyplot as plt
+
+        ax = plt.gca()
     n_pts = int((bounds[1] - bounds[0]) / density)
     x = torch.linspace(bounds[0], bounds[1], n_pts)
     if x_line:
@@ -48,11 +51,14 @@ def plot_func(
         y = y.detach().cpu().numpy()
     if x_line:
         x = x[:, 0]
-    ax = ax or plt.gca()
     return ax.plot(x, y, **kwargs)
 
 
-def plot_func_2d(func, bounds, density=0.02, xy_plane=False, device=None):
+def plot_func_2d(func, bounds, density=0.02, xy_plane=False, device=None, ax=None):
+    if not ax:
+        import matplotlib.pyplot as plt
+
+        ax = plt.gca()
     ns_pts = [int((bs[1] - bs[0]) / density) for bs in bounds]
     xy, x_y = get_flat_mesh(bounds, ns_pts, device=device)
     if xy_plane:
