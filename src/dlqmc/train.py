@@ -11,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import trange
 
 from .ansatz import OmniSchnet
-from .fit import LossWeightedLogProb, fit_wfnet, wfnet_fit_driver
+from .fit import LossWeightedLogProb, batched_sampler, fit_wfnet
 from .geom import geomdb
 from .nn import PauliNet
 from .sampling import LangevinSampler, rand_from_mf
@@ -57,23 +57,23 @@ def train(
     learning_rate,
     n_steps,
     sampler_size,
-    tau,
-    driver_kwargs,
+    sampler_kwargs,
 ):
+    batched_sampler_kwargs = sampler_kwargs.copy()
+    tau = batched_sampler_kwargs.pop('tau')
     rs = rand_from_mf(mf, sampler_size)
     if cuda:
         rs = rs.cuda()
         wfnet.cuda()
-    sampler = LangevinSampler(wfnet, rs, tau=tau, n_first_certain=3)
     with SummaryWriter(log_dir=cwd, flush_secs=15) as writer:
         for step in fit_wfnet(
             wfnet,
             LossWeightedLogProb(),
             torch.optim.AdamW(wfnet.parameters(), lr=learning_rate),
-            wfnet_fit_driver(
-                sampler,
+            batched_sampler(
+                LangevinSampler(wfnet, rs, tau=tau, n_first_certain=3),
                 range_sampling=partial(trange, desc='sampling', leave=False),
-                **driver_kwargs,
+                **batched_sampler_kwargs,
             ),
             trange(n_steps, desc='training'),
             writer=writer,

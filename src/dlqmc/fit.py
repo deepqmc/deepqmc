@@ -41,7 +41,7 @@ def fit_wfnet(
     wfnet,
     loss_func,
     opt,
-    sample_gen,
+    sampler,
     steps,
     require_energy_gradient=False,
     require_psi_gradient=True,
@@ -57,7 +57,7 @@ def fit_wfnet(
     clean_tau=None,
 ):
     assert not (skip_outliers and clip_outliers)
-    for step, (rs, psi0s) in zip(steps, sample_gen):
+    for step, (rs, psi0s) in zip(steps, sampler):
         d = debug[step]
         d['psi0s'], d['rs'], d['state_dict'] = psi0s, rs, state_dict_copy(wfnet)
         subbatch_size = subbatch_size or len(rs)
@@ -142,7 +142,7 @@ def fit_wfnet(
         yield step
 
 
-def wfnet_fit_driver(
+def batched_sampler(
     sampler,
     *,
     batch_size,
@@ -170,7 +170,7 @@ def wfnet_fit_driver(
         yield from rs_dl
 
 
-def wfnet_fit_driver_simple(sampler, *, n_discard=0, n_decorrelate=0):
+def simple_sampler(sampler, *, n_discard=0, n_decorrelate=0):
     while True:
         rs, psis, _ = samples_from(
             sampler, range(1), n_discard=n_discard, n_decorrelate=n_decorrelate

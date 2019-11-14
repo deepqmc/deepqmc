@@ -31,13 +31,13 @@ n_kernel_out_layers = 1
 [train_kwargs]
 learning_rate = 0.01
 sampler_size = 2_000
-tau = 0.05
 n_steps = 2_000
 clip_outliers = true
 cuda = true
 
-[train_kwargs.driver_kwargs]
+[train_kwargs.sampler_kwargs]
 batch_size = 10_000
 sample_every = 100
 n_discard = 50
 n_decorrelate = 1
+tau = 0.05

@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch import nn
 
-from dlqmc.fit import fit_wfnet, LossWeightedLogProb, wfnet_fit_driver_simple
+from dlqmc.fit import LossWeightedLogProb, fit_wfnet, simple_sampler
 from dlqmc.geom import geomdb
 from dlqmc.nn import GTOBasis, PauliNet
 from dlqmc.nn.schnet import ElectronicSchnet
@@ -83,7 +83,7 @@ def test_antisymmetry_trained(wfnet, rs):
         wfnet,
         LossWeightedLogProb(),
         torch.optim.Adam(wfnet.parameters(), lr=1e-2),
-        wfnet_fit_driver_simple(sampler),
+        simple_sampler(sampler),
         range(10),
     )
     assert torch.allclose(wfnet(rs[:, [0, 2, 1]]), -wfnet(rs), atol=0)
