@@ -52,6 +52,8 @@ def train(
     mf,
     *,
     cwd=None,
+    state=None,
+    save_every=None,
     clip_outliers,
     cuda,
     learning_rate,
@@ -65,29 +67,56 @@ def train(
     if cuda:
         rs = rs.cuda()
         wfnet.cuda()
-    with SummaryWriter(log_dir=cwd, flush_secs=15) as writer:
+    opt = torch.optim.AdamW(wfnet.parameters(), lr=learning_rate)
+    if state:
+        init_step = state['step'] + 1
+        wfnet.load_state_dict(state['wfnet'])
+        opt.load_state_dict(state['opt'])
+    else:
+        init_step = 0
+    with SummaryWriter(log_dir=cwd, flush_secs=15, purge_step=init_step - 1) as writer:
         for step in fit_wfnet(
             wfnet,
             LossWeightedLogProb(),
-            torch.optim.AdamW(wfnet.parameters(), lr=learning_rate),
+            opt,
             batched_sampler(
                 LangevinSampler(wfnet, rs, tau=tau, n_first_certain=3),
                 range_sampling=partial(trange, desc='sampling', leave=False),
                 **batched_sampler_kwargs,
             ),
-            trange(n_steps, desc='training'),
+            trange(
+                init_step, n_steps, initial=init_step, total=n_steps, desc='training'
+            ),
             writer=writer,
             clip_outliers=clip_outliers,
         ):
-            if cwd and step % 100 == 50:
-                torch.save(wfnet, Path(cwd) / f'wfnet-{step}.pt')
+            if cwd and save_every and (step + 1) % save_every == 0:
+                state = {
+                    'step': step,
+                    'wfnet': wfnet.state_dict(),
+                    'opt': opt.state_dict(),
+                }
+                torch.save(state, Path(cwd) / f'state-{step:05d}.pt')
 
 
 @click.command('train')
-@click.argument('path', type=click.Path(exists=True, dir_okay=False, resolve_path=True))
-def train_from_file(path):
+@click.argument('path', type=click.Path(exists=True, dir_okay=False))
+@click.option('--state', type=click.Path(dir_okay=False))
+@click.option('--save-every', default=100, show_default=True)
+def train_from_file(path, state, save_every):
     path = Path(path)
     with path.open() as f:
         params = toml.load(f, _dict=AttrDict)
-    net, mf = model(**params.model_kwargs)
-    train(net, mf, cwd=path.parent, **params.train_kwargs)
+    wfnet, mf = model(**params.model_kwargs)
+    if state:
+        state = Path(state)
+        if state.is_file():
+            state = torch.load(state)
+    train(
+        wfnet,
+        mf,
+        cwd=path.parent,
+        state=state,
+        save_every=save_every,
+        **params.train_kwargs,
+    )
