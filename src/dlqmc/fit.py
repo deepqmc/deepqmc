@@ -70,17 +70,16 @@ def fit_wfnet(
                 keep_graph=require_psi_gradient,
                 return_grad=True,
             )
-            forces = forces / psis.detach()[:, None, None]
-            forces_clean = (
-                clean_force(forces, rs, wfnet.geom, tau=clean_tau)
-                if clean_tau is not None
-                else forces
-            )
-            forces, forces_clean = (
-                x.flatten(start_dim=-2).norm(dim=-1) for x in (forces, forces_clean)
-            )
             ws = (psis.detach() / psi0s) ** 2
-            force_ws = forces_clean / forces
+            if clean_tau is not None:
+                forces = forces / psis.detach()[:, None, None]
+                forces_clean = clean_force(forces, rs, wfnet.geom, tau=clean_tau)
+                forces, forces_clean = (
+                    x.flatten(start_dim=-2).norm(dim=-1) for x in (forces, forces_clean)
+                )
+                force_ws = forces_clean / forces
+            else:
+                force_ws = torch.ones_like(ws)
             total_ws = ws * force_ws
             if skip_outliers:
                 outliers = outlier_mask(Es_loc, p, q)[0]
