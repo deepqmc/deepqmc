@@ -85,13 +85,14 @@ class OmniSchnet(nn.Module):
             self.r_backflow = Backflow(geom, embedding_dim)
         else:
             self.forward_r_backflow = None
+        self._cache = {}
 
     def _get_embeddings(self, edges, debug):
-        if getattr(self, '_edges_id', None) != id(edges):
-            self._edges_id = id(edges)
+        if self._cache.get('edges_id') != id(edges):
+            self._cache['edges_id'] = id(edges)
             with debug.cd('schnet'):
-                self._embeddings = self.schnet(edges, debug=debug)
-        return self._embeddings
+                self._cache['embeddings'] = self.schnet(edges, debug=debug)
+        return self._cache['embeddings']
 
     def forward_jastrow(self, edges, debug=NULL_DEBUG):
         xs = self._get_embeddings(edges, debug)
@@ -106,3 +107,6 @@ class OmniSchnet(nn.Module):
     def forward_r_backflow(self, rs, edges, debug=NULL_DEBUG):
         xs = self._get_embeddings(edges, debug)
         return self.r_backflow(rs, xs)
+
+    def forward_close(self):
+        self._cache.clear()

@@ -85,6 +85,8 @@ class PauliNet(BaseWFNet):
             self.backflow = self.omni.forward_backflow
             self.r_backflow = self.omni.forward_r_backflow
             self.jastrow = self.omni.forward_jastrow
+        else:
+            self.omni = None
 
     @classmethod
     def from_pyscf(
@@ -174,4 +176,6 @@ class PauliNet(BaseWFNet):
         if self.jastrow:
             with debug.cd('jastrow'):
                 psi = psi * F.softplus(self.jastrow(edges, debug=debug))
+        if self.omni:
+            self.omni.forward_close()
         return psi
