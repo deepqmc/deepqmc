@@ -33,6 +33,7 @@ n_kernel_out_layers = 1
 learning_rate = 0.01
 sampler_size = 2_000
 n_steps = 2_000
+optimizer = "AdamW"
 cuda = true
 lr_scheduler = "inverse"
 decay_rate = 200

@@ -64,6 +64,7 @@ def train(
     sampler_kwargs,
     lr_scheduler,
     decay_rate,
+    optimizer,
     fit_kwargs,
 ):
     batched_sampler_kwargs = sampler_kwargs.copy()
@@ -72,7 +73,7 @@ def train(
     if cuda:
         rs = rs.cuda()
         wfnet.cuda()
-    opt = torch.optim.AdamW(wfnet.parameters(), lr=learning_rate)
+    opt = getattr(torch.optim, optimizer)(wfnet.parameters(), lr=learning_rate)
     if lr_scheduler == 'inverse':
         scheduler = torch.optim.lr_scheduler.LambdaLR(
             opt, lambda t: 1 / (1 + t / decay_rate)
