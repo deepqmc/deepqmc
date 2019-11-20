@@ -32,6 +32,8 @@ learning_rate = 0.01
 sampler_size = 2_000
 n_steps = 2_000
 cuda = true
+lr_scheduler = "inverse"
+decay_rate = 200
 
 [train_kwargs.fit_kwargs]
 clip_outliers = true

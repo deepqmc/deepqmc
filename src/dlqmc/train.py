@@ -59,6 +59,8 @@ def train(
     n_steps,
     sampler_size,
     sampler_kwargs,
+    lr_scheduler,
+    decay_rate,
     fit_kwargs,
 ):
     batched_sampler_kwargs = sampler_kwargs.copy()
@@ -68,10 +70,18 @@ def train(
         rs = rs.cuda()
         wfnet.cuda()
     opt = torch.optim.AdamW(wfnet.parameters(), lr=learning_rate)
+    if lr_scheduler == 'inverse':
+        scheduler = torch.optim.lr_scheduler.LambdaLR(
+            opt, lambda t: 1 / (1 + t / decay_rate)
+        )
+    else:
+        scheduler = None
     if state:
         init_step = state['step'] + 1
         wfnet.load_state_dict(state['wfnet'])
         opt.load_state_dict(state['opt'])
+        if scheduler:
+            scheduler.load_state_dict(state['scheduler'])
     else:
         init_step = 0
     with SummaryWriter(log_dir=cwd, flush_secs=15, purge_step=init_step - 1) as writer:
@@ -90,12 +100,16 @@ def train(
             writer=writer,
             **fit_kwargs,
         ):
+            if scheduler:
+                scheduler.step()
             if cwd and save_every and (step + 1) % save_every == 0:
                 state = {
                     'step': step,
                     'wfnet': wfnet.state_dict(),
                     'opt': opt.state_dict(),
                 }
+                if scheduler:
+                    state['scheduler'] = scheduler.state_dict()
                 torch.save(state, Path(cwd) / f'state-{step:05d}.pt')
 
 
