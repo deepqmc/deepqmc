@@ -27,14 +27,12 @@ class TOMLParam(click.ParamType):
 
 def merge_into(left, right):
     for key, val in right.items():
-        assert key in left
         if isinstance(val, dict):
             assert isinstance(left[key], dict)
             merge_into(left[key], val)
         else:
-            assert type(left[key]) is type(val)
-            if left[key] != val:
-                print(f'Updating {key!r} from {left[key]!r} to {val!r}')
+            if left.get(key) != val:
+                print(f'Updating {key!r} from {left.get(key)!r} to {val!r}')
                 left[key] = val
 
 

@@ -1,7 +1,6 @@
 # version 0.4.0
 
 [model_kwargs]
-geomname = ""
 charge = 0
 spin = 0
 basis = "6-311g"
