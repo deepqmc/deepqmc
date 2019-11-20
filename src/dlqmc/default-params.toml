@@ -37,6 +37,7 @@ decay_rate = 200
 
 [train_kwargs.fit_kwargs]
 clip_outliers = true
+subbatch_size = 10_000
 
 [train_kwargs.sampler_kwargs]
 batch_size = 10_000
