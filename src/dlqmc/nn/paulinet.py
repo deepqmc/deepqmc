@@ -105,14 +105,20 @@ class PauliNet(BaseWFNet):
                     mf.ci, mf.ncas, mf.nelecas, tol=conf_cutoff, return_strs=False
                 )
             )
-            conf_coeff = torch.tensor(conf_coeff)
-            confs = (
-                torch.tensor(confs, dtype=torch.long)
-                .permute(1, 0, 2)
-                .flatten(start_dim=1)
-            )
         except AttributeError:
             confs = None
+        else:
+            ns_dbl = n_up - mf.nelecas[0], n_down - mf.nelecas[1]
+            conf_coeff = torch.tensor(conf_coeff)
+            confs = [
+                [
+                    torch.arange(n_dbl, dtype=torch.long).expand(len(conf_coeff), -1),
+                    torch.tensor(cfs, dtype=torch.long) + n_dbl,
+                ]
+                for n_dbl, cfs in zip(ns_dbl, confs)
+            ]
+            confs = [torch.cat(cfs, dim=-1) for cfs in confs]
+            confs = torch.cat(confs, dim=-1)
         geom = Geometry(mf.mol.atom_coords().astype('float32'), mf.mol.atom_charges())
         basis = GTOBasis.from_pyscf(mf.mol)
         wf = cls(geom, n_up, n_down, basis, configurations=confs, **kwargs)

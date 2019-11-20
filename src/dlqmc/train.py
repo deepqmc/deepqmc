@@ -6,7 +6,7 @@ from pathlib import Path
 import click
 import toml
 import torch
-from pyscf import gto, scf
+from pyscf import gto, mcscf, scf
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import trange
 
@@ -26,7 +26,7 @@ def get_default_params():
     return deepcopy(DEFAULTS)
 
 
-def model(*, geomname, basis, charge, spin, pauli_kwargs, omni_kwargs):
+def model(*, geomname, basis, charge, spin, pauli_kwargs, omni_kwargs, cas=None):
     mol = gto.M(
         atom=geomdb[geomname].as_pyscf(),
         unit='bohr',
@@ -37,8 +37,11 @@ def model(*, geomname, basis, charge, spin, pauli_kwargs, omni_kwargs):
     )
     mf = scf.RHF(mol)
     mf.kernel()
+    if cas:
+        mc = mcscf.CASSCF(mf, *cas)
+        mc.kernel()
     wfnet = PauliNet.from_pyscf(
-        mf,
+        mc if cas else mf,
         omni_factory=partial(OmniSchnet, **omni_kwargs),
         cusp_correction=True,
         cusp_electrons=True,
