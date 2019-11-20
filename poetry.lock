@@ -923,7 +923,7 @@ test = ["pytest"]
 train = ["tensorboard", "tqdm", "toml", "click"]
 
 [metadata]
-content-hash = "d7ddf16b0e94919d59f997af389302bc68c2dc922e81472db7d295c5aaadaf90"
+content-hash = "85a211509b00bd1bc64efdf61077b2fab5dbbf5b5f8b40ff11b695d49a01d3fa"
 python-versions = "^3.7"
 
 [metadata.hashes]
