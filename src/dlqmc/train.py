@@ -54,12 +54,12 @@ def train(
     cwd=None,
     state=None,
     save_every=None,
-    clip_outliers,
     cuda,
     learning_rate,
     n_steps,
     sampler_size,
     sampler_kwargs,
+    fit_kwargs,
 ):
     batched_sampler_kwargs = sampler_kwargs.copy()
     tau = batched_sampler_kwargs.pop('tau')
@@ -88,7 +88,7 @@ def train(
                 init_step, n_steps, initial=init_step, total=n_steps, desc='training'
             ),
             writer=writer,
-            clip_outliers=clip_outliers,
+            **fit_kwargs,
         ):
             if cwd and save_every and (step + 1) % save_every == 0:
                 state = {

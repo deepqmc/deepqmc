@@ -31,8 +31,10 @@ n_kernel_out_layers = 1
 learning_rate = 0.01
 sampler_size = 2_000
 n_steps = 2_000
-clip_outliers = true
 cuda = true
+
+[train_kwargs.fit_kwargs]
+clip_outliers = true
 
 [train_kwargs.sampler_kwargs]
 batch_size = 10_000
