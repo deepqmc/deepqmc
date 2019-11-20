@@ -82,7 +82,6 @@ def train(
         scheduler = None
     if state:
         init_step = state['step'] + 1
-        wfnet.load_state_dict(state['wfnet'])
         opt.load_state_dict(state['opt'])
         if scheduler:
             scheduler.load_state_dict(state['scheduler'])
@@ -117,23 +116,30 @@ def train(
                 torch.save(state, Path(cwd) / f'state-{step:05d}.pt')
 
 
+def state_from_file(path):
+    return torch.load(path) if path and Path(path).is_file() else None
+
+
+def model_from_file(path, state=None):
+    with open(path) as f:
+        params = toml.load(f, _dict=AttrDict)
+    wfnet, mf = model(**params.model_kwargs)
+    if state:
+        wfnet.load_state_dict(state['wfnet'])
+    return wfnet, mf, params
+
+
 @click.command('train')
 @click.argument('path', type=click.Path(exists=True, dir_okay=False))
 @click.option('--state', type=click.Path(dir_okay=False))
 @click.option('--save-every', default=100, show_default=True)
 def train_from_file(path, state, save_every):
-    path = Path(path)
-    with path.open() as f:
-        params = toml.load(f, _dict=AttrDict)
-    wfnet, mf = model(**params.model_kwargs)
-    if state:
-        state = Path(state)
-        if state.is_file():
-            state = torch.load(state)
+    state = state_from_file(state)
+    wfnet, mf, params = model_from_file(path, state)
     train(
         wfnet,
         mf,
-        cwd=path.parent,
+        cwd=Path(path).parent,
         state=state,
         save_every=save_every,
         **params.train_kwargs,
