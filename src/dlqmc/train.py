@@ -12,23 +12,53 @@ from tqdm.auto import trange
 
 from .ansatz import OmniSchnet
 from .fit import LossWeightedLogProb, batched_sampler, fit_wfnet
-from .geom import geomdb
+from .geom import get_system
 from .nn import PauliNet
 from .sampling import LangevinSampler, rand_from_mf
-from .utils import AttrDict
-
-DEFAULTS = toml.loads(
-    resources.read_text('dlqmc', 'default-params.toml'), _dict=AttrDict
-)
 
 
-def get_default_params():
-    return deepcopy(DEFAULTS)
+def merge_into(self, other):
+    for key, val in other.items():
+        if isinstance(val, dict):
+            if not isinstance(self.get(key), dict):
+                self[key] = {}
+            merge_into(self[key], val)
+        elif self.get(key) != val:
+            self[key] = val
 
 
-def model(*, geomname, basis, charge, spin, pauli_kwargs, omni_kwargs, cas=None):
+class Parametrization:
+    DEFAULTS = toml.loads(resources.read_text('dlqmc', 'default-params.toml'))
+
+    def __init__(self, dct=None):
+        self._dct = dct or deepcopy(Parametrization.DEFAULTS)
+
+    def __getitem__(self, key):
+        x = self._dct
+        for k in key.split('.'):
+            x = x[k]
+        return x
+
+    def __setitem__(self, key, val):
+        x = self._dct
+        keys = key.split('.')
+        for k in keys[:-1]:
+            x = x[k]
+        x[keys[-1]] = val
+
+    def update(self, other):
+        merge_into(self._dct, other)
+
+    def update_with_system(self, name, **kwargs):
+        system = get_system(name, **kwargs)
+        for key in ['geom', 'charge', 'spin']:
+            self[f'model_kwargs.{key}'] = system[key]
+        self['train_kwargs.sampler_kwargs.tau'] = system['tau']
+
+
+def model(*, geom, basis, charge, spin, pauli_kwargs, omni_kwargs, cas=None):
     mol = gto.M(
-        atom=geomdb[geomname].as_pyscf(),
+        atom=geom.as_pyscf(),
         unit='bohr',
         basis=basis,
         charge=charge,
@@ -121,12 +151,18 @@ def state_from_file(path):
 
 
 def model_from_file(path, state=None):
-    with open(path) as f:
-        params = toml.load(f, _dict=AttrDict)
-    wfnet, mf = model(**params.model_kwargs)
+    param = Parametrization()
+    param_file = toml.loads(Path(path).read_text())
+    system = param_file.pop('system', None)
+    if system:
+        if isinstance(system, str):
+            system = {'name': system}
+        param.update_with_system(**system)
+    param.update(param_file)
+    wfnet, mf = model(**param['model_kwargs'])
     if state:
         wfnet.load_state_dict(state['wfnet'])
-    return wfnet, mf, params
+    return wfnet, mf, param
 
 
 @click.command('train')
@@ -135,12 +171,12 @@ def model_from_file(path, state=None):
 @click.option('--save-every', default=100, show_default=True)
 def train_from_file(path, state, save_every):
     state = state_from_file(state)
-    wfnet, mf, params = model_from_file(path, state)
+    wfnet, mf, param = model_from_file(path, state)
     train(
         wfnet,
         mf,
         cwd=Path(path).parent,
         state=state,
         save_every=save_every,
-        **params.train_kwargs,
+        **param['train_kwargs'],
     )

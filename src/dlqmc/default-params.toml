@@ -47,4 +47,3 @@ batch_size = 10_000
 sample_every = 100
 n_discard = 50
 n_decorrelate = 1
-tau = 0.05

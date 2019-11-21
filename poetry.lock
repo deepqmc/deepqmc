@@ -941,10 +941,10 @@ more-itertools = "*"
 
 [extras]
 test = ["pytest"]
-train = ["tensorboard", "tqdm", "toml", "click", "importlib-metadata"]
+train = ["tensorboard", "tqdm", "click", "importlib-metadata"]
 
 [metadata]
-content-hash = "d59ff56d0f2ba72035694d911162e33b31f1412b2c62964d7e7f086214e4a89a"
+content-hash = "39ab89f39bf57af64630e9a85ffbef4a89d07bf595979046da0a1282e97fdacf"
 python-versions = "^3.7"
 
 [metadata.hashes]

@@ -1,9 +1,13 @@
+from copy import deepcopy
+from importlib import resources
+
 import numpy as np
-import pandas as pd
+import toml
 import torch
 from torch import nn
 
 angstrom = 1 / 0.52917721092
+SYSTEMS = toml.loads(resources.read_text('dlqmc', 'systems.toml'))
 
 
 def ensure_fp(tensor):
@@ -63,25 +67,23 @@ class Geomable:
         self.register_buffer('charges', geom.charges)
 
 
-geomdb = pd.Series(
-    {
-        label: Geometry(np.array(coords, dtype=np.float32) * angstrom, charges)
-        for label, coords, charges in [
-            ('H', [[1, 0, 0]], [1]),
-            ('H2+', [[-1 / angstrom, 0, 0], [1 / angstrom, 0, 0]], [1, 1]),
-            ('H2', [[0, 0, 0], [0.742, 0, 0]], [1, 1]),
-            ('Be', [[0, 0, 0]], [4]),
-            ('B', [[0, 0, 0]], [5]),
-            ('LiH', [[0, 0, 0], [1.595, 0, 0]], [3, 1]),
-            (
-                'H2O',
-                [
-                    [0.0000, 0.0000, 0.1173],
-                    [0.0000, 0.7572, -0.4692],
-                    [0.0000, -0.7572, -0.4692],
-                ],
-                [8, 1, 1],
-            ),
-        ]
+def get_H_chain(n, dist):
+    return {
+        'geom': Geometry(
+            np.hstack([np.arange(n)[:, None] * dist, np.zeros((n, 2))]), np.ones(n)
+        )
     }
-)
+
+
+def get_system(name, **kwargs):
+    if name == 'Hn':
+        return {**SYSTEMS[name], **get_H_chain(**kwargs)}
+    assert not kwargs
+    system = deepcopy(SYSTEMS[name])
+    return {
+        'geom': Geometry(
+            np.array(system.pop('coords'), dtype=np.float32) * angstrom,
+            system.pop('charges'),
+        ),
+        **system,
+    }

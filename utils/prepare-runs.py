@@ -7,7 +7,7 @@ import click
 import importlib_metadata
 import toml
 
-from dlqmc.train import get_default_params
+from dlqmc.train import merge_into
 
 INIT_FILE = 'init.sh'
 PARAM_FILE = 'params.toml'
@@ -27,17 +27,6 @@ class TOMLParam(click.ParamType):
             self.fail(f'{value!r} is not a valid TOML expression', param, ctx)
 
 
-def merge_into(left, right):
-    for key, val in right.items():
-        if isinstance(val, dict):
-            assert isinstance(left[key], dict)
-            merge_into(left[key], val)
-        else:
-            if left.get(key) != val:
-                print(f'Updating {key!r} from {left.get(key)!r} to {val!r}')
-                left[key] = val
-
-
 @click.command()
 @click.option('--basedir', default='runs')
 @click.option('--label')
@@ -46,9 +35,7 @@ def merge_into(left, right):
 def prepare(basedir, label, options, conf):
     basedir = Path(basedir)
     label = label or datetime.now().isoformat(timespec='seconds')
-    params = get_default_params()
-    if conf:
-        merge_into(params, toml.load(conf))
+    params = toml.load(conf) if conf else {}
     for option in options:
         merge_into(params, option)
     path = basedir / label

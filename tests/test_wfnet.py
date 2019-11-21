@@ -3,7 +3,7 @@ import torch
 from torch import nn
 
 from dlqmc.fit import LossWeightedLogProb, fit_wfnet, simple_sampler
-from dlqmc.geom import geomdb
+from dlqmc.geom import get_system
 from dlqmc.nn import GTOBasis, PauliNet
 from dlqmc.nn.schnet import ElectronicSchnet
 from dlqmc.physics import local_energy
@@ -29,7 +29,7 @@ def rs():
 
 @pytest.fixture
 def geom():
-    return geomdb['H2']
+    return get_system('H2')['geom']
 
 
 @pytest.fixture(params=[pytest.param(PauliNet, marks=pyscf_marks)])
