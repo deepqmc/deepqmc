@@ -45,7 +45,7 @@ class PauliNet(BaseWFNet):
         )
         if configurations is not None:
             assert configurations.shape[1] == n_up + n_down
-            n_orbitals = configurations.max() + 1
+            n_orbitals = configurations.max().item() + 1
             self.confs = configurations
             self.conf_coeff = nn.Linear(len(configurations), 1, bias=False)
         else:
