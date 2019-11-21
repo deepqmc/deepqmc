@@ -4,13 +4,15 @@ from datetime import datetime
 from pathlib import Path
 
 import click
+import importlib_metadata
 import toml
 
 from dlqmc.train import get_default_params
 
 INIT_FILE = 'init.sh'
 PARAM_FILE = 'params.toml'
-PACKAGE_FILE = 'dlqmc.tar.gz'
+PACKAGE_NAME = 'dlqmc'
+PACKAGE_FILE = f'{PACKAGE_NAME}.tar.gz'
 UTIL_DIR = Path(__file__).resolve().parent
 ROOT = UTIL_DIR.parent
 
@@ -50,8 +52,7 @@ def prepare(basedir, label, options, conf):
     for option in options:
         merge_into(params, option)
     path = basedir / label
-    metadata = toml.loads((ROOT / 'pyproject.toml').read_text())['tool']['poetry']
-    pacakge_file = f'{metadata["name"]}-{metadata["version"]}.tar.gz'
+    pacakge_file = f'{PACKAGE_NAME}-{importlib_metadata.version(PACKAGE_NAME)}.tar.gz'
     path.mkdir(parents=True)
     shutil.copy(ROOT / 'dist' / pacakge_file, path / PACKAGE_FILE)
     (path / PARAM_FILE).write_text(toml.dumps(params))

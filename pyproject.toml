@@ -23,10 +23,11 @@ tensorboard = { version = "^2.0", optional = true }
 tqdm = { version = "^4.31", optional = true }
 toml = { version = "^0.10.0", optional = true }
 click = { version = "^7.0", optional = true }
+importlib-metadata = { version = "^0.23.0", optional = true }
 
 [tool.poetry.extras]
 test = ["pytest"]
-train = ["tensorboard", "tqdm", "toml", "click"]
+train = ["tensorboard", "tqdm", "toml", "click", "importlib-metadata"]
 
 [tool.poetry.dev-dependencies]
 ipykernel = "^5.1"
