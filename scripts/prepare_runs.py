@@ -7,23 +7,25 @@ import click
 import importlib_metadata
 import toml
 
-from dlqmc.train import merge_into
+from dlqmc.utils import NestedDict
 
 INIT_FILE = 'init.sh'
 PARAM_FILE = 'params.toml'
 PACKAGE_NAME = 'dlqmc'
 PACKAGE_FILE = f'{PACKAGE_NAME}.tar.gz'
 PACKAGE_FILE_VER = f'{PACKAGE_NAME}-{importlib_metadata.version(PACKAGE_NAME)}.tar.gz'
-UTIL_DIR = Path(__file__).resolve().parent
-ROOT = UTIL_DIR.parent
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT = SCRIPT_DIR.parent
 
 
 def prepare_run(path, params):
     path = Path(path)
     path.mkdir(parents=True)
     shutil.copy(ROOT / 'dist' / PACKAGE_FILE_VER, path / PACKAGE_FILE)
-    (path / PARAM_FILE).write_text(toml.dumps(params))
-    shutil.copy(UTIL_DIR / 'init-run.sh', path / INIT_FILE)
+    (path / PARAM_FILE).write_text(toml.dumps(params, encoder=toml.TomlEncoder()))
+    # encoder must be passed explicitly otherwise toml uses nesteddict
+    # internally
+    shutil.copy(SCRIPT_DIR / 'init-run.sh', path / INIT_FILE)
 
 
 class TOMLParam(click.ParamType):
@@ -44,9 +46,11 @@ class TOMLParam(click.ParamType):
 def prepare(basedir, label, options, conf):
     basedir = Path(basedir)
     label = label or datetime.now().isoformat(timespec='seconds')
-    params = toml.load(conf) if conf else {}
+    params = NestedDict()
+    if conf:
+        params.update(toml.load(conf))
     for option in options:
-        merge_into(params, option)
+        params.update(option)
     prepare_run(basedir / label, params)
 
 
