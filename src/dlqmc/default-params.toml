@@ -9,7 +9,7 @@ basis = "6-311g"
 dist_basis_dim = 32
 freeze_mos = true
 freeze_confs = false
-conf_cutoff = 1e-3
+conf_cutoff = 1e-2
 
 [model_kwargs.omni_kwargs]
 embedding_dim = 128

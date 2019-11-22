@@ -13,8 +13,17 @@ INIT_FILE = 'init.sh'
 PARAM_FILE = 'params.toml'
 PACKAGE_NAME = 'dlqmc'
 PACKAGE_FILE = f'{PACKAGE_NAME}.tar.gz'
+PACKAGE_FILE_VER = f'{PACKAGE_NAME}-{importlib_metadata.version(PACKAGE_NAME)}.tar.gz'
 UTIL_DIR = Path(__file__).resolve().parent
 ROOT = UTIL_DIR.parent
+
+
+def prepare_run(path, params):
+    path = Path(path)
+    path.mkdir(parents=True)
+    shutil.copy(ROOT / 'dist' / PACKAGE_FILE_VER, path / PACKAGE_FILE)
+    (path / PARAM_FILE).write_text(toml.dumps(params))
+    shutil.copy(UTIL_DIR / 'init-run.sh', path / INIT_FILE)
 
 
 class TOMLParam(click.ParamType):
@@ -38,12 +47,7 @@ def prepare(basedir, label, options, conf):
     params = toml.load(conf) if conf else {}
     for option in options:
         merge_into(params, option)
-    path = basedir / label
-    pacakge_file = f'{PACKAGE_NAME}-{importlib_metadata.version(PACKAGE_NAME)}.tar.gz'
-    path.mkdir(parents=True)
-    shutil.copy(ROOT / 'dist' / pacakge_file, path / PACKAGE_FILE)
-    (path / PARAM_FILE).write_text(toml.dumps(params))
-    shutil.copy(UTIL_DIR / 'init-run.sh', path / INIT_FILE)
+    prepare_run(basedir / label, params)
 
 
 if __name__ == '__main__':
