@@ -217,3 +217,51 @@ def weighted_mean_var(xs, ws):
     ws = normalize_mean(ws)
     mean = (ws * xs).mean()
     return mean, (ws * (xs - mean) ** 2).mean()
+
+
+class NestedDict(dict):
+    def __init__(self, dct=None):
+        super().__init__()
+        if dct:
+            self.update(dct)
+
+    def _split_key(self, key):
+        key, *nested_key = key.split('.', 1)
+        return (key, nested_key[0]) if nested_key else (key, None)
+
+    def __getitem__(self, key):
+        key, nested_key = self._split_key(key)
+        try:
+            val = super().__getitem__(key)
+        except KeyError:
+            val = NestedDict()
+            super().__setitem__(key, val)
+        if nested_key:
+            return val[nested_key]
+        return val
+
+    def __setitem__(self, key, val):
+        key, nested_key = self._split_key(key)
+        if nested_key:
+            self[key][nested_key] = val
+        else:
+            super().__setitem__(key, val)
+
+    def __delitem__(self, key):
+        key, nested_key = self._split_key(key)
+        if nested_key:
+            del super().__getitem__(key)[nested_key]
+        else:
+            super().__delitem__(key)
+
+    def update(self, other):
+        for key, val in other.items():
+            if isinstance(val, dict):
+                if not isinstance(self[key], NestedDict):
+                    if isinstance(self[key], dict):
+                        self[key] = NestedDict(self[key])
+                    else:
+                        self[key] = NestedDict()
+                super().__getitem__(key).update(val)
+            else:
+                super().__setitem__(key, val)
