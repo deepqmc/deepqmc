@@ -20,12 +20,21 @@ def samples_from(sampler, steps, *, n_discard=0, n_decorrelate=0):
 
 class LangevinSampler:
     def __init__(
-        self, wf, rs, *, tau, max_age=None, n_first_certain=0, psi_threshold=None
+        self,
+        wf,
+        rs,
+        *,
+        tau,
+        max_age=None,
+        n_first_certain=0,
+        psi_threshold=None,
+        target_acceptance=None,
     ):
         self.wf, self.rs, self.tau = wf, rs.clone(), tau
         self.max_age = max_age
         self.n_first_certain = n_first_certain
         self.psi_threshold = psi_threshold
+        self.target_acceptance = target_acceptance
         self.restart()
 
     def __len__(self):
@@ -70,13 +79,13 @@ class LangevinSampler:
             accepted = torch.ones_like(accepted)
         self._ages[accepted] = 0
         self._ages[~accepted] += 1
-        info = {
-            'acceptance': accepted.type(torch.int).sum().item() / self.rs.shape[0],
-            'age': self._ages.cpu().numpy(),
-        }
+        acceptance = accepted.type(torch.int).sum().item() / self.rs.shape[0]
+        info = {'acceptance': acceptance, 'age': self._ages.cpu().numpy()}
         assign_where(
             (self.rs, self.psis, self.forces), (rs_new, psis_new, forces_new), accepted
         )
+        if self.target_acceptance:
+            self.tau /= self.target_acceptance / acceptance
         self._step += 1
         return self.rs.clone(), self.psis.clone(), info
 

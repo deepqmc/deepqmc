@@ -50,3 +50,4 @@ n_decorrelate = 1
 
 [train_kwargs.sampler_kwargs]
 n_first_certain = 3
+target_acceptance = 0.57
