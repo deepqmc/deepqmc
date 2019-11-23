@@ -42,8 +42,11 @@ decay_rate = 200
 clip_outliers = true
 subbatch_size = 10_000
 
-[train_kwargs.sampler_kwargs]
+[train_kwargs.batched_sampler_kwargs]
 batch_size = 10_000
 sample_every = 100
 n_discard = 50
 n_decorrelate = 1
+
+[train_kwargs.sampler_kwargs]
+n_first_certain = 3

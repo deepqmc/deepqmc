@@ -67,13 +67,12 @@ def train(
     n_steps,
     sampler_size,
     sampler_kwargs,
+    batched_sampler_kwargs,
     lr_scheduler,
     decay_rate,
     optimizer,
     fit_kwargs,
 ):
-    batched_sampler_kwargs = sampler_kwargs.copy()
-    tau = batched_sampler_kwargs.pop('tau')
     rs = rand_from_mf(mf, sampler_size)
     if cuda:
         rs = rs.cuda()
@@ -98,7 +97,7 @@ def train(
             LossWeightedLogProb(),
             opt,
             batched_sampler(
-                LangevinSampler(wfnet, rs, tau=tau, n_first_certain=3),
+                LangevinSampler(wfnet, rs, **sampler_kwargs),
                 range_sampling=partial(trange, desc='sampling', leave=False),
                 **batched_sampler_kwargs,
             ),
