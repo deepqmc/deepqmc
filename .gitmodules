@@ -1,9 +1,0 @@
-[submodule "pub"]
-	path = pub
-	url = git@github.com:noegroup/dl-qmc-pub.git
-[submodule "vendor/torch-kfac"]
-	path = vendor/torch-kfac
-	url = https://github.com/noegroup/torch-kfac.git
-[submodule "data/motta-hydrogen"]
-	path = data/motta-hydrogen
-	url = https://github.com/simonsfoundation/hydrogen-benchmark-PRX.git
