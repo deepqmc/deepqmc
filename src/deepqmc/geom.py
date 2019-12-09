@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 angstrom = 1 / 0.52917721092
-SYSTEMS = toml.loads(resources.read_text('dlqmc', 'systems.toml'))
+SYSTEMS = toml.loads(resources.read_text('deepqmc', 'systems.toml'))
 
 
 def ensure_fp(tensor):

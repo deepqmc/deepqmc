@@ -1,4 +1,4 @@
-# DL-QMC
+# DeepQMC
 
 ## Installing
 
@@ -9,7 +9,7 @@ poetry install -E test -E train
 ## Example
 
 ```python
-from dlqmc.train import get_default_params, model, train
+from deepqmc.train import get_default_params, model, train
 
 params = get_default_params()
 params.model_kwargs.geomname = 'B'

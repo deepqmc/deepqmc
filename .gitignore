@@ -1,4 +1,5 @@
 *.pyc
+/poetry.lock
 /pip-wheel-metadata/
 /src/*.egg-info/
 /dist/

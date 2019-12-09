@@ -2,12 +2,12 @@ import pytest
 import torch
 from torch import nn
 
-from dlqmc.fit import LossWeightedLogProb, fit_wfnet, simple_sampler
-from dlqmc.geom import get_system
-from dlqmc.nn import GTOBasis, PauliNet
-from dlqmc.nn.schnet import ElectronicSchnet
-from dlqmc.physics import local_energy
-from dlqmc.sampling import LangevinSampler
+from deepqmc.fit import LossWeightedLogProb, fit_wfnet, simple_sampler
+from deepqmc.geom import get_system
+from deepqmc.nn import GTOBasis, PauliNet
+from deepqmc.nn.schnet import ElectronicSchnet
+from deepqmc.physics import local_energy
+from deepqmc.sampling import LangevinSampler
 
 try:
     import pyscf.gto

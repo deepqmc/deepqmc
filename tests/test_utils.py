@@ -1,7 +1,7 @@
 import torch
 from torch.testing import assert_allclose
 
-from dlqmc.utils import pow_int
+from deepqmc.utils import pow_int
 
 
 def test_pow_int():

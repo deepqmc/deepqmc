@@ -19,7 +19,7 @@ from .utils import NestedDict
 
 
 class Parametrization(NestedDict):
-    DEFAULTS = toml.loads(resources.read_text('dlqmc', 'default-params.toml'))
+    DEFAULTS = toml.loads(resources.read_text('deepqmc', 'default-params.toml'))
 
     def __init__(self, dct=None):
         super().__init__(dct or deepcopy(Parametrization.DEFAULTS))

@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from dlqmc import torchext
+from deepqmc import torchext
 
 
 @pytest.fixture
