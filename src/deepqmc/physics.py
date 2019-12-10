@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 
+from .geom import diffs_to_nearest_nuc
 from .grad import grad, laplacian
-from .nn.base import diffs_to_nearest_nuc
 from .utils import NULL_DEBUG
 
 

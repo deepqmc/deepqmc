@@ -8,11 +8,6 @@ import numpy as np
 import torch
 
 
-def triu_flat(x):
-    i, j = np.triu_indices(x.shape[1], k=1)
-    return x[:, i, j, ...]
-
-
 def get_flat_mesh(bounds, npts, device=None):
     edges = [torch.linspace(*b, n, device=device) for b, n in zip(bounds, npts)]
     grids = torch.meshgrid(*edges)
@@ -91,12 +86,6 @@ class InfoException(Exception):
     def __init__(self, info=None):
         self.info = info or {}
         super().__init__(self.info)
-
-
-def dctsel(dct, keys):
-    if isinstance(keys, str):
-        keys = keys.split()
-    return {k: dct[k] for k in keys if k in dct}
 
 
 class DebugContainer(UserDict):

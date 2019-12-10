@@ -5,8 +5,8 @@ import torch
 from scipy.special import factorial2
 from torch import nn
 
-from ..errors import DLQMCError
-from ..utils import pow_int
+from deepqmc.errors import DeepQMCError
+from deepqmc.utils import pow_int
 
 
 @lru_cache(maxsize=16)
@@ -85,7 +85,7 @@ class GTOBasis(nn.Module):
     @classmethod
     def from_pyscf(cls, mol):
         if not mol.cart:
-            raise DLQMCError('GTOBasis supports only Cartesian basis sets')
+            raise DeepQMCError('GTOBasis supports only Cartesian basis sets')
         centers = torch.tensor(mol.atom_coords()).float()
         shells = []
         for i in range(mol.nbas):

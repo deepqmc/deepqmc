@@ -1,2 +1,2 @@
-class DLQMCError(Exception):
+class DeepQMCError(Exception):
     pass

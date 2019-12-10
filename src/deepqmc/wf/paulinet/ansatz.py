@@ -1,10 +1,11 @@
 import torch
 from torch import nn
 
-from .nn import SSP, get_log_dnn
-from .nn.backflow import Backflow
-from .nn.schnet import ElectronicSchnet
-from .utils import NULL_DEBUG
+from deepqmc.torchext import SSP, get_log_dnn
+from deepqmc.utils import NULL_DEBUG
+
+from .backflow import Backflow
+from .schnet import ElectronicSchnet
 
 __version__ = '0.2.0'
 

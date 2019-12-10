@@ -1,12 +1,26 @@
 import torch
 from torch import nn
 
+
+class ElectronicAsymptotic(nn.Module):
+    def __init__(self, *, cusp, alpha=1.0):
+        super().__init__()
+        self.cusp = cusp
+        self.alpha = alpha
+
+    def forward(self, dists):
+        return torch.exp(
+            -(self.cusp / (self.alpha * (1 + self.alpha * dists))).sum(dim=-1)
+        )
+
+    def extra_repr(self):
+        return f'cusp={self.cusp}, alpha={self.alpha}'
+
+
 # This class straightforwardly implements the cusp correction from
 # http://aip.scitation.org/doi/10.1063/1.1940588. The only difference is that
 # rather than deriving phi(0) by fitting to a preexisting optimal E_loc curve
 # (eq. 17), we have it as a trainable parameter (self.shifts).
-
-
 class CuspCorrection(nn.Module):
     def __init__(self, charges, n_orbitals, rc, eps=1e-6):
         super().__init__()

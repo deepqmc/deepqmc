@@ -2,18 +2,26 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ..geom import Geometry
-from ..utils import NULL_DEBUG, triu_flat
-from .anti import eval_slater
-from .base import (
-    BaseWFNet,
-    DistanceBasis,
-    ElectronicAsymptotic,
-    pairwise_diffs,
-    pairwise_distance,
-)
+from deepqmc.geom import Geometry, pairwise_diffs, pairwise_distance
+from deepqmc.torchext import triu_flat
+from deepqmc.utils import NULL_DEBUG
+from deepqmc.wf import BaseWFNet
+
+from .cusp import ElectronicAsymptotic
+from .distbasis import DistanceBasis
 from .gto import GTOBasis
 from .molorb import MolecularOrbital
+
+if torch.__version__ >= '1.2.0':
+    from torch import det
+else:
+    from ..torchext import bdet as det
+
+
+def eval_slater(xs):
+    if xs.shape[-1] == 0:
+        return xs.new_ones(len(xs))
+    return det(xs)
 
 
 class PauliNet(BaseWFNet):

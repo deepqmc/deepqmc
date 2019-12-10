@@ -1,4 +1,7 @@
+import numpy as np
 import torch
+import torch.nn.functional as F
+from torch import nn
 
 from .utils import InfoException, batch_eval
 
@@ -8,6 +11,37 @@ def merge_tensors(mask, source_true, source_false):
     x[mask] = source_true
     x[~mask] = source_false
     return x
+
+
+def triu_flat(x):
+    i, j = np.triu_indices(x.shape[1], k=1)
+    return x[:, i, j, ...]
+
+
+def ssp(*args, **kwargs):
+    return F.softplus(*args, **kwargs) - np.log(2)
+
+
+class SSP(nn.Softplus):
+    def forward(self, xs):
+        return ssp(xs, self.beta, self.threshold)
+
+
+def get_log_dnn(start_dim, end_dim, activation_factory, last_bias=True, *, n_layers):
+    qs = [k / n_layers for k in range(n_layers + 1)]
+    dims = [int(np.round(start_dim ** (1 - q) * end_dim ** q)) for q in qs]
+    return get_custom_dnn(dims, activation_factory, last_bias=last_bias)
+
+
+def get_custom_dnn(dims, activation_factory, last_bias=True):
+    n_layers = len(dims) - 1
+    modules = []
+    for k in range(n_layers):
+        bias = k + 1 < n_layers or last_bias
+        modules.extend(
+            [nn.Linear(dims[k], dims[k + 1], bias=bias), activation_factory()]
+        )
+    return nn.Sequential(*modules[:-1])
 
 
 class LUFactError(InfoException):

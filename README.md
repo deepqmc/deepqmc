@@ -17,7 +17,8 @@ pip install -U deepqmc
 ## A simple example
 
 ```python
-from deepqmc import Molecule, train, PauliNet
+from deepqmc import Molecule, train
+from deepqmc.wf import PauliNet
 
 mol = Molecule.from_name('LiH')
 net = PauliNet(mol)

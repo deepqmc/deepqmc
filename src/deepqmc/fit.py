@@ -7,7 +7,6 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from .physics import clean_force, local_energy
 from .sampling import samples_from
-from .stats import log_clipped_outliers, outlier_mask
 from .utils import NULL_DEBUG, normalize_mean, state_dict_copy, weighted_mean_var
 
 
@@ -32,6 +31,29 @@ def fit_wfnet_multi(wfnet, loss_funcs, opts, gen_factory, gen_kwargs, writers):
     for loss_func, opt, kwargs, writer in zip(loss_funcs, opts, gen_kwargs, writers):
         with writer:
             fit_wfnet(wfnet, loss_func, opt, gen_factory(**kwargs), writer=writer)
+
+
+def outlier_mask(x, p, q, dim=None):
+    x = x.detach()
+    dim = dim if dim is not None else -1
+    n = x.shape[dim]
+    lb = x.kthvalue(int(p * n), dim=dim).values
+    ub = x.kthvalue(int((1 - p) * n), dim=dim).values
+    return (
+        (x - (lb + ub).unsqueeze(dim) / 2).abs() > q * (ub - lb).unsqueeze(dim),
+        (lb, ub),
+    )
+
+
+def log_clipped_outliers(x, q):
+    x = x.detach()
+    median = x.median()
+    x = x - median
+    a = q * x.abs().mean()
+    x = torch.where(
+        x.abs() <= a, x, x.sign() * a * (1 + torch.log((1 + (x.abs() / a) ** 2) / 2))
+    )
+    return median + x
 
 
 class NanLoss(Exception):

@@ -4,9 +4,10 @@ import numpy as np
 import torch
 from torch import nn
 
-from ..indexing import pair_idxs, spin_pair_idxs
-from ..utils import NULL_DEBUG
-from .base import SSP, get_log_dnn
+from deepqmc.torchext import SSP, get_log_dnn
+from deepqmc.utils import NULL_DEBUG
+
+from .indexing import pair_idxs, spin_pair_idxs
 
 
 class ZeroDiagKernel(nn.Module):

@@ -1,10 +1,11 @@
 import torch
 from torch import nn
 
-from ..geom import Geomable
-from ..indexing import pair_idxs
-from ..utils import NULL_DEBUG
-from .base import SSP, get_log_dnn
+from deepqmc.geom import Geomable
+from deepqmc.torchext import SSP, get_log_dnn
+from deepqmc.utils import NULL_DEBUG
+
+from .indexing import pair_idxs
 
 
 def backflow_cutoff(r, L=0.5):

@@ -4,10 +4,11 @@ from torch import nn
 
 from deepqmc.fit import LossWeightedLogProb, fit_wfnet, simple_sampler
 from deepqmc.geom import get_system
-from deepqmc.nn import GTOBasis, PauliNet
-from deepqmc.nn.schnet import ElectronicSchnet
 from deepqmc.physics import local_energy
 from deepqmc.sampling import LangevinSampler
+from deepqmc.wf import PauliNet
+from deepqmc.wf.paulinet.gto import GTOBasis
+from deepqmc.wf.paulinet.schnet import ElectronicSchnet
 
 try:
     import pyscf.gto

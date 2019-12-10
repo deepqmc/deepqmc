@@ -10,16 +10,16 @@ from pyscf import gto, mcscf, scf
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import trange
 
-from .ansatz import OmniSchnet
 from .fit import LossWeightedLogProb, batched_sampler, fit_wfnet
 from .geom import get_system
-from .nn import PauliNet
 from .sampling import LangevinSampler, rand_from_mf
 from .utils import NestedDict
+from .wf import PauliNet
+from .wf.paulinet.ansatz import OmniSchnet
 
 
 class Parametrization(NestedDict):
-    DEFAULTS = toml.loads(resources.read_text('deepqmc', 'default-params.toml'))
+    DEFAULTS = toml.loads(resources.read_text('deepqmc.data', 'default-params.toml'))
 
     def __init__(self, dct=None):
         super().__init__(dct or deepcopy(Parametrization.DEFAULTS))

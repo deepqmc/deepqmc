@@ -4,9 +4,10 @@ import numpy as np
 import torch
 from torch import nn
 
-from ..torchext import merge_tensors
-from ..utils import NULL_DEBUG
-from .base import pairwise_diffs, pairwise_distance
+from deepqmc.geom import pairwise_diffs, pairwise_distance
+from deepqmc.torchext import merge_tensors
+from deepqmc.utils import NULL_DEBUG
+
 from .cusp import CuspCorrection
 
 
