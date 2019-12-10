@@ -3,3 +3,6 @@
 /pip-wheel-metadata/
 /src/*.egg-info/
 /dist/
+/htmlcov/
+/.coverage
+/docs/build/

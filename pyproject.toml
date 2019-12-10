@@ -24,9 +24,12 @@ tensorboard = { version = "^2.0", optional = true }
 tqdm = { version = "^4.31", optional = true }
 click = { version = "^7.0", optional = true }
 importlib-metadata = { version = "^0.23.0", optional = true }
+sphinx = { version = "^2.2", optional = true }
+coverage = { version = "^4.5",optional = true }
 
 [tool.poetry.extras]
-test = ["pytest"]
+test = ["pytest", "coverage"]
+doc = ["sphinx"]
 train = ["tensorboard", "tqdm", "click", "importlib-metadata"]
 
 [tool.poetry.dev-dependencies]
