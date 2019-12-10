@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from ..geom import pairwise_distance, pairwise_self_distance
+from ..physics import pairwise_distance, pairwise_self_distance
 from ..utils import batch_eval, shuffle_tensor
 
 

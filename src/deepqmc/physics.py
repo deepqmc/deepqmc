@@ -34,15 +34,15 @@ def offset_from_axes(rs):
     return torch.where(rs.abs() < eps, rs + offset, rs)
 
 
-def nuclear_energy(geom):
-    coords, charges = geom.coords, geom.charges
+def nuclear_energy(mol):
+    coords, charges = mol.coords, mol.charges
     coulombs = charges[:, None] * charges / (coords[:, None] - coords).norm(dim=-1)
     return coulombs.triu(1).sum()
 
 
-def nuclear_potential(rs, geom):
-    dists = (rs[:, :, None] - geom.coords).norm(dim=-1)
-    return -(geom.charges / dists).sum(dim=(-1, -2))
+def nuclear_potential(rs, mol):
+    dists = (rs[:, :, None] - mol.coords).norm(dim=-1)
+    return -(mol.charges / dists).sum(dim=(-1, -2))
 
 
 def electronic_potential(rs):
@@ -74,11 +74,11 @@ def crossover_parameter(zs, fs, charges):
     return (1 + (fs_unit * zs_unit).sum(dim=-1)) / 2 + Z2z2 / (10 * (4 + Z2z2))
 
 
-def clean_force(forces, rs, geom, *, tau, return_a=False):
-    zs, idxs = diffs_to_nearest_nuc(rs.flatten(end_dim=1), geom.coords)
+def clean_force(forces, rs, mol, *, tau, return_a=False):
+    zs, idxs = diffs_to_nearest_nuc(rs.flatten(end_dim=1), mol.coords)
     zs = zs.view(len(rs), -1, 4)
     a = crossover_parameter(
-        zs.flatten(end_dim=1), forces.flatten(end_dim=1), geom.charges[idxs]
+        zs.flatten(end_dim=1), forces.flatten(end_dim=1), mol.charges[idxs]
     ).view(len(rs), -1)
     av2tau = a * (forces ** 2).sum(dim=-1) * tau
     factors = (torch.sqrt(1 + 2 * av2tau) - 1) / av2tau
@@ -94,11 +94,11 @@ def clean_force(forces, rs, geom, *, tau, return_a=False):
 
 
 def local_energy(
-    rs, wf, geom=None, create_graph=False, keep_graph=None, debug=NULL_DEBUG, **kwargs
+    rs, wf, mol=None, create_graph=False, keep_graph=None, debug=NULL_DEBUG, **kwargs
 ):
-    geom = geom or wf.geom
-    Es_nuc = debug['Es_nuc'] = nuclear_energy(geom)
-    Vs_nuc = debug['Vs_nuc'] = nuclear_potential(rs, geom)
+    mol = mol or wf.mol
+    Es_nuc = debug['Es_nuc'] = nuclear_energy(mol)
+    Vs_nuc = debug['Vs_nuc'] = nuclear_potential(rs, mol)
     Vs_el = debug['Vs_el'] = electronic_potential(rs)
     lap_psis, psis, *other = debug['lap_psis'], debug['psis'], *_ = laplacian(
         rs, wf, create_graph=create_graph, keep_graph=keep_graph, **kwargs

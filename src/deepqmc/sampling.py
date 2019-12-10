@@ -56,7 +56,7 @@ class LangevinSampler:
         except torchext.LUFactError as e:
             e.info['rs'] = rs[e.info['idxs']]
             raise
-        forces = clean_force(forces, rs, self.wf.geom, tau=self.tau)
+        forces = clean_force(forces, rs, self.wf.mol, tau=self.tau)
         return forces, psis
 
     def __next__(self):

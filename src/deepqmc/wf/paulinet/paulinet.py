@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from deepqmc.geom import Geometry
+from deepqmc import Molecule
 from deepqmc.physics import pairwise_diffs, pairwise_distance
 from deepqmc.torchext import triu_flat
 from deepqmc.utils import NULL_DEBUG
@@ -28,9 +28,7 @@ def eval_slater(xs):
 class PauliNet(BaseWFNet):
     def __init__(
         self,
-        geom,
-        n_up,
-        n_down,
+        mol,
         basis,
         mo_factory=None,
         jastrow_factory=None,
@@ -45,8 +43,9 @@ class PauliNet(BaseWFNet):
         configurations=None,
     ):
         super().__init__()
-        self.n_up = n_up
-        self.register_geom(geom)
+        n_elec = int(mol.charges.sum() - mol.charge)
+        n_up, n_down = (n_elec + mol.spin) // 2, (n_elec - mol.spin) // 2
+        self.mol, self.n_up = mol, n_up
         self.dist_basis = (
             DistanceBasis(dist_basis_dim, cutoff=dist_basis_cutoff, envelope='nocusp')
             if mo_factory or jastrow_factory or backflow_factory or omni_factory
@@ -64,7 +63,7 @@ class PauliNet(BaseWFNet):
             ).unsqueeze(dim=0)
             self.conf_coeff = nn.Identity()
         self.mo = MolecularOrbital(
-            geom,
+            mol,
             basis,
             n_orbitals,
             net_factory=mo_factory,
@@ -78,19 +77,19 @@ class PauliNet(BaseWFNet):
             else (None, None)
         )
         self.jastrow = (
-            jastrow_factory(len(geom), dist_basis_dim, n_up, n_down)
+            jastrow_factory(len(mol), dist_basis_dim, n_up, n_down)
             if jastrow_factory
             else None
         )
         self.backflow = (
-            backflow_factory(len(geom), dist_basis_dim, n_up, n_down, n_orbitals)
+            backflow_factory(len(mol), dist_basis_dim, n_up, n_down, n_orbitals)
             if backflow_factory
             else None
         )
         self.r_backflow = None
         if omni_factory:
             assert not backflow_factory and not jastrow_factory
-            self.omni = omni_factory(geom, dist_basis_dim, n_up, n_down, n_orbitals)
+            self.omni = omni_factory(mol, dist_basis_dim, n_up, n_down, n_orbitals)
             self.backflow = self.omni.forward_backflow
             self.r_backflow = self.omni.forward_r_backflow
             self.jastrow = self.omni.forward_jastrow
@@ -128,9 +127,14 @@ class PauliNet(BaseWFNet):
             ]
             confs = [torch.cat(cfs, dim=-1) for cfs in confs]
             confs = torch.cat(confs, dim=-1)
-        geom = Geometry(mf.mol.atom_coords().astype('float32'), mf.mol.atom_charges())
+        mol = Molecule(
+            mf.mol.atom_coords().astype('float32'),
+            mf.mol.atom_charges(),
+            mf.mol.charge,
+            mf.mol.spin,
+        )
         basis = GTOBasis.from_pyscf(mf.mol)
-        wf = cls(geom, n_up, n_down, basis, configurations=confs, **kwargs)
+        wf = cls(mol, basis, configurations=confs, **kwargs)
         if init_weights:
             wf.mo.init_from_pyscf(mf, freeze_mos=freeze_mos)
             if confs is not None:
@@ -142,10 +146,9 @@ class PauliNet(BaseWFNet):
     def forward(self, rs, debug=NULL_DEBUG):
         batch_dim, n_elec = rs.shape[:2]
         assert n_elec == self.confs.shape[1]
-        n_atoms = len(self.coords)
-        diffs_nuc = pairwise_diffs(
-            torch.cat([self.coords, rs.flatten(end_dim=1)]), self.coords
-        )
+        n_atoms = len(self.mol)
+        coords = self.mol.coords
+        diffs_nuc = pairwise_diffs(torch.cat([coords, rs.flatten(end_dim=1)]), coords)
         edges_nuc = (
             self.dist_basis(diffs_nuc[:, :, 3].sqrt())
             if self.jastrow or self.mo.net
@@ -159,7 +162,7 @@ class PauliNet(BaseWFNet):
         if self.r_backflow:
             rs_flowed = self.r_backflow(rs, edges, debug=debug)
             diffs_nuc = pairwise_diffs(
-                torch.cat([self.coords, rs_flowed.flatten(end_dim=1)]), self.coords
+                torch.cat([coords, rs_flowed.flatten(end_dim=1)]), coords
             )
         with debug.cd('mos'):
             xs = self.mo(diffs_nuc, edges_nuc, debug=debug)

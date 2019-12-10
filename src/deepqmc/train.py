@@ -10,8 +10,8 @@ from pyscf import gto, mcscf, scf
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import trange
 
+from . import Molecule
 from .fit import LossWeightedLogProb, batched_sampler, fit_wfnet
-from .geom import get_system
 from .sampling import LangevinSampler, rand_from_mf
 from .utils import NestedDict
 from .wf import PauliNet
@@ -25,19 +25,16 @@ class Parametrization(NestedDict):
         super().__init__(dct or deepcopy(Parametrization.DEFAULTS))
 
     def update_with_system(self, name, **kwargs):
-        system = get_system(name, **kwargs)
-        for key in ['geom', 'charge', 'spin']:
-            self[f'model_kwargs.{key}'] = system[key]
-        self['train_kwargs.sampler_kwargs.tau'] = system['tau']
+        self['model_kwargs.mol'] = Molecule.from_name(name, **kwargs)
 
 
-def model(*, geom, basis, charge, spin, pauli_kwargs, omni_kwargs, cas=None):
+def model(*, mol, basis, pauli_kwargs, omni_kwargs, cas=None):
     mol = gto.M(
-        atom=geom.as_pyscf(),
+        atom=mol.as_pyscf(),
         unit='bohr',
         basis=basis,
-        charge=charge,
-        spin=spin,
+        charge=mol.charge,
+        spin=mol.spin,
         cart=True,
     )
     mf = scf.RHF(mol)

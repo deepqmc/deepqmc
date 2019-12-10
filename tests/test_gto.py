@@ -41,7 +41,7 @@ def test_eval_ao_normed(mol, grids):
 def test_torch_gto_aos(gtowf, grids):
     coords, weights = map(torch.tensor, (grids.coords, grids.weights))
     ovlps = (
-        gtowf.mo.basis(pairwise_diffs(coords, gtowf.coords)) ** 2 * weights[:, None]
+        gtowf.mo.basis(pairwise_diffs(coords, gtowf.mol.coords)) ** 2 * weights[:, None]
     ).sum(dim=0)
     assert_allclose(ovlps, 1)
 

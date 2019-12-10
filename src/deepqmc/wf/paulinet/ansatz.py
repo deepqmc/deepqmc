@@ -41,7 +41,7 @@ class SubnetFactory:
 class OmniSchnet(nn.Module):
     def __init__(
         self,
-        geom,
+        mol,
         n_features,
         n_up,
         n_down,
@@ -60,7 +60,7 @@ class OmniSchnet(nn.Module):
         self.schnet = ElectronicSchnet(
             n_up,
             n_down,
-            n_nuclei=len(geom),
+            n_nuclei=len(mol),
             basis_dim=n_features,
             embedding_dim=embedding_dim,
             subnet_factories=SubnetFactory(**schnet_subnet_kwargs),
@@ -83,7 +83,7 @@ class OmniSchnet(nn.Module):
         else:
             self.forward_backflow = None
         if with_r_backflow:
-            self.r_backflow = Backflow(geom, embedding_dim)
+            self.r_backflow = Backflow(mol, embedding_dim)
         else:
             self.forward_r_backflow = None
         self._cache = {}

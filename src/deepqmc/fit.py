@@ -96,7 +96,7 @@ def fit_wfnet(
             ws = (psis.detach() / psi0s) ** 2
             if clean_tau is not None:
                 forces = forces / psis.detach()[:, None, None]
-                forces_clean = clean_force(forces, rs, wfnet.geom, tau=clean_tau)
+                forces_clean = clean_force(forces, rs, wfnet.mol, tau=clean_tau)
                 forces, forces_clean = (
                     x.flatten(start_dim=-2).norm(dim=-1) for x in (forces, forces_clean)
                 )

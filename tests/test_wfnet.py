@@ -2,8 +2,8 @@ import pytest
 import torch
 from torch import nn
 
+from deepqmc import Molecule
 from deepqmc.fit import LossWeightedLogProb, fit_wfnet, simple_sampler
-from deepqmc.geom import get_system
 from deepqmc.physics import local_energy
 from deepqmc.sampling import LangevinSampler
 from deepqmc.wf import PauliNet
@@ -29,8 +29,11 @@ def rs():
 
 
 @pytest.fixture
-def geom():
-    return get_system('H2')['geom']
+def mol():
+    mol = Molecule.from_name('H2')
+    mol.charge = -1
+    mol.spin = 3
+    return mol
 
 
 @pytest.fixture(params=[pytest.param(PauliNet, marks=pyscf_marks)])
@@ -52,11 +55,11 @@ class JastrowNet(nn.Module):
 
 
 @pytest.fixture
-def wfnet(net_factory, geom):
-    args = (geom, 3, 0)
+def wfnet(net_factory, mol):
+    args = (mol,)
     kwargs = {}
     if net_factory is PauliNet:
-        mol = pyscf.gto.M(atom=geom.as_pyscf(), unit='bohr', basis='6-311g', cart=True)
+        mol = pyscf.gto.M(atom=mol.as_pyscf(), unit='bohr', basis='6-311g', cart=True)
         basis = GTOBasis.from_pyscf(mol)
         args += (basis,)
         kwargs.update(

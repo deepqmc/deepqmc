@@ -14,7 +14,7 @@ from .cusp import CuspCorrection
 class MolecularOrbital(nn.Module):
     def __init__(
         self,
-        geom,
+        mol,
         basis,
         n_orbitals,
         net_factory=None,
@@ -24,20 +24,20 @@ class MolecularOrbital(nn.Module):
         eps=1e-6,
     ):
         super().__init__()
-        self.n_atoms = len(geom)
+        self.n_atoms = len(mol)
         self.n_orbitals = n_orbitals
         self.basis = basis
         self.mo_coeff = nn.Linear(len(basis), n_orbitals, bias=False)
-        self.net = net_factory(len(geom), edge_dim, n_orbitals) if net_factory else None
+        self.net = net_factory(len(mol), edge_dim, n_orbitals) if net_factory else None
         if cusp_correction:
-            rc = rc_scaling / geom.charges.float()
-            dists = pairwise_distance(geom.coords, geom.coords)
-            eye = torch.eye(len(geom), out=torch.empty_like(dists))
+            rc = rc_scaling / mol.charges.float()
+            dists = pairwise_distance(mol.coords, mol.coords)
+            eye = torch.eye(len(mol), out=torch.empty_like(dists))
             factors = (eye + dists / (rc + rc[:, None])).min(dim=-1).values
             if (factors < 0.99).any():
                 warning('Reducing cusp-correction cutoffs due to overlaps')
             rc = rc * factors
-            self.cusp_corr = CuspCorrection(geom.charges, n_orbitals, rc, eps=eps)
+            self.cusp_corr = CuspCorrection(mol.charges, n_orbitals, rc, eps=eps)
             self.register_buffer('basis_cusp_info', basis.get_cusp_info(rc).t())
         else:
             self.cusp_corr = None

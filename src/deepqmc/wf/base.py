@@ -1,10 +1,9 @@
 from torch import nn
 
-from ..geom import Geomable
 from ..utils import Debuggable
 
 
-class BaseWFNet(nn.Module, Geomable, Debuggable):
+class BaseWFNet(nn.Module, Debuggable):
     def tracked_parameters(self):
         return ()
 
