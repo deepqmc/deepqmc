@@ -2,7 +2,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from deepqmc.geom import Geometry, pairwise_diffs, pairwise_distance
+from deepqmc.geom import Geometry
+from deepqmc.physics import pairwise_diffs, pairwise_distance
 from deepqmc.torchext import triu_flat
 from deepqmc.utils import NULL_DEBUG
 from deepqmc.wf import BaseWFNet

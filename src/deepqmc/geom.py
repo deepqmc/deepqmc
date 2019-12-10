@@ -10,35 +10,6 @@ angstrom = 1 / 0.52917721092
 SYSTEMS = toml.loads(resources.read_text('deepqmc.data', 'systems.toml'))
 
 
-def pairwise_distance(coords1, coords2):
-    return (coords1[..., :, None, :] - coords2[..., None, :, :]).norm(dim=-1)
-
-
-def pairwise_self_distance(coords):
-    i, j = np.triu_indices(coords.shape[1], k=1)
-    diffs = coords[..., :, None, :] - coords[..., None, :, :]
-    return diffs[..., i, j, :].norm(dim=-1)
-
-
-def pairwise_diffs(coords1, coords2, axes_offset=True):
-    diffs = coords1[..., :, None, :] - coords2[..., None, :, :]
-    if axes_offset:
-        diffs = offset_from_axes(diffs)
-    return torch.cat([diffs, (diffs ** 2).sum(dim=-1, keepdim=True)], dim=-1)
-
-
-def diffs_to_nearest_nuc(rs, coords):
-    zs = pairwise_diffs(rs, coords)
-    idxs = zs[..., -1].min(dim=-1).indices
-    return zs[torch.arange(len(rs)), idxs], idxs
-
-
-def offset_from_axes(rs):
-    eps = rs.new_tensor(100 * torch.finfo(rs.dtype).eps)
-    offset = torch.where(rs < 0, -eps, eps)
-    return torch.where(rs.abs() < eps, rs + offset, rs)
-
-
 def ensure_fp(tensor):
     if tensor.dtype in {torch.half, torch.float, torch.double}:
         return tensor
