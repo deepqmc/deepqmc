@@ -11,7 +11,9 @@ __version__ = '0.2.0'
 
 
 class SubnetFactory:
-    def __init__(self, *, n_filter_layers, n_kernel_in_layers, n_kernel_out_layers):
+    def __init__(
+        self, *, n_filter_layers=2, n_kernel_in_layers=1, n_kernel_out_layers=1
+    ):
         self.n_filter_layers = n_filter_layers
         self.n_kernel_in_layers = n_kernel_in_layers
         self.n_kernel_out_layers = n_kernel_out_layers
@@ -46,25 +48,24 @@ class OmniSchnet(nn.Module):
         n_up,
         n_down,
         n_orbitals,
-        *,
-        embedding_dim,
-        n_backflow_layers,
-        n_jastrow_layers,
-        with_backflow,
-        with_jastrow,
-        with_r_backflow,
-        schnet_kwargs,
-        schnet_subnet_kwargs,
+        embedding_dim=128,
+        n_backflow_layers=3,
+        n_jastrow_layers=3,
+        with_backflow=True,
+        with_jastrow=True,
+        with_r_backflow=False,
+        schnet_kwargs=None,
+        schnet_subnet_kwargs=None,
     ):
         super().__init__()
         self.schnet = ElectronicSchnet(
             n_up,
             n_down,
-            n_nuclei=len(mol),
+            len(mol),
             basis_dim=n_features,
             embedding_dim=embedding_dim,
-            subnet_factories=SubnetFactory(**schnet_subnet_kwargs),
-            **schnet_kwargs,
+            subnet_factories=SubnetFactory(**(schnet_subnet_kwargs or {})),
+            **(schnet_kwargs or {}),
         )
         if with_jastrow:
             self.jastrow = get_log_dnn(

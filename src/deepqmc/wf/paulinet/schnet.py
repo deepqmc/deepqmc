@@ -24,13 +24,14 @@ class ElectronicSchnet(nn.Module):
         n_up,
         n_down,
         n_nuclei,
-        n_interactions,
-        basis_dim,
-        kernel_dim,
+        *,
         embedding_dim,
+        basis_dim,
+        n_interactions=3,
+        kernel_dim=64,
         subnet_factories=None,
         return_interactions=False,
-        version=1,
+        version=2,
     ):
         if not subnet_factories:
 

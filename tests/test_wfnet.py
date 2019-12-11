@@ -45,7 +45,14 @@ class JastrowNet(nn.Module):
     def __init__(self, n_atoms, n_features, n_up, n_down):
         super().__init__()
         self.schnet = ElectronicSchnet(
-            n_up, n_down, n_atoms, 2, basis_dim=4, kernel_dim=8, embedding_dim=16
+            n_up,
+            n_down,
+            n_atoms,
+            n_interactions=2,
+            basis_dim=4,
+            kernel_dim=8,
+            embedding_dim=16,
+            version=1,
         )
         self.orbital = nn.Linear(16, 1)
 

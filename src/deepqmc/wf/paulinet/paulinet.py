@@ -1,3 +1,5 @@
+from functools import partial
+
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -8,6 +10,7 @@ from deepqmc.torchext import triu_flat
 from deepqmc.utils import NULL_DEBUG
 from deepqmc.wf import BaseWFNet
 
+from .ansatz import OmniSchnet
 from .cusp import ElectronicAsymptotic
 from .distbasis import DistanceBasis
 from .gto import GTOBasis
@@ -99,9 +102,9 @@ class PauliNet(BaseWFNet):
         cls,
         mf,
         init_weights=True,
-        freeze_mos=False,
+        freeze_mos=True,
         freeze_confs=False,
-        conf_cutoff=1e-3,
+        conf_cutoff=1e-2,
         **kwargs,
     ):
         n_up, n_down = mf.mol.nelec
@@ -140,6 +143,35 @@ class PauliNet(BaseWFNet):
                 if freeze_confs:
                     wf.conf_coeff.weight.requires_grad_(False)
         return wf
+
+    @classmethod
+    def from_hf(
+        cls, mol, basis='6-311g', cas=(6, 2), pauli_kwargs=None, omni_kwargs=None
+    ):
+        from pyscf import gto, mcscf, scf
+
+        mol = gto.M(
+            atom=mol.as_pyscf(),
+            unit='bohr',
+            basis=basis,
+            charge=mol.charge,
+            spin=mol.spin,
+            cart=True,
+        )
+        mf = scf.RHF(mol)
+        mf.kernel()
+        if cas:
+            mc = mcscf.CASSCF(mf, *cas)
+            mc.kernel()
+        wfnet = PauliNet.from_pyscf(
+            mc if cas else mf,
+            omni_factory=partial(OmniSchnet, **(omni_kwargs or {})),
+            cusp_correction=True,
+            cusp_electrons=True,
+            **(pauli_kwargs or {}),
+        )
+        wfnet.mf = mf
+        return wfnet
 
     def forward(self, rs, debug=NULL_DEBUG):
         batch_dim, n_elec = rs.shape[:2]

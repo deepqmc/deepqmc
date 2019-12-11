@@ -6,7 +6,6 @@ from pathlib import Path
 import click
 import toml
 import torch
-from pyscf import gto, mcscf, scf
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import trange
 
@@ -15,7 +14,6 @@ from .fit import LossWeightedLogProb, batched_sampler, fit_wfnet
 from .sampling import LangevinSampler, rand_from_mf
 from .utils import NestedDict
 from .wf import PauliNet
-from .wf.paulinet.ansatz import OmniSchnet
 
 
 class Parametrization(NestedDict):
@@ -24,37 +22,9 @@ class Parametrization(NestedDict):
     def __init__(self, dct=None):
         super().__init__(dct or deepcopy(Parametrization.DEFAULTS))
 
-    def update_with_system(self, name, **kwargs):
-        self['model_kwargs.mol'] = Molecule.from_name(name, **kwargs)
-
-
-def model(*, mol, basis, pauli_kwargs, omni_kwargs, cas=None):
-    mol = gto.M(
-        atom=mol.as_pyscf(),
-        unit='bohr',
-        basis=basis,
-        charge=mol.charge,
-        spin=mol.spin,
-        cart=True,
-    )
-    mf = scf.RHF(mol)
-    mf.kernel()
-    if cas:
-        mc = mcscf.CASSCF(mf, *cas)
-        mc.kernel()
-    wfnet = PauliNet.from_pyscf(
-        mc if cas else mf,
-        omni_factory=partial(OmniSchnet, **omni_kwargs),
-        cusp_correction=True,
-        cusp_electrons=True,
-        **pauli_kwargs,
-    )
-    return wfnet, mf
-
 
 def train(
     wfnet,
-    mf,
     *,
     cwd=None,
     state=None,
@@ -70,7 +40,7 @@ def train(
     optimizer,
     fit_kwargs,
 ):
-    rs = rand_from_mf(mf, sampler_size)
+    rs = rand_from_mf(wfnet.mf, sampler_size)
     if cuda:
         rs = rs.cuda()
         wfnet.cuda()
@@ -124,16 +94,15 @@ def state_from_file(path):
 def model_from_file(path, state=None):
     param = Parametrization()
     param_file = toml.loads(Path(path).read_text())
-    system = param_file.pop('system', None)
-    if system:
-        if isinstance(system, str):
-            system = {'name': system}
-        param.update_with_system(**system)
+    system = param_file.pop('system')
+    if isinstance(system, str):
+        system = {'name': system}
+    mol = Molecule.from_name(**system)
     param.update(param_file)
-    wfnet, mf = model(**param['model_kwargs'])
+    wfnet = PauliNet.from_hf(mol, **param['model_kwargs'])
     if state:
         wfnet.load_state_dict(state['wfnet'])
-    return wfnet, mf, param
+    return wfnet, param
 
 
 @click.command('train')
@@ -142,10 +111,9 @@ def model_from_file(path, state=None):
 @click.option('--save-every', default=100, show_default=True)
 def train_from_file(path, state, save_every):
     state = state_from_file(state)
-    wfnet, mf, param = model_from_file(path, state)
+    wfnet, param = model_from_file(path, state)
     train(
         wfnet,
-        mf,
         cwd=Path(path).parent,
         state=state,
         save_every=save_every,

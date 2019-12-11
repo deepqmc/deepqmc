@@ -1,34 +1,5 @@
 # version 0.5.0
 
-[model_kwargs]
-charge = 0
-spin = 0
-basis = "6-311g"
-
-[model_kwargs.pauli_kwargs]
-dist_basis_dim = 32
-freeze_mos = true
-freeze_confs = false
-conf_cutoff = 1e-2
-
-[model_kwargs.omni_kwargs]
-embedding_dim = 128
-n_jastrow_layers = 3
-n_backflow_layers = 3
-with_jastrow = true
-with_backflow = true
-with_r_backflow = false
-
-[model_kwargs.omni_kwargs.schnet_kwargs]
-n_interactions = 3
-kernel_dim = 64
-version = 2
-
-[model_kwargs.omni_kwargs.schnet_subnet_kwargs]
-n_filter_layers = 2
-n_kernel_in_layers = 1
-n_kernel_out_layers = 1
-
 [train_kwargs]
 learning_rate = 0.01
 sampler_size = 2_000
