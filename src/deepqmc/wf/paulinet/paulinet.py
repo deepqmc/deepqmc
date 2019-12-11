@@ -42,10 +42,8 @@ class PauliNet(BaseWFNet):
         rc_scaling=1.0,
         configurations=None,
     ):
-        super().__init__()
-        n_elec = int(mol.charges.sum() - mol.charge)
-        n_up, n_down = (n_elec + mol.spin) // 2, (n_elec - mol.spin) // 2
-        self.mol, self.n_up = mol, n_up
+        super().__init__(mol)
+        n_up, n_down = self.n_up, self.n_down
         self.dist_basis = (
             DistanceBasis(dist_basis_dim, cutoff=dist_basis_cutoff, envelope='nocusp')
             if mo_factory or jastrow_factory or backflow_factory or omni_factory
