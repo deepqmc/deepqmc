@@ -1,6 +1,4 @@
-from copy import deepcopy
 from functools import partial
-from importlib import resources
 from pathlib import Path
 
 import click
@@ -12,15 +10,7 @@ from tqdm.auto import trange
 from . import Molecule
 from .fit import LossWeightedLogProb, batched_sampler, fit_wfnet
 from .sampling import LangevinSampler, rand_from_mf
-from .utils import NestedDict
 from .wf import PauliNet
-
-
-class Parametrization(NestedDict):
-    DEFAULTS = toml.loads(resources.read_text('deepqmc.data', 'default-params.toml'))
-
-    def __init__(self, dct=None):
-        super().__init__(dct or deepcopy(Parametrization.DEFAULTS))
 
 
 def train(
@@ -29,16 +19,16 @@ def train(
     cwd=None,
     state=None,
     save_every=None,
-    cuda,
-    learning_rate,
-    n_steps,
-    sampler_size,
-    sampler_kwargs,
-    batched_sampler_kwargs,
-    lr_scheduler,
-    decay_rate,
-    optimizer,
-    fit_kwargs,
+    cuda=True,
+    learning_rate=0.01,
+    n_steps=10_000,
+    sampler_size=2_000,
+    lr_scheduler='inverse',
+    decay_rate=200,
+    optimizer='AdamW',
+    sampler_kwargs=None,
+    batched_sampler_kwargs=None,
+    fit_kwargs=None,
 ):
     rs = rand_from_mf(wfnet.mf, sampler_size)
     if cuda:
@@ -64,15 +54,15 @@ def train(
             LossWeightedLogProb(),
             opt,
             batched_sampler(
-                LangevinSampler(wfnet, rs, **sampler_kwargs),
+                LangevinSampler(wfnet, rs, **(sampler_kwargs or {})),
                 range_sampling=partial(trange, desc='sampling', leave=False),
-                **batched_sampler_kwargs,
+                **(batched_sampler_kwargs or {}),
             ),
             trange(
                 init_step, n_steps, initial=init_step, total=n_steps, desc='training'
             ),
             writer=writer,
-            **fit_kwargs,
+            **(fit_kwargs or {}),
         ):
             if scheduler:
                 scheduler.step()
@@ -92,13 +82,11 @@ def state_from_file(path):
 
 
 def model_from_file(path, state=None):
-    param = Parametrization()
-    param_file = toml.loads(Path(path).read_text())
-    system = param_file.pop('system')
+    param = toml.loads(Path(path).read_text())
+    system = param.pop('system')
     if isinstance(system, str):
         system = {'name': system}
     mol = Molecule.from_name(**system)
-    param.update(param_file)
     wfnet = PauliNet.from_hf(mol, **param['model_kwargs'])
     if state:
         wfnet.load_state_dict(state['wfnet'])

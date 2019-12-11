@@ -24,11 +24,11 @@ class LangevinSampler:
         wf,
         rs,
         *,
-        tau,
+        tau=0.1,
         max_age=None,
-        n_first_certain=0,
+        n_first_certain=3,
         psi_threshold=None,
-        target_acceptance=None,
+        target_acceptance=0.57,
     ):
         self.wf, self.rs, self.tau = wf, rs.clone(), tau
         self.max_age = max_age

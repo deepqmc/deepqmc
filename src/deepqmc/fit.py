@@ -66,6 +66,7 @@ def fit_wfnet(
     opt,
     sampler,
     steps,
+    *,
     require_energy_gradient=False,
     require_psi_gradient=True,
     clip_grad=None,
@@ -73,10 +74,10 @@ def fit_wfnet(
     start=0,
     debug=NULL_DEBUG,
     skip_outliers=False,
-    clip_outliers=False,
+    clip_outliers=True,
     p=0.01,
     q=5,
-    subbatch_size=None,
+    subbatch_size=10_000,
     clean_tau=None,
 ):
     assert not (skip_outliers and clip_outliers)
@@ -168,10 +169,10 @@ def fit_wfnet(
 def batched_sampler(
     sampler,
     *,
-    batch_size,
-    sample_every,
-    n_discard=0,
-    n_decorrelate=0,
+    batch_size=10_000,
+    sample_every=100,
+    n_discard=50,
+    n_decorrelate=1,
     range_sampling=range,
 ):
     if isinstance(batch_size, int):
