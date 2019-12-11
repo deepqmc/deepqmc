@@ -30,7 +30,9 @@ coverage = { version = "^4.5",optional = true }
 [tool.poetry.extras]
 test = ["pytest", "coverage"]
 doc = ["sphinx"]
-train = ["tensorboard", "tqdm", "click", "importlib-metadata"]
+train = ["tensorboard", "tqdm"]
+cli = ["click"]
+all = ["pytest", "coverage", "sphinx", "tensorboard", "tqdm", "click"]
 
 [tool.poetry.dev-dependencies]
 flake8 = "^3.5"
