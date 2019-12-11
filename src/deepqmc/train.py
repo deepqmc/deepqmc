@@ -6,7 +6,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import trange
 
 from .fit import LossWeightedLogProb, batched_sampler, fit_wfnet
-from .sampling import LangevinSampler, rand_from_mf
+from .sampling import LangevinSampler
 
 
 def train(
@@ -18,7 +18,6 @@ def train(
     cuda=True,
     learning_rate=0.01,
     n_steps=10_000,
-    sampler_size=2_000,
     lr_scheduler='inverse',
     decay_rate=200,
     optimizer='AdamW',
@@ -26,10 +25,9 @@ def train(
     batched_sampler_kwargs=None,
     fit_kwargs=None,
 ):
-    rs = rand_from_mf(wfnet.mf, sampler_size)
     if cuda:
-        rs = rs.cuda()
         wfnet.cuda()
+    sampler = LangevinSampler.from_mf(wfnet, cuda=cuda, **(sampler_kwargs or {}))
     opt = getattr(torch.optim, optimizer)(wfnet.parameters(), lr=learning_rate)
     if lr_scheduler == 'inverse':
         scheduler = torch.optim.lr_scheduler.LambdaLR(
@@ -50,7 +48,7 @@ def train(
             LossWeightedLogProb(),
             opt,
             batched_sampler(
-                LangevinSampler(wfnet, rs, **(sampler_kwargs or {})),
+                sampler,
                 range_sampling=partial(trange, desc='sampling', leave=False),
                 **(batched_sampler_kwargs or {}),
             ),

@@ -9,6 +9,6 @@ def test_simple_example():
         net,
         cuda=False,
         n_steps=2,
-        sampler_size=5,
+        sampler_kwargs={'sampler_size': 5},
         batched_sampler_kwargs={'batch_size': 5, 'n_discard': 0, 'sample_every': 2},
     )

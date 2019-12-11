@@ -37,6 +37,13 @@ class LangevinSampler:
         self.target_acceptance = target_acceptance
         self.restart()
 
+    @classmethod
+    def from_mf(cls, wf, *, sampler_size=2_000, cuda=False, **kwargs):
+        rs = rand_from_mf(wf.mf, sampler_size)
+        if cuda:
+            rs = rs.cuda()
+        return cls(wf, rs, **kwargs)
+
     def __len__(self):
         return len(self.rs)
 
