@@ -23,12 +23,6 @@ def loss_least_squares(y_pred, y_true):
     return ((y_pred - y_true) ** 2).mean()
 
 
-def fit_wfnet_multi(wfnet, loss_funcs, opts, gen_factory, gen_kwargs, writers):
-    for loss_func, opt, kwargs, writer in zip(loss_funcs, opts, gen_kwargs, writers):
-        with writer:
-            fit_wfnet(wfnet, loss_func, opt, gen_factory(**kwargs), writer=writer)
-
-
 def outlier_mask(x, p, q, dim=None):
     x = x.detach()
     dim = dim if dim is not None else -1
