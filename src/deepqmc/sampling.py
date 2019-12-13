@@ -1,24 +1,61 @@
+import math
+from abc import ABC, abstractmethod
+from itertools import count
+
 import numpy as np
-import pandas as pd
 import torch
+from torch.utils.data import DataLoader, TensorDataset
 
 from . import torchext
 from .physics import clean_force, quantum_force
 from .utils import assign_where
 
 
-def samples_from(sampler, steps, *, n_discard=0, n_decorrelate=0):
-    rs, psis, infos = zip(
-        *(
-            samples
-            for i, samples in zip(steps, sampler)
-            if i >= n_discard and i % (n_decorrelate + 1) == 0
+def samples_from(sampler, steps):
+    xs = zip(*(xs for _, xs in zip(steps, sampler)))
+    return tuple(torch.stack(x, dim=1) for x in xs)
+
+
+class BaseSampler(ABC):
+    def __init__(self, *, n_discard=50, n_decorrelate=1):
+        self.n_discard = n_discard
+        self.n_decorrelate = n_decorrelate
+
+    @abstractmethod
+    def __len__(self):
+        pass
+
+    @abstractmethod
+    def step(self):
+        pass
+
+    @abstractmethod
+    def restart(self):
+        pass
+
+    def iter_extra(self):
+        return (
+            self.step()
+            for i in count(-self.n_discard)
+            if i >= 0 and i % (self.n_decorrelate + 1) == 0
         )
-    )
-    return torch.stack(rs, dim=1), torch.stack(psis, dim=1), pd.DataFrame(infos)
+
+    def __iter__(self):
+        return (xs[:2] for xs in self.iter_extra())
+
+    def iter_batches(self, *, epoch_size, batch_size, range=range):
+        while True:
+            n_steps = math.ceil(epoch_size * batch_size / len(self))
+            xs = samples_from(self, range(n_steps))
+            samples_ds = TensorDataset(*(x.flatten(end_dim=1) for x in xs))
+            rs_dl = DataLoader(
+                samples_ds, batch_size=batch_size, shuffle=True, drop_last=True
+            )
+            yield from rs_dl
+            self.restart()
 
 
-class LangevinSampler:
+class LangevinSampler(BaseSampler):
     def __init__(
         self,
         wf,
@@ -29,7 +66,9 @@ class LangevinSampler:
         n_first_certain=3,
         psi_threshold=None,
         target_acceptance=0.57,
+        **kwargs,
     ):
+        super().__init__(**kwargs)
         self.wf, self.rs, self.tau = wf, rs.clone(), tau
         self.max_age = max_age
         self.n_first_certain = n_first_certain
@@ -38,17 +77,14 @@ class LangevinSampler:
         self.restart()
 
     @classmethod
-    def from_mf(cls, wf, *, sampler_size=2_000, cuda=False, **kwargs):
-        rs = rand_from_mf(wf.mf, sampler_size)
+    def from_mf(cls, wf, *, sample_size=2_000, cuda=False, **kwargs):
+        rs = rand_from_mf(wf.mf, sample_size)
         if cuda:
             rs = rs.cuda()
         return cls(wf, rs, **kwargs)
 
     def __len__(self):
         return len(self.rs)
-
-    def __iter__(self):
-        return self
 
     def _walker_step(self):
         return (
@@ -66,7 +102,7 @@ class LangevinSampler:
         forces = clean_force(forces, rs, self.wf.mol, tau=self.tau)
         return forces, psis
 
-    def __next__(self):
+    def step(self):
         rs_new = self._walker_step()
         forces_new, psis_new = self.qforce(rs_new)
         log_G_ratios = (
@@ -98,7 +134,7 @@ class LangevinSampler:
 
     def __repr__(self):
         return (
-            f'<LangevinSampler n_walker={self.rs.shape[0]} '
+            f'<LangevinSampler sample_size={self.rs.shape[0]} '
             'n_electrons={self.rs.shape[1]} tau={self.tau}>'
         )
 

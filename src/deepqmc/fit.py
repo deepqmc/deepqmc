@@ -1,12 +1,8 @@
-import math
-from itertools import count
-
 import torch
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 
 from .physics import clean_force, local_energy
-from .sampling import samples_from
 from .utils import NULL_DEBUG, normalize_mean, state_dict_copy, weighted_mean_var
 
 
@@ -164,43 +160,6 @@ def fit_wfnet(
         opt.step()
         opt.zero_grad()
         yield step
-
-
-def batched_sampler(
-    sampler,
-    *,
-    batch_size=10_000,
-    sample_every=100,
-    n_discard=50,
-    n_decorrelate=1,
-    range_sampling=range,
-):
-    if isinstance(batch_size, int):
-        batch_size = [(None, batch_size)]
-    for n_epochs, bs in batch_size:
-        for _ in range(n_epochs) if n_epochs else count():
-            n_sampling_steps = (
-                math.ceil(sample_every * bs / len(sampler)) * (1 + n_decorrelate)
-                + n_discard
-            )
-            sampler.restart()
-            rs, psis, _ = samples_from(
-                sampler,
-                range_sampling(n_sampling_steps),
-                n_discard=n_discard,
-                n_decorrelate=n_decorrelate,
-            )
-            samples_ds = TensorDataset(rs.flatten(end_dim=1), psis.flatten(end_dim=1))
-            rs_dl = DataLoader(samples_ds, batch_size=bs, shuffle=True, drop_last=True)
-            yield from rs_dl
-
-
-def simple_sampler(sampler, *, n_discard=0, n_decorrelate=0):
-    while True:
-        rs, psis, _ = samples_from(
-            sampler, range(1), n_discard=n_discard, n_decorrelate=n_decorrelate
-        )
-        yield rs.flatten(end_dim=1), psis.flatten(end_dim=1)
 
 
 def fit_wfnet_supervised(

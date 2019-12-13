@@ -5,7 +5,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import trange
 
-from .fit import LossWeightedLogProb, batched_sampler, fit_wfnet
+from .fit import LossWeightedLogProb, fit_wfnet
 from .sampling import LangevinSampler
 
 
@@ -20,9 +20,10 @@ def train(
     n_steps=10_000,
     lr_scheduler='inverse',
     decay_rate=200,
+    epoch_size=100,
+    batch_size=10_000,
     optimizer='AdamW',
     sampler_kwargs=None,
-    batched_sampler_kwargs=None,
     fit_kwargs=None,
 ):
     if cuda:
@@ -47,10 +48,10 @@ def train(
             wfnet,
             LossWeightedLogProb(),
             opt,
-            batched_sampler(
-                sampler,
-                range_sampling=partial(trange, desc='sampling', leave=False),
-                **(batched_sampler_kwargs or {}),
+            sampler.iter_batches(
+                batch_size=batch_size,
+                epoch_size=epoch_size,
+                range=partial(trange, desc='sampling', leave=False),
             ),
             trange(
                 init_step, n_steps, initial=init_step, total=n_steps, desc='training'
