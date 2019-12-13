@@ -1,5 +1,4 @@
 import math
-from abc import ABC, abstractmethod
 from itertools import count
 
 import numpy as np
@@ -12,50 +11,11 @@ from .utils import assign_where
 
 
 def samples_from(sampler, steps):
-    xs = zip(*(xs for _, xs in zip(steps, sampler)))
-    return tuple(torch.stack(x, dim=1) for x in xs)
+    rs, psis, *extra = zip(*(xs for _, xs in zip(steps, sampler)))
+    return (torch.stack(rs, dim=1), torch.stack(psis, dim=1), *extra)
 
 
-class BaseSampler(ABC):
-    def __init__(self, *, n_discard=50, n_decorrelate=1):
-        self.n_discard = n_discard
-        self.n_decorrelate = n_decorrelate
-
-    @abstractmethod
-    def __len__(self):
-        pass
-
-    @abstractmethod
-    def step(self):
-        pass
-
-    @abstractmethod
-    def restart(self):
-        pass
-
-    def iter_extra(self):
-        return (
-            self.step()
-            for i in count(-self.n_discard)
-            if i >= 0 and i % (self.n_decorrelate + 1) == 0
-        )
-
-    def __iter__(self):
-        return (xs[:2] for xs in self.iter_extra())
-
-    def iter_batches(self, *, epoch_size, batch_size, range=range):
-        while True:
-            n_steps = math.ceil(epoch_size * batch_size / len(self))
-            xs = samples_from(self, range(n_steps))
-            samples_ds = TensorDataset(*(x.flatten(end_dim=1) for x in xs))
-            rs_dl = DataLoader(
-                samples_ds, batch_size=batch_size, shuffle=True, drop_last=True
-            )
-            yield from rs_dl
-            self.restart()
-
-
-class LangevinSampler(BaseSampler):
+class MetropolisSampler:
     def __init__(
         self,
         wf,
@@ -66,15 +26,39 @@ class LangevinSampler(BaseSampler):
         n_first_certain=3,
         psi_threshold=None,
         target_acceptance=0.57,
-        **kwargs,
+        n_discard=50,
+        n_decorrelate=1,
     ):
-        super().__init__(**kwargs)
-        self.wf, self.rs, self.tau = wf, rs.clone(), tau
+        self.wf = wf
+        self.rs = rs.clone()
+        self.tau = tau
         self.max_age = max_age
         self.n_first_certain = n_first_certain
         self.psi_threshold = psi_threshold
         self.target_acceptance = target_acceptance
+        self.n_discard = n_discard
+        self.n_decorrelate = n_decorrelate
         self.restart()
+
+    def proposal(self):
+        return self.rs + torch.randn_like(self.rs) * self.tau
+
+    def acceptance_prob(self, rs):
+        psis = self.wf(rs).detach()
+        Ps_acc = (psis / self.psis) ** 2
+        return Ps_acc, psis
+
+    def extra_vars(self):
+        return ()
+
+    def __len__(self):
+        return len(self.rs)
+
+    def __repr__(self):
+        return (
+            f'<{self.__class__.__name__} sample_size={self.rs.shape[0]} '
+            'n_electrons={self.rs.shape[1]} tau={self.tau}>'
+        )
 
     @classmethod
     def from_mf(cls, wf, *, sample_size=2_000, cuda=False, **kwargs):
@@ -83,38 +67,13 @@ class LangevinSampler(BaseSampler):
             rs = rs.cuda()
         return cls(wf, rs, **kwargs)
 
-    def __len__(self):
-        return len(self.rs)
-
-    def _walker_step(self):
-        return (
-            self.rs
-            + self.forces * self.tau
-            + torch.randn_like(self.rs) * np.sqrt(self.tau)
-        )
-
-    def qforce(self, rs):
-        try:
-            forces, psis = quantum_force(rs, self.wf)
-        except torchext.LUFactError as e:
-            e.info['rs'] = rs[e.info['idxs']]
-            raise
-        forces = clean_force(forces, rs, self.wf.mol, tau=self.tau)
-        return forces, psis
-
     def step(self):
-        rs_new = self._walker_step()
-        forces_new, psis_new = self.qforce(rs_new)
-        log_G_ratios = (
-            (self.forces + forces_new)
-            * ((self.rs - rs_new) + self.tau / 2 * (self.forces - forces_new))
-        ).sum(dim=(-1, -2))
-        Ps_acc = torch.exp(log_G_ratios) * (psis_new / self.psis) ** 2
+        rs = self.proposal()
+        Ps_acc, psis, *extra_vars = self.acceptance_prob(rs)
         accepted = Ps_acc > torch.rand_like(Ps_acc)
         if self.psi_threshold is not None:
-            accepted = accepted & (psis_new.abs() > self.psi_threshold) | (
-                (self.psis.abs() < self.psi_threshold)
-                & (psis_new.abs() > self.psis.abs())
+            accepted = accepted & (psis.abs() > self.psi_threshold) | (
+                (self.psis.abs() < self.psi_threshold) & (psis.abs() > self.psis.abs())
             )
         if self.max_age is not None:
             accepted = accepted | (self._ages >= self.max_age)
@@ -125,30 +84,45 @@ class LangevinSampler(BaseSampler):
         acceptance = accepted.type(torch.int).sum().item() / self.rs.shape[0]
         info = {'acceptance': acceptance, 'age': self._ages.cpu().numpy()}
         assign_where(
-            (self.rs, self.psis, self.forces), (rs_new, psis_new, forces_new), accepted
+            (self.rs, self.psis, *self.extra_vars()), (rs, psis, *extra_vars), accepted,
         )
         if self.target_acceptance:
             self.tau /= self.target_acceptance / acceptance
         self._step += 1
         return self.rs.clone(), self.psis.clone(), info
 
-    def __repr__(self):
+    def iter_with_info(self):
         return (
-            f'<LangevinSampler sample_size={self.rs.shape[0]} '
-            'n_electrons={self.rs.shape[1]} tau={self.tau}>'
+            self.step()
+            for i in count(-self.n_discard)
+            if i >= 0 and i % (self.n_decorrelate + 1) == 0
         )
 
-    def propagate_all(self):
-        self.rs = self._walker_step()
-        self.restart()
+    def __iter__(self):
+        return ((rs, psis) for rs, psis, info in self.iter_with_info())
 
-    def recompute_force(self):
-        self.forces, self.psis = self.qforce(self.rs)
+    def iter_batches(self, *, epoch_size, batch_size, range=range):
+        while True:
+            n_steps = math.ceil(epoch_size * batch_size / len(self))
+            rs, psis = samples_from(self, range(n_steps))
+            samples_ds = TensorDataset(*(x.flatten(end_dim=1) for x in (rs, psis)))
+            rs_dl = DataLoader(
+                samples_ds, batch_size=batch_size, shuffle=True, drop_last=True
+            )
+            yield from rs_dl
+            self.restart()
+
+    def recompute_psi(self):
+        self.psis = self.wf(self.rs)
 
     def restart(self):
         self._step = 0
-        self.recompute_force()
+        self.recompute_psi()
         self._ages = torch.zeros_like(self.psis, dtype=torch.long)
+
+    def propagate_all(self):
+        self.rs = self.proposal()
+        self.restart()
 
 
 def rand_from_mf(mf, bs, elec_std=1.0, idxs=None):
@@ -175,63 +149,34 @@ def rand_from_mf(mf, bs, elec_std=1.0, idxs=None):
     return rs
 
 
-class MetropolisSampler:
-    def __init__(
-        self, wf, rs, *, tau, max_age=None, n_first_certain=0, psi_threshold=None
-    ):
-        self.wf, self.rs, self.tau = wf, rs.clone(), tau
-        self.max_age = max_age
-        self.n_first_certain = n_first_certain
-        self.psi_threshold = psi_threshold
-        self.restart()
-
-    def __len__(self):
-        return len(self.rs)
-
-    def __iter__(self):
-        return self
-
-    def _walker_step(self):
-        return self.rs + torch.randn_like(self.rs) * self.tau
-
-    def __next__(self):
-        rs_new = self._walker_step()
-        psis_new = self.wf(rs_new).detach()
-        Ps_acc = (psis_new / self.psis) ** 2
-        accepted = Ps_acc > torch.rand_like(Ps_acc)
-        if self.psi_threshold is not None:
-            accepted = accepted & (psis_new.abs() > self.psi_threshold) | (
-                (self.psis.abs() < self.psi_threshold)
-                & (psis_new.abs() > self.psis.abs())
-            )
-        if self.max_age is not None:
-            accepted = accepted | (self._ages >= self.max_age)
-        if self._step < self.n_first_certain:
-            accepted = torch.ones_like(accepted)
-        self._ages[accepted] = 0
-        self._ages[~accepted] += 1
-        info = {
-            'acceptance': accepted.type(torch.int).sum().item() / self.rs.shape[0],
-            'age': self._ages.cpu().numpy(),
-        }
-        assign_where((self.rs, self.psis), (rs_new, psis_new), accepted)
-        self._step += 1
-        return self.rs.clone(), self.psis.clone(), info
-
-    def __repr__(self):
+class LangevinSampler(MetropolisSampler):
+    def proposal(self):
         return (
-            f'<MetropolisSampler n_walker={self.rs.shape[0]} '
-            'n_electrons={self.rs.shape[1]} tau={self.tau}>'
+            self.rs
+            + self.forces * self.tau
+            + torch.randn_like(self.rs) * np.sqrt(self.tau)
         )
 
-    def propagate_all(self):
-        self.rs = self._walker_step()
-        self.restart()
+    def acceptance_prob(self, rs):
+        forces, psis = self.qforce(rs)
+        log_G_ratios = (
+            (self.forces + forces)
+            * ((self.rs - rs) + self.tau / 2 * (self.forces - forces))
+        ).sum(dim=(-1, -2))
+        Ps_acc = torch.exp(log_G_ratios) * (psis / self.psis) ** 2
+        return Ps_acc, psis, forces
+
+    def qforce(self, rs):
+        try:
+            forces, psis = quantum_force(rs, self.wf)
+        except torchext.LUFactError as e:
+            e.info['rs'] = rs[e.info['idxs']]
+            raise
+        forces = clean_force(forces, rs, self.wf.mol, tau=self.tau)
+        return forces, psis
+
+    def extra_vars(self):
+        return (self.forces,)
 
     def recompute_psi(self):
-        self.psis = self.wf(self.rs)
-
-    def restart(self):
-        self._step = 0
-        self.recompute_psi()
-        self._ages = torch.zeros_like(self.psis, dtype=torch.long)
+        self.forces, self.psis = self.qforce(self.rs)

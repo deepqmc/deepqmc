@@ -78,6 +78,7 @@ def integrate_on_mesh(func, bounds, density=0.02):
 
 
 def assign_where(xs, ys, where):
+    assert len(xs) == len(ys)
     for x, y in zip(xs, ys):
         x[where] = y[where]
 
