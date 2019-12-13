@@ -42,6 +42,7 @@ flake8-quotes = "^1.0"
 black = "^19-beta.0"
 pep8-naming = "^0.7.0"
 isort = "^4.3"
+pydocstyle = "^5.0.1"
 
 [tool.poetry.scripts]
 deepqmc-train = "deepqmc.train:train_from_file"
