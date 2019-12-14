@@ -92,9 +92,10 @@ class MetropolisSampler:
         return self.rs.clone(), self.psis.clone(), info
 
     def iter_with_info(self):
+        samples = (self.step() for _ in count())
         return (
-            self.step()
-            for i in count(-self.n_discard)
+            sample
+            for i, sample in zip(count(-self.n_discard), samples)
             if i >= 0 and i % (self.n_decorrelate + 1) == 0
         )
 
