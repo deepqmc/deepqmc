@@ -12,27 +12,25 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.7"
-certifi = "*"
+toml = "^0.10.0"
 numpy = "^1.16"
 torch = "^1.1"
-scipy = "^1.2"
-pyscf = "^1.6"
-pandas = "^0.24.2"
-toml = "^0.10.0"
+scipy = { version = "^1.2", optional = true }
+pyscf = { version = "^1.6", optional = true }
 pytest = { version = "^4.4", optional = true }
+coverage = { version = "^4.5", optional = true }
 tensorboard = { version = "^2.0", optional = true }
 tqdm = { version = "^4.31", optional = true }
 click = { version = "^7.0", optional = true }
-importlib-metadata = { version = "^0.23.0", optional = true }
 sphinx = { version = "^2.2", optional = true }
-coverage = { version = "^4.5",optional = true }
 
 [tool.poetry.extras]
+wf = ["scipy", "pyscf"]
 test = ["pytest", "coverage"]
-doc = ["sphinx"]
 train = ["tensorboard", "tqdm"]
 cli = ["click"]
-all = ["pytest", "coverage", "sphinx", "tensorboard", "tqdm", "click"]
+doc = ["sphinx"]
+all = ["scipy", "pyscf", "pytest", "coverage", "tensorboard", "tqdm", "click"]
 
 [tool.poetry.dev-dependencies]
 flake8 = "^3.5"
