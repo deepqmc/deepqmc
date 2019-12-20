@@ -3,10 +3,10 @@ from torch import nn
 
 
 class DistanceBasis(nn.Module):
-    def __init__(self, basis_dim, cutoff=10.0, envelope='physnet'):
+    def __init__(self, dist_feat_dim, cutoff=10.0, envelope='physnet'):
         super().__init__()
-        delta = 1 / (2 * basis_dim)
-        qs = torch.linspace(delta, 1 - delta, basis_dim)
+        delta = 1 / (2 * dist_feat_dim)
+        qs = torch.linspace(delta, 1 - delta, dist_feat_dim)
         self.cutoff = cutoff
         self.envelope = envelope
         self.register_buffer('mus', cutoff * qs ** 2)
@@ -32,7 +32,7 @@ class DistanceBasis(nn.Module):
         return ', '.join(
             f'{lbl}={val!r}'
             for lbl, val in [
-                ('basis_dim', len(self.mus)),
+                ('dist_feat_dim', len(self.mus)),
                 ('cutoff', self.cutoff),
                 ('envelope', self.envelope),
             ]

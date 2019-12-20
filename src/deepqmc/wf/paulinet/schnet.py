@@ -51,7 +51,7 @@ class SubnetFactory:
         )
 
 
-class ElectronicSchnet(nn.Module):
+class ElectronicSchNet(nn.Module):
     def __init__(
         self,
         n_up,
@@ -59,16 +59,16 @@ class ElectronicSchnet(nn.Module):
         n_nuclei,
         *,
         embedding_dim,
-        basis_dim,
+        dist_feat_dim,
         n_interactions=3,
         kernel_dim=64,
-        subnet_factories=None,
+        subnet_metafactory=None,
         return_interactions=False,
         version=2,
     ):
         assert version in {1, 2}
-        subnet_factories = subnet_factories or SubnetFactory
-        factory = subnet_factories(basis_dim, kernel_dim, embedding_dim)
+        subnet_metafactory = subnet_metafactory or SubnetFactory
+        factory = subnet_metafactory(dist_feat_dim, kernel_dim, embedding_dim)
         super().__init__()
         self.version = version
         self.n_up, self.n_down = n_up, n_down

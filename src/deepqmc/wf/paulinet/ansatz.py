@@ -7,18 +7,16 @@ from deepqmc.torchext import SSP, get_log_dnn
 from deepqmc.utils import NULL_DEBUG
 
 from .backflow import Backflow
-from .schnet import ElectronicSchnet, SubnetFactory
+from .schnet import ElectronicSchNet, SubnetFactory
 
 __version__ = '0.2.0'
 
 
-
-
-class OmniSchnet(nn.Module):
+class OmniSchNet(nn.Module):
     def __init__(
         self,
         mol,
-        n_features,
+        dist_feat_dim,
         n_up,
         n_down,
         n_orbitals,
@@ -29,16 +27,16 @@ class OmniSchnet(nn.Module):
         with_jastrow=True,
         with_r_backflow=False,
         schnet_kwargs=None,
-        schnet_subnet_kwargs=None,
+        subnet_kwargs=None,
     ):
         super().__init__()
-        self.schnet = ElectronicSchnet(
+        self.schnet = ElectronicSchNet(
             n_up,
             n_down,
             len(mol),
-            basis_dim=n_features,
+            dist_feat_dim=dist_feat_dim,
             embedding_dim=embedding_dim,
-            subnet_factories=partial(SubnetFactory, **(schnet_subnet_kwargs or {})),
+            subnet_metafactory=partial(SubnetFactory, **(subnet_kwargs or {})),
             **(schnet_kwargs or {}),
         )
         if with_jastrow:

@@ -29,7 +29,7 @@ class CuspCorrection(nn.Module):
         self.register_buffer('rc', rc)
         self.eps = eps
 
-    def fit_cusp_poly(self, phi_gto_boundary, mos0):
+    def _fit_cusp_poly(self, phi_gto_boundary, mos0):
         has_s_part = phi_gto_boundary[0].abs() > self.eps
         charges, rc = (
             x[:, None].expand_as(has_s_part) for x in (self.charges, self.rc)
@@ -56,7 +56,7 @@ class CuspCorrection(nn.Module):
     def forward(self, rs_2, phi_gto_boundary, mos0):
         # TODO the indexing here is far from desirable, but I don't have time to
         # clean it up now
-        C, sgn, alphas, has_s_part = self.fit_cusp_poly(phi_gto_boundary, mos0)
+        C, sgn, alphas, has_s_part = self._fit_cusp_poly(phi_gto_boundary, mos0)
         rs_2_nearest, center_idx = rs_2.min(dim=-1)
         maybe_corrected = rs_2_nearest < self.rc[center_idx] ** 2
         rs_1 = rs_2_nearest[maybe_corrected].sqrt()

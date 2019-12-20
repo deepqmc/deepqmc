@@ -3,7 +3,7 @@ from torch import nn
 from ..utils import Debuggable
 
 
-class BaseWFNet(nn.Module, Debuggable):
+class WaveFunction(nn.Module, Debuggable):
     def __init__(self, mol):
         super().__init__()
         self.mol = mol

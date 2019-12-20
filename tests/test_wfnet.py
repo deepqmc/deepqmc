@@ -3,12 +3,12 @@ import torch
 from torch import nn
 
 from deepqmc import Molecule
-from deepqmc.fit import LossEnergy, fit_wfnet
+from deepqmc.fit import LossEnergy, fit_wf
 from deepqmc.physics import local_energy
 from deepqmc.sampling import LangevinSampler
 from deepqmc.wf import PauliNet
 from deepqmc.wf.paulinet.gto import GTOBasis
-from deepqmc.wf.paulinet.schnet import ElectronicSchnet
+from deepqmc.wf.paulinet.schnet import ElectronicSchNet
 
 try:
     import pyscf.gto
@@ -42,14 +42,14 @@ def net_factory(request):
 
 
 class JastrowNet(nn.Module):
-    def __init__(self, n_atoms, n_features, n_up, n_down):
+    def __init__(self, n_atoms, dist_feat_dim, n_up, n_down):
         super().__init__()
-        self.schnet = ElectronicSchnet(
+        self.schnet = ElectronicSchNet(
             n_up,
             n_down,
             n_atoms,
+            dist_feat_dim=dist_feat_dim,
             n_interactions=2,
-            basis_dim=4,
             kernel_dim=8,
             embedding_dim=16,
             version=1,
@@ -62,7 +62,7 @@ class JastrowNet(nn.Module):
 
 
 @pytest.fixture
-def wfnet(net_factory, mol):
+def wf(net_factory, mol):
     args = (mol,)
     kwargs = {}
     if net_factory is PauliNet:
@@ -74,54 +74,54 @@ def wfnet(net_factory, mol):
                 'cusp_correction': True,
                 'cusp_electrons': True,
                 'jastrow_factory': JastrowNet,
-                'dist_basis_dim': 4,
+                'dist_feat_dim': 4,
             }
         )
     return net_factory(*args, **kwargs)
 
 
-def test_batching(wfnet, rs):
-    assert torch.allclose(wfnet(rs[:2]), wfnet(rs)[:2], atol=0)
+def test_batching(wf, rs):
+    assert torch.allclose(wf(rs[:2]), wf(rs)[:2], atol=0)
 
 
-def test_antisymmetry(wfnet, rs):
-    assert torch.allclose(wfnet(rs[:, [0, 2, 1]]), -wfnet(rs), atol=0)
+def test_antisymmetry(wf, rs):
+    assert torch.allclose(wf(rs[:, [0, 2, 1]]), -wf(rs), atol=0)
 
 
-def test_antisymmetry_trained(wfnet, rs):
-    sampler = LangevinSampler(wfnet, torch.rand_like(rs), tau=0.1)
-    fit_wfnet(
-        wfnet,
+def test_antisymmetry_trained(wf, rs):
+    sampler = LangevinSampler(wf, torch.rand_like(rs), tau=0.1)
+    fit_wf(
+        wf,
         LossEnergy(),
-        torch.optim.Adam(wfnet.parameters(), lr=1e-2),
+        torch.optim.Adam(wf.parameters(), lr=1e-2),
         sampler,
         range(10),
     )
-    assert torch.allclose(wfnet(rs[:, [0, 2, 1]]), -wfnet(rs), atol=0)
+    assert torch.allclose(wf(rs[:, [0, 2, 1]]), -wf(rs), atol=0)
 
 
-def test_backprop(wfnet, rs):
-    wfnet(rs).sum().backward()
+def test_backprop(wf, rs):
+    wf(rs).sum().backward()
     assert_alltrue_named(
-        (name, param.grad is not None) for name, param in wfnet.named_parameters()
+        (name, param.grad is not None) for name, param in wf.named_parameters()
     )
     assert_alltrue_named(
         (name, param.grad.sum().abs().item() > 0)
-        for name, param in wfnet.named_parameters()
+        for name, param in wf.named_parameters()
     )
 
 
-def test_grad(wfnet, rs):
+def test_grad(wf, rs):
     rs.requires_grad_()
-    wfnet(rs).sum().backward()
+    wf(rs).sum().backward()
     assert rs.grad.sum().abs().item() > 0
 
 
-def test_loc_ene_backprop(wfnet, rs):
+def test_loc_ene_backprop(wf, rs):
     rs.requires_grad_()
-    Es_loc, _ = local_energy(rs, wfnet, create_graph=True)
+    Es_loc, _ = local_energy(rs, wf, create_graph=True)
     Es_loc.sum().backward()
     assert_alltrue_named(
         (name, param.grad.sum().abs().item() > 0)
-        for name, param in wfnet.named_parameters()
+        for name, param in wf.named_parameters()
     )

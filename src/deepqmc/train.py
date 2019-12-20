@@ -5,12 +5,12 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import trange
 
-from .fit import LossEnergy, fit_wfnet
+from .fit import LossEnergy, fit_wf
 from .sampling import LangevinSampler
 
 
 def train(
-    wfnet,
+    wf,
     *,
     cwd=None,
     state=None,
@@ -27,12 +27,12 @@ def train(
     fit_kwargs=None,
 ):
     if cuda:
-        wfnet.cuda()
-    sampler = LangevinSampler.from_mf(wfnet, cuda=cuda, **(sampler_kwargs or {}))
-    opt = getattr(torch.optim, optimizer)(wfnet.parameters(), lr=learning_rate)
+        wf.cuda()
+    sampler = LangevinSampler.from_mf(wf, cuda=cuda, **(sampler_kwargs or {}))
+    opt = getattr(torch.optim, optimizer)(wf.parameters(), lr=learning_rate)
     if lr_scheduler == 'inverse':
         scheduler = torch.optim.lr_scheduler.LambdaLR(
-            opt, lambda t: 1 / (1 + t / decay_rate)
+            opt, lambda n: 1 / (1 + n / decay_rate)
         )
     else:
         scheduler = None
@@ -44,8 +44,8 @@ def train(
     else:
         init_step = 0
     with SummaryWriter(log_dir=cwd, flush_secs=15, purge_step=init_step - 1) as writer:
-        for step in fit_wfnet(
-            wfnet,
+        for step in fit_wf(
+            wf,
             LossEnergy(),
             opt,
             sampler.iter_batches(
@@ -64,7 +64,7 @@ def train(
             if cwd and save_every and (step + 1) % save_every == 0:
                 state = {
                     'step': step,
-                    'wfnet': wfnet.state_dict(),
+                    'wf': wf.state_dict(),
                     'opt': opt.state_dict(),
                 }
                 if scheduler:

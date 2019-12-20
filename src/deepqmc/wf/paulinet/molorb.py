@@ -18,7 +18,7 @@ class MolecularOrbital(nn.Module):
         basis,
         n_orbitals,
         net_factory=None,
-        edge_dim=None,
+        dist_feat_dim=None,
         cusp_correction=True,
         rc_scaling=1.0,
         eps=1e-6,
@@ -28,7 +28,9 @@ class MolecularOrbital(nn.Module):
         self.n_orbitals = n_orbitals
         self.basis = basis
         self.mo_coeff = nn.Linear(len(basis), n_orbitals, bias=False)
-        self.net = net_factory(len(mol), edge_dim, n_orbitals) if net_factory else None
+        self.net = (
+            net_factory(len(mol), dist_feat_dim, n_orbitals) if net_factory else None
+        )
         if cusp_correction:
             rc = rc_scaling / mol.charges.float()
             dists = pairwise_distance(mol.coords, mol.coords)
@@ -56,20 +58,20 @@ class MolecularOrbital(nn.Module):
         diffs_nuc = pairwise_diffs(torch.cat([coords, rs]), coords)
         return self(diffs_nuc)
 
-    def forward(self, diffs, edges=None, debug=NULL_DEBUG):
-        # first n_atoms rows of diffs and edges correspond to electrons on
+    def forward(self, diffs, dist_feats=None, debug=NULL_DEBUG):
+        # first n_atoms rows of diffs and dist_feats correspond to electrons on
         # nuclei
         n_atoms = self.n_atoms
         aos = debug['aos'] = self.basis(diffs)
         mos = self.mo_coeff(aos)
         if self.net:
-            mos = self.net(mos, edges)
+            mos = self.net(mos, dist_feats)
         mos, mos0 = mos[n_atoms:], mos[:n_atoms]
         if self.cusp_corr:
             dists_2_nuc, aos = diffs[n_atoms:, :, 3], aos[n_atoms:]
             phi_gto_boundary = torch.stack(  # boundary values for s-type parts of MOs
                 [
-                    self.mo_coeff_s_type_at(idx, self.basis_cusp_info_at(idx))
+                    self._mo_coeff_s_type_at(idx, self._basis_cusp_info_at(idx))
                     for idx in range(n_atoms)
                 ],
                 dim=1,
@@ -82,7 +84,7 @@ class MolecularOrbital(nn.Module):
             for idx in range(n_atoms):
                 if not (center_idx == idx).any():
                     continue
-                phi_gto[center_idx == idx] = self.mo_coeff_s_type_at(
+                phi_gto[center_idx == idx] = self._mo_coeff_s_type_at(
                     idx, aos[center_idx == idx][:, self.basis.s_center_idxs == idx]
                 )
             mos = merge_tensors(
@@ -92,10 +94,10 @@ class MolecularOrbital(nn.Module):
             )
         return debug.result(mos)
 
-    def mo_coeff_s_type_at(self, idx, xs):
+    def _mo_coeff_s_type_at(self, idx, xs):
         mo_coeff = self.mo_coeff.weight.t()
         mo_coeff_at = mo_coeff[self.basis.is_s_type][self.basis.s_center_idxs == idx]
         return xs @ mo_coeff_at
 
-    def basis_cusp_info_at(self, idx):
+    def _basis_cusp_info_at(self, idx):
         return self.basis_cusp_info[:, self.basis.s_center_idxs == idx]

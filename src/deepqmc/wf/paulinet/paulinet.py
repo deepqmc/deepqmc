@@ -8,9 +8,9 @@ from deepqmc import Molecule
 from deepqmc.physics import pairwise_diffs, pairwise_distance
 from deepqmc.torchext import triu_flat
 from deepqmc.utils import NULL_DEBUG
-from deepqmc.wf import BaseWFNet
+from deepqmc.wf import WaveFunction
 
-from .ansatz import OmniSchnet
+from .ansatz import OmniSchNet
 from .cusp import ElectronicAsymptotic
 from .distbasis import DistanceBasis
 from .gto import GTOBasis
@@ -28,18 +28,18 @@ def eval_slater(xs):
     return det(xs)
 
 
-class PauliNet(BaseWFNet):
+class PauliNet(WaveFunction):
     def __init__(
         self,
         mol,
         basis,
         mo_factory=None,
+        dist_feat_dim=32,
+        dist_feat_cutoff=10.0,
         jastrow_factory=None,
         backflow_factory=None,
         r_backflow_factory=None,
         omni_factory=None,
-        dist_basis_dim=32,
-        dist_basis_cutoff=10.0,
         cusp_correction=False,
         cusp_electrons=False,
         rc_scaling=1.0,
@@ -48,7 +48,7 @@ class PauliNet(BaseWFNet):
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
         self.dist_basis = (
-            DistanceBasis(dist_basis_dim, cutoff=dist_basis_cutoff, envelope='nocusp')
+            DistanceBasis(dist_feat_dim, cutoff=dist_feat_cutoff, envelope='nocusp')
             if mo_factory or jastrow_factory or backflow_factory or omni_factory
             else None
         )
@@ -68,7 +68,7 @@ class PauliNet(BaseWFNet):
             basis,
             n_orbitals,
             net_factory=mo_factory,
-            edge_dim=dist_basis_dim,
+            dist_feat_dim=dist_feat_dim,
             cusp_correction=cusp_correction,
             rc_scaling=rc_scaling,
         )
@@ -78,19 +78,19 @@ class PauliNet(BaseWFNet):
             else (None, None)
         )
         self.jastrow = (
-            jastrow_factory(len(mol), dist_basis_dim, n_up, n_down)
+            jastrow_factory(len(mol), dist_feat_dim, n_up, n_down)
             if jastrow_factory
             else None
         )
         self.backflow = (
-            backflow_factory(len(mol), dist_basis_dim, n_up, n_down, n_orbitals)
+            backflow_factory(len(mol), dist_feat_dim, n_up, n_down, n_orbitals)
             if backflow_factory
             else None
         )
         self.r_backflow = None
         if omni_factory:
             assert not backflow_factory and not jastrow_factory
-            self.omni = omni_factory(mol, dist_basis_dim, n_up, n_down, n_orbitals)
+            self.omni = omni_factory(mol, dist_feat_dim, n_up, n_down, n_orbitals)
             self.backflow = self.omni.forward_backflow
             self.r_backflow = self.omni.forward_r_backflow
             self.jastrow = self.omni.forward_jastrow
@@ -163,15 +163,15 @@ class PauliNet(BaseWFNet):
         if cas:
             mc = mcscf.CASSCF(mf, *cas)
             mc.kernel()
-        wfnet = PauliNet.from_pyscf(
+        wf = PauliNet.from_pyscf(
             mc if cas else mf,
-            omni_factory=partial(OmniSchnet, **(omni_kwargs or {})),
+            omni_factory=partial(OmniSchNet, **(omni_kwargs or {})),
             cusp_correction=True,
             cusp_electrons=True,
             **(pauli_kwargs or {}),
         )
-        wfnet.mf = mf
-        return wfnet
+        wf.mf = mf
+        return wf
 
     def forward(self, rs, debug=NULL_DEBUG):
         batch_dim, n_elec = rs.shape[:2]

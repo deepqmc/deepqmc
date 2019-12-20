@@ -8,16 +8,16 @@ from . import Molecule, train
 from .wf import PauliNet
 
 
-def wfnet_from_file(path, state=None):
+def wf_from_file(path, state=None):
     param = toml.loads(Path(path).read_text())
     system = param.pop('system')
     if isinstance(system, str):
         system = {'name': system}
     mol = Molecule.from_name(**system)
-    wfnet = PauliNet.from_hf(mol, **param['model_kwargs'])
+    wf = PauliNet.from_hf(mol, **param['model_kwargs'])
     if state:
-        wfnet.load_state_dict(state['wfnet'])
-    return wfnet, param
+        wf.load_state_dict(state['wf'])
+    return wf, param
 
 
 @click.command()
@@ -26,9 +26,9 @@ def wfnet_from_file(path, state=None):
 @click.option('--save-every', default=100, show_default=True)
 def train_from_file(path, state, save_every):
     state = torch.load(state) if state and Path(state).is_file() else None
-    wfnet, param = wfnet_from_file(path, state)
+    wf, param = wf_from_file(path, state)
     train(
-        wfnet,
+        wf,
         cwd=Path(path).parent,
         state=state,
         save_every=save_every,

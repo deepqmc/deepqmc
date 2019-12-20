@@ -54,8 +54,8 @@ def log_clipped_outliers(x, q):
     return median + x
 
 
-def fit_wfnet(
-    wfnet,
+def fit_wf(
+    wf,
     loss_func,
     opt,
     sampler,
@@ -77,13 +77,13 @@ def fit_wfnet(
     assert not (skip_outliers and clip_outliers)
     for step, (rs, psi0s) in zip(steps, sampler):
         d = debug[step]
-        d['psi0s'], d['rs'], d['state_dict'] = psi0s, rs, state_dict_copy(wfnet)
+        d['psi0s'], d['rs'], d['state_dict'] = psi0s, rs, state_dict_copy(wf)
         subbatch_size = subbatch_size or len(rs)
         subbatches = []
         for rs, psi0s in DataLoader(TensorDataset(rs, psi0s), batch_size=subbatch_size):
             Es_loc, psis, forces = local_energy(
                 rs,
-                wfnet,
+                wf,
                 create_graph=require_energy_gradient,
                 keep_graph=require_psi_gradient,
                 return_grad=True,
@@ -91,7 +91,7 @@ def fit_wfnet(
             ws = (psis.detach() / psi0s) ** 2
             if clean_tau is not None:
                 forces = forces / psis.detach()[:, None, None]
-                forces_clean = clean_force(forces, rs, wfnet.mol, tau=clean_tau)
+                forces_clean = clean_force(forces, rs, wf.mol, tau=clean_tau)
                 forces, forces_clean = (
                     x.flatten(start_dim=-2).norm(dim=-1) for x in (forces, forces_clean)
                 )
@@ -131,7 +131,7 @@ def fit_wfnet(
             raise NanLoss()
         d['Es_loc'], d['psis'] = Es_loc, psis
         if clip_grad:
-            clip_grad_norm_(wfnet.parameters(), clip_grad)
+            clip_grad_norm_(wf.parameters(), clip_grad)
         if writer:
             E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, ws)
             writer.add_scalar('E_loc/mean', E_loc_mean, step)
@@ -147,10 +147,10 @@ def fit_wfnet(
             writer.add_scalar('force_weights/min', force_ws.min(), step)
             writer.add_scalar('force_weights/max', force_ws.max(), step)
             grads = torch.cat(
-                [p.grad.flatten() for p in wfnet.parameters() if p.grad is not None]
+                [p.grad.flatten() for p in wf.parameters() if p.grad is not None]
             )
             writer.add_scalar('grad/norm', grads.norm(), step)
-            for label, value in wfnet.tracked_parameters():
+            for label, value in wf.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
             lr = opt.state_dict()['param_groups'][0]['lr']
             writer.add_scalar('misc/learning_rate', lr, step)
@@ -160,7 +160,7 @@ def fit_wfnet(
         yield step
 
 
-def fit_wfnet_supervised(
+def fit_wf_supervised(
     fit_net,
     true_net,
     loss_func,

@@ -1,4 +1,4 @@
-from .base import BaseWFNet
+from .base import WaveFunction
 from .paulinet import PauliNet
 
-__all__ = ['BaseWFNet', 'PauliNet']
+__all__ = ['WaveFunction', 'PauliNet']

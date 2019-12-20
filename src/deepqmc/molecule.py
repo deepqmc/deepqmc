@@ -7,8 +7,9 @@ import torch
 from torch import nn
 
 angstrom = 1 / 0.52917721092
-SYSTEMS = toml.loads(resources.read_text('deepqmc.data', 'systems.toml'))
-SYSTEM_FACTORIES = {
+
+_SYSTEMS = toml.loads(resources.read_text('deepqmc.data', 'systems.toml'))
+_SYSTEM_FACTORIES = {
     'Hn': lambda n, dist: (
         np.hstack([np.arange(n)[:, None] * dist, np.zeros((n, 2))]),
         np.ones(n),
@@ -16,7 +17,7 @@ SYSTEM_FACTORIES = {
 }
 
 
-def ensure_fp(tensor):
+def _ensure_fp(tensor):
     if tensor.dtype in {torch.half, torch.float, torch.double}:
         return tensor
     return tensor.float()
@@ -26,8 +27,8 @@ class Molecule(nn.Module):
     def __init__(self, coords, charges, charge, spin):
         assert len(coords) == len(charges)
         super().__init__()
-        self.register_buffer('coords', ensure_fp(torch.as_tensor(coords)))
-        self.register_buffer('charges', ensure_fp(torch.as_tensor(charges)))
+        self.register_buffer('coords', _ensure_fp(torch.as_tensor(coords)))
+        self.register_buffer('charges', _ensure_fp(torch.as_tensor(charges)))
         self.charge = charge
         self.spin = spin
 
@@ -48,11 +49,11 @@ class Molecule(nn.Module):
 
     @classmethod
     def from_name(cls, name, **kwargs):
-        system = deepcopy(SYSTEMS[name])
-        if name in SYSTEM_FACTORIES:
-            coords, charges = SYSTEM_FACTORIES[name](**kwargs)
+        system = deepcopy(_SYSTEMS[name])
+        if name in _SYSTEM_FACTORIES:
+            coords, charges = _SYSTEM_FACTORIES[name](**kwargs)
         else:
             assert not kwargs
             coords = np.array(system.pop('coords'), dtype=np.float32) * angstrom
             charges = system.pop('charges')
-        return cls(coords, charges, **system,)
+        return cls(coords, charges, **system)
