@@ -2,3 +2,9 @@ Langevin
 GPU
 a.u.
 backflow
+ansatz
+multireference
+PauliNet
+featurized
+multideterminant
+equivariant
