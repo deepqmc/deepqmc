@@ -7,6 +7,8 @@ from functools import partial, wraps
 import numpy as np
 import torch
 
+__all__ = ()
+
 
 def get_flat_mesh(bounds, npts, device=None):
     edges = [torch.linspace(*b, n, device=device) for b, n in zip(bounds, npts)]
@@ -83,6 +85,7 @@ def assign_where(xs, ys, where):
         x[where] = y[where]
 
 
+# TODO refactor as NestedDict
 class DebugContainer(UserDict):
     def __init__(self):
         super().__init__()

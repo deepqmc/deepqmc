@@ -10,6 +10,7 @@ from .backflow import Backflow
 from .schnet import ElectronicSchNet, SubnetFactory
 
 __version__ = '0.2.0'
+__all__ = ['OmniSchNet']
 
 
 class OmniSchNet(nn.Module):

@@ -8,6 +8,9 @@ from torch import nn
 from deepqmc.errors import DeepQMCError
 from deepqmc.utils import pow_int
 
+__version__ = '0.1.0'
+__all__ = ['GTOBasis', 'GTOShell']
+
 
 @lru_cache(maxsize=16)
 def get_cartesian_angulars(l):

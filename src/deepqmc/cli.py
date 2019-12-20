@@ -7,6 +7,8 @@ import torch
 from . import Molecule, train
 from .wf import PauliNet
 
+__all__ = ()
+
 
 def wf_from_file(path, state=None):
     param = toml.loads(Path(path).read_text())

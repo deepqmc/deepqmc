@@ -1,6 +1,9 @@
 import torch
 from torch import nn
 
+__version__ = '0.1.0'
+__all__ = ['DistanceBasis']
+
 
 class DistanceBasis(nn.Module):
     def __init__(self, dist_feat_dim, cutoff=10.0, envelope='physnet'):

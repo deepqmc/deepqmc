@@ -4,6 +4,8 @@ import torch
 from ..physics import pairwise_distance, pairwise_self_distance
 from ..utils import batch_eval, shuffle_tensor
 
+__all__ = ()
+
 
 class GaussianKDEstimator:
     def __init__(self, xs, max_memory=1.0, weights=None, *, bw):

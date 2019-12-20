@@ -8,6 +8,9 @@ from tqdm.auto import trange
 from .fit import LossEnergy, fit_wf
 from .sampling import LangevinSampler
 
+__version__ = '0.1.0'
+__all__ = ['train']
+
 
 def train(
     wf,

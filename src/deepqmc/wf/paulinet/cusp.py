@@ -1,6 +1,9 @@
 import torch
 from torch import nn
 
+__version__ = '0.1.0'
+__all__ = ['ElectronicAsymptotic', 'CuspCorrection']
+
 
 class ElectronicAsymptotic(nn.Module):
     def __init__(self, *, cusp, alpha=1.0):

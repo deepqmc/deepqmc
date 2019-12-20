@@ -6,6 +6,8 @@ from torch import nn
 from .errors import LUFactError
 from .utils import batch_eval
 
+__all__ = ()
+
 
 def merge_tensors(mask, source_true, source_false):
     x = torch.empty_like(mask, dtype=source_false.dtype)

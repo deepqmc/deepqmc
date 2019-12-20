@@ -10,6 +10,9 @@ from deepqmc.utils import NULL_DEBUG
 
 from .cusp import CuspCorrection
 
+__version__ = '0.1.0'
+__all__ = ['MolecularOrbital']
+
 
 class MolecularOrbital(nn.Module):
     def __init__(

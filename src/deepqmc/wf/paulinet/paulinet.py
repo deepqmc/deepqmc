@@ -21,6 +21,9 @@ if torch.__version__ >= '1.2.0':
 else:
     from ..torchext import bdet as det
 
+__version__ = '0.1.0'
+__all__ = ['PauliNet']
+
 
 def eval_slater(xs):
     if xs.shape[-1] == 0:

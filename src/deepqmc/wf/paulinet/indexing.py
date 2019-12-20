@@ -3,6 +3,8 @@ from itertools import combinations, permutations
 
 import numpy as np
 
+__all__ = ()
+
 
 @lru_cache()
 def pair_idxs(n, unique=False):

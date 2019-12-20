@@ -6,6 +6,9 @@ import toml
 import torch
 from torch import nn
 
+__version__ = '0.1.0'
+__all__ = ['Molecule']
+
 angstrom = 1 / 0.52917721092
 
 _SYSTEMS = toml.loads(resources.read_text('deepqmc.data', 'systems.toml'))
