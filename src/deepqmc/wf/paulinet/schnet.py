@@ -1,6 +1,5 @@
 from itertools import product
 
-import numpy as np
 import torch
 from torch import nn
 
@@ -8,14 +7,6 @@ from deepqmc.torchext import SSP, get_log_dnn
 from deepqmc.utils import NULL_DEBUG
 
 from .indexing import pair_idxs, spin_pair_idxs
-
-
-class ZeroDiagKernel(nn.Module):
-    def forward(self, Ws):
-        Ws = Ws.clone()
-        i, j = np.diag_indices(Ws.shape[1])
-        Ws[:, i, j] = 0
-        return Ws
 
 
 class SubnetFactory:
