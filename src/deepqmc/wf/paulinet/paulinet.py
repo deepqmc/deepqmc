@@ -32,6 +32,64 @@ def eval_slater(xs):
 
 
 class PauliNet(WaveFunction):
+    r"""Implements the PauliNet ansatz from [Hermann19]_.
+
+    Derived from :class:`WaveFunction`. This constructor provides a fully
+    flexible low-level interface. See the alternative constructors for the
+    high-level interfaces.
+
+    The PauliNet ansatz combines a multireference Slater determinant expansion,
+    Gaussian-type cusp-corrected molecular orbitals (:class:`MolecularOrbital`),
+    electronic cusp Jastrow factor (:class:`ElectronicAsymptotic`) and many-body
+    Jastrow factor and backflow transformation represented by neural networks
+    that use featurized particle distances,
+    :math:`\mathbf e(|\mathbf r-\mathbf r'|)` (:class:`DistanceBasis`), as input,
+
+    .. math::
+        \psi_{\boldsymbol\theta}(\mathbf r)
+          =\mathrm e^{\gamma(\mathbf r)+J_{\boldsymbol\theta}(\mathbf r)}
+          \sum_p c_p
+          \det[\tilde\varphi_{\boldsymbol\theta,{\mu_p}i}^\uparrow(\mathbf r)]
+          \det[\tilde\varphi_{\boldsymbol\theta,{\mu_p}i}^\downarrow(\mathbf r)]
+
+    Here, :math:`c_p,\mu_p` define the multideterminant expansion,
+    :math:`\tilde\varphi_{\boldsymbol\theta,{\mu_p}i}(\mathbf r)` are the
+    backflow-transformed molecular orbitals (equivariant with respect to the
+    exchange of same-spin electrons), :math:`J_{\boldsymbol\theta}(\mathbf r)`
+    is the many-body Jastrow factor and :math:`\gamma` enforces correct
+    electronic cusp conditions.
+
+    Args:
+        mol (:class:`~deepqmc.Molecule`): molecule whose wave function is represented
+        basis (:class:`~deepqmc.wf.paulinet.GTOBasis`): basis for the molecular orbitals
+        cusp_correction (bool): whether nuclear cusp correction is used
+        cusp_electrons (bool): whether electronic cusp function is used
+        dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of distance features
+        dist_feat_cutoff (float, a.u.): distance at which distance features
+            go to zero
+        jastrow_factory (callable): constructor for a Jastrow factor,
+            :math:`(M,\dim(\mathbf e),N^\uparrow,N^\downarrow)`
+            :math:`\rightarrow(\mathbf e_{ij},\mathbf e_{iI})\rightarrow J`
+        backflow_factory (callable): constructor for a backflow,
+            :math:`(M,\dim(\mathbf e),N^\uparrow,N^\downarrow,N_\text{orb})`
+            :math:`\rightarrow(\varphi_\mu(\mathbf r_i),\mathbf e_{ij},\mathbf e_{iI})`
+            :math:`\rightarrow\tilde\varphi_{\mu i}(\mathbf r)`
+        r_backflow_factory (callable): constructor for a real-space backflow
+        omni_factory (callable): constructor for a combined Jastrow factor and backflow,
+            with interface identical to :class:`~deepqmc.wf.paulinet.OmniSchNet`
+        configuration (:class:`~torch.Tensor`:math:`(N_\text{det},N)`): :math:`\mu_p`,
+            orbital indexes of multireference configurations
+        mo_factory (callable): passed to :class:`~deepqmc.wf.paulinet.MolecularOrbital`
+            as ``net_factory``
+
+    Attributes:
+        jastrow: :class:`torch.nn.Module` representing the Jastrow factor
+        backflow: :class:`torch.nn.Module` representing the backflow transformation
+        conf_coeff: :class:`torch.nn.Linear` with no bias that represents
+            the multireference coefficients :math:`c_p` via its :attr:`weight`
+            variable of shape :math:`(1,N_\text{det})`
+    """
+
     def __init__(
         self,
         mol,
@@ -110,6 +168,24 @@ class PauliNet(WaveFunction):
         conf_cutoff=1e-2,
         **kwargs,
     ):
+        r"""Construct a :class:`PauliNet` instance from a finished PySCF_ calculation.
+
+        Args:
+            mf (:class:`pyscf.scf.hf.RHF` | :class:`pyscf.mcscf.mc1step.CASSCF`):
+                restricted (multireference) HF calculation
+            init_weights (bool): whether molecular orbital coefficients and
+                configuration coefficients are initialized from the HF calculation
+            freeze_mos (bool): whether the MO coefficients are frozen for
+                gradient optimization
+            freeze_confs (bool): whether the configuration coefficients are
+                frozen for gradient optimization
+            conf_cutoff (float): determinants with a linear coefficient above
+                this threshold are included in the determinant expansion
+            kwargs: all other arguments are passed to the :class:`PauliNet`
+                constructor
+
+        .. _PySCF: http://pyscf.org
+        """
         n_up, n_down = mf.mol.nelec
         try:
             conf_coeff, *confs = zip(
@@ -151,6 +227,20 @@ class PauliNet(WaveFunction):
     def from_hf(
         cls, mol, basis='6-311g', cas=(6, 2), pauli_kwargs=None, omni_kwargs=None
     ):
+        r"""Construct a :class:`PauliNet` instance by running a HF calculation.
+
+        This is the top-level interface.
+
+        Args:
+            mol (:class:`~deepqmc.Molecule`): molecule whose wave function
+                is represented
+            basis (str): basis of the internal HF calculation
+            cas ((int, int)): tuple of the number of active orbitals and number of
+                active electrons for a complete active space multireference
+                HF calculation
+            pauli_kwargs: arguments passed to :func:`PauliNet.from_pyscf`
+            omni_kwargs: arguments passed to :class:`~deepqmc.wf.paulinet.OmniSchNet`
+        """
         from pyscf import gto, mcscf, scf
 
         mol = gto.M(

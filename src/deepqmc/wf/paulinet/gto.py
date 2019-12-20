@@ -20,6 +20,31 @@ def get_cartesian_angulars(l):
 
 
 class GTOShell(nn.Module):
+    r"""Maps electron coordinates to a single Gaussian-type basis shell.
+
+    The basis functions are of the Cartesian type, each specified by its
+    angular momentum, :math:`\mathbf l=(l_x,l_y,l_z), l=l_x+l_y+l_z`. The radial
+    part is encoded as a linear combination of Gaussians,
+
+    .. math::
+        \xi_{\mathbf l}(\mathbf r)
+        :=x^{l_x}y^{l_y}z^{l_z}\sum_m\mathrm c_me^{-\zeta_mr^2}
+
+    The instance can be queried with :func:`len` to get the total number of
+    different angular momenta, :math:`N_\mathbf l`
+
+    Args:
+        l (int): *l*, total angular momentum
+        coeffs (:class:`~torch.Tensor`:math:`N_\text g`): :math:`c_m`, Gaussian
+            linear coefficients
+        zetas (:class:`~torch.Tensor`:math:`N_\text g`): :math:`\zeta_m`, Gaussian
+            exponential coefficients
+
+    Shape:
+        - Input, :math:`\mathbf r`: :math:`(*,4)`, see [dim4]_
+        - Output, :math:`\xi_{\mathbf l}(\mathbf r)`: :math:`(*,N_\mathbf l)`
+    """
+
     def __init__(self, l, coeffs, zetas):
         super().__init__()
         self.ls = torch.tensor(get_cartesian_angulars(l))
@@ -59,6 +84,25 @@ class GTOShell(nn.Module):
 
 
 class GTOBasis(nn.Module):
+    r"""Maps electron coordinates to Gaussian-type basis functions.
+
+    The basis consists of Gaussian-type shells of various angular degree, *l*,
+    centered at :math:`\mathbf R_I`, each containing :math:`(2l+1)` basis functions.
+
+    An instance can be queried with :func:`len` to obtain the total number of
+    basis functions, :math:`N_\text{basis}`.
+
+    Args:
+        centers (:class:`~torch.Tensor`:math:`(M,3)`): :math:`\mathbf R_I`, basis
+            center coordinates
+        shells (list): each item is a 2-tuple (:class:`int`, :class:`GTOShell`)
+            encoding a shell placed at a center given by its index
+
+    Shape:
+        - Input, :math:`(\mathbf r-\mathbf R_I)`: :math:`(*,M,4)`, see [dim4]_
+        - Output, :math:`\xi_p(\mathbf r)`: :math:`(*,N_\text{basis})`
+    """
+
     def __init__(self, centers, shells):
         super().__init__()
         self.register_buffer('centers', centers)
@@ -87,6 +131,11 @@ class GTOBasis(nn.Module):
 
     @classmethod
     def from_pyscf(cls, mol):
+        """Construct the basis from a PySCF molecule object.
+
+        Args:
+            mol (:class:`pyscf.gto.mole.Mole`): a molecule
+        """
         if not mol.cart:
             raise DeepQMCError('GTOBasis supports only Cartesian basis sets')
         centers = torch.tensor(mol.atom_coords()).float()

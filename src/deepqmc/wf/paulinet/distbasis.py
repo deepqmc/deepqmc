@@ -6,6 +6,23 @@ __all__ = ['DistanceBasis']
 
 
 class DistanceBasis(nn.Module):
+    r"""Expands distances in distance feature basis.
+
+    Maps distances, *d*, to distance features, :math:`\mathbf e(d)`.
+
+    Args:
+        dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of features
+        cutoff (float, .a.u.): distance at which all features go to zero
+        envelope (str): type of envelope for distance features
+
+            - ``'physnet'``: taken from [UnkeJCTC19]_
+            - ``'nocusp'``: used in [Hermann19]_
+
+    Shape:
+        - Input, *d*: :math:`(*)`
+        - Output, :math:`\mathbf e(d)`: :math:`(*,\dim(\mathbf e))`
+    """
+
     def __init__(self, dist_feat_dim, cutoff=10.0, envelope='physnet'):
         super().__init__()
         delta = 1 / (2 * dist_feat_dim)

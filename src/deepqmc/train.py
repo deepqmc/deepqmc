@@ -29,6 +29,35 @@ def train(
     save_every=None,
     state=None,
 ):
+    r"""Train a wave function model.
+
+    This is the main top-level entry point of the DeepQMC package. This function
+    initializes a :class:`~deepqmc.sampling.LangevinSampler`, an optimizer, a
+    learning rate scheduler, optionally restores a previously stored training
+    state, sets up a Tensorboard writer, and calls :func:`~deepqmc.fit.fit_wf`.
+
+    Args:
+        wf (:class:`~deepqmc.wf.WaveFunction`): wave function model to be trained
+        n_steps (int): number of optimization steps
+        batch_size (int): number of samples used in a single step
+        epoch_size (int): number of steps between sampling from the wave function
+        optimizer (str): name of the optimizer from :mod:`torch.optim`
+        learning_rate (float): learning rate for gradient-descent optimizers
+        lr_scheduler (str): name of the learning rate scheduling scheme
+
+            - :data:`None` -- no learning rate scheduling
+            - ``'inverse'`` -- :math:`\mathrm{lr}(n):=1/(1+n/r)`, where *r*
+              is decay rate
+        decay_rate (int): *r*, decay rate for learning rate scheduling
+        sampler_kwargs (dict): arguments passed to
+            :class:`~deepqmc.sampling.LangevinSampler`
+        fit_kwargs (dict): arguments passed to :func:`~deepqmc.fit.fit_wf`
+        cuda (bool): whether to train on a GPU
+        cwd (str): path where to store Tensorboard event file and intermediate
+            parameter states
+        save_every (int): number of steps between storing current parameter state
+        state (dict): restore optimizer and scheduler states from a stored state
+    """
     if cuda:
         wf.cuda()
     sampler = LangevinSampler.from_mf(wf, cuda=cuda, **(sampler_kwargs or {}))

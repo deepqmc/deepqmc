@@ -1,9 +1,16 @@
 from torch import nn
 
-from ..utils import Debuggable
+from ..utils import NULL_DEBUG, Debuggable
 
 
 class WaveFunction(nn.Module, Debuggable):
+    r"""Base class for all trial wave functions.
+
+    Shape:
+        - Input, :math:`\mathbf r`, a.u.: :math:`(\cdot,N,3)`
+        - Output, :math:`\psi(\mathbf r)`: :math:`(\cdot)`
+    """
+
     def __init__(self, mol):
         super().__init__()
         self.mol = mol
@@ -17,3 +24,6 @@ class WaveFunction(nn.Module, Debuggable):
     @property
     def spin_slices(self):
         return slice(None, self.n_up), slice(self.n_up, None)
+
+    def forward(self, rs, debug=NULL_DEBUG):
+        return NotImplemented

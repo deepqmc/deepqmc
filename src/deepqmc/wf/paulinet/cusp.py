@@ -6,6 +6,24 @@ __all__ = ['ElectronicAsymptotic', 'CuspCorrection']
 
 
 class ElectronicAsymptotic(nn.Module):
+    r"""Jastrow factor with a correct electronic cusp.
+
+    The Jastrow factor is calculated from distances between all pairs of
+    electrons, :math:`d_{ij}`,
+
+    .. math::
+        \mathrm ee^\gamma
+        :=\exp\left({\sum_{ij}-\frac{c}{\alpha(1+\alpha d_{ij})}}\right)
+
+    Args:
+        cusp (float): *c*, target cusp value
+        alpha (float): :math:`\alpha`, rate of decay of the cusp function to 1.
+
+    Shape:
+        - Input, :math:`d_{ij}`: :math:`(*,N_\text{pair})`
+        - Output, *J*: :math:`(*)`
+    """
+
     def __init__(self, *, cusp, alpha=1.0):
         super().__init__()
         self.cusp = cusp
@@ -20,11 +38,68 @@ class ElectronicAsymptotic(nn.Module):
         return f'cusp={self.cusp}, alpha={self.alpha}'
 
 
-# This class straightforwardly implements the cusp correction from
-# http://aip.scitation.org/doi/10.1063/1.1940588. The only difference is that
-# rather than deriving phi(0) by fitting to a preexisting optimal E_loc curve
-# (eq. 17), we have it as a trainable parameter (self.shifts).
 class CuspCorrection(nn.Module):
+    r"""Corrects nuclear cusp of Gaussian-type molecular orbitals.
+
+    The implementation closely follows [MaJCP05]_. Each orbital
+    :math:`\varphi_\mu(\mathbf r)` is decomposed to its *s*-type part centered
+    on the *I*-th nucleus, and the rest,
+
+    .. math::
+        \varphi_\mu(\mathbf r)=s_{\mu I}(|\mathbf r-\mathbf R_I|)
+        +\phi_{\mu I}(\mathbf r)
+
+    Within a cutoff radius, :math:`r_\text c`, the *s*-type part is replaced
+    by a 4-th order polynomial that fits on four boundary values,
+
+    .. math::
+        \mathbf b_{\mu I}=\big(
+            s_{\mu I}(0),
+            s_{\mu I}(r_\text c),
+            s_{\mu I}'(r_\text c),
+            s_{\mu I}''(r_\text c)
+        \big)
+
+    The fifth coefficient of the polynomial is
+    fixed by the cusp condition,
+
+    .. math::
+        \frac1{\varphi_\mu(\mathbf r)}\frac{\partial\varphi_\mu(\mathbf r)}
+        {\partial|\mathbf r-\mathbf R_I|}
+        \bigg|_{\mathbf r=\mathbf R_I}=-Z_I
+
+    The value of the corrected *s*-type part at the center,
+    :math:`s_{\mu I}(0)`, is further adjusted by a trainable shift,
+    :math:`\Delta_{\mu I}`.
+
+    Args:
+        charges (:class:`~torch.Tensor`:math:`(M)`): :math:`Z_I`, nuclear charges
+        n_orbitals (int): :math:`N_\text{orb}`, number of orbitals
+        rc (:class:`~torch.Tensor`:math:`(M)`): :math:`r_\text c`, cutoff radii
+        eps (float): :math:`\varepsilon`, numerical zero. An orbital
+            is considered to have a non-zero *s*-type part if
+            :math:`s_{\mu I}(0)>\varepsilon`.
+
+    On output, the module returns the mask of corrected electron positions,
+    the indexes of the nuclei that triggered the correction, and the corrected
+    *s*-type part.
+
+    Shape:
+        - Input1, :math:`|\mathbf r-\mathbf R_I|^2`: :math:`(*,M)`
+        - Input2, :math:`\mathbf b_{\mu I}`: :math:`(4,M,N_\text{orb})`
+        - Input3, :math:`\varphi_\mu(\mathbf R_I)`: :math:`(M,N_\text{orb})`
+        - Output1, corrected?: :math:`(*,N_\text{orb})`
+        - Output2, which nucleus: :math:`(*)`
+        - Output3, corrected :math:`s_{\mu I}(r)`: :math:`(N_\text{corr})`,
+          where :math:`N_\text{corr}` is the number of nonzero elements in
+          the first output (only corrected orbitals are returned in a flattened
+          form)
+
+    Attributes:
+        shifts: orbital shifts :math:`\Delta_{\mu I}` of shape
+            :math:`(M,N_\text{orb})`), initialized to zero
+    """
+
     def __init__(self, charges, n_orbitals, rc, eps=1e-6):
         super().__init__()
         self.register_buffer('charges', charges)

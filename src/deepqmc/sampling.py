@@ -19,6 +19,29 @@ def samples_from(sampler, steps):
 
 
 class MetropolisSampler:
+    r"""Samples electronic wave functions with vanilla Metropolis--Hastings Monte Carlo.
+
+    An instance of this class is an iterator that yields 2-tuples of electron
+    coordinates and wave function values with shapes of :math:`(\cdot,N,3)` and
+    :math:`(\cdot)`, respectively.
+
+    Args:
+        wf (:class:`~deepqmc.wf.WaveFunction`): wave function to sample from
+        rs (:class:`torch.Tensor`:math:`(\cdot,N,3)`): initial positions of the
+            Markov-chain walkers
+        tau (float): :math:`\tau`, proposal step size
+        max_age (int): maximum age of a walker without a move after which it is
+            moved with 100% acceptance
+        n_first_certain (int): number of initial steps done with 100% acceptance
+        psi_threshold (float): steps into proposals with wave function values
+            below this threshold are always rejected
+        target_acceptance (float): initial step size is automatically adjusted
+            to achieve this requested acceptance
+        n_discard (int): number of steps in the beginning of the sampling that are
+            discarded
+        n_decorrelate (int): number of extra steps between yielded samples
+    """
+
     def __init__(
         self,
         wf,
@@ -65,6 +88,18 @@ class MetropolisSampler:
 
     @classmethod
     def from_mf(cls, wf, *, sample_size=2_000, cuda=False, **kwargs):
+        """Initialize a sampler from a HF calculation.
+
+        The initial walker positions are sampled from Gaussians centered
+        on atoms, with charge distribution corresponding to the charge analysis
+        of the HF wave function.
+
+        Args:
+            wf (:class:`~deepqmc.wf.WaveFunction`): wave function to be sampled from
+            sample_size (int): number of Markov-chain walkers
+            cuda (bool): whether the samples are created on a GPU
+            kwargs: all other arguments are passed to the constructor
+        """
         rs = rand_from_mf(wf.mf, sample_size)
         if cuda:
             rs = rs.cuda()
@@ -106,6 +141,17 @@ class MetropolisSampler:
         return ((rs, psis) for rs, psis, info in self.iter_with_info())
 
     def iter_batches(self, *, epoch_size, batch_size, range=range):
+        """Iterate over buffered batches sampled in epochs.
+
+        Each epoch, the wave function is sampled in one shot, the samples
+        are buffered, and used to form all batches within a given epoch, entirely
+        shuffled.
+
+        Args:
+            epoch_size (int): number of batches per epoch
+            batch_size (int): number of samples in a batch
+            range (callable): alternative to :class:`range`
+        """
         while True:
             n_steps = math.ceil(epoch_size * batch_size / len(self))
             rs, psis = samples_from(self, range(n_steps))
@@ -154,6 +200,11 @@ def rand_from_mf(mf, bs, elec_std=1.0, idxs=None):
 
 
 class LangevinSampler(MetropolisSampler):
+    """Samples electronic wave functions with Langevin Monte Carlo.
+
+    Derived from :class:`MetropolisSampler`.
+    """
+
     def proposal(self):
         return (
             self.rs

@@ -12,6 +12,19 @@ __all__ = ['fit_wf', 'WaveFunctionLoss', 'LossEnergy']
 
 
 class WaveFunctionLoss(nn.Module):
+    r"""Base class for all wave function loss functions.
+
+    Any such loss must be derived from the local energy and wave function
+    values, :math:`L(\{E_\text{loc}[\psi],\psi,w\})`, using also
+    importance-sampling weights *w*.
+
+    Shape:
+        - Input1, :math:`E_\text{loc}[\psi](\mathbf r)`: :math:`(*)`
+        - Input2, :math:`\psi(\mathbf r)`: :math:`(*)`
+        - Input3, :math:`w(\mathbf r)`: :math:`(*)`
+        - Output, *L*: :math:`()`
+    """
+
     pass
 
 
@@ -23,6 +36,16 @@ class LossVariance(WaveFunctionLoss):
 
 
 class LossEnergy(WaveFunctionLoss):
+    r"""Total energy loss function.
+
+    .. math::
+        L:=2\mathbb E\big[(E_\text{loc}-\mathbb E[E_\text{loc}])\ln|\psi|\big]
+
+    Taking a derivative of only the logarithm, the resulting gradient is equivalent,
+    thanks to the Hermitian property of the Hamiltonian, to the gradient of the
+    plain total energy loss function, :math:`\mathbb E[E_\text{loc}]`.
+    """
+
     def forward(self, Es_loc, psis, ws):
         assert Es_loc.grad_fn is None
         self.weights = ws * (Es_loc - (ws * Es_loc).mean())
@@ -75,6 +98,39 @@ def fit_wf(
     subbatch_size=10_000,
     clean_tau=None,
 ):
+    r"""Fit a wave function using the variational principle and gradient descent.
+
+    This is a low-level interface, see :func:`~deepqmc.train` for a high-level
+    interface. This iterator iteratively draws samples from the sampler, evaluates
+    the local energy, processes outliers, calculates the loss function, and updates
+    the wave function model parameters using a gradient of the loss and an
+    optimizer. Diagnostics is written into the Tensorboard writer, and finally
+    at the end of each iteration the step index is yielded, so that the caller
+    can do some additional processing such as learning rate scheduling.
+
+    Args:
+        wf (:class:`~deepqmc.wf.WaveFunction`): wave function model to be fitted
+        loss_func (:class:`WaveFunctionLoss`): loss function that accepts local
+            energy and wave function values
+        opt (:class:`torch.optim.Optimizer`): optimizer
+        sampler (iterator): yields batches of electron coordinate samples
+        steps (iterator): yields step indexes
+        require_energy_gradient (bool): whether the loss function requires
+            gradients of the local energy
+        require_psi_gradient (bool): whether the loss function requires
+            gradients of the wave function
+        clip_grad (bool): whether to clip gradients using
+            :func:`torch.nn.utils.clip_grad_norm_`
+        writer (:class:`torch.utils.tensorboard.writer.SummaryWriter`):
+            Tensorboard writer
+        skip_outliers (bool): whether to skip local energy outliers
+        clip_outliers (bool): whether to clip local energy outliers
+        p (float): percentile defining outliers
+        q (float): multiple of MAE defining outliers
+        subbatch_size (int): number of samples for a single vectorized loss evaluation
+        clean_tau (float): if not :data:`None`, :math:`\tau` used for force
+            cleaning
+    """
     assert not (skip_outliers and clip_outliers)
     for step, (rs, psi0s) in zip(steps, sampler):
         d = debug[step]

@@ -27,6 +27,18 @@ def _ensure_fp(tensor):
 
 
 class Molecule(nn.Module):
+    """Represents a molecule.
+
+    The array-like arguments accept anything that can be transformed to
+    :class:`torch.Tensor`.
+
+    Args:
+        coords (array-like, rank-2, float, a.u.): atom coordinates as rows
+        charges (array-like, rank-1, float): atom charges
+        charge (int): total charge of a molecule
+        spin (int): total spin multiplicity
+    """
+
     def __init__(self, coords, charges, charge, spin):
         assert len(coords) == len(charges)
         super().__init__()
@@ -52,6 +64,11 @@ class Molecule(nn.Module):
 
     @classmethod
     def from_name(cls, name, **kwargs):
+        """Create a molecule from a database of named molecules.
+
+        .. todo::
+            Document available molecules.
+        """
         system = deepcopy(_SYSTEMS[name])
         if name in _SYSTEM_FACTORIES:
             coords, charges = _SYSTEM_FACTORIES[name](**kwargs)
