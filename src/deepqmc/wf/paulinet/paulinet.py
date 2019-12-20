@@ -33,17 +33,17 @@ class PauliNet(WaveFunction):
         self,
         mol,
         basis,
-        mo_factory=None,
+        cusp_correction=False,
+        cusp_electrons=False,
         dist_feat_dim=32,
         dist_feat_cutoff=10.0,
         jastrow_factory=None,
         backflow_factory=None,
         r_backflow_factory=None,
         omni_factory=None,
-        cusp_correction=False,
-        cusp_electrons=False,
-        rc_scaling=1.0,
         configurations=None,
+        mo_factory=None,
+        rc_scaling=1.0,
     ):
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down

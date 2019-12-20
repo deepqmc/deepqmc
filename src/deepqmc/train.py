@@ -12,19 +12,19 @@ from .sampling import LangevinSampler
 def train(
     wf,
     *,
-    cwd=None,
-    state=None,
-    save_every=None,
-    cuda=True,
-    learning_rate=0.01,
     n_steps=10_000,
+    batch_size=10_000,
+    epoch_size=100,
+    optimizer='AdamW',
+    learning_rate=0.01,
     lr_scheduler='inverse',
     decay_rate=200,
-    epoch_size=100,
-    batch_size=10_000,
-    optimizer='AdamW',
     sampler_kwargs=None,
     fit_kwargs=None,
+    cuda=True,
+    cwd=None,
+    save_every=None,
+    state=None,
 ):
     if cuda:
         wf.cuda()

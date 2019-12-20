@@ -65,7 +65,6 @@ def fit_wf(
     require_psi_gradient=True,
     clip_grad=None,
     writer=None,
-    start=0,
     debug=NULL_DEBUG,
     skip_outliers=False,
     clip_outliers=True,
