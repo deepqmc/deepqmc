@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -7,14 +8,20 @@ from .physics import clean_force, local_energy
 from .utils import NULL_DEBUG, normalize_mean, state_dict_copy, weighted_mean_var
 
 
-def loss_local_energy(Es_loc, psis, ws, E_ref=None, p=1):
-    assert psis.grad_fn is None
-    E0 = E_ref if E_ref is not None else (ws * Es_loc).mean()
-    return (ws * (Es_loc - E0).abs() ** p).mean()
+
+class WaveFunctionLoss(nn.Module):
+    pass
 
 
-class LossWeightedLogProb:
-    def __call__(self, Es_loc, psis, ws):
+class LossVariance(WaveFunctionLoss):
+    def forward(self, Es_loc, psis, ws, E_ref=None, p=1):
+        assert psis.grad_fn is None
+        E0 = E_ref if E_ref is not None else (ws * Es_loc).mean()
+        return (ws * (Es_loc - E0).abs() ** p).mean()
+
+
+class LossEnergy(WaveFunctionLoss):
+    def forward(self, Es_loc, psis, ws):
         assert Es_loc.grad_fn is None
         self.weights = ws * (Es_loc - (ws * Es_loc).mean())
         return 2 * (self.weights * torch.log(psis.abs())).mean()

@@ -5,7 +5,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import trange
 
-from .fit import LossWeightedLogProb, fit_wfnet
+from .fit import LossEnergy, fit_wfnet
 from .sampling import LangevinSampler
 
 
@@ -46,7 +46,7 @@ def train(
     with SummaryWriter(log_dir=cwd, flush_secs=15, purge_step=init_step - 1) as writer:
         for step in fit_wfnet(
             wfnet,
-            LossWeightedLogProb(),
+            LossEnergy(),
             opt,
             sampler.iter_batches(
                 batch_size=batch_size,

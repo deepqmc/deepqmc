@@ -3,7 +3,7 @@ import torch
 from torch import nn
 
 from deepqmc import Molecule
-from deepqmc.fit import LossWeightedLogProb, fit_wfnet
+from deepqmc.fit import LossEnergy, fit_wfnet
 from deepqmc.physics import local_energy
 from deepqmc.sampling import LangevinSampler
 from deepqmc.wf import PauliNet
@@ -92,7 +92,7 @@ def test_antisymmetry_trained(wfnet, rs):
     sampler = LangevinSampler(wfnet, torch.rand_like(rs), tau=0.1)
     fit_wfnet(
         wfnet,
-        LossWeightedLogProb(),
+        LossEnergy(),
         torch.optim.Adam(wfnet.parameters(), lr=1e-2),
         sampler,
         range(10),
