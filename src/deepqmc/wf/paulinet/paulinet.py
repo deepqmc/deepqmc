@@ -190,7 +190,7 @@ class PauliNet(BaseWFNet):
             edges_nuc = edges_nuc[n_atoms:].view(batch_dim, n_elec, n_atoms, -1)
             edges = self.dist_basis(dists_elec), edges_nuc
         if self.r_backflow:
-            rs_flowed = self.r_backflow(rs, edges, debug=debug)
+            rs_flowed = self.r_backflow(rs, *edges, debug=debug)
             diffs_nuc = pairwise_diffs(
                 torch.cat([coords, rs_flowed.flatten(end_dim=1)]), coords
             )
@@ -199,7 +199,7 @@ class PauliNet(BaseWFNet):
         xs = debug['slaters'] = xs.view(batch_dim, n_elec, -1)
         if self.backflow:
             with debug.cd('backflow'):
-                xs = self.backflow(xs, edges, debug=debug)
+                xs = self.backflow(xs, *edges, debug=debug)
         conf_up, conf_down = self.confs[:, : self.n_up], self.confs[:, self.n_up :]
         det_up = debug['det_up'] = eval_slater(
             xs[:, : self.n_up, conf_up].permute(0, 2, 1, 3).flatten(end_dim=1)
@@ -223,7 +223,7 @@ class PauliNet(BaseWFNet):
             psi = psi * cusp_same * cusp_anti
         if self.jastrow:
             with debug.cd('jastrow'):
-                psi = psi * F.softplus(self.jastrow(edges, debug=debug))
+                psi = psi * F.softplus(self.jastrow(*edges, debug=debug))
         if self.omni:
             self.omni.forward_close()
         return psi

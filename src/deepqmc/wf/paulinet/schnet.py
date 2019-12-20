@@ -65,8 +65,7 @@ class ElectronicSchnet(nn.Module):
             h[f'{n}'] = h_factory()
         self.w, self.h, self.g = map(nn.ModuleDict, [w, h, g])
 
-    def forward(self, edges, debug=NULL_DEBUG):
-        edges_elec, edges_nuc = edges
+    def forward(self, edges_elec, edges_nuc, debug=NULL_DEBUG):
         *batch_dims, n_elec = edges_nuc.shape[:-2]
         assert edges_elec.shape[:-1] == (*batch_dims, n_elec, n_elec)
         assert n_elec == self.n_up + self.n_down

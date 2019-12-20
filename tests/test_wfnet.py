@@ -56,8 +56,8 @@ class JastrowNet(nn.Module):
         )
         self.orbital = nn.Linear(16, 1)
 
-    def forward(self, xs, **kwargs):
-        xs = self.schnet(xs)
+    def forward(self, *xs, **kwargs):
+        xs = self.schnet(*xs)
         return self.orbital(xs).squeeze(dim=-1).sum(dim=-1)
 
 
