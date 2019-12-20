@@ -1,3 +1,5 @@
+from functools import partial
+
 import torch
 from torch import nn
 
@@ -36,7 +38,7 @@ class OmniSchnet(nn.Module):
             len(mol),
             basis_dim=n_features,
             embedding_dim=embedding_dim,
-            subnet_factories=SubnetFactory(**(schnet_subnet_kwargs or {})),
+            subnet_factories=partial(SubnetFactory, **(schnet_subnet_kwargs or {})),
             **(schnet_kwargs or {}),
         )
         if with_jastrow:

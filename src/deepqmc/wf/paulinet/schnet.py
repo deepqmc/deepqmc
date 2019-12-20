@@ -20,31 +20,43 @@ class ZeroDiagKernel(nn.Module):
 
 class SubnetFactory:
     def __init__(
-        self, *, n_filter_layers=2, n_kernel_in_layers=1, n_kernel_out_layers=1
+        self,
+        dist_feat_dim,
+        kernel_dim,
+        embedding_dim,
+        *,
+        n_layers_w=2,
+        n_layers_h=1,
+        n_layers_g=1,
     ):
-        self.n_filter_layers = n_filter_layers
-        self.n_kernel_in_layers = n_kernel_in_layers
-        self.n_kernel_out_layers = n_kernel_out_layers
+        self.dist_feat_dim = dist_feat_dim
+        self.kernel_dim = kernel_dim
+        self.embedding_dim = embedding_dim
+        self.n_layers_w = n_layers_w
+        self.n_layers_h = n_layers_h
+        self.n_layers_g = n_layers_g
 
-    def __call__(self, kernel_dim, embedding_dim, basis_dim):
-        return (
-            lambda: get_log_dnn(
-                basis_dim, kernel_dim, SSP, n_layers=self.n_filter_layers
-            ),
-            lambda: get_log_dnn(
-                embedding_dim,
-                kernel_dim,
-                SSP,
-                last_bias=False,
-                n_layers=self.n_kernel_in_layers,
-            ),
-            lambda: get_log_dnn(
-                kernel_dim,
-                embedding_dim,
-                SSP,
-                last_bias=False,
-                n_layers=self.n_kernel_out_layers,
-            ),
+    def w_subnet(self):
+        return get_log_dnn(
+            self.dist_feat_dim, self.kernel_dim, SSP, n_layers=self.n_layers_w
+        )
+
+    def h_subnet(self):
+        return get_log_dnn(
+            self.embedding_dim,
+            self.kernel_dim,
+            SSP,
+            last_bias=False,
+            n_layers=self.n_layers_h,
+        )
+
+    def g_subnet(self):
+        return get_log_dnn(
+            self.kernel_dim,
+            self.embedding_dim,
+            SSP,
+            last_bias=False,
+            n_layers=self.n_layers_g,
         )
 
 
@@ -63,19 +75,9 @@ class ElectronicSchnet(nn.Module):
         return_interactions=False,
         version=2,
     ):
-        if not subnet_factories:
-
-            def subnet_factories(kernel_dim, embedding_dim, basis_dim):
-                return (
-                    lambda: get_log_dnn(basis_dim, kernel_dim, SSP, n_layers=2),
-                    lambda: nn.Linear(embedding_dim, kernel_dim, bias=False),
-                    lambda: get_log_dnn(kernel_dim, embedding_dim, SSP, n_layers=2),
-                )
-
         assert version in {1, 2}
-        w_factory, h_factory, g_factory = subnet_factories(
-            kernel_dim, embedding_dim, basis_dim
-        )
+        subnet_factories = subnet_factories or SubnetFactory
+        factory = subnet_factories(basis_dim, kernel_dim, embedding_dim)
         super().__init__()
         self.version = version
         self.n_up, self.n_down = n_up, n_down
@@ -86,13 +88,13 @@ class ElectronicSchnet(nn.Module):
         w, h, g = {}, {}, {}
         for n in range(n_interactions):
             if version == 1:
-                w[f'{n}'] = w_factory()
-                g[f'{n}'] = g_factory()
+                w[f'{n}'] = factory.w_subnet()
+                g[f'{n}'] = factory.g_subnet()
             elif version == 2:
                 for label in [True, False, 'n']:
-                    w[f'{n},{label}'] = w_factory()
-                    g[f'{n},{label}'] = g_factory()
-            h[f'{n}'] = h_factory()
+                    w[f'{n},{label}'] = factory.w_subnet()
+                    g[f'{n},{label}'] = factory.g_subnet()
+            h[f'{n}'] = factory.h_subnet()
         self.w, self.h, self.g = map(nn.ModuleDict, [w, h, g])
 
     def forward(self, edges_elec, edges_nuc, debug=NULL_DEBUG):
