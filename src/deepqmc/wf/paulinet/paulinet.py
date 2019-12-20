@@ -10,11 +10,11 @@ from deepqmc.torchext import triu_flat
 from deepqmc.utils import NULL_DEBUG
 from deepqmc.wf import WaveFunction
 
-from .ansatz import OmniSchNet
 from .cusp import ElectronicAsymptotic
 from .distbasis import DistanceBasis
 from .gto import GTOBasis
 from .molorb import MolecularOrbital
+from .omni import OmniSchNet
 
 if torch.__version__ >= '1.2.0':
     from torch import det
