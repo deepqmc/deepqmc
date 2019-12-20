@@ -2,6 +2,7 @@ import torch
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 
+from .errors import NanLoss
 from .physics import clean_force, local_energy
 from .utils import NULL_DEBUG, normalize_mean, state_dict_copy, weighted_mean_var
 
@@ -44,10 +45,6 @@ def log_clipped_outliers(x, q):
         x.abs() <= a, x, x.sign() * a * (1 + torch.log((1 + (x.abs() / a) ** 2) / 2))
     )
     return median + x
-
-
-class NanLoss(Exception):
-    pass
 
 
 def fit_wfnet(

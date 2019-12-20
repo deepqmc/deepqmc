@@ -83,12 +83,6 @@ def assign_where(xs, ys, where):
         x[where] = y[where]
 
 
-class InfoException(Exception):
-    def __init__(self, info=None):
-        self.info = info or {}
-        super().__init__(self.info)
-
-
 class DebugContainer(UserDict):
     def __init__(self):
         super().__init__()

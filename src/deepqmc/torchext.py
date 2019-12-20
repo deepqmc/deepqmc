@@ -3,7 +3,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from .utils import InfoException, batch_eval
+from .errors import LUFactError
+from .utils import batch_eval
 
 
 def merge_tensors(mask, source_true, source_false):
@@ -42,10 +43,6 @@ def get_custom_dnn(dims, activation_factory, last_bias=True):
             [nn.Linear(dims[k], dims[k + 1], bias=bias), activation_factory()]
         )
     return nn.Sequential(*modules[:-1])
-
-
-class LUFactError(InfoException):
-    pass
 
 
 class BDet(torch.autograd.Function):
