@@ -105,6 +105,7 @@ class PauliNet(WaveFunction):
         configurations=None,
         mo_factory=None,
         rc_scaling=1.0,
+        cusp_alpha=10.0,
     ):
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
@@ -134,7 +135,7 @@ class PauliNet(WaveFunction):
             rc_scaling=rc_scaling,
         )
         self.cusp_same, self.cusp_anti = (
-            (ElectronicAsymptotic(cusp=cusp) for cusp in (0.25, 0.5))
+            (ElectronicAsymptotic(cusp=cusp, alpha=cusp_alpha) for cusp in (0.25, 0.5))
             if cusp_electrons
             else (None, None)
         )
