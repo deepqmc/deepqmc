@@ -13,10 +13,14 @@ angstrom = 1 / 0.52917721092
 
 _SYSTEMS = toml.loads(resources.read_text('deepqmc.data', 'systems.toml'))
 _SYSTEM_FACTORIES = {
-    'Hn': lambda n, dist: (
-        np.hstack([np.arange(n)[:, None] * dist, np.zeros((n, 2))]),
-        np.ones(n),
-    ),
+    'Hn': lambda n, dist: {
+        'coords': np.hstack(
+            [np.arange(n)[:, None] * dist / angstrom, np.zeros((n, 2))]
+        ),
+        'charges': np.ones(n),
+        'charge': 0,
+        'spin': n % 2,
+    },
 }
 
 
@@ -72,9 +76,8 @@ class Molecule(nn.Module):
         """
         system = deepcopy(_SYSTEMS[name])
         if name in _SYSTEM_FACTORIES:
-            coords, charges = _SYSTEM_FACTORIES[name](**kwargs)
+            system.update(_SYSTEM_FACTORIES[name](**kwargs))
         else:
             assert not kwargs
-            coords = np.array(system.pop('coords'), dtype=np.float32) * angstrom
-            charges = system.pop('charges')
-        return cls(coords, charges, **system)
+        coords = np.array(system.pop('coords'), dtype=np.float32) * angstrom
+        return cls(coords, **system)
