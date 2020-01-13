@@ -12,7 +12,7 @@ def pairwise_distance(coords1, coords2):
 
 
 def pairwise_self_distance(coords):
-    i, j = np.triu_indices(coords.shape[1], k=1)
+    i, j = np.triu_indices(coords.shape[-2], k=1)
     diffs = coords[..., :, None, :] - coords[..., None, :, :]
     return diffs[..., i, j, :].norm(dim=-1)
 
