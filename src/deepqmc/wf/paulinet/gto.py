@@ -6,7 +6,7 @@ from scipy.special import factorial2
 from torch import nn
 
 from deepqmc.errors import DeepQMCError
-from deepqmc.utils import pow_int
+from deepqmc.torchext import pow_int
 
 __version__ = '0.1.0'
 __all__ = ['GTOBasis', 'GTOShell']

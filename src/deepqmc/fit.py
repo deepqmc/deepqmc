@@ -5,7 +5,8 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from .errors import NanLoss
 from .physics import clean_force, local_energy
-from .utils import NULL_DEBUG, normalize_mean, state_dict_copy, weighted_mean_var
+from .torchext import normalize_mean, state_dict_copy, weighted_mean_var
+from .utils import NULL_DEBUG
 
 __version__ = '0.1.0'
 __all__ = ['fit_wf', 'WaveFunctionLoss', 'LossEnergy']

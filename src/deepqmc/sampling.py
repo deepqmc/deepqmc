@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from . import torchext
 from .physics import clean_force, quantum_force
-from .utils import assign_where
+from .torchext import assign_where
 
 __version__ = '0.1.0'
 __all__ = ['MetropolisSampler', 'LangevinSampler']

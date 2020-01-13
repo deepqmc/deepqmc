@@ -2,7 +2,8 @@ import numpy as np
 import torch
 
 from ..physics import pairwise_distance, pairwise_self_distance
-from ..utils import batch_eval, shuffle_tensor
+from ..torchext import shuffle_tensor
+from ..utils import batch_eval
 
 __all__ = ()
 

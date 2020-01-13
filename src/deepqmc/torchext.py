@@ -9,6 +9,26 @@ from .utils import batch_eval
 __all__ = ()
 
 
+def state_dict_copy(net):
+    return {name: val.cpu() for name, val in net.state_dict().items()}
+
+
+def normalize_mean(x):
+    return x / x.mean()
+
+
+def weighted_mean_var(xs, ws):
+    ws = normalize_mean(ws)
+    mean = (ws * xs).mean()
+    return mean, (ws * (xs - mean) ** 2).mean()
+
+
+def assign_where(xs, ys, where):
+    assert len(xs) == len(ys)
+    for x, y in zip(xs, ys):
+        x[where] = y[where]
+
+
 def merge_tensors(mask, source_true, source_false):
     x = torch.empty_like(mask, dtype=source_false.dtype)
     x[mask] = source_true
@@ -16,9 +36,27 @@ def merge_tensors(mask, source_true, source_false):
     return x
 
 
+def number_of_parameters(net):
+    return sum(p.numel() for p in net.parameters())
+
+
+def shuffle_tensor(x):
+    return x[torch.randperm(len(x))]
+
+
 def triu_flat(x):
     i, j = np.triu_indices(x.shape[1], k=1)
     return x[:, i, j, ...]
+
+
+def pow_int(xs, exps):
+    batch_dims = xs.shape[: -len(exps.shape)]
+    zs = xs.new_zeros(*batch_dims, *exps.shape)
+    xs_expanded = xs.expand_as(zs)
+    for exp in exps.unique():
+        mask = exps == exp
+        zs[..., mask] = xs_expanded[..., mask] ** exp.item()
+    return zs
 
 
 def ssp(*args, **kwargs):
