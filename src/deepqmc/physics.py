@@ -55,6 +55,8 @@ def electronic_potential(rs):
 
 def quantum_force(rs, wf):
     grad_psis, psis = grad(rs, wf)
+    eps = rs.new_tensor(torch.finfo(rs.dtype).tiny)
+    psis = torch.where(psis.abs() > 0, psis, eps)
     forces = grad_psis / psis[:, None, None]
     return forces, psis
 
@@ -70,8 +72,9 @@ def quantum_force(rs, wf):
 
 def crossover_parameter(zs, fs, charges):
     zs, zs_2 = zs[..., :3], zs[..., 3]
+    eps = fs.new_tensor(torch.finfo(fs.dtype).tiny)
     zs_unit = zs / zs.norm(dim=-1)[..., None]
-    fs_unit = fs / fs.norm(dim=-1)[..., None]
+    fs_unit = fs / fs.norm(dim=-1).clamp(eps, None)[..., None]
     Z2z2 = charges ** 2 * zs_2
     return (1 + (fs_unit * zs_unit).sum(dim=-1)) / 2 + Z2z2 / (10 * (4 + Z2z2))
 
@@ -83,12 +86,14 @@ def clean_force(forces, rs, mol, *, tau, return_a=False):
         zs.flatten(end_dim=1), forces.flatten(end_dim=1), mol.charges[idxs]
     ).view(len(rs), -1)
     av2tau = a * (forces ** 2).sum(dim=-1) * tau
-    factors = (torch.sqrt(1 + 2 * av2tau) - 1) / av2tau
-    # TODO actual eps
-    factors = torch.where(av2tau < 1e-7, a.new_tensor(1.0), factors)
+    # av2tau can be small or zero, so the following expression must handle that
+    factors = 2 / (torch.sqrt(1 + 2 * av2tau) + 1)
     forces = factors[..., None] * forces
-    forces_norm = forces.norm(dim=-1)
-    norm_factors = torch.min(forces_norm, zs[..., -1].sqrt() / tau) / forces_norm
+    eps = rs.new_tensor(torch.finfo(rs.dtype).eps)
+    norm_factors = torch.min(
+        zs.new_tensor(1.0),
+        zs[..., -1].sqrt() / (tau * forces.norm(dim=-1).clamp(eps, None)),
+    )
     forces = forces * norm_factors[..., None]
     if return_a:
         return forces, a
