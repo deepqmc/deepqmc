@@ -39,6 +39,8 @@ class Molecule(nn.Module):
         spin (int): total spin multiplicity
     """
 
+    all_names = set(_SYSTEMS.keys())
+
     def __init__(self, coords, charges, charge, spin):
         assert len(coords) == len(charges)
         super().__init__()
@@ -66,8 +68,7 @@ class Molecule(nn.Module):
     def from_name(cls, name, **kwargs):
         """Create a molecule from a database of named molecules.
 
-        .. todo::
-            Document available molecules.
+        The available names are in :attr:`Molecule.all_names`.
         """
         system = deepcopy(_SYSTEMS[name])
         if name in _SYSTEM_FACTORIES:
