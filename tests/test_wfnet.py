@@ -66,8 +66,8 @@ def wf(net_factory, mol):
     args = (mol,)
     kwargs = {}
     if net_factory is PauliNet:
-        mol = pyscf.gto.M(atom=mol.as_pyscf(), unit='bohr', basis='6-311g', cart=True)
-        basis = GTOBasis.from_pyscf(mol)
+        mole = pyscf.gto.M(atom=mol.as_pyscf(), unit='bohr', basis='6-311g', cart=True)
+        basis = GTOBasis.from_pyscf(mole)
         args += (basis,)
         kwargs.update(
             {

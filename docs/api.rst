@@ -1,4 +1,5 @@
-===
+.. _api:
+
 API
 ===
 
@@ -7,7 +8,7 @@ The API is designed in such a way that entering it via the top-level :func:`deep
 All classes documented below with a Shape section are derived from :class:`torch.nn.Module` and are to be used as such.
 
 Training
-========
+--------
 
 .. automodule:: deepqmc
 
@@ -16,12 +17,12 @@ Training
 .. automodule:: deepqmc.sampling
 
 Wave functions
-==============
+--------------
 
 .. autoclass:: deepqmc.wf.WaveFunction
 
 PauliNet
---------
+~~~~~~~~
 
 .. autoclass:: deepqmc.wf.PauliNet
 

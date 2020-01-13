@@ -2,33 +2,23 @@
 Welcome to DeepQMC
 ==================
 
-DeepQMC implements variational quantum Monte Carlo for electrons in molecules, using deep neural networks written in `PyTorch <https://pytorch.org>`_ as trial wave functions. Besides the core functionality, it contains implementations of the following ansatzes:
+Welcome to the DeepQMC documentation. Start with :ref:`installation` and then go through the :ref:`tutorial`, which walks you through the basic use of the package. Detailed technical reference can be found in the :ref:`api` section.
 
-- PauliNet: https://arxiv.org/abs/1909.08423
+DeepQMC depends heavily on `PyTorch <https://pytorch.org>`_, the documentation for which can be found here:
 
-Installing
+- `PyTorch documentation <https://pytorch.org/docs/stable/index.html>`_
+
+User guide
 ==========
 
-Install and update using `Pip <https://pip.pypa.io/en/stable/quickstart/>`_.
+.. toctree::
+    :maxdepth: 2
 
-.. code-block:: bash
+    installation
+    tutorial
 
-    pip install -U deepqmc[all]
-
-A simple example
-================
-
-.. code-block::
-
-    from deepqmc import Molecule, train
-    from deepqmc.wf import PauliNet
-
-    mol = Molecule.from_name('LiH')
-    net = PauliNet.from_hf(mol)
-    train(net)
-
-API referencee
-==============
+API reference
+=============
 
 .. toctree::
 
