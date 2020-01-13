@@ -75,6 +75,10 @@ def train(
     else:
         init_step = 0
     with SummaryWriter(log_dir=cwd, flush_secs=15, purge_step=init_step - 1) as writer:
+        writer.add_text(
+            'hyperparameters',
+            ''.join(f'**{key}** = {val}  \n' for key, val in locals().items()),
+        )
         sampler = LangevinSampler.from_mf(
             wf, cuda=cuda, writer=writer, **(sampler_kwargs or {})
         )
