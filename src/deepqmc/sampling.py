@@ -87,7 +87,7 @@ class MetropolisSampler:
         )
 
     @classmethod
-    def from_mf(cls, wf, *, sample_size=2_000, cuda=False, **kwargs):
+    def from_mf(cls, wf, *, sample_size=2_000, cuda=False, mf=None, **kwargs):
         """Initialize a sampler from a HF calculation.
 
         The initial walker positions are sampled from Gaussians centered
@@ -98,9 +98,11 @@ class MetropolisSampler:
             wf (:class:`~deepqmc.wf.WaveFunction`): wave function to be sampled from
             sample_size (int): number of Markov-chain walkers
             cuda (bool): whether the samples are created on a GPU
+            mf (:class:`pyscf.scf.hf.RHF`): HF calculation used to get Mulliken
+                partial charges, taken from ``wf.mf`` if not given
             kwargs: all other arguments are passed to the constructor
         """
-        rs = rand_from_mf(wf.mf, sample_size)
+        rs = rand_from_mf(mf or wf.mf, sample_size)
         if cuda:
             rs = rs.cuda()
         return cls(wf, rs, **kwargs)
