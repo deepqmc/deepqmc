@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 
-from .errors import NanLoss
+from .errors import NanLoss, DeepQMCError
 from .physics import clean_force, local_energy
 from .torchext import normalize_mean, state_dict_copy, weighted_mean_var
 from .utils import NULL_DEBUG
@@ -80,6 +80,55 @@ def log_clipped_outliers(x, q):
     return median + x
 
 
+def estimate_subbatch_size_cuda(
+    wf,
+    loss_func,
+    require_psi_gradient=True,
+    test_batch_sizes=(300, 400, 500),
+    mem_margin=0.9,
+    max_memory=None,
+):
+    # require_energy_gradient isn't needed here because it adds only little
+    # extra memory to the probe calculation
+    assert next(wf.parameters()).is_cuda
+    test_batch_sizes = torch.tensor(test_batch_sizes).float() / (wf.n_up + wf.n_down)
+    mem = torch.zeros_like(test_batch_sizes)
+    for i, size in enumerate(test_batch_sizes.int()):
+        torch.cuda.reset_max_memory_allocated()
+        rs = torch.randn(
+            (size.item(), wf.n_down + wf.n_up, 3), device='cuda', requires_grad=True
+        )
+        E_loc, psi = local_energy(rs, wf, wf.mol, keep_graph=require_psi_gradient)
+        loss = loss_func(
+            E_loc.detach() if require_psi_gradient else E_loc,
+            psi,
+            torch.ones(len(rs)).cuda(),
+        )
+        loss.backward()
+        mem[i] = (
+            torch.cuda.max_memory_allocated() * 9.5367e-7
+        )  # conversion from bytes to MiB
+    delta = (mem[1:] - mem[:-1]) / (test_batch_sizes[1:] - test_batch_sizes[:-1])
+    memory_per_batch = delta.mean() / mem_margin
+    if torch.sqrt(delta.var()) / memory_per_batch > 0.3:
+        raise DeepQMCError(
+            'Inconsitent estimation of GPU-RAM per batch. '
+            'Consider specifing a longer test_batch_sizes tensor and try again.'
+        )
+    if max_memory is None:
+        import subprocess
+
+        memory_total = torch.cuda.get_device_properties(0).total_memory * 9.5367e-7
+        sp = subprocess.Popen(
+            ['nvidia-smi', '-q'], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        memory_in_use = int(
+            str(sp.communicate()).split('Used GPU Memory         : ')[1].split('MiB')[0]
+        )
+        max_memory = memory_total - memory_in_use
+    return int(max_memory / memory_per_batch)
+
+
 def fit_wf(
     wf,
     loss_func,
@@ -96,7 +145,8 @@ def fit_wf(
     clip_outliers=True,
     p=0.01,
     q=5,
-    subbatch_size=10_000,
+    subbatch_size=None,
+    max_memory=None,
     clean_tau=None,
 ):
     r"""Fit a wave function using the variational principle and gradient descent.
@@ -128,11 +178,26 @@ def fit_wf(
         clip_outliers (bool): whether to clip local energy outliers
         p (float): percentile defining outliers
         q (float): multiple of MAE defining outliers
-        subbatch_size (int): number of samples for a single vectorized loss evaluation
+        subbatch_size (int): number of samples for a single vectorized loss evaluation.
+            If None and on a GPU, subbatch_size is estimated, else if None and on a CPU,
+            no subbatching is done.
+        max_memory (float): maximum amount of allocated GPU memory (MiB) to be
+            considered if automatically estimating the subbatch_size. If :data:`None`
+            and subbatch_size is estimated, the maximum memory is set to the total
+            free GPU memory. When training on CPU always set to :data:`None`.
         clean_tau (float): if not :data:`None`, :math:`\tau` used for force
             cleaning
     """
     assert not (skip_outliers and clip_outliers)
+    if not next(wf.parameters()).is_cuda and max_memory:
+        raise DeepQMCError(
+            'Automatic subbatch_size estimation only implemented for GPU. '
+            'When training on CPU, do not use max_memory.'
+        )
+    elif next(wf.parameters()).is_cuda and not subbatch_size:
+        subbatch_size = estimate_subbatch_size_cuda(
+            wf, loss_func, require_psi_gradient, max_memory=max_memory
+        )
     for step, (rs, psi0s) in zip(steps, sampler):
         d = debug[step]
         d['psi0s'], d['rs'], d['state_dict'] = psi0s, rs, state_dict_copy(wf)
