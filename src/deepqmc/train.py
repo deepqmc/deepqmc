@@ -60,7 +60,6 @@ def train(
     """
     if cuda:
         wf.cuda()
-    sampler = LangevinSampler.from_mf(wf, cuda=cuda, **(sampler_kwargs or {}))
     opt = getattr(torch.optim, optimizer)(wf.parameters(), lr=learning_rate)
     if lr_scheduler == 'inverse':
         scheduler = torch.optim.lr_scheduler.LambdaLR(
@@ -76,6 +75,9 @@ def train(
     else:
         init_step = 0
     with SummaryWriter(log_dir=cwd, flush_secs=15, purge_step=init_step - 1) as writer:
+        sampler = LangevinSampler.from_mf(
+            wf, cuda=cuda, writer=writer, **(sampler_kwargs or {})
+        )
         for step in fit_wf(
             wf,
             LossEnergy(),
