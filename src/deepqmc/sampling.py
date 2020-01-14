@@ -54,6 +54,7 @@ class MetropolisSampler:
         target_acceptance=0.57,
         n_discard=50,
         n_decorrelate=1,
+        writer=None,
     ):
         self.wf = wf
         self.rs = rs.clone()
@@ -65,6 +66,8 @@ class MetropolisSampler:
         self.n_discard = n_discard
         self.n_decorrelate = n_decorrelate
         self.restart()
+        self.writer = writer
+        self._totalstep = 0
 
     def proposal(self):
         return self.rs + torch.randn_like(self.rs) * self.tau
@@ -122,13 +125,21 @@ class MetropolisSampler:
         self._ages[accepted] = 0
         self._ages[~accepted] += 1
         acceptance = accepted.type(torch.int).sum().item() / self.rs.shape[0]
-        info = {'acceptance': acceptance, 'age': self._ages.cpu().numpy()}
+        info = {
+            'acceptance': acceptance,
+            'age': self._ages.cpu().numpy(),
+            'tau': self.tau,
+        }
         assign_where(
             (self.rs, self.psis, *self.extra_vars()), (rs, psis, *extra_vars), accepted,
         )
         if self.target_acceptance:
             self.tau /= self.target_acceptance / acceptance
         self._step += 1
+        self._totalstep += 1
+        if self.writer:
+            self.writer.add_scalar('sampling/acceptance', acceptance, self._totalstep)
+            self.writer.add_scalar('sampling/tau', self.tau, self._totalstep)
         return self.rs.clone(), self.psis.clone(), info
 
     def iter_with_info(self):
