@@ -134,7 +134,7 @@ class MetropolisSampler:
             (self.rs, self.psis, *self.extra_vars()), (rs, psis, *extra_vars), accepted,
         )
         if self.target_acceptance:
-            self.tau /= self.target_acceptance / acceptance
+            self.tau /= self.target_acceptance / max(acceptance, 0.05)
         self._step += 1
         self._totalstep += 1
         if self.writer:
