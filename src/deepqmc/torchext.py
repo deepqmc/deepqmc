@@ -9,6 +9,10 @@ from .utils import batch_eval
 __all__ = ()
 
 
+def is_cuda(net):
+    return next(net.parameters()).is_cuda
+
+
 def state_dict_copy(net):
     return {name: val.cpu() for name, val in net.state_dict().items()}
 

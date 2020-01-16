@@ -79,9 +79,7 @@ def train(
             'hyperparameters',
             ''.join(f'**{key}** = {val}  \n' for key, val in locals().items()),
         )
-        sampler = LangevinSampler.from_mf(
-            wf, cuda=cuda, writer=writer, **(sampler_kwargs or {})
-        )
+        sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
         for step in fit_wf(
             wf,
             LossEnergy(),

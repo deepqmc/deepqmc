@@ -3,9 +3,9 @@ from torch import nn
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 
-from .errors import NanLoss, DeepQMCError
+from .errors import DeepQMCError, NanLoss
 from .physics import clean_force, local_energy
-from .torchext import normalize_mean, state_dict_copy, weighted_mean_var
+from .torchext import is_cuda, normalize_mean, state_dict_copy, weighted_mean_var
 from .utils import NULL_DEBUG
 
 __version__ = '0.1.0'
@@ -112,8 +112,8 @@ def estimate_subbatch_size_cuda(
     memory_per_batch = delta.mean() / mem_margin
     if torch.sqrt(delta.var()) / memory_per_batch > 0.3:
         raise DeepQMCError(
-            'Inconsitent estimation of GPU-RAM per batch. '
-            'Consider specifing a longer test_batch_sizes tensor and try again.'
+            'Inconsistent estimation of GPU-RAM per batch. '
+            'Consider specifying a longer test_batch_sizes tensor and try again.'
         )
     if max_memory is None:
         import subprocess
@@ -189,7 +189,7 @@ def fit_wf(
             cleaning
     """
     assert not (skip_outliers and clip_outliers)
-    if not next(wf.parameters()).is_cuda and max_memory:
+    if not is_cuda(wf) and max_memory:
         raise DeepQMCError(
             'Automatic subbatch_size estimation only implemented for GPU. '
             'When training on CPU, do not use max_memory.'

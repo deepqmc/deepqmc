@@ -7,9 +7,9 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from . import torchext
 from .physics import clean_force, quantum_force
-from .torchext import assign_where
+from .torchext import assign_where, is_cuda
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 __all__ = ['MetropolisSampler', 'LangevinSampler']
 
 
@@ -90,7 +90,7 @@ class MetropolisSampler:
         )
 
     @classmethod
-    def from_mf(cls, wf, *, sample_size=2_000, cuda=False, mf=None, **kwargs):
+    def from_mf(cls, wf, *, sample_size=2_000, mf=None, **kwargs):
         """Initialize a sampler from a HF calculation.
 
         The initial walker positions are sampled from Gaussians centered
@@ -100,13 +100,12 @@ class MetropolisSampler:
         Args:
             wf (:class:`~deepqmc.wf.WaveFunction`): wave function to be sampled from
             sample_size (int): number of Markov-chain walkers
-            cuda (bool): whether the samples are created on a GPU
             mf (:class:`pyscf.scf.hf.RHF`): HF calculation used to get Mulliken
                 partial charges, taken from ``wf.mf`` if not given
             kwargs: all other arguments are passed to the constructor
         """
         rs = rand_from_mf(mf or wf.mf, sample_size)
-        if cuda:
+        if is_cuda(wf):
             rs = rs.cuda()
         return cls(wf, rs, **kwargs)
 
