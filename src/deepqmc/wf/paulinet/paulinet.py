@@ -106,6 +106,7 @@ class PauliNet(WaveFunction):
         mo_factory=None,
         rc_scaling=1.0,
         cusp_alpha=10.0,
+        return_log=False,
     ):
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
@@ -158,6 +159,7 @@ class PauliNet(WaveFunction):
             self.jastrow = self.omni.forward_jastrow
         else:
             self.omni = None
+        self.return_log = return_log
 
     @classmethod
     def from_pyscf(
@@ -295,13 +297,22 @@ class PauliNet(WaveFunction):
             with debug.cd('backflow'):
                 xs = self.backflow(xs, *edges, debug=debug)
         conf_up, conf_down = self.confs[:, : self.n_up], self.confs[:, self.n_up :]
-        det_up = debug['det_up'] = eval_slater(
-            xs[:, : self.n_up, conf_up].permute(0, 2, 1, 3).flatten(end_dim=1)
-        ).view(batch_dim, -1)
-        det_down = debug['det_down'] = eval_slater(
-            xs[:, self.n_up :, conf_down].permute(0, 2, 1, 3).flatten(end_dim=1)
-        ).view(batch_dim, -1)
-        psi = self.conf_coeff(det_up * det_down).squeeze(dim=-1)
+        det_up = xs[:, : self.n_up, conf_up].permute(0, 2, 1, 3)
+        det_down = xs[:, self.n_up :, conf_down].permute(0, 2, 1, 3)
+        if self.return_log:
+            sign_up, det_up = det_up.slogdet()
+            sign_down, det_down = det_down.slogdet()
+            xs = det_up + det_down
+            xs_shift = xs.max(dim=-1).values
+            # the exp-normalize trick, to avoid over/underflow of the exponential
+            xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None])
+        else:
+            det_up = debug['det_up'] = eval_slater(det_up.flatten(end_dim=1)).view(batch_dim, -1)
+            det_down = debug['det_down'] = eval_slater(det_down.flatten(end_dim=1)).view(batch_dim, -1)
+            xs = det_up * det_down
+        psi = self.conf_coeff(xs).squeeze(dim=-1)
+        if self.return_log:
+            psi, sign = psi.abs().log() + xs_shift, psi.sign()
         if self.cusp_same or self.jastrow:
             dists_elec = pairwise_distance(rs, rs)
         if self.cusp_same:
@@ -314,10 +325,18 @@ class PauliNet(WaveFunction):
             cusp_anti = self.cusp_anti(
                 dists_elec[:, : self.n_up, self.n_up :].flatten(start_dim=1)
             )
-            psi = psi * cusp_same * cusp_anti
+            psi = (
+                psi + cusp_same + cusp_anti
+                if self.return_log
+                else psi * torch.exp(cusp_same + cusp_anti)
+            )
         if self.jastrow:
             with debug.cd('jastrow'):
-                psi = psi * F.softplus(self.jastrow(*edges, debug=debug))
+                psi = (
+                    psi + self.jastrow(*edges, debug=debug)
+                    if self.return_log
+                    else psi * torch.exp(self.jastrow(*edges, debug=debug))
+                )
         if self.omni:
             self.omni.forward_close()
-        return psi
+        return (psi, sign) if self.return_log else psi
