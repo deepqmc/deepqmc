@@ -14,8 +14,13 @@ __all__ = ['MetropolisSampler', 'LangevinSampler']
 
 
 def samples_from(sampler, steps):
-    rs, psis, *extra = zip(*(xs for _, xs in zip(steps, sampler)))
-    return (torch.stack(rs, dim=1), torch.stack(psis, dim=1), *extra)
+    rs, log_psis, sign_psis, *extra = zip(*(xs for _, xs in zip(steps, sampler)))
+    return (
+        torch.stack(rs, dim=1),
+        torch.stack(log_psis, dim=1),
+        torch.stack(sign_psis, dim=1),
+        *extra,
+    )
 
 
 class MetropolisSampler:
@@ -50,7 +55,7 @@ class MetropolisSampler:
         tau=0.1,
         max_age=None,
         n_first_certain=3,
-        psi_threshold=None,
+        log_psi_threshold=None,
         target_acceptance=0.57,
         n_discard=50,
         n_decorrelate=1,
@@ -61,7 +66,7 @@ class MetropolisSampler:
         self.tau = tau
         self.max_age = max_age
         self.n_first_certain = n_first_certain
-        self.psi_threshold = psi_threshold
+        self.log_psi_threshold = log_psi_threshold
         self.target_acceptance = target_acceptance
         self.n_discard = n_discard
         self.n_decorrelate = n_decorrelate
@@ -73,9 +78,11 @@ class MetropolisSampler:
         return self.rs + torch.randn_like(self.rs) * self.tau
 
     def acceptance_prob(self, rs):
-        psis = self.wf(rs).detach()
-        Ps_acc = (psis / self.psis) ** 2
-        return Ps_acc, psis
+        with torch.no_grad:
+            log_psis, sign_psis = self.wf(rs)
+        Ps_acc = torch.exp(2 * (log_psis - self.log_psis))
+        # Ps_acc might become 0 or inf, however this does not affect the stability of the remaining code
+        return Ps_acc, log_psis, sign_psis
 
     def extra_vars(self):
         return ()
@@ -111,11 +118,11 @@ class MetropolisSampler:
 
     def step(self):
         rs = self.proposal()
-        Ps_acc, psis, *extra_vars = self.acceptance_prob(rs)
+        Ps_acc, log_psis, sign_psis, *extra_vars = self.acceptance_prob(rs)
         accepted = Ps_acc > torch.rand_like(Ps_acc)
-        if self.psi_threshold is not None:
-            accepted = accepted & (psis.abs() > self.psi_threshold) | (
-                (self.psis.abs() < self.psi_threshold) & (psis.abs() > self.psis.abs())
+        if self.log_psi_threshold is not None:
+            accepted = accepted & (log_psis > self.log_psi_threshold) | (
+                (self.log_psis < self.log_psi_threshold) & (log_psis > self.log_psis)
             )
         if self.max_age is not None:
             accepted = accepted | (self._ages >= self.max_age)
@@ -130,7 +137,9 @@ class MetropolisSampler:
             'tau': self.tau,
         }
         assign_where(
-            (self.rs, self.psis, *self.extra_vars()), (rs, psis, *extra_vars), accepted,
+            (self.rs, self.log_psis, self.sign_psis, *self.extra_vars()),
+            (rs, log_psis, sign_psis, *extra_vars),
+            accepted,
         )
         if self.target_acceptance:
             self.tau /= self.target_acceptance / max(acceptance, 0.05)
@@ -139,7 +148,7 @@ class MetropolisSampler:
         if self.writer:
             self.writer.add_scalar('sampling/acceptance', acceptance, self._totalstep)
             self.writer.add_scalar('sampling/tau', self.tau, self._totalstep)
-        return self.rs.clone(), self.psis.clone(), info
+        return self.rs.clone(), self.log_psis.clone(), self.sign_psis.clone(), info
 
     def iter_with_info(self):
         samples = (self.step() for _ in count())
@@ -150,7 +159,10 @@ class MetropolisSampler:
         )
 
     def __iter__(self):
-        return ((rs, psis) for rs, psis, info in self.iter_with_info())
+        return (
+            (rs, log_psis, sign_psis)
+            for rs, log_psis, sign_psis, info in self.iter_with_info()
+        )
 
     def iter_batches(self, *, epoch_size, batch_size, range=range):
         """Iterate over buffered batches sampled in epochs.
@@ -166,8 +178,10 @@ class MetropolisSampler:
         """
         while True:
             n_steps = math.ceil(epoch_size * batch_size / len(self))
-            rs, psis = samples_from(self, range(n_steps))
-            samples_ds = TensorDataset(*(x.flatten(end_dim=1) for x in (rs, psis)))
+            rs, log_psis, sign_psis = samples_from(self, range(n_steps))
+            samples_ds = TensorDataset(
+                *(x.flatten(end_dim=1) for x in (rs, log_psis, sign_psis))
+            )
             rs_dl = DataLoader(
                 samples_ds, batch_size=batch_size, shuffle=True, drop_last=True
             )
@@ -175,12 +189,12 @@ class MetropolisSampler:
             self.restart()
 
     def recompute_psi(self):
-        self.psis = self.wf(self.rs)
+        self.log_psis, self.sign_psis = self.wf(self.rs)
 
     def restart(self):
         self._step = 0
         self.recompute_psi()
-        self._ages = torch.zeros_like(self.psis, dtype=torch.long)
+        self._ages = torch.zeros_like(self.log_psis, dtype=torch.long)
 
     def propagate_all(self):
         self.rs = self.proposal()
@@ -225,25 +239,26 @@ class LangevinSampler(MetropolisSampler):
         )
 
     def acceptance_prob(self, rs):
-        forces, psis = self.qforce(rs)
+        forces, (log_psis, sign_psis) = self.qforce(rs)
         log_G_ratios = (
             (self.forces + forces)
             * ((self.rs - rs) + self.tau / 2 * (self.forces - forces))
         ).sum(dim=(-1, -2))
-        Ps_acc = torch.exp(log_G_ratios) * (psis / self.psis) ** 2
-        return Ps_acc, psis, forces
+        Ps_acc = torch.exp(log_G_ratios + 2 * (log_psis - self.log_psis))
+        # Ps_acc might become 0 or inf, however this does not affect the stability of the remaining code
+        return Ps_acc, log_psis, sign_psis, forces
 
     def qforce(self, rs):
         try:
-            forces, psis = quantum_force(rs, self.wf)
+            forces, (log_psis, sign_psis) = quantum_force(rs, self.wf)
         except torchext.LUFactError as e:
             e.info['rs'] = rs[e.info['idxs']]
             raise
         forces = clean_force(forces, rs, self.wf.mol, tau=self.tau)
-        return forces, psis
+        return forces, (log_psis, sign_psis)
 
     def extra_vars(self):
         return (self.forces,)
 
     def recompute_psi(self):
-        self.forces, self.psis = self.qforce(self.rs)
+        self.forces, (self.log_psis, self.sign_psis) = self.qforce(self.rs)

@@ -52,10 +52,10 @@ class LossEnergy(WaveFunctionLoss):
     plain total energy loss function, :math:`\mathbb E[E_\text{loc}]`.
     """
 
-    def forward(self, Es_loc, psis, ws):
+    def forward(self, Es_loc, log_psis, ws):
         assert Es_loc.grad_fn is None
         self.weights = ws * (Es_loc - (ws * Es_loc).mean())
-        return 2 * (self.weights * torch.log(psis.abs())).mean()
+        return 2 * (self.weights * log_psis).mean()
 
 
 def loss_least_squares(y_pred, y_true):
@@ -157,22 +157,28 @@ def fit_wf(
             max_memory=max_memory,
         )
         log.info(f'estimated optimal subbatch size: {subbatch_size}')
-    for step, (rs, psi0s) in zip(steps, sampler):
+    for step, (rs, log_psi0s, sign_psi0s) in zip(steps, sampler):
         d = debug[step]
-        d['psi0s'], d['rs'], d['state_dict'] = psi0s, rs, state_dict_copy(wf)
+        d['log_psi0s'], d['sign_psi0s'], d['rs'], d['state_dict'] = (
+            log_psi0s,
+            sign_psi0s,
+            rs,
+            state_dict_copy(wf),
+        )
         subbatch_size = subbatch_size or len(rs)
         subbatches = []
-        for rs, psi0s in DataLoader(TensorDataset(rs, psi0s), batch_size=subbatch_size):
-            Es_loc, psis, forces = local_energy(
+        for rs, log_psi0s, sign_psi0s in DataLoader(
+            TensorDataset(rs, log_psi0s, sign_psi0s), batch_size=subbatch_size
+        ):
+            Es_loc, (log_psis, sign_psis), forces = local_energy(
                 rs,
                 wf,
                 create_graph=require_energy_gradient,
                 keep_graph=require_psi_gradient,
                 return_grad=True,
             )
-            ws = (psis.detach() / psi0s) ** 2
+            ws = torch.exp(2 * (log_psis.detach() - log_psi0s))
             if clean_tau is not None:
-                forces = forces / psis.detach()[:, None, None]
                 forces_clean = clean_force(forces, rs, wf.mol, tau=clean_tau)
                 forces, forces_clean = (
                     x.flatten(start_dim=-2).norm(dim=-1) for x in (forces, forces_clean)
@@ -192,26 +198,27 @@ def fit_wf(
                 Es_loc_loss = log_clipped_outliers(Es_loc, q)
             else:
                 Es_loc_loss = Es_loc
-            loss = loss_func(Es_loc_loss, psis, normalize_mean(total_ws))
+            loss = loss_func(Es_loc_loss, log_psis, normalize_mean(total_ws))
             loss.backward()
             subbatches.append(
                 (
                     loss.detach().view(1),
                     Es_loc.detach(),
                     Es_loc_loss.detach(),
-                    psis.detach(),
+                    log_psis.detach(),
+                    sign_psis.detach(),
                     ws,
                     force_ws,
                     total_ws,
                 )
             )
-        loss, Es_loc, Es_loc_loss, psis, ws, forces_ws, total_ws = (
+        loss, Es_loc, Es_loc_loss, log_psis, sign_psis, ws, forces_ws, total_ws = (
             torch.cat(xs) for xs in zip(*subbatches)
         )
         loss = d['loss'] = loss.sum()
         if torch.isnan(loss).any():
             raise NanLoss()
-        d['Es_loc'], d['psis'] = Es_loc, psis
+        d['Es_loc'], d['log_psis'], d['sign_psis'] = Es_loc, log_psis, sign_psis
         if clip_grad:
             clip_grad_norm_(wf.parameters(), clip_grad)
         if writer:
@@ -221,7 +228,7 @@ def fit_wf(
             E_loc_loss_mean, E_loc_loss_var = weighted_mean_var(Es_loc_loss, total_ws)
             writer.add_scalar('E_loc_loss/mean', E_loc_loss_mean, step)
             writer.add_scalar('E_loc_loss/var', E_loc_loss_var, step)
-            writer.add_scalar('psi/sq_mean', (psis ** 2).mean(), step)
+            writer.add_scalar('psi/sq_mean', (torch.exp(2 * log_psis)).mean(), step)
             writer.add_scalar('loss', loss, step)
             writer.add_scalar('weights/mean', ws.mean(), step)
             writer.add_scalar('weights/median', ws.median(), step)

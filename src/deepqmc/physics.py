@@ -54,10 +54,7 @@ def electronic_potential(rs):
 
 
 def quantum_force(rs, wf):
-    grad_psis, psis = grad(rs, wf)
-    eps = rs.new_tensor(torch.finfo(rs.dtype).tiny)
-    psis = torch.where(psis.abs() > 0, psis, eps)
-    forces = grad_psis / psis[:, None, None]
+    forces, psis = grad(rs, wf)
     return forces, psis
 
 
@@ -101,19 +98,35 @@ def clean_force(forces, rs, mol, *, tau, return_a=False):
 
 
 def local_energy(
-    rs, wf, mol=None, create_graph=False, keep_graph=None, debug=NULL_DEBUG, **kwargs
+    rs,
+    wf,
+    mol=None,
+    create_graph=False,
+    keep_graph=None,
+    debug=NULL_DEBUG,
+    return_grad=False,
 ):
     mol = mol or wf.mol
     Es_nuc = debug['Es_nuc'] = nuclear_energy(mol)
     Vs_nuc = debug['Vs_nuc'] = nuclear_potential(rs, mol)
     Vs_el = debug['Vs_el'] = electronic_potential(rs)
-    lap_psis, psis, *other = debug['lap_psis'], debug['psis'], *_ = laplacian(
-        rs, wf, create_graph=create_graph, keep_graph=keep_graph, **kwargs
+    lap_log_psis, (log_psis, sign_psis), quantum_force = (
+        debug['lap_psis'],
+        (debug['log_psis'], debug['sign_psis']),
+        debug['quantum_force'],
+    ) = laplacian(
+        rs, wf, create_graph=create_graph, keep_graph=keep_graph, return_grad=True,
     )
     Es_loc = (
-        -0.5 * lap_psis / (psis if create_graph else psis.detach())
+        -0.5 * (lap_log_psis + (quantum_force ** 2).sum(dim=(-2, -1)))
         + Vs_nuc
         + Vs_el
         + Es_nuc
     )
-    return (Es_loc, psis if keep_graph else psis.detach(), *other)
+    result = (
+        Es_loc,
+        (log_psis if keep_graph else log_psis.detach(), sign_psis),
+    )
+    if return_grad:
+        result += (quantum_force,)
+    return result
