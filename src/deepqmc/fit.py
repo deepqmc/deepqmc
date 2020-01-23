@@ -84,7 +84,7 @@ def estimate_subbatch_size_cuda(
     wf,
     loss_func,
     require_psi_gradient=True,
-    test_batch_sizes=(300, 400, 500),
+    test_batch_sizes=(200, 300, 400, 500),
     mem_margin=0.9,
     max_memory=None,
 ):
@@ -92,8 +92,8 @@ def estimate_subbatch_size_cuda(
     # extra memory to the probe calculation
     assert next(wf.parameters()).is_cuda
     test_batch_sizes = torch.tensor(test_batch_sizes).float() / (wf.n_up + wf.n_down)
-    mem = torch.zeros_like(test_batch_sizes)
-    for i, size in enumerate(test_batch_sizes.int()):
+    mem = []
+    for size in test_batch_sizes.int():
         torch.cuda.reset_max_memory_allocated()
         rs = torch.randn(
             (size.item(), wf.n_down + wf.n_up, 3), device='cuda', requires_grad=True
@@ -105,15 +105,16 @@ def estimate_subbatch_size_cuda(
             torch.ones(len(rs)).cuda(),
         )
         loss.backward()
-        mem[i] = (
-            torch.cuda.max_memory_allocated() * 9.5367e-7
-        )  # conversion from bytes to MiB
+        mem.append(torch.cuda.max_memory_allocated() / 1e6)
+    mem = torch.tensor(mem)
     delta = (mem[1:] - mem[:-1]) / (test_batch_sizes[1:] - test_batch_sizes[:-1])
+    delta = delta[1:]  # throw away first try
+    assert (delta > 0).all()
     memory_per_batch = delta.mean() / mem_margin
     if torch.sqrt(delta.var()) / memory_per_batch > 0.3:
         raise DeepQMCError(
-            'Inconsistent estimation of GPU-RAM per batch. '
-            'Consider specifying a longer test_batch_sizes tensor and try again.'
+            'Inconsistent estimation of GPU memory per batch. '
+            'Try specifying large test_batch_sizes.'
         )
     if max_memory is None:
         import subprocess
