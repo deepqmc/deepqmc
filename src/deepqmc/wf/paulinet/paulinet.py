@@ -106,7 +106,7 @@ class PauliNet(WaveFunction):
         mo_factory=None,
         rc_scaling=1.0,
         cusp_alpha=10.0,
-        return_log=False,
+        return_log=True,
     ):
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
