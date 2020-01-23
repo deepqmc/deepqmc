@@ -30,9 +30,7 @@ class ElectronicAsymptotic(nn.Module):
         self.alpha = alpha
 
     def forward(self, dists):
-        return torch.exp(
-            -(self.cusp / (self.alpha * (1 + self.alpha * dists))).sum(dim=-1)
-        )
+        return -(self.cusp / (self.alpha * (1 + self.alpha * dists))).sum(dim=-1)
 
     def extra_repr(self):
         return f'cusp={self.cusp}, alpha={self.alpha}'
