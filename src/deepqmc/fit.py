@@ -1,4 +1,5 @@
 import logging
+from functools import partial
 
 import torch
 from torch import nn
@@ -8,7 +9,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from .errors import DeepQMCError, NanLoss
 from .physics import clean_force, local_energy
 from .torchext import is_cuda, normalize_mean, state_dict_copy, weighted_mean_var
-from .utils import NULL_DEBUG
+from .utils import NULL_DEBUG, estimate_optimal_batch_size_cuda
 
 __version__ = '0.1.0'
 __all__ = ['fit_wf', 'WaveFunctionLoss', 'LossEnergy']
@@ -84,56 +85,6 @@ def log_clipped_outliers(x, q):
     return median + x
 
 
-def estimate_subbatch_size_cuda(
-    wf,
-    loss_func,
-    require_psi_gradient=True,
-    test_batch_sizes=(200, 300, 400, 500),
-    mem_margin=0.9,
-    max_memory=None,
-):
-    # require_energy_gradient isn't needed here because it adds only little
-    # extra memory to the probe calculation
-    assert next(wf.parameters()).is_cuda
-    test_batch_sizes = torch.tensor(test_batch_sizes).float() / (wf.n_up + wf.n_down)
-    mem = []
-    for size in test_batch_sizes.int():
-        torch.cuda.reset_max_memory_allocated()
-        rs = torch.randn(
-            (size.item(), wf.n_down + wf.n_up, 3), device='cuda', requires_grad=True
-        )
-        E_loc, psi = local_energy(rs, wf, wf.mol, keep_graph=require_psi_gradient)
-        loss = loss_func(
-            E_loc.detach() if require_psi_gradient else E_loc,
-            psi,
-            torch.ones(len(rs)).cuda(),
-        )
-        loss.backward()
-        mem.append(torch.cuda.max_memory_allocated() / 1e6)
-    mem = torch.tensor(mem)
-    delta = (mem[1:] - mem[:-1]) / (test_batch_sizes[1:] - test_batch_sizes[:-1])
-    delta = delta[1:]  # throw away first try
-    assert (delta > 0).all()
-    memory_per_batch = delta.mean() / mem_margin
-    if torch.sqrt(delta.var()) / memory_per_batch > 0.3:
-        raise DeepQMCError(
-            'Inconsistent estimation of GPU memory per batch. '
-            'Try specifying large test_batch_sizes.'
-        )
-    if max_memory is None:
-        import subprocess
-
-        memory_total = torch.cuda.get_device_properties(0).total_memory * 9.5367e-7
-        sp = subprocess.Popen(
-            ['nvidia-smi', '-q'], stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        memory_in_use = int(
-            str(sp.communicate()).split('Used GPU Memory         : ')[1].split('MiB')[0]
-        )
-        max_memory = memory_total - memory_in_use
-    return int(max_memory / memory_per_batch)
-
-
 def fit_wf(
     wf,
     loss_func,
@@ -200,8 +151,10 @@ def fit_wf(
             'When training on CPU, do not use max_memory.'
         )
     elif next(wf.parameters()).is_cuda and not subbatch_size:
-        subbatch_size = estimate_subbatch_size_cuda(
-            wf, loss_func, require_psi_gradient, max_memory=max_memory
+        subbatch_size = estimate_optimal_batch_size_cuda(
+            partial(memory_test_func, wf, loss_func, require_psi_gradient),
+            torch.linspace(200, 500, 4) / (wf.n_up + wf.n_down),
+            max_memory=max_memory,
         )
         log.info(f'estimated optimal subbatch size: {subbatch_size}')
     for step, (rs, psi0s) in zip(steps, sampler):
@@ -287,6 +240,20 @@ def fit_wf(
         opt.step()
         opt.zero_grad()
         yield step
+
+
+def memory_test_func(wf, loss_func, require_psi_gradient, size):
+    # require_energy_gradient isn't needed here because it adds only little
+    # extra memory to the probe calculation
+    assert next(wf.parameters()).is_cuda
+    rs = torch.randn((size, wf.n_down + wf.n_up, 3), device='cuda', requires_grad=True)
+    E_loc, psi = local_energy(rs, wf, wf.mol, keep_graph=require_psi_gradient)
+    loss = loss_func(
+        E_loc.detach() if require_psi_gradient else E_loc,
+        psi,
+        torch.ones(len(rs)).cuda(),
+    )
+    loss.backward()
 
 
 def fit_wf_supervised(
