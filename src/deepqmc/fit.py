@@ -1,3 +1,5 @@
+import logging
+
 import torch
 from torch import nn
 from torch.nn.utils import clip_grad_norm_
@@ -10,6 +12,8 @@ from .utils import NULL_DEBUG
 
 __version__ = '0.1.0'
 __all__ = ['fit_wf', 'WaveFunctionLoss', 'LossEnergy']
+
+log = logging.getLogger(__name__)
 
 
 class WaveFunctionLoss(nn.Module):
@@ -199,6 +203,7 @@ def fit_wf(
         subbatch_size = estimate_subbatch_size_cuda(
             wf, loss_func, require_psi_gradient, max_memory=max_memory
         )
+        log.info(f'estimated optimal subbatch size: {subbatch_size}')
     for step, (rs, psi0s) in zip(steps, sampler):
         d = debug[step]
         d['psi0s'], d['rs'], d['state_dict'] = psi0s, rs, state_dict_copy(wf)
