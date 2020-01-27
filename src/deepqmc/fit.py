@@ -21,12 +21,12 @@ class WaveFunctionLoss(nn.Module):
     r"""Base class for all wave function loss functions.
 
     Any such loss must be derived from the local energy and wave function
-    values, :math:`L(\{E_\text{loc}[\psi],\psi,w\})`, using also
+    values, :math:`L(\{E_\text{loc}[\psi],\ln|\psi|,w\})`, using also
     importance-sampling weights *w*.
 
     Shape:
         - Input1, :math:`E_\text{loc}[\psi](\mathbf r)`: :math:`(*)`
-        - Input2, :math:`\psi(\mathbf r)`: :math:`(*)`
+        - Input2, :math:`\ln|\psi(\mathbf r)|`: :math:`(*)`
         - Input3, :math:`w(\mathbf r)`: :math:`(*)`
         - Output, *L*: :math:`()`
     """

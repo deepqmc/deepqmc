@@ -12,8 +12,8 @@ class ElectronicAsymptotic(nn.Module):
     electrons, :math:`d_{ij}`,
 
     .. math::
-        \mathrm ee^\gamma
-        :=\exp\left({\sum_{ij}-\frac{c}{\alpha(1+\alpha d_{ij})}}\right)
+        \mathrm \gamma
+        :=\sum_{ij}-\frac{c}{\alpha(1+\alpha d_{ij})}
 
     Args:
         cusp (float): *c*, target cusp value
@@ -21,7 +21,7 @@ class ElectronicAsymptotic(nn.Module):
 
     Shape:
         - Input, :math:`d_{ij}`: :math:`(*,N_\text{pair})`
-        - Output, *J*: :math:`(*)`
+        - Output, :math:`\gamma`: :math:`(*)`
     """
 
     def __init__(self, *, cusp, alpha=1.0):

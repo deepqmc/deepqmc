@@ -59,6 +59,11 @@ class PauliNet(WaveFunction):
     is the many-body Jastrow factor and :math:`\gamma` enforces correct
     electronic cusp conditions.
 
+    The PauliNet ansatz is implemented in logspace to avoid numerical instabilities 
+    introduced by wave functions having meaningful values among various orders of 
+    magnitude. :class:`~deepqmc.wf.paulinet` returns a tuple of the form 
+    :math:`\big(ln|\psi|,\text{sign}(\psi)\big)`.
+
     Args:
         mol (:class:`~deepqmc.Molecule`): molecule whose wave function is represented
         basis (:class:`~deepqmc.wf.paulinet.GTOBasis`): basis for the molecular orbitals
@@ -307,8 +312,12 @@ class PauliNet(WaveFunction):
             # the exp-normalize trick, to avoid over/underflow of the exponential
             xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None])
         else:
-            det_up = debug['det_up'] = eval_slater(det_up.flatten(end_dim=1)).view(batch_dim, -1)
-            det_down = debug['det_down'] = eval_slater(det_down.flatten(end_dim=1)).view(batch_dim, -1)
+            det_up = debug['det_up'] = eval_slater(det_up.flatten(end_dim=1)).view(
+                batch_dim, -1
+            )
+            det_down = debug['det_down'] = eval_slater(
+                det_down.flatten(end_dim=1)
+            ).view(batch_dim, -1)
             xs = det_up * det_down
         psi = self.conf_coeff(xs).squeeze(dim=-1)
         if self.return_log:
