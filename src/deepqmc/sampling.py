@@ -38,7 +38,7 @@ class MetropolisSampler:
         max_age (int): maximum age of a walker without a move after which it is
             moved with 100% acceptance
         n_first_certain (int): number of initial steps done with 100% acceptance
-        psi_threshold (float): steps into proposals with wave function values
+        log_psi_threshold (float): steps into proposals with log wave function values
             below this threshold are always rejected
         target_acceptance (float): initial step size is automatically adjusted
             to achieve this requested acceptance
