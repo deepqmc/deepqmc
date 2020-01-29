@@ -54,7 +54,7 @@ class JastrowNet(nn.Module):
             embedding_dim=16,
             version=1,
         )
-        self.orbital = nn.Linear(16, 1)
+        self.orbital = nn.Linear(16, 1, bias=False)
 
     def forward(self, *xs, **kwargs):
         xs = self.schnet(*xs)
@@ -81,11 +81,17 @@ def wf(net_factory, mol):
 
 
 def test_batching(wf, rs):
-    assert torch.allclose(wf(rs[:2]), wf(rs)[:2], atol=0)
+    assert_alltrue_named(
+        (name, torch.allclose(wf(rs[:2])[i], wf(rs)[i][:2], atol=0))
+        for i, name in enumerate(['log(abs(psi))', 'sign(psi)'])
+    )
 
 
 def test_antisymmetry(wf, rs):
-    assert torch.allclose(wf(rs[:, [0, 2, 1]]), -wf(rs), atol=0)
+    assert_alltrue_named(
+        (name, torch.allclose(wf(rs[:, [0, 2, 1]])[i], (-1) ** i * wf(rs)[i]))
+        for i, name in enumerate(['log(abs(psi))', 'sign(psi)'])
+    )
 
 
 def test_antisymmetry_trained(wf, rs):
@@ -97,23 +103,27 @@ def test_antisymmetry_trained(wf, rs):
         sampler,
         range(10),
     )
-    assert torch.allclose(wf(rs[:, [0, 2, 1]]), -wf(rs), atol=0)
+    assert_alltrue_named(
+        (name, torch.allclose(wf(rs[:, [0, 2, 1]])[i], (-1) ** i * wf(rs)[i]))
+        for i, name in enumerate(['log(abs(psi))', 'sign(psi)'])
+    )
 
 
 def test_backprop(wf, rs):
-    wf(rs).sum().backward()
+    wf(rs)[0].sum().backward()
     assert_alltrue_named(
         (name, param.grad is not None) for name, param in wf.named_parameters()
     )
     assert_alltrue_named(
-        (name, param.grad.sum().abs().item() > 0)
+        (name, (param.grad.sum().abs().item() > 0 or name == 'mo.cusp_corr.shifts'))
         for name, param in wf.named_parameters()
     )
+    # mo.cusp_corr.shifts is excluded, as gradients occasionally vanish
 
 
 def test_grad(wf, rs):
     rs.requires_grad_()
-    wf(rs).sum().backward()
+    wf(rs)[0].sum().backward()
     assert rs.grad.sum().abs().item() > 0
 
 
@@ -122,6 +132,7 @@ def test_loc_ene_backprop(wf, rs):
     Es_loc, _ = local_energy(rs, wf, create_graph=True)
     Es_loc.sum().backward()
     assert_alltrue_named(
-        (name, param.grad.sum().abs().item() > 0)
+        (name, (param.grad.sum().abs().item() > 0 or name == 'mo.cusp_corr.shifts'))
         for name, param in wf.named_parameters()
     )
+    # mo.cusp_corr.shifts is excluded, as gradients occasionally vanish

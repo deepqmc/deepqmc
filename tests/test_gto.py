@@ -48,5 +48,5 @@ def test_torch_gto_aos(gtowf, grids):
 
 def test_torch_gto_density(gtowf, grids):
     coords, weights = map(torch.tensor, (grids.coords, grids.weights))
-    n_elec = (gtowf(coords[:, None, :]) ** 2 * weights).sum()
+    n_elec = (torch.exp(2 * gtowf(coords[:, None, :])[0]) * weights).sum()
     assert n_elec.item() == approx(1)
