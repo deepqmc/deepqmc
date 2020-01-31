@@ -129,7 +129,7 @@ def test_grad(wf, rs):
 
 def test_loc_ene_backprop(wf, rs):
     rs.requires_grad_()
-    Es_loc, _ = local_energy(rs, wf, create_graph=True)
+    Es_loc, _, _ = local_energy(rs, wf, create_graph=True)
     Es_loc.sum().backward()
     assert_alltrue_named(
         (name, (param.grad.sum().abs().item() > 0 or name == 'mo.cusp_corr.shifts'))

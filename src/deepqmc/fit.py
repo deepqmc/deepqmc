@@ -170,7 +170,7 @@ def fit_wf(
         for rs, log_psi0s, sign_psi0s in DataLoader(
             TensorDataset(rs, log_psi0s, sign_psi0s), batch_size=subbatch_size
         ):
-            Es_loc, (log_psis, sign_psis), forces = local_energy(
+            Es_loc, log_psis, sign_psis, forces = local_energy(
                 rs,
                 wf,
                 create_graph=require_energy_gradient,
@@ -254,7 +254,7 @@ def memory_test_func(wf, loss_func, require_psi_gradient, size):
     # extra memory to the probe calculation
     assert next(wf.parameters()).is_cuda
     rs = torch.randn((size, wf.n_down + wf.n_up, 3), device='cuda', requires_grad=True)
-    E_loc, (log_psi, _) = local_energy(rs, wf, wf.mol, keep_graph=require_psi_gradient)
+    E_loc, log_psi, _ = local_energy(rs, wf, keep_graph=require_psi_gradient)
     loss = loss_func(
         E_loc.detach() if require_psi_gradient else E_loc,
         log_psi,
