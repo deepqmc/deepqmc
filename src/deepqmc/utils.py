@@ -67,6 +67,9 @@ class _NullDebug(DebugContainer):
     def __setitem__(self, key, val):
         pass
 
+    def result(self, val):
+        return val
+
 
 NULL_DEBUG = _NullDebug()
 
