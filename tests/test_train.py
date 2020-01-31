@@ -7,7 +7,6 @@ def test_simple_example():
     net = PauliNet.from_hf(mol, cas=(4, 2))
     train(
         net,
-        cuda=False,
         n_steps=2,
         batch_size=5,
         epoch_size=2,

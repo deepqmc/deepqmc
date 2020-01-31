@@ -85,7 +85,7 @@ def log_clipped_outliers(x, q):
     return median + x
 
 
-def fit_wf(
+def fit_wf(  # noqa: C901
     wf,
     loss_func,
     opt,
@@ -150,9 +150,9 @@ def fit_wf(
             'Automatic subbatch_size estimation only implemented for GPU. '
             'When training on CPU, do not use max_memory.'
         )
-    elif next(wf.parameters()).is_cuda and not subbatch_size:
+    elif is_cuda(wf) and not subbatch_size:
         subbatch_size = estimate_optimal_batch_size_cuda(
-            partial(memory_test_func, wf, loss_func, require_psi_gradient),
+            partial(fit_wf_mem_test_func, wf, loss_func, require_psi_gradient),
             torch.linspace(200, 500, 4) / (wf.n_up + wf.n_down),
             max_memory=max_memory,
         )
@@ -168,7 +168,7 @@ def fit_wf(
         )
         subbatch_size = subbatch_size or len(rs)
         subbatches = []
-        for rs, log_psi0s, sign_psi0s in DataLoader(
+        for rs, log_psi0s, _ in DataLoader(
             TensorDataset(rs, log_psi0s, sign_psi0s), batch_size=subbatch_size
         ):
             Es_loc, log_psis, sign_psis, forces = local_energy(
@@ -253,10 +253,10 @@ def fit_wf(
         yield step
 
 
-def memory_test_func(wf, loss_func, require_psi_gradient, size):
+def fit_wf_mem_test_func(wf, loss_func, require_psi_gradient, size):
     # require_energy_gradient isn't needed here because it adds only little
     # extra memory to the probe calculation
-    assert next(wf.parameters()).is_cuda
+    assert is_cuda(wf)
     rs = torch.randn((size, wf.n_down + wf.n_up, 3), device='cuda', requires_grad=True)
     E_loc, log_psi, _ = local_energy(rs, wf, keep_graph=require_psi_gradient)
     loss = loss_func(
