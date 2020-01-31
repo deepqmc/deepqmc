@@ -34,7 +34,7 @@ Create a wave function ansatz
 All wave function ansatzes are available in the :mod:`deepqmc.wf` package. At the moment, the only available ansatz is :class:`~deepqmc.wf.PauliNet`. The PauliNet class has three different constructors, differing in how low-level they are. The high-level :meth:`PauliNet.from_hf` constructor has default parameters for everything except for the molecule, and it runs the underlying multireference Hartree--Fock calculation which provides the orbitals on which the ansatz is built::
 
     >>> from deepqmc.wf import PauliNet
-    >>> net = PauliNet.from_hf(mol)
+    >>> net = PauliNet.from_hf(mol).cuda()
     converged SCF energy = -7.9846409186467
     CASSCF energy = -8.00439006914284
     CASCI E = -8.00439006914284  E(CI) = -1.10200121173341  S^2 = 0.0000000

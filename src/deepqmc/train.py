@@ -24,7 +24,6 @@ def train(
     decay_rate=200,
     sampler_kwargs=None,
     fit_kwargs=None,
-    cuda=True,
     cwd=None,
     save_every=None,
     state=None,
@@ -52,14 +51,11 @@ def train(
         sampler_kwargs (dict): arguments passed to
             :class:`~deepqmc.sampling.LangevinSampler`
         fit_kwargs (dict): arguments passed to :func:`~deepqmc.fit.fit_wf`
-        cuda (bool): whether to train on a GPU
         cwd (str): path where to store Tensorboard event file and intermediate
             parameter states
         save_every (int): number of steps between storing current parameter state
         state (dict): restore optimizer and scheduler states from a stored state
     """
-    if cuda:
-        wf.cuda()
     opt = getattr(torch.optim, optimizer)(wf.parameters(), lr=learning_rate)
     if lr_scheduler == 'inverse':
         scheduler = torch.optim.lr_scheduler.LambdaLR(
