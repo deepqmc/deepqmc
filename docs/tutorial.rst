@@ -59,3 +59,15 @@ The terminal output shows only how far has the training progressed. All monitori
     TensorBoard 2.1.0 at http://localhost:6007/ (Press CTRL+C to quit)
 
 This launches a Tensorboard server which can be accessed in a web browser.
+
+Get the energy
+--------------
+
+The rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the training run. A rigorous estimation with a statistical sampling error can be obtained with the high-level :func:`~deepqmc.evaluate` function::
+
+    >>> from deepqmc import evaluate
+    >>> evaluate(net)
+    evaluating: 100%|█████████| 500/500 [10:28<00:00,  1.26s/it, E=-8.07000(19)]
+    {'energy': -8.07000108151436+/-0.000193955696684799}
+
+As in the case of the training, the evaluation can be also monitored with Tensorboard.
