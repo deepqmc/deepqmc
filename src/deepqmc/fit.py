@@ -189,9 +189,9 @@ def fit_wf(
             total_ws = ws * force_ws
             if skip_outliers:
                 outliers = outlier_mask(Es_loc, p, q)[0]
-                Es_loc_loss, psis, total_ws = (
+                Es_loc_loss, log_psis, total_ws = (
                     Es_loc[~outliers],
-                    psis[~outliers],
+                    log_psis[~outliers],
                     total_ws[~outliers],
                 )
             elif clip_outliers:
@@ -254,10 +254,10 @@ def memory_test_func(wf, loss_func, require_psi_gradient, size):
     # extra memory to the probe calculation
     assert next(wf.parameters()).is_cuda
     rs = torch.randn((size, wf.n_down + wf.n_up, 3), device='cuda', requires_grad=True)
-    E_loc, psi = local_energy(rs, wf, wf.mol, keep_graph=require_psi_gradient)
+    E_loc, (log_psi, _) = local_energy(rs, wf, wf.mol, keep_graph=require_psi_gradient)
     loss = loss_func(
         E_loc.detach() if require_psi_gradient else E_loc,
-        psi,
+        log_psi,
         torch.ones(len(rs)).cuda(),
     )
     loss.backward()

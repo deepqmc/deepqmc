@@ -81,7 +81,8 @@ class MetropolisSampler:
         with torch.no_grad:
             log_psis, sign_psis = self.wf(rs)
         Ps_acc = torch.exp(2 * (log_psis - self.log_psis))
-        # Ps_acc might become 0 or inf, however this does not affect the stability of the remaining code
+        # Ps_acc might become 0 or inf, however this does not affect
+        # the stability of the remaining code
         return Ps_acc, log_psis, sign_psis
 
     def extra_vars(self):
@@ -245,7 +246,8 @@ class LangevinSampler(MetropolisSampler):
             * ((self.rs - rs) + self.tau / 2 * (self.forces - forces))
         ).sum(dim=(-1, -2))
         Ps_acc = torch.exp(log_G_ratios + 2 * (log_psis - self.log_psis))
-        # Ps_acc might become 0 or inf, however this does not affect the stability of the remaining code
+        # Ps_acc might become 0 or inf, however this does not affect
+        # the stability of the remaining code
         return Ps_acc, log_psis, sign_psis, forces
 
     def qforce(self, rs):
