@@ -15,5 +15,9 @@ class NanLoss(DeepQMCError):
     pass
 
 
+class NanGradients(DeepQMCError):
+    pass
+
+
 class LUFactError(InfoException, DeepQMCError):
     pass
