@@ -1,16 +1,109 @@
+import logging
 import math
 from itertools import count
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
+from uncertainties import ufloat, unumpy as unp
 
 from . import torchext
-from .physics import clean_force, quantum_force
+from .physics import clean_force, local_energy, pairwise_self_distance, quantum_force
 from .torchext import assign_where, is_cuda
 
-__version__ = '0.2.0'
-__all__ = ['MetropolisSampler', 'LangevinSampler']
+__version__ = '0.3.0'
+__all__ = ['sample_wf', 'MetropolisSampler', 'LangevinSampler']
+
+log = logging.getLogger(__name__)
+
+
+def sample_wf(  # noqa: C901
+    wf, sampler, steps, *, block_size=10, writer=None, blocks=None, detect_eq=True,
+):
+    r"""Sample a wave function and accumulate expectation values.
+
+    This is a low-level interface, see :func:`~deepqmc.evaluate` for a high-level
+    interface. This iterator iteratively draws samples from the sampler, detects
+    when equilibrium is reached, and starts calculating and accumulating
+    local energies to get an estimate of the energy. Diagnostics is written into
+    the Tensorboard writer, and every full block, the step index and the current
+    estimate of the energy is yielded.
+
+    Args:
+        wf (:class:`~deepqmc.wf.WaveFunction`): wave function model to be sampled
+        steps (iterator): yields step indexes
+        block_size (int): size of a block (a sequence of samples)
+        writer (:class:`torch.utils.tensorboard.writer.SummaryWriter`):
+            Tensorboard writer
+        blocks (list): used as storage of blocks. If not given, the iterator
+            uses a local storage.
+        detect_eq (bool): If false, local energies are calculated and accumulated
+            from the first sampling step, otherwise equilibrium is first detected.
+    """
+    blocks = blocks if blocks is not None else []
+    calculating_energy = not detect_eq
+    buffer = []
+    for step, (rs, log_psis, _, info) in zip(steps, sampler):
+        if step == 0:
+            dist_means = rs.new_zeros(5 * block_size)
+        dist_means[:-1] = dist_means[1:].clone()
+        dist_means[-1] = pairwise_self_distance(rs).mean()
+        if not calculating_energy and dist_means[0] > 0:
+            if dist_means[:block_size].std() < dist_means[-block_size:].std():
+                calculating_energy = True
+        if calculating_energy:
+            Es_loc = local_energy(rs, wf, keep_graph=False)[0]
+            buffer.append(Es_loc)
+            if len(buffer) == block_size:
+                buffer = torch.stack(buffer)
+                block = unp.uarray(
+                    buffer.mean(dim=0).cpu(),
+                    buffer.std(dim=0).cpu() / np.sqrt(len(buffer)),
+                )
+                blocks.append(block)
+                buffer = []
+            if not buffer:
+                blocks_arr = unp.nominal_values(np.stack(blocks, -1))
+                err = blocks_arr.mean(-1).std() / np.sqrt(len(blocks_arr))
+                energy = ufloat(blocks_arr.mean(), err)
+                yield step, energy
+        if writer:
+            writer.add_scalar('age/mean', info['age'].mean(), step)
+            writer.add_scalar('age/max', info['age'].max(), step)
+            writer.add_scalar('psi/mean', log_psis.exp().mean(), step)
+            writer.add_scalar('r/norm/mean', rs.norm(dim=-1).mean(), step)
+            writer.add_scalar('r/dist/mean', dist_means[-1], step)
+            if calculating_energy:
+                writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
+                writer.add_scalar('E_loc/var', Es_loc.var(), step)
+                writer.add_scalar('E_loc/min', Es_loc.min(), step)
+                writer.add_scalar('E_loc/max', Es_loc.max(), step)
+                if not buffer:
+                    writer.add_scalar('E/value', energy.nominal_value, step)
+                    writer.add_scalar('E/error', energy.std_dev, step)
+            try:
+                from matplotlib.figure import Figure
+            except ImportError:
+                log.warning('Matplotlib not installed, will not generate figures')
+            else:
+                fig = Figure(dpi=300)
+                ax = fig.subplots()
+                ax.hist(log_psis.cpu(), bins=100)
+                writer.add_figure('log_psi', fig, step)
+                fig = Figure(dpi=300)
+                ax = fig.subplots()
+                ax.hist(info['age'], bins=100)
+                writer.add_figure('age', fig, step)
+                if calculating_energy:
+                    fig = Figure(dpi=300)
+                    ax = fig.subplots()
+                    ax.hist(Es_loc.cpu(), bins=100)
+                    writer.add_figure('E_loc', fig, step)
+                    if not buffer:
+                        fig = Figure(dpi=300)
+                        ax = fig.subplots()
+                        ax.hist(blocks_arr.flatten(), bins=100)
+                        writer.add_figure('E_block', fig, step)
 
 
 def samples_from(sampler, steps):
