@@ -158,6 +158,7 @@ def fit_wf(
         )
         log.info(f'estimated optimal subbatch size: {subbatch_size}')
     for step, (rs, log_psi0s, sign_psi0s) in zip(steps, sampler):
+        opt.zero_grad()
         d = debug[step]
         d['log_psi0s'], d['sign_psi0s'], d['rs'], d['state_dict'] = (
             log_psi0s,
@@ -249,7 +250,6 @@ def fit_wf(
             writer.add_scalar('misc/learning_rate', lr, step)
             writer.add_scalar('misc/batch_size', len(Es_loc), step)
         opt.step()
-        opt.zero_grad()
         yield step
 
 
