@@ -125,7 +125,8 @@ def local_energy(
     )
     result = (
         Es_loc,
-        (log_psis if keep_graph else log_psis.detach(), sign_psis),
+        log_psis if keep_graph else log_psis.detach(),
+        sign_psis,
     )
     if return_grad:
         result += (quantum_force,)
