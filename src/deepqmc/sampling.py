@@ -152,18 +152,14 @@ class MetropolisSampler:
         return self.rs.clone(), self.log_psis.clone(), self.sign_psis.clone(), info
 
     def iter_with_info(self):
-        samples = (self.step() for _ in count())
-        return (
-            sample
-            for i, sample in zip(count(-self.n_discard), samples)
-            if i >= 0 and i % (self.n_decorrelate + 1) == 0
-        )
+        for i in count(-self.n_discard):
+            sample = self.step()
+            if i >= 0 and i % (self.n_decorrelate + 1) == 0:
+                yield sample
 
     def __iter__(self):
-        return (
-            (rs, log_psis, sign_psis)
-            for rs, log_psis, sign_psis, info in self.iter_with_info()
-        )
+        for *sample, _ in self.iter_with_info():
+            yield sample
 
     def iter_batches(self, *, epoch_size, batch_size, range=range):
         """Iterate over buffered batches sampled in epochs.
