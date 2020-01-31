@@ -19,12 +19,13 @@ pip install -U deepqmc[wf,train]
 ## A simple example
 
 ```python
-from deepqmc import Molecule, train
+from deepqmc import Molecule, evaluate, train
 from deepqmc.wf import PauliNet
 
 mol = Molecule.from_name('LiH')
 net = PauliNet.from_hf(mol).cuda()
 train(net)
+evaluate(net)
 ```
 
 ## Links
