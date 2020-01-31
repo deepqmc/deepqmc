@@ -6,7 +6,7 @@ from torch import nn
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 
-from .errors import DeepQMCError, NanLoss
+from .errors import DeepQMCError, NanGradients, NanLoss
 from .physics import clean_force, local_energy
 from .torchext import is_cuda, normalize_mean, state_dict_copy, weighted_mean_var
 from .utils import NULL_DEBUG, estimate_optimal_batch_size_cuda
@@ -215,9 +215,13 @@ def fit_wf(
         loss, Es_loc, Es_loc_loss, log_psis, sign_psis, ws, forces_ws, total_ws = (
             torch.cat(xs) for xs in zip(*subbatches)
         )
-        loss = d['loss'] = loss.sum()
         if torch.isnan(loss).any():
             raise NanLoss()
+        if any(
+            torch.isnan(p.grad).any() for p in wf.parameters() if p.grad is not None
+        ):
+            raise NanGradients()
+        loss = d['loss'] = loss.sum()
         d['Es_loc'], d['log_psis'], d['sign_psis'] = Es_loc, log_psis, sign_psis
         if clip_grad:
             clip_grad_norm_(wf.parameters(), clip_grad)
