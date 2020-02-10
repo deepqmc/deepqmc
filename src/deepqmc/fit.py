@@ -97,13 +97,10 @@ def fit_wf(  # noqa: C901
     clip_grad=None,
     writer=None,
     debug=NULL_DEBUG,
-    skip_outliers=False,
     clip_outliers=True,
-    p=0.01,
     q=5,
     subbatch_size=None,
     max_memory=None,
-    clean_tau=None,
 ):
     r"""Fit a wave function using the variational principle and gradient descent.
 
@@ -130,9 +127,7 @@ def fit_wf(  # noqa: C901
             :func:`torch.nn.utils.clip_grad_norm_`
         writer (:class:`torch.utils.tensorboard.writer.SummaryWriter`):
             Tensorboard writer
-        skip_outliers (bool): whether to skip local energy outliers
         clip_outliers (bool): whether to clip local energy outliers
-        p (float): percentile defining outliers
         q (float): multiple of MAE defining outliers
         subbatch_size (int): number of samples for a single vectorized loss evaluation.
             If None and on a GPU, subbatch_size is estimated, else if None and on a CPU,
@@ -141,10 +136,7 @@ def fit_wf(  # noqa: C901
             considered if automatically estimating the subbatch_size. If :data:`None`
             and subbatch_size is estimated, the maximum memory is set to the total
             free GPU memory. When training on CPU always set to :data:`None`.
-        clean_tau (float): if not :data:`None`, :math:`\tau` used for force
-            cleaning
     """
-    assert not (skip_outliers and clip_outliers)
     if not is_cuda(wf) and max_memory:
         raise DeepQMCError(
             'Automatic subbatch_size estimation only implemented for GPU. '
@@ -171,35 +163,15 @@ def fit_wf(  # noqa: C901
         for rs, log_psi0s, _ in DataLoader(
             TensorDataset(rs, log_psi0s, sign_psi0s), batch_size=subbatch_size
         ):
-            Es_loc, log_psis, sign_psis, forces = local_energy(
+            Es_loc, log_psis, sign_psis = local_energy(
                 rs,
                 wf,
                 create_graph=require_energy_gradient,
                 keep_graph=require_psi_gradient,
-                return_grad=True,
             )
             ws = torch.exp(2 * (log_psis.detach() - log_psi0s))
-            if clean_tau is not None:
-                forces_clean = clean_force(forces, rs, wf.mol, tau=clean_tau)
-                forces, forces_clean = (
-                    x.flatten(start_dim=-2).norm(dim=-1) for x in (forces, forces_clean)
-                )
-                force_ws = forces_clean / forces
-            else:
-                force_ws = torch.ones_like(ws)
-            total_ws = ws * force_ws
-            if skip_outliers:
-                outliers = outlier_mask(Es_loc, p, q)[0]
-                Es_loc_loss, log_psis, total_ws = (
-                    Es_loc[~outliers],
-                    log_psis[~outliers],
-                    total_ws[~outliers],
-                )
-            elif clip_outliers:
-                Es_loc_loss = log_clipped_outliers(Es_loc, q)
-            else:
-                Es_loc_loss = Es_loc
-            loss = loss_func(Es_loc_loss, log_psis, normalize_mean(total_ws))
+            Es_loc_loss = log_clipped_outliers(Es_loc, q) if clip_outliers else Es_loc
+            loss = loss_func(Es_loc_loss, log_psis, normalize_mean(ws))
             loss.backward()
             subbatches.append(
                 (
@@ -209,11 +181,9 @@ def fit_wf(  # noqa: C901
                     log_psis.detach(),
                     sign_psis.detach(),
                     ws,
-                    force_ws,
-                    total_ws,
                 )
             )
-        loss, Es_loc, Es_loc_loss, log_psis, sign_psis, ws, forces_ws, total_ws = (
+        loss, Es_loc, Es_loc_loss, log_psis, sign_psis, ws = (
             torch.cat(xs) for xs in zip(*subbatches)
         )
         if torch.isnan(loss).any():
@@ -230,7 +200,7 @@ def fit_wf(  # noqa: C901
             E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, ws)
             writer.add_scalar('E_loc/mean', E_loc_mean, step)
             writer.add_scalar('E_loc/var', E_loc_var, step)
-            E_loc_loss_mean, E_loc_loss_var = weighted_mean_var(Es_loc_loss, total_ws)
+            E_loc_loss_mean, E_loc_loss_var = weighted_mean_var(Es_loc_loss, ws)
             writer.add_scalar('E_loc_loss/mean', E_loc_loss_mean, step)
             writer.add_scalar('E_loc_loss/var', E_loc_loss_var, step)
             writer.add_scalar('psi/sq_mean', (torch.exp(2 * log_psis)).mean(), step)
@@ -238,8 +208,6 @@ def fit_wf(  # noqa: C901
             writer.add_scalar('weights/mean', ws.mean(), step)
             writer.add_scalar('weights/median', ws.median(), step)
             writer.add_scalar('weights/var', ws.var(), step)
-            writer.add_scalar('force_weights/min', force_ws.min(), step)
-            writer.add_scalar('force_weights/max', force_ws.max(), step)
             grads = torch.cat(
                 [p.grad.flatten() for p in wf.parameters() if p.grad is not None]
             )
