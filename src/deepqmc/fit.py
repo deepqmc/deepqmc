@@ -169,9 +169,9 @@ def fit_wf(  # noqa: C901
                 create_graph=require_energy_gradient,
                 keep_graph=require_psi_gradient,
             )
-            ws = torch.exp(2 * (log_psis.detach() - log_psi0s))
+            log_ws = 2 * log_psis.detach() - 2 * log_psi0s
             Es_loc_loss = log_clipped_outliers(Es_loc, q) if clip_outliers else Es_loc
-            loss = loss_func(Es_loc_loss, log_psis, normalize_mean(ws))
+            loss = loss_func(Es_loc_loss, log_psis, normalize_mean(log_ws.exp()))
             loss.backward()
             subbatches.append(
                 (
@@ -180,10 +180,10 @@ def fit_wf(  # noqa: C901
                     Es_loc_loss.detach(),
                     log_psis.detach(),
                     sign_psis.detach(),
-                    ws,
+                    log_ws,
                 )
             )
-        loss, Es_loc, Es_loc_loss, log_psis, sign_psis, ws = (
+        loss, Es_loc, Es_loc_loss, log_psis, sign_psis, log_ws = (
             torch.cat(xs) for xs in zip(*subbatches)
         )
         if torch.isnan(loss).any():
@@ -197,17 +197,17 @@ def fit_wf(  # noqa: C901
         if clip_grad:
             clip_grad_norm_(wf.parameters(), clip_grad)
         if writer:
-            E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, ws)
+            E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, log_ws.exp())
             writer.add_scalar('E_loc/mean', E_loc_mean, step)
             writer.add_scalar('E_loc/var', E_loc_var, step)
-            E_loc_loss_mean, E_loc_loss_var = weighted_mean_var(Es_loc_loss, ws)
+            E_loc_loss_mean, E_loc_loss_var = weighted_mean_var(
+                Es_loc_loss, log_ws.exp()
+            )
             writer.add_scalar('E_loc_loss/mean', E_loc_loss_mean, step)
             writer.add_scalar('E_loc_loss/var', E_loc_loss_var, step)
             writer.add_scalar('psi/sq_mean', (torch.exp(2 * log_psis)).mean(), step)
             writer.add_scalar('loss', loss, step)
-            writer.add_scalar('weights/mean', ws.mean(), step)
-            writer.add_scalar('weights/median', ws.median(), step)
-            writer.add_scalar('weights/var', ws.var(), step)
+            writer.add_scalar('log_weights/std', log_ws.std(), step)
             grads = torch.cat(
                 [p.grad.flatten() for p in wf.parameters() if p.grad is not None]
             )
