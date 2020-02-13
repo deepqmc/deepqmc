@@ -26,8 +26,8 @@ def sample_wf(  # noqa: C901
     interface. This iterator iteratively draws samples from the sampler, detects
     when equilibrium is reached, and starts calculating and accumulating
     local energies to get an estimate of the energy. Diagnostics is written into
-    the Tensorboard writer, and every full block, the step index and the current
-    estimate of the energy is yielded.
+    the Tensorboard writer, and every full block, the step index, the current
+    estimate of the energy, and the sampled electron coordinates are yielded.
 
     Args:
         wf (:class:`~deepqmc.wf.WaveFunction`): wave function model to be sampled
@@ -43,6 +43,7 @@ def sample_wf(  # noqa: C901
     blocks = blocks if blocks is not None else []
     calculating_energy = not detect_eq
     buffer = []
+    buffer_rs = []
     for step, (rs, log_psis, _, info) in zip(steps, sampler):
         if step == 0:
             dist_means = rs.new_zeros(5 * block_size)
@@ -54,6 +55,7 @@ def sample_wf(  # noqa: C901
         if calculating_energy:
             Es_loc = local_energy(rs, wf, keep_graph=False)[0]
             buffer.append(Es_loc)
+            buffer_rs.append(rs)
             if len(buffer) == block_size:
                 buffer = torch.stack(buffer)
                 block = unp.uarray(
@@ -66,7 +68,8 @@ def sample_wf(  # noqa: C901
                 blocks_arr = unp.nominal_values(np.stack(blocks, -1))
                 err = blocks_arr.mean(-1).std() / np.sqrt(len(blocks_arr))
                 energy = ufloat(blocks_arr.mean(), err)
-                yield step, energy
+                yield step, energy, torch.stack(buffer_rs)
+                buffer_rs = []
         if writer:
             writer.add_scalar('age/mean', info['age'].mean(), step)
             writer.add_scalar('age/max', info['age'].max(), step)

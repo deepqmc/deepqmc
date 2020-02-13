@@ -20,6 +20,7 @@ def evaluate(
     sampler_kwargs=None,
     sample_kwargs=None,
     cwd=None,
+    store_coords=False,
 ):
     r"""Evaluate a wave function model.
 
@@ -38,6 +39,7 @@ def evaluate(
         sample_kwargs (dict): arguments passed to :func:`~deepqmc.sampling.sample_wf`
         cwd (str): path where to store Tensorboard event file and HDF5 file with
             sampling block energies
+        store_coords (bool): whether to store sampled electron coordinates
 
     Returns:
         dict: Expectation values with standard errors.
@@ -51,6 +53,12 @@ def evaluate(
                 block_file['energy'].create_dataset(
                     label, (0, sample_size), maxshape=(None, sample_size)
                 )
+            if store_coords:
+                block_file.create_dataset(
+                    'coord',
+                    (0, sample_size, wf.n_up + wf.n_down, 3),
+                    maxshape=(None, sample_size, wf.n_up + wf.n_down, 3),
+                )
         block_file.swmr_mode = True
     sampler = LangevinSampler.from_mf(
         wf,
@@ -63,7 +71,7 @@ def evaluate(
     blocks = []
     steps = trange(n_steps, desc='evaluating')
     try:
-        for _, energy in sample_wf(
+        for step, energy, rs in sample_wf(
             wf,
             sampler.iter_with_info(),
             steps,
@@ -80,7 +88,11 @@ def evaluate(
                     ds = block_file[key]
                     ds.resize(ds.shape[0] + 1, axis=0)
                     ds[-1, :] = val
-                    ds.flush()
+                if store_coords:
+                    ds = block_file['coord']
+                    ds.resize(ds.shape[0] + len(rs), axis=0)
+                    ds[-len(rs) :, ...] = rs.cpu()
+                block_file.flush()
     finally:
         writer.close()
         steps.close()
