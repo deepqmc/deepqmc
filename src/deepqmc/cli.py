@@ -10,6 +10,11 @@ from .wf import PauliNet
 __all__ = ()
 
 
+@click.group()
+def cli():
+    pass
+
+
 def wf_from_file(path, state=None):
     param = toml.loads(Path(path).read_text())
     system = param.pop('system')
@@ -22,7 +27,7 @@ def wf_from_file(path, state=None):
     return wf, param
 
 
-@click.command()
+@cli.command('train')
 @click.argument('path', type=click.Path(exists=True, dir_okay=False))
 @click.option('--state', type=click.Path(dir_okay=False))
 @click.option('--save-every', default=100, show_default=True)

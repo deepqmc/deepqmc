@@ -1,3 +1,7 @@
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
+
 [tool.poetry]
 name = "deepqmc"
 version = "0.1.0"
@@ -46,12 +50,8 @@ isort = "^4.3"
 pydocstyle = "^5.0.1"
 
 [tool.poetry.scripts]
-deepqmc-train = "deepqmc.train:train_from_file"
+deepqmc = "deepqmc.cli:cli"
 
 [tool.black]
 target-version = ["py37"]
 skip-string-normalization = true
-
-[build-system]
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"
