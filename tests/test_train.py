@@ -17,5 +17,5 @@ def test_simple_example():
         n_steps=1,
         sample_size=5,
         n_decorrelate=0,
-        sample_kwargs={'detect_eq': False, 'block_size': 1},
+        sample_kwargs={'equilibrate': False, 'block_size': 1},
     )

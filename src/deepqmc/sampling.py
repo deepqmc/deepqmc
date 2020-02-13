@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 
 def sample_wf(  # noqa: C901
-    wf, sampler, steps, *, block_size=10, writer=None, blocks=None, detect_eq=True,
+    wf, sampler, steps, *, block_size=10, writer=None, blocks=None, equilibrate=True,
 ):
     r"""Sample a wave function and accumulate expectation values.
 
@@ -37,11 +37,11 @@ def sample_wf(  # noqa: C901
             Tensorboard writer
         blocks (list): used as storage of blocks. If not given, the iterator
             uses a local storage.
-        detect_eq (bool): If false, local energies are calculated and accumulated
-            from the first sampling step, otherwise equilibrium is first detected.
+        equilibrate (bool): if false, local energies are calculated and accumulated
+            from the first sampling step, otherwise equilibrium is first detected
     """
     blocks = blocks if blocks is not None else []
-    calculating_energy = not detect_eq
+    calculating_energy = not equilibrate
     buffer = []
     buffer_rs = []
     for step, (rs, log_psis, _, info) in zip(steps, sampler):
@@ -52,6 +52,7 @@ def sample_wf(  # noqa: C901
         if not calculating_energy and dist_means[0] > 0:
             if dist_means[:block_size].std() < dist_means[-block_size:].std():
                 calculating_energy = True
+                yield step, None, None
         if calculating_energy:
             Es_loc = local_energy(rs, wf, keep_graph=False)[0]
             buffer.append(Es_loc)

@@ -1,8 +1,9 @@
+from itertools import count
 from pathlib import Path
 
 import h5py
 from torch.utils.tensorboard import SummaryWriter
-from tqdm.auto import trange
+from tqdm.auto import tqdm
 from uncertainties import unumpy as unp
 
 from .sampling import LangevinSampler, sample_wf
@@ -34,9 +35,10 @@ def evaluate(
         sample_size (int): number of Markov-chain walkers
         n_decorrelate (int): number of extra steps between samples included
             in the expectation value averaging
-        sampler_kwargs (dict): arguments passed to
+        sampler_kwargs (dict): extra arguments passed to
             :class:`~deepqmc.sampling.LangevinSampler`
-        sample_kwargs (dict): arguments passed to :func:`~deepqmc.sampling.sample_wf`
+        sample_kwargs (dict): extra arguments passed to
+            :func:`~deepqmc.sampling.sample_wf`
         cwd (str): path where to store Tensorboard event file and HDF5 file with
             sampling block energies
         store_coords (bool): whether to store sampled electron coordinates
@@ -69,7 +71,7 @@ def evaluate(
         **(sampler_kwargs or {}),
     )
     blocks = []
-    steps = trange(n_steps, desc='evaluating')
+    steps = tqdm(count(), desc='equilibrating')
     try:
         for step, energy, rs in sample_wf(
             wf,
@@ -79,6 +81,10 @@ def evaluate(
             blocks=blocks,
             **(sample_kwargs or {}),
         ):
+            if energy is None:
+                steps.total = step + n_steps
+                steps.set_description('evaluating')
+                continue
             steps.set_postfix(E=f'{energy:S}')
             if cwd:
                 for key, val in [
@@ -93,6 +99,8 @@ def evaluate(
                     ds.resize(ds.shape[0] + len(rs), axis=0)
                     ds[-len(rs) :, ...] = rs.cpu()
                 block_file.flush()
+            if step >= (steps.total or n_steps) - 1:
+                break
     finally:
         writer.close()
         steps.close()
