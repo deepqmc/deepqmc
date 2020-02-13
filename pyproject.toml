@@ -27,7 +27,6 @@ coverage = { version = "^4.5", optional = true }
 tensorboard = { version = "^2.0", optional = true }
 tqdm = { version = "^4.31", optional = true }
 h5py = { version = "^2.10.0", optional = true }
-click = { version = "^7.0", optional = true }
 sphinx = { version = "^2.2", optional = true }
 sphinxcontrib-katex = { version = "^0.5.1", optional = true }
 
@@ -35,9 +34,8 @@ sphinxcontrib-katex = { version = "^0.5.1", optional = true }
 wf = ["scipy", "pyscf"]
 test = ["pytest", "coverage"]
 train = ["tensorboard", "tqdm", "h5py"]
-cli = ["click"]
 doc = ["sphinx", "sphinxcontrib-katex"]
-all = ["scipy", "pyscf", "pytest", "coverage", "tensorboard", "tqdm", "h5py", "click"]
+all = ["scipy", "pyscf", "pytest", "coverage", "tensorboard", "tqdm", "h5py"]
 
 [tool.poetry.dev-dependencies]
 flake8 = "^3.5"
@@ -48,9 +46,6 @@ black = "^19-beta.0"
 pep8-naming = "^0.7.0"
 isort = "^4.3"
 pydocstyle = "^5.0.1"
-
-[tool.poetry.scripts]
-deepqmc = "deepqmc.cli:cli"
 
 [tool.black]
 target-version = ["py37"]
