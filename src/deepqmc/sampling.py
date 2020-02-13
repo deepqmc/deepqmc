@@ -111,12 +111,9 @@ def sample_wf(  # noqa: C901
 
 
 def samples_from(sampler, steps):
-    rs, log_psis, sign_psis, *extra = zip(*(xs for _, xs in zip(steps, sampler)))
-    return (
-        torch.stack(rs, dim=1),
-        torch.stack(log_psis, dim=1),
-        torch.stack(sign_psis, dim=1),
-        *extra,
+    xs = zip(*(xs for _, xs in zip(steps, sampler)))
+    return tuple(
+        torch.stack(x, dim=1) if isinstance(x[0], torch.Tensor) else x for x in xs
     )
 
 
@@ -290,10 +287,8 @@ class MetropolisSampler:
         """
         while True:
             n_steps = math.ceil(epoch_size * batch_size / len(self))
-            rs, log_psis, sign_psis = samples_from(self, range(n_steps))
-            samples_ds = TensorDataset(
-                *(x.flatten(end_dim=1) for x in (rs, log_psis, sign_psis))
-            )
+            xs = samples_from(self, range(n_steps))
+            samples_ds = TensorDataset(*(x.flatten(end_dim=1) for x in xs))
             rs_dl = DataLoader(
                 samples_ds, batch_size=batch_size, shuffle=True, drop_last=True
             )
