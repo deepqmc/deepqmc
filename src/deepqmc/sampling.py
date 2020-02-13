@@ -181,6 +181,9 @@ class MetropolisSampler:
     def extra_vars(self):
         return ()
 
+    def extra_writer(self):
+        return ()
+
     def __len__(self):
         return len(self.rs)
 
@@ -240,8 +243,23 @@ class MetropolisSampler:
         self._step += 1
         self._totalstep += 1
         if self.writer:
+            self.writer.add_scalar(
+                'sampling/log_psis/mean', self.log_psis.mean(), self._totalstep
+            )
+            self.writer.add_scalar(
+                'sampling/dists/mean',
+                pairwise_self_distance(self.rs).mean(),
+                self._totalstep,
+            )
             self.writer.add_scalar('sampling/acceptance', acceptance, self._totalstep)
             self.writer.add_scalar('sampling/tau', self.tau, self._totalstep)
+            self.writer.add_scalar(
+                'sampling/age/max', info['age'].max(), self._totalstep
+            )
+            self.writer.add_scalar(
+                'sampling/age/rms', np.sqrt((info['age'] ** 2).mean()), self._totalstep
+            )
+            self.extra_writer()
         return self.rs.clone(), self.log_psis.clone(), self.sign_psis.clone(), info
 
     def iter_with_info(self):
@@ -350,6 +368,11 @@ class LangevinSampler(MetropolisSampler):
 
     def extra_vars(self):
         return (self.forces,)
+
+    def extra_writer(self):
+        self.writer.add_scalar(
+            'sampling/forces', self.forces.norm(dim=-1).mean(), self._totalstep
+        )
 
     def recompute_psi(self):
         self.forces, (self.log_psis, self.sign_psis) = self.qforce(self.rs)

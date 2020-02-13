@@ -205,7 +205,6 @@ def fit_wf(  # noqa: C901
             )
             writer.add_scalar('E_loc_loss/mean', E_loc_loss_mean, step)
             writer.add_scalar('E_loc_loss/var', E_loc_loss_var, step)
-            writer.add_scalar('psi/sq_mean', (torch.exp(2 * log_psis)).mean(), step)
             writer.add_scalar('loss', loss, step)
             writer.add_scalar('log_weights/std', log_ws.std(), step)
             grads = torch.cat(
