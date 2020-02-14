@@ -25,9 +25,25 @@ __all__ = ['PauliNet']
 
 
 def eval_slater(xs):
-    if xs.shape[-1] == 0:
-        return xs.new_ones(len(xs))
-    return det(xs)
+    batch_dim = len(xs)
+    xs = xs.flatten(end_dim=1)
+    if xs.shape[-1] > 0:
+        xs = det(xs)
+    else:
+        xs = xs.new_ones(len(xs))
+    xs = xs.view(batch_dim, -1)
+    return xs
+
+
+def eval_log_slater(xs):
+    batch_dim = len(xs)
+    xs = xs.flatten(end_dim=1)
+    if xs.shape[-1] > 0:
+        signs, xs = xs.slogdet()
+    else:
+        signs, xs = xs.new_ones(len(xs)), xs.new_zeros(len(xs))
+    signs, xs = signs.view(batch_dim, -1), xs.view(batch_dim, -1)
+    return signs, xs
 
 
 class PauliNet(WaveFunction):
@@ -304,19 +320,15 @@ class PauliNet(WaveFunction):
         det_up = xs[:, : self.n_up, conf_up].permute(0, 2, 1, 3)
         det_down = xs[:, self.n_up :, conf_down].permute(0, 2, 1, 3)
         if self.return_log:
-            sign_up, det_up = det_up.slogdet()
-            sign_down, det_down = det_down.slogdet()
+            sign_up, det_up = eval_log_slater(det_up)
+            sign_down, det_down = eval_log_slater(det_down)
             xs = det_up + det_down
             xs_shift = xs.max(dim=-1).values
             # the exp-normalize trick, to avoid over/underflow of the exponential
             xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None])
         else:
-            det_up = debug['det_up'] = eval_slater(det_up.flatten(end_dim=1)).view(
-                batch_dim, -1
-            )
-            det_down = debug['det_down'] = eval_slater(
-                det_down.flatten(end_dim=1)
-            ).view(batch_dim, -1)
+            det_up = debug['det_up'] = eval_slater(det_up)
+            det_down = debug['det_down'] = eval_slater(det_down)
             xs = det_up * det_down
         psi = self.conf_coeff(xs).squeeze(dim=-1)
         if self.return_log:
