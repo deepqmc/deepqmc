@@ -74,9 +74,9 @@ class PauliNet(WaveFunction):
     is the many-body Jastrow factor and :math:`\gamma` enforces correct
     electronic cusp conditions.
 
-    The PauliNet ansatz is implemented in logspace to avoid numerical instabilities 
-    introduced by wave functions having meaningful values among various orders of 
-    magnitude. :class:`~deepqmc.wf.paulinet` returns a tuple of the form 
+    The PauliNet ansatz is implemented in logspace to avoid numerical instabilities
+    introduced by wave functions having meaningful values among various orders of
+    magnitude. :class:`~deepqmc.wf.paulinet` returns a tuple of the form
     :math:`\big(ln|\psi|,\text{sign}(\psi)\big)`.
 
     Args:

@@ -43,7 +43,7 @@ class DistanceBasis(nn.Module):
         elif self.envelope == 'nocusp':
             envelope = dists ** 2 * torch.exp(-dists)
         else:
-            assert False
+            raise AssertionError()
         return envelope[..., None] * torch.exp(
             -((dists[..., None] - self.mus) ** 2) / self.sigmas ** 2
         )
