@@ -72,11 +72,6 @@ def sample_wf(  # noqa: C901
                 yield step, energy, torch.stack(buffer_rs)
                 buffer_rs = []
         if writer:
-            writer.add_scalar('age/mean', info['age'].mean(), step)
-            writer.add_scalar('age/max', info['age'].max(), step)
-            writer.add_scalar('psi/mean', log_psis.exp().mean(), step)
-            writer.add_scalar('r/norm/mean', rs.norm(dim=-1).mean(), step)
-            writer.add_scalar('r/dist/mean', dist_means[-1], step)
             if calculating_energy:
                 writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
                 writer.add_scalar('E_loc/var', Es_loc.var(), step)
