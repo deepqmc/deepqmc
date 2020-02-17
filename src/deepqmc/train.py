@@ -70,6 +70,9 @@ def train(
             scheduler.load_state_dict(state['scheduler'])
     else:
         init_step = 0
+    if cwd:
+        chkpts_dir = Path(cwd) / 'chkpts'
+        chkpts_dir.mkdir()
     with SummaryWriter(log_dir=cwd, flush_secs=15, purge_step=init_step - 1) as writer:
         writer.add_text(
             'hyperparameters',
@@ -101,4 +104,4 @@ def train(
                 }
                 if scheduler:
                     state['scheduler'] = scheduler.state_dict()
-                torch.save(state, Path(cwd) / f'state-{step:05d}.pt')
+                torch.save(state, chkpts_dir / f'state-{step:05d}.pt')
