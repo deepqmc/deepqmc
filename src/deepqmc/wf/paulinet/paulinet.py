@@ -114,19 +114,20 @@ class PauliNet(WaveFunction):
         self,
         mol,
         basis,
-        cusp_correction=False,
-        cusp_electrons=False,
-        dist_feat_dim=32,
-        dist_feat_cutoff=10.0,
         jastrow_factory=None,
         backflow_factory=None,
         r_backflow_factory=None,
         omni_factory=None,
         configurations=None,
         mo_factory=None,
+        return_log=True,
+        *,
+        cusp_correction=False,
+        cusp_electrons=False,
+        dist_feat_dim=32,
+        dist_feat_cutoff=10.0,
         rc_scaling=1.0,
         cusp_alpha=10.0,
-        return_log=True,
     ):
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
@@ -185,6 +186,7 @@ class PauliNet(WaveFunction):
     def from_pyscf(
         cls,
         mf,
+        *,
         init_weights=True,
         freeze_mos=True,
         freeze_confs=False,
@@ -248,7 +250,7 @@ class PauliNet(WaveFunction):
 
     @classmethod
     def from_hf(
-        cls, mol, basis='6-311g', cas=(6, 2), pauli_kwargs=None, omni_kwargs=None
+        cls, mol, *, basis='6-311g', cas=(6, 2), pauli_kwargs=None, omni_kwargs=None
     ):
         r"""Construct a :class:`PauliNet` instance by running a HF calculation.
 

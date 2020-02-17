@@ -14,14 +14,14 @@ __all__ = ['evaluate']
 
 def evaluate(
     wf,
+    store_coords=False,
+    cwd=None,
     *,
     n_steps=500,
     sample_size=1_000,
     n_decorrelate=4,
-    sampler_kwargs=None,
     sample_kwargs=None,
-    cwd=None,
-    store_coords=False,
+    sampler_kwargs=None,
 ):
     r"""Evaluate a wave function model.
 

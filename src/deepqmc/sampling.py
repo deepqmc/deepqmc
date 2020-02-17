@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 
 def sample_wf(  # noqa: C901
-    wf, sampler, steps, *, block_size=10, writer=None, blocks=None, equilibrate=True,
+    wf, sampler, steps, writer=None, blocks=None, *, block_size=10, equilibrate=True,
 ):
     r"""Sample a wave function and accumulate expectation values.
 
@@ -140,15 +140,15 @@ class MetropolisSampler:
         self,
         wf,
         rs,
+        writer=None,
         *,
         tau=0.1,
-        max_age=None,
         n_first_certain=3,
-        log_psi_threshold=None,
         target_acceptance=0.57,
         n_discard=50,
         n_decorrelate=1,
-        writer=None,
+        max_age=None,
+        log_psi_threshold=None,
     ):
         self.wf = wf
         self.rs = rs.clone()
@@ -190,7 +190,7 @@ class MetropolisSampler:
         )
 
     @classmethod
-    def from_mf(cls, wf, *, sample_size=2_000, mf=None, **kwargs):
+    def from_mf(cls, wf, mf=None, *, sample_size=2_000, **kwargs):
         """Initialize a sampler from a HF calculation.
 
         The initial walker positions are sampled from Gaussians centered

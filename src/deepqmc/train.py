@@ -14,6 +14,9 @@ __all__ = ['train']
 
 def train(
     wf,
+    cwd=None,
+    save_every=None,
+    state=None,
     *,
     n_steps=10_000,
     batch_size=10_000,
@@ -22,11 +25,8 @@ def train(
     learning_rate=0.01,
     lr_scheduler='inverse',
     decay_rate=200,
-    sampler_kwargs=None,
     fit_kwargs=None,
-    cwd=None,
-    save_every=None,
-    state=None,
+    sampler_kwargs=None,
 ):
     r"""Train a wave function model.
 

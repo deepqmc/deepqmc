@@ -91,16 +91,16 @@ def fit_wf(  # noqa: C901
     opt,
     sampler,
     steps,
-    *,
-    require_energy_gradient=False,
-    require_psi_gradient=True,
-    clip_grad=None,
     writer=None,
     debug=NULL_DEBUG,
-    clip_outliers=True,
-    q=5,
+    require_energy_gradient=False,
+    require_psi_gradient=True,
     subbatch_size=None,
     max_memory=None,
+    *,
+    clip_outliers=True,
+    q=5,
+    max_grad_norm=None,
 ):
     r"""Fit a wave function using the variational principle and gradient descent.
 
@@ -123,7 +123,7 @@ def fit_wf(  # noqa: C901
             gradients of the local energy
         require_psi_gradient (bool): whether the loss function requires
             gradients of the wave function
-        clip_grad (bool): whether to clip gradients using
+        max_grad_norm (float): maximum gradient norm passed to
             :func:`torch.nn.utils.clip_grad_norm_`
         writer (:class:`torch.utils.tensorboard.writer.SummaryWriter`):
             Tensorboard writer
@@ -194,8 +194,8 @@ def fit_wf(  # noqa: C901
             raise NanGradients()
         loss = d['loss'] = loss.sum()
         d['Es_loc'], d['log_psis'], d['sign_psis'] = Es_loc, log_psis, sign_psis
-        if clip_grad:
-            clip_grad_norm_(wf.parameters(), clip_grad)
+        if max_grad_norm is not None:
+            clip_grad_norm_(wf.parameters(), max_grad_norm)
         if writer:
             E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, log_ws.exp())
             writer.add_scalar('E_loc/mean', E_loc_mean, step)

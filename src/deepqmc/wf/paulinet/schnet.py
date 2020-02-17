@@ -160,13 +160,13 @@ class ElectronicSchNet(nn.Module):
         n_up,
         n_down,
         n_nuclei,
-        *,
         embedding_dim,
         dist_feat_dim,
-        n_interactions=3,
-        kernel_dim=64,
         subnet_metafactory=None,
         return_interactions=False,
+        *,
+        n_interactions=3,
+        kernel_dim=64,
         version=2,
     ):
         assert version in {1, 2}
