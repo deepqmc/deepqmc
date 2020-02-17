@@ -1,12 +1,13 @@
 from functools import partial
+from itertools import count
 from pathlib import Path
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
-from tqdm.auto import trange
+from tqdm.auto import tqdm, trange
 
 from .fit import LossEnergy, fit_wf
-from .sampling import LangevinSampler
+from .sampling import LangevinSampler, sample_wf
 
 __version__ = '0.1.0'
 __all__ = ['train']
@@ -79,6 +80,8 @@ def train(
             ''.join(f'**{key}** = {val}  \n' for key, val in locals().items()),
         )
         sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
+        with tqdm(count(), desc='equilibrating', leave=False) as steps:
+            next(sample_wf(wf, sampler.iter_with_info(), steps))
         for step in fit_wf(
             wf,
             LossEnergy(),
