@@ -56,6 +56,8 @@ def sample_wf(  # noqa: C901
     for step, (rs, log_psis, _, info) in zip(steps, sampler):
         if step == 0:
             dist_means = rs.new_zeros(5 * block_size)
+            if not equilibrate:
+                yield 0, None, None
         dist_means[:-1] = dist_means[1:].clone()
         dist_means[-1] = pairwise_self_distance(rs).mean()
         if not calculating_energy and dist_means[0] > 0:
