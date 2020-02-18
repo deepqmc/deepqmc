@@ -46,9 +46,9 @@ def evaluate(
     Returns:
         dict: Expectation values with standard errors.
     """
-    writer = SummaryWriter(log_dir=workdir, flush_secs=15)
     if workdir:
         workdir = Path(workdir)
+        writer = SummaryWriter(log_dir=workdir, flush_secs=15)
         block_file = h5py.File(workdir / 'blocks.h5', 'a', libver='v110')
         if 'energy' not in block_file:
             block_file.create_group('energy')
@@ -62,7 +62,8 @@ def evaluate(
                     (0, sample_size, wf.n_up + wf.n_down, 3),
                     maxshape=(None, sample_size, wf.n_up + wf.n_down, 3),
                 )
-        block_file.swmr_mode = True
+    else:
+        writer = None
     sampler = LangevinSampler.from_mf(
         wf,
         sample_size=sample_size,
@@ -103,8 +104,8 @@ def evaluate(
             if step >= (steps.total or n_steps) - 1:
                 break
     finally:
-        writer.close()
         steps.close()
         if workdir:
+            writer.close()
             block_file.close()
     return {'energy': energy}

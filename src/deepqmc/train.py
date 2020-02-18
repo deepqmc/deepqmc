@@ -73,16 +73,20 @@ def train(
         init_step = 0
     if workdir:
         workdir = Path(workdir)
-        chkpts_dir = workdir / 'chkpts'
-        chkpts_dir.mkdir()
-    with SummaryWriter(log_dir=workdir, flush_secs=15, purge_step=init_step - 1) as writer:
+        writer = SummaryWriter(log_dir=workdir, flush_secs=15, purge_step=init_step - 1)
         writer.add_text(
             'hyperparameters',
             ''.join(f'**{key}** = {val}  \n' for key, val in locals().items()),
         )
-        sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
-        with tqdm(count(), desc='equilibrating', leave=False) as steps:
-            next(sample_wf(wf, sampler.iter_with_info(), steps))
+        chkpts_dir = workdir / 'chkpts'
+        chkpts_dir.mkdir()
+    else:
+        writer = None
+    sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
+    steps = trange(
+        init_step, n_steps, initial=init_step, total=n_steps, desc='training'
+    )
+    try:
         for step in fit_wf(
             wf,
             LossEnergy(),
@@ -92,9 +96,7 @@ def train(
                 epoch_size=epoch_size,
                 range=partial(trange, desc='sampling', leave=False),
             ),
-            trange(
-                init_step, n_steps, initial=init_step, total=n_steps, desc='training'
-            ),
+            steps,
             writer=writer,
             **(fit_kwargs or {}),
         ):
@@ -109,3 +111,7 @@ def train(
                 if scheduler:
                     state['scheduler'] = scheduler.state_dict()
                 torch.save(state, chkpts_dir / f'state-{step:05d}.pt')
+    finally:
+        steps.close()
+        if workdir:
+            writer.close()
