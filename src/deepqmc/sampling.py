@@ -18,7 +18,15 @@ log = logging.getLogger(__name__)
 
 
 def sample_wf(  # noqa: C901
-    wf, sampler, steps, writer=None, blocks=None, *, block_size=10, equilibrate=True,
+    wf,
+    sampler,
+    steps,
+    writer=None,
+    log_dict=None,
+    blocks=None,
+    *,
+    block_size=10,
+    equilibrate=True,
 ):
     r"""Sample a wave function and accumulate expectation values.
 
@@ -35,6 +43,7 @@ def sample_wf(  # noqa: C901
         block_size (int): size of a block (a sequence of samples)
         writer (:class:`torch.utils.tensorboard.writer.SummaryWriter`):
             Tensorboard writer
+        log_dict (dict-like): batch data will be stored in this dictionary if given
         blocks (list): used as storage of blocks. If not given, the iterator
             uses a local storage.
         equilibrate (bool): if false, local energies are calculated and accumulated
@@ -63,6 +72,10 @@ def sample_wf(  # noqa: C901
                     buffer.mean(dim=0).cpu(),
                     buffer.std(dim=0).cpu() / np.sqrt(len(buffer)),
                 )
+                if log_dict is not None:
+                    log_dict['energy'] = np.stack(
+                        [unp.nominal_values(block), unp.std_devs(block)], -1
+                    )
                 blocks.append(block)
                 buffer = []
             if not buffer:

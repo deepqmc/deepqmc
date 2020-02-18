@@ -5,6 +5,7 @@ import torch
 from torch import nn
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
+from uncertainties import ufloat
 
 from .errors import DeepQMCError, NanGradients, NanLoss
 from .physics import local_energy
@@ -92,6 +93,7 @@ def fit_wf(  # noqa: C901
     sampler,
     steps,
     writer=None,
+    log_dict=None,
     debug=NULL_DEBUG,
     require_energy_gradient=False,
     require_psi_gradient=True,
@@ -127,6 +129,7 @@ def fit_wf(  # noqa: C901
             :func:`torch.nn.utils.clip_grad_norm_`
         writer (:class:`torch.utils.tensorboard.writer.SummaryWriter`):
             Tensorboard writer
+        log_dict (dict-like): batch data will be stored in this dictionary if given
         clip_outliers (bool): whether to clip local energy outliers
         q (float): multiple of MAE defining outliers
         subbatch_size (int): number of samples for a single vectorized loss evaluation.
@@ -198,19 +201,17 @@ def fit_wf(  # noqa: C901
             clip_grad_norm_(wf.parameters(), max_grad_norm)
         if writer:
             E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, log_ws.exp())
+            E_loc_err = torch.sqrt(E_loc_var / len(Es_loc))
             writer.add_scalar('E_loc/mean', E_loc_mean, step)
             writer.add_scalar('E_loc/var', E_loc_var, step)
             writer.add_scalar('E_loc/min', Es_loc.min(), step)
             writer.add_scalar('E_loc/max', Es_loc.max(), step)
-            writer.add_scalar('E_loc/err', torch.sqrt(E_loc_var / len(Es_loc)), step)
+            writer.add_scalar('E_loc/err', E_loc_err, step)
             E_loc_loss_mean, E_loc_loss_var = weighted_mean_var(
                 Es_loc_loss, log_ws.exp()
             )
             writer.add_scalar('E_loc_loss/mean', E_loc_loss_mean, step)
             writer.add_scalar('E_loc_loss/var', E_loc_loss_var, step)
-            writer.add_scalar(
-                'E_loc_loss/err', torch.sqrt(E_loc_loss_var / len(Es_loc)), step
-            )
             writer.add_scalar('loss', loss, step)
             writer.add_scalar('log_weights/std', log_ws.std(), step)
             grads = torch.cat(
@@ -222,6 +223,12 @@ def fit_wf(  # noqa: C901
             lr = opt.state_dict()['param_groups'][0]['lr']
             writer.add_scalar('misc/learning_rate', lr, step)
             writer.add_scalar('misc/batch_size', len(Es_loc), step)
+        if log_dict is not None:
+            log_dict['E_loc'] = Es_loc.cpu().numpy()
+            log_dict['E_loc_loss'] = Es_loc_loss.cpu().numpy()
+            log_dict['log_psis'] = log_psis.cpu().numpy()
+            log_dict['sign_psis'] = sign_psis.cpu().numpy()
+            log_dict['log_ws'] = log_ws.cpu().numpy()
         opt.step()
         yield step
 
