@@ -230,7 +230,7 @@ def fit_wf(  # noqa: C901
             log_dict['sign_psis'] = sign_psis.cpu().numpy()
             log_dict['log_ws'] = log_ws.cpu().numpy()
         opt.step()
-        yield step
+        yield step, ufloat(E_loc_mean.item(), E_loc_err.item())
 
 
 def fit_wf_mem_test_func(wf, loss_func, require_psi_gradient, size):

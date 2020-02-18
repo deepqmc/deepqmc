@@ -87,7 +87,7 @@ def train(
         init_step, n_steps, initial=init_step, total=n_steps, desc='training'
     )
     try:
-        for step in fit_wf(
+        for step, energy in fit_wf(
             wf,
             LossEnergy(),
             opt,
@@ -100,6 +100,7 @@ def train(
             writer=writer,
             **(fit_kwargs or {}),
         ):
+            steps.set_postfix(E=f'{energy:S}')
             if scheduler:
                 scheduler.step()
             if workdir and save_every and (step + 1) % save_every == 0:
