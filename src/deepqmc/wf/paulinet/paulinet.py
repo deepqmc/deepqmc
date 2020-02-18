@@ -250,7 +250,7 @@ class PauliNet(WaveFunction):
 
     @classmethod
     def from_hf(
-        cls, mol, *, basis='6-311g', cas=(6, 2), pauli_kwargs=None, omni_kwargs=None
+        cls, mol, *, basis='6-311g', cas=None, pauli_kwargs=None, omni_kwargs=None
     ):
         r"""Construct a :class:`PauliNet` instance by running a HF calculation.
 
