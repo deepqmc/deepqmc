@@ -13,7 +13,7 @@ __version__ = '0.1.0'
 __all__ = ['train']
 
 
-def train(
+def train(  # noqa: C901
     wf,
     workdir=None,
     save_every=None,
@@ -26,6 +26,7 @@ def train(
     learning_rate=0.01,
     lr_scheduler='inverse',
     decay_rate=200,
+    equilibrate=True,
     fit_kwargs=None,
     sampler_kwargs=None,
 ):
@@ -79,7 +80,7 @@ def train(
             ''.join(f'**{key}** = {val}  \n' for key, val in locals().items()),
         )
         chkpts_dir = workdir / 'chkpts'
-        chkpts_dir.mkdir()
+        chkpts_dir.mkdir(exist_ok=True)
     else:
         writer = None
     sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
@@ -87,6 +88,10 @@ def train(
         init_step, n_steps, initial=init_step, total=n_steps, desc='training'
     )
     try:
+        if equilibrate:
+            with tqdm(count(), desc='equilibrating') as eq_steps:
+                next(sample_wf(wf, sampler.iter_with_info(), eq_steps))
+            steps.unpause()
         for step, energy in fit_wf(
             wf,
             LossEnergy(),
