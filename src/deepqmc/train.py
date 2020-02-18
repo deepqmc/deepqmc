@@ -2,6 +2,7 @@ from functools import partial
 from itertools import count
 from pathlib import Path
 
+import tables
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm, trange
@@ -53,8 +54,8 @@ def train(  # noqa: C901
         sampler_kwargs (dict): arguments passed to
             :class:`~deepqmc.sampling.LangevinSampler`
         fit_kwargs (dict): arguments passed to :func:`~deepqmc.fit.fit_wf`
-        workdir (str): path where to store Tensorboard event file and intermediate
-            parameter states
+        workdir (str): path where to store Tensorboard event file, intermediate
+            parameter states, and HDF5 file with the fit trajectory
         save_every (int): number of steps between storing current parameter state
         state (dict): restore optimizer and scheduler states from a stored state
     """
@@ -81,6 +82,16 @@ def train(  # noqa: C901
         )
         chkpts_dir = workdir / 'chkpts'
         chkpts_dir.mkdir(exist_ok=True)
+        h5file = tables.open_file(workdir / 'fit.h5', 'a')
+        if 'fit' not in h5file.root:
+            desc = {
+                label: tables.Float32Col(batch_size)
+                for label in ['E_loc', 'E_loc_loss', 'log_psis', 'sign_psis', 'log_ws']
+            }
+            table = h5file.create_table('/', 'fit', desc)
+        else:
+            table = h5file.root['fit']
+            table.remove_rows(init_step)
     else:
         writer = None
     sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
@@ -102,22 +113,27 @@ def train(  # noqa: C901
                 range=partial(trange, desc='sampling', leave=False),
             ),
             steps,
+            log_dict=table.row if workdir else None,
             writer=writer,
             **(fit_kwargs or {}),
         ):
             steps.set_postfix(E=f'{energy:S}')
             if scheduler:
                 scheduler.step()
-            if workdir and save_every and (step + 1) % save_every == 0:
-                state = {
-                    'step': step,
-                    'wf': wf.state_dict(),
-                    'opt': opt.state_dict(),
-                }
-                if scheduler:
-                    state['scheduler'] = scheduler.state_dict()
-                torch.save(state, chkpts_dir / f'state-{step:05d}.pt')
+            if workdir:
+                table.row.append()
+                table.flush()
+                if save_every and (step + 1) % save_every == 0:
+                    state = {
+                        'step': step,
+                        'wf': wf.state_dict(),
+                        'opt': opt.state_dict(),
+                    }
+                    if scheduler:
+                        state['scheduler'] = scheduler.state_dict()
+                    torch.save(state, chkpts_dir / f'state-{step:05d}.pt')
     finally:
         steps.close()
         if workdir:
             writer.close()
+            h5file.close()

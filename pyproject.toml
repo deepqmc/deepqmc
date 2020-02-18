@@ -26,7 +26,7 @@ pytest = { version = "^4.4", optional = true }
 coverage = { version = "^4.5", optional = true }
 tensorboard = { version = "^2.0", optional = true }
 tqdm = { version = "^4.31", optional = true }
-h5py = { version = "^2.10.0", optional = true }
+tables = { version = "^3.6.1", optional = true }
 sphinx = { version = "^2.2", optional = true }
 Pillow = { version = "^5.4", optional = true }
 sphinxcontrib-katex = { version = "^0.5.1", optional = true }
@@ -34,9 +34,9 @@ sphinxcontrib-katex = { version = "^0.5.1", optional = true }
 [tool.poetry.extras]
 wf = ["scipy", "pyscf"]
 test = ["pytest", "coverage"]
-train = ["tensorboard", "tqdm", "h5py", "Pillow"]
+train = ["tensorboard", "tqdm", "tables", "Pillow"]
 doc = ["sphinx", "sphinxcontrib-katex"]
-all = ["scipy", "pyscf", "pytest", "coverage", "tensorboard", "tqdm", "h5py", "Pillow"]
+all = ["scipy", "pyscf", "pytest", "coverage", "tensorboard", "tqdm", "tables", "Pillow"]
 
 [tool.poetry.dev-dependencies]
 flake8 = "^3.5"

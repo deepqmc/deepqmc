@@ -1,10 +1,9 @@
 from itertools import count
 from pathlib import Path
 
-import h5py
+import tables
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
-from uncertainties import unumpy as unp
 
 from .sampling import LangevinSampler, sample_wf
 
@@ -49,19 +48,19 @@ def evaluate(
     if workdir:
         workdir = Path(workdir)
         writer = SummaryWriter(log_dir=workdir, flush_secs=15)
-        block_file = h5py.File(workdir / 'blocks.h5', 'a', libver='v110')
-        if 'energy' not in block_file:
-            block_file.create_group('energy')
-            for label in ['value', 'error']:
-                block_file['energy'].create_dataset(
-                    label, (0, sample_size), maxshape=(None, sample_size)
-                )
-            if store_coords:
-                block_file.create_dataset(
-                    'coord',
-                    (0, sample_size, wf.n_up + wf.n_down, 3),
-                    maxshape=(None, sample_size, wf.n_up + wf.n_down, 3),
-                )
+        h5file = tables.open_file(workdir / 'blocks.h5', 'a')
+        if 'blocks' not in h5file.root:
+            table_blocks = h5file.create_table(
+                '/', 'blocks', {'energy': tables.Float32Col((sample_size, 2))}
+            )
+            table_steps = h5file.create_table(
+                '/',
+                'steps',
+                {'coords': tables.Float32Col((sample_size, wf.n_up + wf.n_down, 3))},
+            )
+        else:
+            table_blocks = h5file.root['blocks']
+            table_steps = h5file.root['steps']
     else:
         writer = None
     sampler = LangevinSampler.from_mf(
@@ -72,15 +71,14 @@ def evaluate(
         writer=writer,
         **(sampler_kwargs or {}),
     )
-    blocks = []
     steps = tqdm(count(), desc='equilibrating')
     try:
         for step, energy, rs in sample_wf(
             wf,
             sampler.iter_with_info(),
             steps,
+            log_dict=table_blocks.row if workdir else None,
             writer=writer,
-            blocks=blocks,
             **(sample_kwargs or {}),
         ):
             if energy is None:
@@ -89,23 +87,18 @@ def evaluate(
                 continue
             steps.set_postfix(E=f'{energy:S}')
             if workdir:
-                for key, val in [
-                    ('energy/value', unp.nominal_values(blocks[-1])),
-                    ('energy/error', unp.std_devs(blocks[-1])),
-                ]:
-                    ds = block_file[key]
-                    ds.resize(ds.shape[0] + 1, axis=0)
-                    ds[-1, :] = val
+                table_blocks.row.append()
+                table_blocks.flush()
                 if store_coords:
-                    ds = block_file['coord']
-                    ds.resize(ds.shape[0] + len(rs), axis=0)
-                    ds[-len(rs) :, ...] = rs.cpu()
-                block_file.flush()
+                    for rs in rs:
+                        table_steps.row['coords'] = rs.cpu().numpy()
+                        table_steps.row.append()
+                    table_steps.flush()
             if step >= (steps.total or n_steps) - 1:
                 break
     finally:
         steps.close()
         if workdir:
             writer.close()
-            block_file.close()
+            h5file.close()
     return {'energy': energy}
