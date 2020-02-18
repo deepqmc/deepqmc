@@ -15,7 +15,7 @@ __all__ = ['train']
 
 def train(
     wf,
-    cwd=None,
+    workdir=None,
     save_every=None,
     state=None,
     *,
@@ -52,7 +52,7 @@ def train(
         sampler_kwargs (dict): arguments passed to
             :class:`~deepqmc.sampling.LangevinSampler`
         fit_kwargs (dict): arguments passed to :func:`~deepqmc.fit.fit_wf`
-        cwd (str): path where to store Tensorboard event file and intermediate
+        workdir (str): path where to store Tensorboard event file and intermediate
             parameter states
         save_every (int): number of steps between storing current parameter state
         state (dict): restore optimizer and scheduler states from a stored state
@@ -71,10 +71,11 @@ def train(
             scheduler.load_state_dict(state['scheduler'])
     else:
         init_step = 0
-    if cwd:
-        chkpts_dir = Path(cwd) / 'chkpts'
+    if workdir:
+        workdir = Path(workdir)
+        chkpts_dir = workdir / 'chkpts'
         chkpts_dir.mkdir()
-    with SummaryWriter(log_dir=cwd, flush_secs=15, purge_step=init_step - 1) as writer:
+    with SummaryWriter(log_dir=workdir, flush_secs=15, purge_step=init_step - 1) as writer:
         writer.add_text(
             'hyperparameters',
             ''.join(f'**{key}** = {val}  \n' for key, val in locals().items()),
@@ -99,7 +100,7 @@ def train(
         ):
             if scheduler:
                 scheduler.step()
-            if cwd and save_every and (step + 1) % save_every == 0:
+            if workdir and save_every and (step + 1) % save_every == 0:
                 state = {
                     'step': step,
                     'wf': wf.state_dict(),

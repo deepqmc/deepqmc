@@ -15,7 +15,7 @@ __all__ = ['evaluate']
 def evaluate(
     wf,
     store_coords=False,
-    cwd=None,
+    workdir=None,
     *,
     n_steps=500,
     sample_size=1_000,
@@ -39,16 +39,17 @@ def evaluate(
             :class:`~deepqmc.sampling.LangevinSampler`
         sample_kwargs (dict): extra arguments passed to
             :func:`~deepqmc.sampling.sample_wf`
-        cwd (str): path where to store Tensorboard event file and HDF5 file with
+        workdir (str): path where to store Tensorboard event file and HDF5 file with
             sampling block energies
         store_coords (bool): whether to store sampled electron coordinates
 
     Returns:
         dict: Expectation values with standard errors.
     """
-    writer = SummaryWriter(log_dir=cwd, flush_secs=15)
-    if cwd:
-        block_file = h5py.File(Path(cwd) / 'blocks.h5', 'a', libver='v110')
+    writer = SummaryWriter(log_dir=workdir, flush_secs=15)
+    if workdir:
+        workdir = Path(workdir)
+        block_file = h5py.File(workdir / 'blocks.h5', 'a', libver='v110')
         if 'energy' not in block_file:
             block_file.create_group('energy')
             for label in ['value', 'error']:
@@ -86,7 +87,7 @@ def evaluate(
                 steps.set_description('evaluating')
                 continue
             steps.set_postfix(E=f'{energy:S}')
-            if cwd:
+            if workdir:
                 for key, val in [
                     ('energy/value', unp.nominal_values(blocks[-1])),
                     ('energy/error', unp.std_devs(blocks[-1])),
@@ -104,6 +105,6 @@ def evaluate(
     finally:
         writer.close()
         steps.close()
-        if cwd:
+        if workdir:
             block_file.close()
     return {'energy': energy}
