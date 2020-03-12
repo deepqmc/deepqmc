@@ -18,6 +18,12 @@ spin = 0
 
 [Hn]
 
+[He]
+coords = [[0.0, 0.0, 0.0]]
+charges = [2]
+charge = 0
+spin = 0
+
 [Be]
 coords = [[0.0, 0.0, 0.0]]
 charges = [4]
