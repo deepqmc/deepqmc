@@ -25,24 +25,27 @@ __all__ = ['PauliNet']
 
 
 def eval_slater(xs):
-    batch_dim = len(xs)
-    xs = xs.flatten(end_dim=1)
+    batch_dim, n_backflows, n_confs, _, _ = xs.shape
+    xs = xs.flatten(end_dim=1).contiguous()
     if xs.shape[-1] > 0:
         xs = det(xs)
     else:
         xs = xs.new_ones(len(xs))
-    xs = xs.view(batch_dim, -1)
+    xs = xs.view(batch_dim, n_backflows, n_confs)
     return xs
 
 
 def eval_log_slater(xs):
-    batch_dim = len(xs)
-    xs = xs.flatten(end_dim=1)
+    batch_dim, n_backflows, n_confs, _, _ = xs.shape
+    xs = xs.flatten(end_dim=1).contiguous()
     if xs.shape[-1] > 0:
         signs, xs = xs.slogdet()
     else:
         signs, xs = xs.new_ones(len(xs)), xs.new_zeros(len(xs))
-    signs, xs = signs.view(batch_dim, -1), xs.view(batch_dim, -1)
+    signs, xs = (
+        signs.view(batch_dim, n_backflows, n_confs),
+        xs.view(batch_dim, n_backflows, n_confs),
+    )
     return signs, xs
 
 
@@ -172,12 +175,15 @@ class PauliNet(WaveFunction):
             else None
         )
         self.r_backflow = None
+        self.backflow_coeff = nn.Identity()
         if omni_factory:
             assert not backflow_factory and not jastrow_factory
             self.omni = omni_factory(mol, dist_feat_dim, n_up, n_down, n_orbitals)
             self.backflow = self.omni.forward_backflow
             self.r_backflow = self.omni.forward_r_backflow
             self.jastrow = self.omni.forward_jastrow
+            if len(self.omni.backflow) > 1:
+                self.backflow_coeff = nn.Linear(len(self.omni.backflow), 1, bias=False)
         else:
             self.omni = None
         self.return_log = return_log
@@ -314,24 +320,25 @@ class PauliNet(WaveFunction):
             )
         with debug.cd('mos'):
             xs = self.mo(diffs_nuc, edges_nuc, debug=debug)
-        xs = debug['slaters'] = xs.view(batch_dim, n_elec, -1)
+        xs = debug['slaters'] = xs.view(batch_dim, 1, n_elec, -1)
         if self.backflow:
             with debug.cd('backflow'):
-                xs = self.backflow(xs, *edges, debug=debug)
+                xs = self.backflow(xs.squeeze(dim=1), *edges, debug=debug)
         conf_up, conf_down = self.confs[:, : self.n_up], self.confs[:, self.n_up :]
-        det_up = xs[:, : self.n_up, conf_up].permute(0, 2, 1, 3)
-        det_down = xs[:, self.n_up :, conf_down].permute(0, 2, 1, 3)
+        det_up = xs[:, :, : self.n_up, conf_up].permute(0, 1, 3, 2, 4)
+        det_down = xs[:, :, self.n_up :, conf_down].permute(0, 1, 3, 2, 4)
         if self.return_log:
             sign_up, det_up = eval_log_slater(det_up)
             sign_down, det_down = eval_log_slater(det_down)
             xs = det_up + det_down
-            xs_shift = xs.max(dim=-1).values
+            xs_shift = xs.flatten(start_dim=-2).max(dim=-1).values
             # the exp-normalize trick, to avoid over/underflow of the exponential
-            xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None])
+            xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None, None])
         else:
             det_up = debug['det_up'] = eval_slater(det_up)
             det_down = debug['det_down'] = eval_slater(det_down)
             xs = det_up * det_down
+        xs = self.backflow_coeff(xs.permute(0, 2, 1)).squeeze(dim=-1)
         psi = self.conf_coeff(xs).squeeze(dim=-1)
         if self.return_log:
             psi, sign = psi.abs().log() + xs_shift, psi.sign().detach()
