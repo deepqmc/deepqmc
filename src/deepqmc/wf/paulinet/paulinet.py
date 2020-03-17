@@ -342,8 +342,6 @@ class PauliNet(WaveFunction):
         psi = self.conf_coeff(xs).squeeze(dim=-1)
         if self.return_log:
             psi, sign = psi.abs().log() + xs_shift, psi.sign().detach()
-        if self.cusp_same or self.jastrow:
-            dists_elec = pairwise_distance(rs, rs)
         if self.cusp_same:
             cusp_same = self.cusp_same(
                 torch.cat(
