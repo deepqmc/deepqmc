@@ -112,12 +112,11 @@ class OmniSchNet(nn.Module):
         else:
             self.forward_jastrow = None
         if with_backflow:
-            self.backflow = [
-                get_log_dnn(
-                    embedding_dim, n_orbitals, SSP, n_layers=n_backflow_layers,
-                ).cuda()
+            backflow = [
+                get_log_dnn(embedding_dim, n_orbitals, SSP, n_layers=n_backflow_layers)
                 for _ in range(n_backflows)
             ]
+            self.backflow = nn.ModuleList(backflow)
         else:
             self.forward_backflow = None
         if with_r_backflow:
