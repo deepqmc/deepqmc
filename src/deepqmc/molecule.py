@@ -61,8 +61,11 @@ class Molecule(nn.Module):
 
     def __repr__(self):
         return (
-            f'Molecule(coords={self.coords}, charges={self.charges})'
-            f', charge={self.charge}, spin={self.spin})'
+            'Molecule(coords=\n'
+            f'{self.coords.cpu().numpy()},\n'
+            f'  charges={self.charges.cpu().numpy()},\n'
+            f'  charge={self.charge}, spin={self.spin}\n'
+            ')'
         )
 
     def as_pyscf(self):
