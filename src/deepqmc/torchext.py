@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -7,6 +9,8 @@ from .errors import LUFactError
 from .utils import batch_eval
 
 __all__ = ()
+
+DNN_NAMED_MODULES = False
 
 
 def is_cuda(net):
@@ -82,11 +86,17 @@ def get_custom_dnn(dims, activation_factory, last_bias=False):
     n_layers = len(dims) - 1
     modules = []
     for k in range(n_layers):
-        bias = k + 1 < n_layers or last_bias
-        modules.extend(
-            [nn.Linear(dims[k], dims[k + 1], bias=bias), activation_factory()]
-        )
-    return nn.Sequential(*modules[:-1])
+        last = k + 1 == n_layers
+        bias = not last or last_bias
+        lin = nn.Linear(dims[k], dims[k + 1], bias=bias)
+        act = activation_factory()
+        modules.append((f'linear{k+1}', lin) if DNN_NAMED_MODULES else lin)
+        if not last:
+            modules.append((f'activ{k+1}', act) if DNN_NAMED_MODULES else act)
+    if DNN_NAMED_MODULES:
+        return nn.Sequential(OrderedDict(modules))
+    else:
+        return nn.Sequential(*modules)
 
 
 class BDet(torch.autograd.Function):
