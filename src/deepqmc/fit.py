@@ -55,8 +55,8 @@ class LossEnergy(WaveFunctionLoss):
 
     def forward(self, Es_loc, log_psis, ws):
         assert Es_loc.grad_fn is None
-        self.weights = ws * (Es_loc - (ws * Es_loc).mean())
-        return 2 * (self.weights * log_psis).mean()
+        self.weights = 2 * (Es_loc - (ws * Es_loc).mean()) / len(Es_loc)
+        return (self.weights * ws * log_psis).sum()
 
 
 def loss_least_squares(y_pred, y_true):
