@@ -205,9 +205,9 @@ def fit_wf(  # noqa: C901
         d['Es_loc'], d['log_psis'], d['sign_psis'] = Es_loc, log_psis, sign_psis
         if max_grad_norm is not None:
             clip_grad_norm_(wf.parameters(), max_grad_norm)
+        E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, log_ws.exp())
+        E_loc_err = torch.sqrt(E_loc_var / len(Es_loc))
         if writer:
-            E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, log_ws.exp())
-            E_loc_err = torch.sqrt(E_loc_var / len(Es_loc))
             writer.add_scalar('E_loc/mean', E_loc_mean, step)
             writer.add_scalar('E_loc/var', E_loc_var, step)
             writer.add_scalar('E_loc/min', Es_loc.min(), step)
