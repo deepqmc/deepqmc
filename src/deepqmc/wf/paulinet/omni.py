@@ -108,19 +108,13 @@ class OmniSchNet(nn.Module):
             **(schnet_kwargs or {}),
         )
         if with_jastrow:
-            self.jastrow = get_log_dnn(
-                embedding_dim, 1, SSP, last_bias=False, n_layers=n_jastrow_layers
-            )
+            self.jastrow = get_log_dnn(embedding_dim, 1, SSP, n_layers=n_jastrow_layers)
         else:
             self.forward_jastrow = None
         if with_backflow:
             self.backflow = [
                 get_log_dnn(
-                    embedding_dim,
-                    n_orbitals,
-                    SSP,
-                    last_bias=False,
-                    n_layers=n_backflow_layers,
+                    embedding_dim, n_orbitals, SSP, n_layers=n_backflow_layers,
                 ).cuda()
                 for _ in range(n_backflows)
             ]
