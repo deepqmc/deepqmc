@@ -305,10 +305,12 @@ class PauliNet(WaveFunction):
             mc.kernel()
         wf = PauliNet.from_pyscf(
             mc if cas else mf,
-            omni_factory=partial(OmniSchNet, **(omni_kwargs or {})),
-            cusp_correction=True,
-            cusp_electrons=True,
-            **(pauli_kwargs or {}),
+            **{
+                'omni_factory': partial(OmniSchNet, **(omni_kwargs or {})),
+                'cusp_correction': True,
+                'cusp_electrons': True,
+                **(pauli_kwargs or {}),
+            },
         )
         wf.mf = mf
         return wf
