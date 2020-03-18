@@ -122,9 +122,6 @@ class ElectronicSchNet(nn.Module):
             :math:`(\dim(\mathbf e),\dim(\mathbf w),\dim(\mathbf X))`
             :math:`\rightarrow(\mathbf w,\mathbf h,\mathbf g)`, with the
             interface of :class:`SubnetFactory`
-        return_interactions (bool): whether calling the instance will return also
-            intermediate electron embeddings, :math:`\mathbf x_i^{(n)}`, as the
-            second output value
         version (int): architecture version, one of ``1`` or ``2``
 
     Shape:
@@ -155,7 +152,6 @@ class ElectronicSchNet(nn.Module):
         embedding_dim,
         dist_feat_dim,
         subnet_metafactory=None,
-        return_interactions=False,
         *,
         n_interactions=3,
         kernel_dim=64,
@@ -168,7 +164,6 @@ class ElectronicSchNet(nn.Module):
         self.version = version
         self.n_up, self.n_down = n_up, n_down
         self.n_interactions = n_interactions
-        self.return_interactions = return_interactions
         self.Y = nn.Parameter(torch.randn(n_nuclei, kernel_dim))
         self.X = nn.Parameter(torch.randn(1 if n_up == n_down else 2, embedding_dim))
         w, h, g = {}, {}, {}
@@ -187,7 +182,6 @@ class ElectronicSchNet(nn.Module):
         *batch_dims, n_elec = edges_nuc.shape[:-2]
         assert edges_elec.shape[:-1] == (*batch_dims, n_elec, n_elec)
         assert n_elec == self.n_up + self.n_down
-        interactions = [] if self.return_interactions else None
         x = debug[0] = torch.cat(
             [
                 X.clone().expand(n, -1)
@@ -230,7 +224,5 @@ class ElectronicSchNet(nn.Module):
                     + self.g[f'{n},{False}'](z_elec_anti)
                     + self.g[f'{n},n'](z_nuc)
                 )
-            if interactions is not None:
-                interactions.append(z)
             x = debug[n + 1] = x + z
-        return x if interactions is None else interactions
+        return x
