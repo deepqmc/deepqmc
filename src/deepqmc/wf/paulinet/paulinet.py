@@ -9,7 +9,7 @@ from deepqmc.torchext import triu_flat
 from deepqmc.utils import NULL_DEBUG
 from deepqmc.wf import WaveFunction
 
-from .cusp import ElectronicAsymptotic
+from .cusp import CuspCorrection, ElectronicAsymptotic
 from .distbasis import DistanceBasis
 from .gto import GTOBasis
 from .molorb import MolecularOrbital
@@ -187,6 +187,22 @@ class PauliNet(WaveFunction):
         else:
             self.omni = None
         self.return_log = return_log
+
+    def requires_grad_classes_(self, classes, requires_grad):
+        for m in self.modules():
+            if isinstance(m, classes):
+                for p in m.parameters(recurse=False):
+                    p.requires_grad_(requires_grad)
+        return self
+
+    def requires_grad_cusps_(self, requires_grad):
+        return self.requires_grad_classes_(CuspCorrection, requires_grad)
+
+    def requires_grad_embeddings_(self, requires_grad):
+        return self.requires_grad_classes_(nn.Embedding, requires_grad)
+
+    def requires_grad_nets_(self, requires_grad):
+        return self.requires_grad_classes_(nn.Linear, requires_grad)
 
     @classmethod
     def from_pyscf(
