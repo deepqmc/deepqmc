@@ -63,6 +63,62 @@ class SubnetFactory:
         )
 
 
+class SchNetLayer(nn.Module):
+    def __init__(self, factory, n_up):
+        super().__init__()
+        self.w = factory.w_subnet()
+        self.g = factory.g_subnet()
+        self.h = factory.h_subnet()
+
+    def forward(self, x, Y, edges_elec, edges_nuc):
+        *batch_dims, n_elec = edges_nuc.shape[:-2]
+        h = self.h(x)
+        i, j = pair_idxs(n_elec).T
+        z_elec = (
+            (self.w(edges_elec[..., i, j, :]) * h[..., j, :])
+            .view(*batch_dims, n_elec, -1, h.shape[-1])
+            .sum(dim=-2)
+        )
+        z_nuc = (self.w(edges_nuc) * Y[..., None, :, :]).sum(dim=-2)
+        return self.g(z_elec + z_nuc)
+
+
+class SchNetSpinLayer(nn.Module):
+    def __init__(self, factory, n_up):
+        super().__init__()
+        labels = ['same', 'anti', 'n']
+        self.w = nn.ModuleDict((lbl, factory.w_subnet()) for lbl in labels)
+        self.g = nn.ModuleDict((lbl, factory.g_subnet()) for lbl in labels)
+        self.h = factory.h_subnet()
+        self.n_up = n_up
+
+    def forward(self, x, Y, edges_elec, edges_nuc):
+        *batch_dims, n_elec = edges_nuc.shape[:-2]
+        n_up, n_down = self.n_up, n_elec - self.n_up
+        h = self.h(x)
+        z_elec_uu, z_elec_ud, z_elec_du, z_elec_dd = (
+            (
+                self.w['same' if si == sj else 'anti'](edges_elec[..., i, j, :])
+                * h[..., j, :]
+            )
+            .view(*batch_dims, n_si, -1, h.shape[-1])
+            .sum(dim=-2)
+            for (si, sj), (i, j), n_si in zip(
+                product('ud', repeat=2),
+                spin_pair_idxs(n_up, n_down, transposed=True),
+                [n_up, n_up, n_down, n_down],
+            )
+        )
+        z_elec_same = torch.cat([z_elec_uu, z_elec_dd], dim=-2)
+        z_elec_anti = torch.cat([z_elec_ud, z_elec_du], dim=-2)
+        z_nuc = (self.w['n'](edges_nuc) * Y[..., None, :, :]).sum(dim=-2)
+        return (
+            self.g['same'](z_elec_same)
+            + self.g['anti'](z_elec_anti)
+            + self.g['n'](z_nuc)
+        )
+
+
 class ElectronicSchNet(nn.Module):
     r"""Graph neural network SchNet adapted to handle electrons.
 
@@ -144,6 +200,11 @@ class ElectronicSchNet(nn.Module):
             :math:`\mathbf h^{(\cdot)}` subnetworks
     """
 
+    layer_factories = {
+        1: SchNetLayer,
+        2: SchNetSpinLayer,
+    }
+
     def __init__(
         self,
         n_up,
@@ -156,73 +217,38 @@ class ElectronicSchNet(nn.Module):
         n_interactions=3,
         kernel_dim=64,
         version=2,
+        layer_norm=False,
     ):
-        assert version in {1, 2}
+        assert version in self.layer_factories
         subnet_metafactory = subnet_metafactory or SubnetFactory
-        factory = subnet_metafactory(dist_feat_dim, kernel_dim, embedding_dim)
+        subnet_factory = subnet_metafactory(dist_feat_dim, kernel_dim, embedding_dim)
         super().__init__()
-        self.version = version
-        self.n_up, self.n_down = n_up, n_down
-        self.n_interactions = n_interactions
-        self.Y = nn.Parameter(torch.randn(n_nuclei, kernel_dim))
-        self.X = nn.Parameter(torch.randn(1 if n_up == n_down else 2, embedding_dim))
-        w, h, g = {}, {}, {}
-        for n in range(n_interactions):
-            if version == 1:
-                w[f'{n}'] = factory.w_subnet()
-                g[f'{n}'] = factory.g_subnet()
-            elif version == 2:
-                for label in [True, False, 'n']:
-                    w[f'{n},{label}'] = factory.w_subnet()
-                    g[f'{n},{label}'] = factory.g_subnet()
-            h[f'{n}'] = factory.h_subnet()
-        self.w, self.h, self.g = map(nn.ModuleDict, [w, h, g])
+        self.Y = nn.Embedding(n_nuclei, kernel_dim)
+        self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
+        self.layers = nn.ModuleList(
+            self.layer_factories[version](subnet_factory, n_up)
+            for _ in range(n_interactions)
+        )
+        self.layer_norms = (
+            nn.ModuleList(nn.LayerNorm(embedding_dim) for _ in range(n_interactions))
+            if layer_norm
+            else [None for _ in range(n_interactions)]
+        )
+        spin_idxs = torch.tensor(
+            (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
+        )
+        self.register_buffer('spin_idxs', spin_idxs)
+        self.register_buffer('nuclei_idxs', torch.arange(n_nuclei))
 
     def forward(self, edges_elec, edges_nuc, debug=NULL_DEBUG):
-        *batch_dims, n_elec = edges_nuc.shape[:-2]
+        *batch_dims, n_elec, n_nuclei = edges_nuc.shape[:-1]
         assert edges_elec.shape[:-1] == (*batch_dims, n_elec, n_elec)
-        assert n_elec == self.n_up + self.n_down
-        x = debug[0] = torch.cat(
-            [
-                X.clone().expand(n, -1)
-                for X, n in zip(
-                    self.X, [self.n_up, self.n_down] if len(self.X) == 2 else [n_elec]
-                )
-            ]
-        ).expand(*batch_dims, -1, -1)
-        for n in range(self.n_interactions):
-            h = self.h[f'{n}'](x)
-            if self.version == 1:
-                i, j = pair_idxs(n_elec).T
-                z_elec = (
-                    (self.w[f'{n}'](edges_elec[..., i, j, :]) * h[..., j, :])
-                    .view(*batch_dims, n_elec, -1, h.shape[-1])
-                    .sum(dim=-2)
-                )
-                z_nuc = (self.w[f'{n}'](edges_nuc) * self.Y[..., None, :, :]).sum(
-                    dim=-2
-                )
-                z = self.g[f'{n}'](z_elec + z_nuc)
-            elif self.version == 2:
-                z_elec_uu, z_elec_ud, z_elec_du, z_elec_dd = (
-                    (self.w[f'{n},{si == sj}'](edges_elec[..., i, j, :]) * h[..., j, :])
-                    .view(*batch_dims, n_si, -1, h.shape[-1])
-                    .sum(dim=-2)
-                    for (si, sj), (i, j), n_si in zip(
-                        product('ud', repeat=2),
-                        spin_pair_idxs(self.n_up, self.n_down, transposed=True),
-                        [self.n_up, self.n_up, self.n_down, self.n_down],
-                    )
-                )
-                z_elec_same = torch.cat([z_elec_uu, z_elec_dd], dim=-2)
-                z_elec_anti = torch.cat([z_elec_ud, z_elec_du], dim=-2)
-                z_nuc = (self.w[f'{n},n'](edges_nuc) * self.Y[..., None, :, :]).sum(
-                    dim=-2
-                )
-                z = (
-                    self.g[f'{n},{True}'](z_elec_same)
-                    + self.g[f'{n},{False}'](z_elec_anti)
-                    + self.g[f'{n},n'](z_nuc)
-                )
+        assert n_elec == len(self.spin_idxs)
+        x = debug[0] = self.X(self.spin_idxs.expand(*batch_dims, -1))
+        Y = self.Y(self.nuclei_idxs.expand(*batch_dims, -1))
+        for n, (layer, norm) in enumerate(zip(self.layers, self.layer_norms)):
+            z = layer(x, Y, edges_elec, edges_nuc)
+            if norm:
+                z = 0.1 * norm(z)
             x = debug[n + 1] = x + z
         return x
