@@ -127,7 +127,24 @@ def samples_from(sampler, steps):
     )
 
 
-class MetropolisSampler:
+class Sampler:
+    def __init__(self):
+        self.state = {}
+
+    def state_dict(self):
+        return self.state.copy()
+
+    def load_state_dict(self, state_dict):
+        for name, param in self.state.items():
+            value = state_dict[name]
+            if isinstance(value, torch.Tensor):
+                if value.is_floating_point():
+                    value = value.to(param.dtype)
+                value = value.to(param.device)
+            self.state[name] = value
+
+
+class MetropolisSampler(Sampler):
     r"""Samples electronic wave functions with vanilla Metropolis--Hastings Monte Carlo.
 
     An instance of this class is an iterator that yields 2-tuples of electron
@@ -165,18 +182,39 @@ class MetropolisSampler:
         max_age=None,
         log_psi_threshold=None,
     ):
+        super().__init__()
         self.wf = wf
-        self.rs = rs.clone()
-        self.tau = tau
         self.max_age = max_age
         self.n_first_certain = n_first_certain
         self.log_psi_threshold = log_psi_threshold
         self.target_acceptance = target_acceptance
         self.n_discard = n_discard
         self.n_decorrelate = n_decorrelate
+        self.state['rs'] = rs.clone()
+        self.state['tau'] = tau
         self.restart()
         self.writer = writer
-        self._totalstep = 0
+        self._step_writer = 0
+
+    @property
+    def rs(self):
+        return self.state['rs']
+
+    @property
+    def log_psis(self):
+        return self.state['log_psis']
+
+    @property
+    def sign_psis(self):
+        return self.state['sign_psis']
+
+    @property
+    def _ages(self):
+        return self.state['ages']
+
+    @property
+    def tau(self):
+        return self.state['tau']
 
     def proposal(self):
         return self.rs + torch.randn_like(self.rs) * self.tau
@@ -234,7 +272,7 @@ class MetropolisSampler:
             )
         if self.max_age is not None:
             accepted = accepted | (self._ages >= self.max_age)
-        if self._step < self.n_first_certain:
+        if self.state['step'] < self.n_first_certain:
             accepted = torch.ones_like(accepted)
         self._ages[accepted] = 0
         self._ages[~accepted] += 1
@@ -250,25 +288,27 @@ class MetropolisSampler:
             accepted,
         )
         if self.target_acceptance:
-            self.tau /= self.target_acceptance / max(acceptance, 0.05)
-        self._step += 1
-        self._totalstep += 1
+            self.state['tau'] /= self.target_acceptance / max(acceptance, 0.05)
+        self.state['step'] += 1
+        self._step_writer += 1
         if self.writer:
             self.writer.add_scalar(
-                'sampling/log_psis/mean', self.log_psis.mean(), self._totalstep
+                'sampling/log_psis/mean', self.log_psis.mean(), self._step_writer
             )
             self.writer.add_scalar(
                 'sampling/dists/mean',
                 pairwise_self_distance(self.rs).mean(),
-                self._totalstep,
+                self._step_writer,
             )
-            self.writer.add_scalar('sampling/acceptance', acceptance, self._totalstep)
-            self.writer.add_scalar('sampling/tau', self.tau, self._totalstep)
+            self.writer.add_scalar('sampling/acceptance', acceptance, self._step_writer)
+            self.writer.add_scalar('sampling/tau', self.tau, self._step_writer)
             self.writer.add_scalar(
-                'sampling/age/max', info['age'].max(), self._totalstep
+                'sampling/age/max', info['age'].max(), self._step_writer
             )
             self.writer.add_scalar(
-                'sampling/age/rms', np.sqrt((info['age'] ** 2).mean()), self._totalstep
+                'sampling/age/rms',
+                np.sqrt((info['age'] ** 2).mean()),
+                self._step_writer,
             )
             self.extra_writer()
         return self.rs.clone(), self.log_psis.clone(), self.sign_psis.clone(), info
@@ -295,26 +335,25 @@ class MetropolisSampler:
             batch_size (int): number of samples in a batch
             range (callable): alternative to :class:`range`
         """
+        n_total = epoch_size * batch_size
+        n_steps = math.ceil(n_total / len(self))
         while True:
-            n_steps = math.ceil(epoch_size * batch_size / len(self))
             xs = samples_from(self, range(n_steps))
-            samples_ds = TensorDataset(*(x.flatten(end_dim=1) for x in xs))
-            rs_dl = DataLoader(
-                samples_ds, batch_size=batch_size, shuffle=True, drop_last=True
-            )
+            samples_ds = TensorDataset(*(x.flatten(end_dim=1)[:n_total] for x in xs))
+            rs_dl = DataLoader(samples_ds, batch_size=batch_size, shuffle=True)
             yield from rs_dl
             self.restart()
 
     def recompute_psi(self):
-        self.log_psis, self.sign_psis = self.wf(self.rs)
+        self.state['log_psis'], self.state['sign_psis'] = self.wf(self.rs)
 
     def restart(self):
-        self._step = 0
+        self.state['step'] = 0
         self.recompute_psi()
-        self._ages = torch.zeros_like(self.log_psis, dtype=torch.long)
+        self.state['ages'] = torch.zeros_like(self.log_psis, dtype=torch.long)
 
     def propagate_all(self):
-        self.rs = self.proposal()
+        self.state['rs'] = self.proposal()
         self.restart()
 
 
@@ -348,6 +387,10 @@ class LangevinSampler(MetropolisSampler):
     Derived from :class:`MetropolisSampler`.
     """
 
+    @property
+    def forces(self):
+        return self.state['forces']
+
     def proposal(self):
         return (
             self.rs
@@ -380,8 +423,11 @@ class LangevinSampler(MetropolisSampler):
 
     def extra_writer(self):
         self.writer.add_scalar(
-            'sampling/forces', self.forces.norm(dim=-1).mean(), self._totalstep
+            'sampling/forces', self.forces.norm(dim=-1).mean(), self._step_writer
         )
 
     def recompute_psi(self):
-        self.forces, (self.log_psis, self.sign_psis) = self.qforce(self.rs)
+        (
+            self.state['forces'],
+            (self.state['log_psis'], self.state['sign_psis']),
+        ) = self.qforce(self.rs)
