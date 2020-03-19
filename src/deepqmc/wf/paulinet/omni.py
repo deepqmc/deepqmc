@@ -86,6 +86,7 @@ class OmniSchNet(nn.Module):
         n_up,
         n_down,
         n_orbitals,
+        n_channels,
         *,
         embedding_dim=128,
         with_jastrow=True,
@@ -111,9 +112,11 @@ class OmniSchNet(nn.Module):
         else:
             self.forward_jastrow = None
         if with_backflow:
-            self.backflow = get_log_dnn(
-                embedding_dim, n_orbitals, SSP, n_layers=n_backflow_layers,
-            )
+            backflow = [
+                get_log_dnn(embedding_dim, n_orbitals, SSP, n_layers=n_backflow_layers)
+                for _ in range(n_channels)
+            ]
+            self.backflow = nn.ModuleList(backflow)
         else:
             self.forward_backflow = None
         if with_r_backflow:
@@ -141,8 +144,8 @@ class OmniSchNet(nn.Module):
     def forward_backflow(self, edges_elec, edges_nuc, debug=NULL_DEBUG):
         """Evaluate backflow."""
         xs = self._get_embeddings(edges_elec, edges_nuc, debug)
-        xs = debug['backflow'] = self.backflow(xs)
-        return (1 + 2 * torch.tanh(xs / 4))
+        xs = torch.stack([bf(xs) for bf in self.backflow], dim=1)
+        return 1 + 2 * torch.tanh(xs / 4)
 
     def forward_r_backflow(self, rs, edges_elec, edges_nuc, debug=NULL_DEBUG):
         xs = self._get_embeddings(edges_elec, edges_nuc, debug)
