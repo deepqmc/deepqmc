@@ -138,11 +138,11 @@ class OmniSchNet(nn.Module):
         J = self.jastrow(xs.sum(dim=-2)).squeeze(dim=-1)
         return debug.result(J)
 
-    def forward_backflow(self, mos, edges_elec, edges_nuc, debug=NULL_DEBUG):
+    def forward_backflow(self, edges_elec, edges_nuc, debug=NULL_DEBUG):
         """Evaluate backflow."""
         xs = self._get_embeddings(edges_elec, edges_nuc, debug)
         xs = debug['backflow'] = self.backflow(xs)
-        return (1 + 2 * torch.tanh(xs / 4)) * mos
+        return (1 + 2 * torch.tanh(xs / 4))
 
     def forward_r_backflow(self, rs, edges_elec, edges_nuc, debug=NULL_DEBUG):
         xs = self._get_embeddings(edges_elec, edges_nuc, debug)

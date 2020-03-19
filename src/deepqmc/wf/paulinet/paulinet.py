@@ -335,7 +335,7 @@ class PauliNet(WaveFunction):
         xs = debug['slaters'] = xs.view(batch_dim, n_elec, -1)
         if self.backflow:
             with debug.cd('backflow'):
-                xs = self.backflow(xs, *edges, debug=debug)
+                xs = self.backflow(*edges, debug=debug) * xs
         conf_up, conf_down = self.confs[:, : self.n_up], self.confs[:, self.n_up :]
         det_up = xs[:, : self.n_up, conf_up].permute(0, 2, 1, 3)
         det_down = xs[:, self.n_up :, conf_down].permute(0, 2, 1, 3)
