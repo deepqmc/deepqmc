@@ -1,5 +1,6 @@
 from functools import partial
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -204,6 +205,7 @@ class PauliNet(WaveFunction):
         freeze_mos=True,
         freeze_confs=False,
         conf_cutoff=1e-2,
+        conf_limit=None,
         **kwargs,
     ):
         r"""Construct a :class:`PauliNet` instance from a finished PySCF_ calculation.
@@ -225,15 +227,16 @@ class PauliNet(WaveFunction):
         .. _PySCF: http://pyscf.org
         """
         n_up, n_down = mf.mol.nelec
-        try:
+        if hasattr(mf, 'fcisolver'):
+            if conf_limit:
+                conf_cutoff = max(
+                    np.sort(abs(mf.ci.flatten()))[-conf_limit] - 1e-10, conf_cutoff
+                )
             conf_coeff, *confs = zip(
                 *mf.fcisolver.large_ci(
                     mf.ci, mf.ncas, mf.nelecas, tol=conf_cutoff, return_strs=False
                 )
             )
-        except AttributeError:
-            confs = None
-        else:
             ns_dbl = n_up - mf.nelecas[0], n_down - mf.nelecas[1]
             conf_coeff = torch.tensor(conf_coeff)
             confs = [
@@ -245,6 +248,8 @@ class PauliNet(WaveFunction):
             ]
             confs = [torch.cat(cfs, dim=-1) for cfs in confs]
             confs = torch.cat(confs, dim=-1)
+        else:
+            confs = None
         mol = Molecule(
             mf.mol.atom_coords().astype('float32'),
             mf.mol.atom_charges(),
