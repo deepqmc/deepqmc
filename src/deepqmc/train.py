@@ -21,8 +21,9 @@ def train(  # noqa: C901
     workdir=None,
     save_every=None,
     state=None,
-    _optimizer=None,
-    _sampler_state=None,
+    _optimizer_factory=None,
+    _sampler_factory=None,
+    _scheduler_factory=None,
     *,
     n_steps=10_000,
     batch_size=10_000,
@@ -66,10 +67,12 @@ def train(  # noqa: C901
         save_every (int): number of steps between storing current parameter state
         state (dict): restore optimizer and scheduler states from a stored state
     """
-    opt = _optimizer or getattr(torch.optim, optimizer)(
+    opt = (_optimizer_factory or getattr(torch.optim, optimizer))(
         wf.parameters(), lr=learning_rate
     )
-    if lr_scheduler == 'inverse':
+    if _scheduler_factory:
+        scheduler = _scheduler_factory(opt)
+    elif lr_scheduler == 'inverse':
         scheduler = torch.optim.lr_scheduler.LambdaLR(
             opt, lambda n: 1 / (1 + n / decay_rate)
         )
@@ -105,9 +108,10 @@ def train(  # noqa: C901
             table.remove_rows(init_step)
     else:
         writer = None
-    sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
-    if _sampler_state:
-        sampler.load_state_dict(_sampler_state)
+    if _sampler_factory:
+        sampler = _sampler_factory(wf, writer=writer)
+    else:
+        sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
     steps = trange(
         init_step, n_steps, initial=init_step, total=n_steps, desc='training'
     )
