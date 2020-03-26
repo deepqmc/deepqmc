@@ -18,7 +18,6 @@ def evaluate(
     *,
     n_steps=500,
     sample_size=1_000,
-    n_decorrelate=4,
     sample_kwargs=None,
     sampler_kwargs=None,
 ):
@@ -66,10 +65,9 @@ def evaluate(
     sampler = LangevinSampler.from_mf(
         wf,
         sample_size=sample_size,
-        n_discard=0,
-        n_decorrelate=n_decorrelate,
         writer=writer,
-        **(sampler_kwargs or {}),
+        n_discard=0,
+        **{'n_decorrelate': 4, **(sampler_kwargs or {})},
     )
     steps = tqdm(count(), desc='equilibrating')
     try:
