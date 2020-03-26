@@ -121,6 +121,7 @@ class PauliNet(WaveFunction):
         backflow_channels=1,
         rc_scaling=1.0,
         cusp_alpha=10.0,
+        freeze_embed=False,
     ):
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
@@ -179,6 +180,8 @@ class PauliNet(WaveFunction):
         else:
             self.omni = None
         self.return_log = return_log
+        if freeze_embed:
+            self.requires_grad_embeddings_(False)
 
     def requires_grad_classes_(self, classes, requires_grad):
         for m in self.modules():
