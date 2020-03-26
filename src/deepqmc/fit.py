@@ -207,6 +207,7 @@ def fit_wf(  # noqa: C901
             clip_grad_norm_(wf.parameters(), max_grad_norm)
         E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, log_ws.exp())
         E_loc_err = torch.sqrt(E_loc_var / len(Es_loc))
+        lr = opt.state_dict()['param_groups'][0]['lr']
         if writer:
             writer.add_scalar('E_loc/mean', E_loc_mean, step)
             writer.add_scalar('E_loc/var', E_loc_var, step)
@@ -226,7 +227,6 @@ def fit_wf(  # noqa: C901
             writer.add_scalar('grad/norm', grads.norm(), step)
             for label, value in wf.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
-            lr = opt.state_dict()['param_groups'][0]['lr']
             writer.add_scalar('misc/learning_rate', lr, step)
             writer.add_scalar('misc/batch_size', len(Es_loc), step)
         if log_dict is not None:
@@ -235,6 +235,7 @@ def fit_wf(  # noqa: C901
             log_dict['log_psis'] = log_psis.cpu().numpy()
             log_dict['sign_psis'] = sign_psis.cpu().numpy()
             log_dict['log_ws'] = log_ws.cpu().numpy()
+            log_dict['learning_rate'] = lr
         if kfac:
             kfac.step_precondition()
             fnorm, gnorm = kfac.step_rescale()

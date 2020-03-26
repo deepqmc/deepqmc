@@ -102,6 +102,7 @@ def train(  # noqa: C901
                 label: tables.Float32Col(batch_size)
                 for label in ['E_loc', 'E_loc_loss', 'log_psis', 'sign_psis', 'log_ws']
             }
+            desc['learning_rate'] = tables.Float32Col()
             table = h5file.create_table('/', 'fit', desc)
         else:
             table = h5file.root['fit']
