@@ -19,5 +19,12 @@ class NanGradients(DeepQMCError):
     pass
 
 
+class TrainingBlowup(DeepQMCError):
+    def __init__(self, step, chkpts):
+        super().__init__()
+        self.step = step
+        self.chkpts = chkpts
+
+
 class LUFactError(InfoException, DeepQMCError):
     pass
