@@ -2,11 +2,13 @@ from functools import partial
 from itertools import count
 from pathlib import Path
 
+import numpy as np
 import tables
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm, trange
 
+from .errors import NanGradients, NanLoss, TrainingBlowup
 from .fit import LossEnergy, fit_wf
 from .sampling import LangevinSampler, sample_wf
 
@@ -32,6 +34,9 @@ def train(  # noqa: C901
     equilibrate=True,
     fit_kwargs=None,
     sampler_kwargs=None,
+    ewm_decay=0.99,
+    outlier_sigma=3,
+    max_outliers=3,
 ):
     r"""Train a wave function model.
 
@@ -75,8 +80,10 @@ def train(  # noqa: C901
         opt.load_state_dict(state['opt'])
         if scheduler:
             scheduler.load_state_dict(state['scheduler'])
+        ewm_energy = state['ewm_energy']
     else:
         init_step = 0
+        ewm_energy = None
     if workdir:
         workdir = Path(workdir)
         writer = SummaryWriter(log_dir=workdir, flush_secs=15, purge_step=init_step - 1)
@@ -104,6 +111,8 @@ def train(  # noqa: C901
     steps = trange(
         init_step, n_steps, initial=init_step, total=n_steps, desc='training'
     )
+    chkpts = []
+    outlier_count = 0
     try:
         if equilibrate:
             with tqdm(count(), desc='equilibrating') as eq_steps:
@@ -123,7 +132,16 @@ def train(  # noqa: C901
             writer=writer,
             **(fit_kwargs or {}),
         ):
-            steps.set_postfix(E=f'{energy:S}')
+            if ewm_energy is None:
+                ewm_energy = energy
+            elif abs(energy - ewm_energy) < outlier_sigma * ewm_energy.std_dev:
+                ewm_energy = (1 - ewm_decay) * energy + ewm_decay * ewm_energy
+                outlier_count = 0
+            elif outlier_count < max_outliers:
+                outlier_count += 1
+            else:
+                raise TrainingBlowup(step, chkpts)
+            steps.set_postfix(E=f'{ewm_energy:S}')
             if scheduler:
                 scheduler.step()
             if workdir:
@@ -134,10 +152,15 @@ def train(  # noqa: C901
                         'step': step,
                         'wf': wf.state_dict(),
                         'opt': opt.state_dict(),
+                        'ewm_energy': ewm_energy,
                     }
                     if scheduler:
                         state['scheduler'] = scheduler.state_dict()
-                    torch.save(state, chkpts_dir / f'state-{step:05d}.pt')
+                    state_file = chkpts_dir / f'state-{step + 1:05d}.pt'
+                    chkpts.append((step, state_file))
+                    torch.save(state, state_file)
+    except (NanLoss, NanGradients) as e:
+        raise TrainingBlowup(step, chkpts) from e
     finally:
         steps.close()
         if workdir:
