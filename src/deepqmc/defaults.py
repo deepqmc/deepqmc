@@ -12,6 +12,8 @@ from deepqmc.wf.paulinet import ElectronicSchNet, OmniSchNet, SubnetFactory
 DEEPQMC_MAPPING = {
     (train, 'sampler_kwargs'): LangevinSampler.from_mf,
     (train, 'fit_kwargs'): fit_wf,
+    (train, 'optimizer_kwargs'): True,
+    (train, 'lr_scheduler_kwargs'): True,
     (LangevinSampler.from_mf, 'kwargs'): LangevinSampler,
     (evaluate, 'sampler_kwargs'): (
         LangevinSampler.from_mf,
@@ -52,10 +54,13 @@ def collect_kwarg_defaults(func, mapping):
             for item in sub_kwargs.value.body:
                 kwargs.add(*item)
         elif p.name.endswith('_kwargs'):
-            assert p.default is None
-            assert p.kind is inspect.Parameter.KEYWORD_ONLY
-            sub_kwargs = _get_subkwargs(func, p.name, mapping)
-            kwargs[p.name] = sub_kwargs
+            if mapping.get((func, p.name)) is True:
+                kwargs[p.name] = p.default
+            else:
+                assert p.default is None
+                assert p.kind is inspect.Parameter.KEYWORD_ONLY
+                sub_kwargs = _get_subkwargs(func, p.name, mapping)
+                kwargs[p.name] = sub_kwargs
         elif p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD:
             assert p.default in (p.empty, p.default, NULL_DEBUG)
         else:
@@ -64,10 +69,7 @@ def collect_kwarg_defaults(func, mapping):
                 kwargs.add(tomlkit.comment(f'{p.name} = ...'))
             else:
                 try:
-                    default = p.default
-                    if isinstance(default, tuple):
-                        default = list(default)
-                    kwargs[p.name] = default
+                    kwargs[p.name] = p.default
                 except ValueError:
                     print(func, p.name, p.kind, p.default)
                     raise

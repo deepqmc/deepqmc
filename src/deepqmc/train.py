@@ -2,7 +2,6 @@ from functools import partial
 from itertools import count
 from pathlib import Path
 
-import numpy as np
 import tables
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -14,6 +13,27 @@ from .sampling import LangevinSampler, sample_wf
 
 __version__ = '0.1.0'
 __all__ = ['train']
+
+OPTIMIZER_KWARGS = {
+    'AdamW': {'betas': [0.9, 0.9], 'weight_decay': 0.01},
+}
+SCHEDULER_KWARGS = {
+    'CyclicLR': {
+        'base_lr': 1e-4,
+        'max_lr': 10e-3,
+        'step_size_up': 250,
+        'mode': 'triangular2',
+        'cycle_momentum': False,
+    },
+    'OneCycleLR': {
+        'max_lr': 5e-3,
+        'total_steps': 5_000,
+        'pct_start': 0.075,
+        'anneal_strategy': 'linear',
+    },
+    'inverse': {'decay_rate': 200},
+    'scan': {'eq_steps': 100, 'start': 0.1, 'rate': 1.05},
+}
 
 
 def train(  # noqa: C901
@@ -30,8 +50,9 @@ def train(  # noqa: C901
     epoch_size=100,
     optimizer='AdamW',
     learning_rate=0.01,
-    lr_scheduler='inverse',
-    decay_rate=200,
+    optimizer_kwargs=OPTIMIZER_KWARGS,
+    lr_scheduler='CyclicLR',
+    lr_scheduler_kwargs=SCHEDULER_KWARGS,
     equilibrate=True,
     fit_kwargs=None,
     sampler_kwargs=None,
@@ -67,15 +88,42 @@ def train(  # noqa: C901
         save_every (int): number of steps between storing current parameter state
         state (dict): restore optimizer and scheduler states from a stored state
     """
-    opt = (_optimizer_factory or getattr(torch.optim, optimizer))(
-        wf.parameters(), lr=learning_rate
-    )
+    if _optimizer_factory:
+        opt = _optimizer_factory(wf.parameters())
+    else:
+        optimizer_kwargs = {
+            **OPTIMIZER_KWARGS.get(optimizer, {}),
+            **optimizer_kwargs[optimizer],
+        }
+        print(optimizer_kwargs)
+        opt = getattr(torch.optim, optimizer)(
+            wf.parameters(), lr=learning_rate, **optimizer_kwargs
+        )
     if _scheduler_factory:
         scheduler = _scheduler_factory(opt)
-    elif lr_scheduler == 'inverse':
-        scheduler = torch.optim.lr_scheduler.LambdaLR(
-            opt, lambda n: 1 / (1 + n / decay_rate)
-        )
+    elif lr_scheduler:
+        scheduler_kwargs = {
+            **SCHEDULER_KWARGS.get(lr_scheduler, {}),
+            **lr_scheduler_kwargs[lr_scheduler],
+        }
+        if lr_scheduler[0].islower():
+            if lr_scheduler == 'inverse':
+
+                def lr_lambda(n, decay_rate):
+                    return 1 / (1 + n / decay_rate)
+
+            elif lr_scheduler == 'scan':
+
+                def lr_lambda(n, eq_steps, start, rate):
+                    return 1.0 if n < eq_steps else start * rate ** (n - eq_steps)
+
+            scheduler = torch.optim.lr_scheduler.LambdaLR(
+                opt, partial(lr_lambda, **scheduler_kwargs)
+            )
+        else:
+            scheduler = getattr(torch.optim.lr_scheduler, lr_scheduler)(
+                opt, **scheduler_kwargs
+            )
     else:
         scheduler = None
     if state:
