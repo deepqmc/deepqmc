@@ -15,6 +15,7 @@ __version__ = '0.1.0'
 __all__ = ['train']
 
 OPTIMIZER_KWARGS = {
+    'Adam': {'betas': [0.9, 0.9]},
     'AdamW': {'betas': [0.9, 0.9], 'weight_decay': 0.01},
 }
 SCHEDULER_KWARGS = {
