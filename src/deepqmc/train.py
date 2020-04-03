@@ -56,7 +56,7 @@ def train(  # noqa: C901
     equilibrate=True,
     fit_kwargs=None,
     sampler_kwargs=None,
-    ewm_decay=0.99,
+    ewm_decay_rate=20,
     outlier_sigma=3,
     max_outliers=3,
 ):
@@ -95,7 +95,6 @@ def train(  # noqa: C901
             **OPTIMIZER_KWARGS.get(optimizer, {}),
             **optimizer_kwargs[optimizer],
         }
-        print(optimizer_kwargs)
         opt = getattr(torch.optim, optimizer)(
             wf.parameters(), lr=learning_rate, **optimizer_kwargs
         )
@@ -131,10 +130,10 @@ def train(  # noqa: C901
         opt.load_state_dict(state['opt'])
         if scheduler:
             scheduler.load_state_dict(state['scheduler'])
-        ewm_energy = state['ewm_energy']
+        ewm_mean, ewm_std = state['ewm']
     else:
         init_step = 0
-        ewm_energy = None
+        ewm_mean = None
     if workdir:
         workdir = Path(workdir)
         writer = SummaryWriter(log_dir=workdir, flush_secs=15, purge_step=init_step - 1)
@@ -185,16 +184,18 @@ def train(  # noqa: C901
             writer=writer,
             **(fit_kwargs or {}),
         ):
-            if ewm_energy is None:
-                ewm_energy = energy
-            elif abs(energy - ewm_energy) < outlier_sigma * ewm_energy.std_dev:
-                ewm_energy = (1 - ewm_decay) * energy + ewm_decay * ewm_energy
+            ewm_decay = 1 - 1 / (2 + step / ewm_decay_rate)
+            if ewm_mean is None:
+                ewm_mean, ewm_std = energy, energy.std_dev
+            elif abs(energy - ewm_mean) < outlier_sigma * ewm_std:
+                ewm_mean = (1 - ewm_decay) * energy + ewm_decay * ewm_mean
+                ewm_std = (1 - ewm_decay) * energy.std_dev + ewm_decay * ewm_std
                 outlier_count = 0
             elif outlier_count < max_outliers:
                 outlier_count += 1
             else:
                 raise TrainingBlowup(step, chkpts)
-            steps.set_postfix(E=f'{ewm_energy:S}')
+            steps.set_postfix(E=f'{ewm_mean:S} (s={ewm_std:.3f})')
             if scheduler:
                 scheduler.step()
             if workdir:
@@ -205,7 +206,7 @@ def train(  # noqa: C901
                         'step': step,
                         'wf': wf.state_dict(),
                         'opt': opt.state_dict(),
-                        'ewm_energy': ewm_energy,
+                        'ewm': (ewm_mean, ewm_std),
                     }
                     if scheduler:
                         state['scheduler'] = scheduler.state_dict()
