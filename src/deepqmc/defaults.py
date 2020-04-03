@@ -1,6 +1,7 @@
 import inspect
 
 import tomlkit
+from tomlkit.items import Comment, Trivia
 
 from deepqmc import evaluate, train
 from deepqmc.fit import fit_wf
@@ -66,7 +67,7 @@ def collect_kwarg_defaults(func, mapping):
         else:
             assert p.kind is inspect.Parameter.KEYWORD_ONLY
             if p.default is None:
-                kwargs.add(tomlkit.comment(f'{p.name} = ...'))
+                kwargs.add(Comment(Trivia(comment=f'#: {p.name} = ...')))
             else:
                 try:
                     kwargs[p.name] = p.default

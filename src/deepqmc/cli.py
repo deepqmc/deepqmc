@@ -36,12 +36,16 @@ def cli():
 
 
 @cli.command()
-def defaults():
+@click.option('--commented', '-c', is_flag=True)
+def defaults(commented):
     table = tomlkit.table()
     table['model_kwargs'] = collect_kwarg_defaults(PauliNet.from_hf, DEEPQMC_MAPPING)
     table['train_kwargs'] = collect_kwarg_defaults(train, DEEPQMC_MAPPING)
     table['evaluate_kwargs'] = collect_kwarg_defaults(evaluate, DEEPQMC_MAPPING)
-    click.echo(tomlkit.dumps(table), nl=False)
+    lines = tomlkit.dumps(table).split('\n')
+    if commented:
+        lines = ['# ' + l if ' = ' in l and l[0] != '#' else l for l in lines]
+    click.echo('\n'.join(lines), nl=False)
 
 
 @cli.command('train')
