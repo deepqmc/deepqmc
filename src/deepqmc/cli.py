@@ -1,5 +1,6 @@
 import logging
 import sys
+import time
 from pathlib import Path
 
 import click
@@ -111,6 +112,33 @@ def evaluate_at(workdir, cuda):
     if cuda:
         wf.cuda()
     evaluate(wf, workdir=workdir, **params.get('evaluate_kwargs', {}))
+
+
+def get_status(path):
+    path = Path(path)
+    with path.open() as f:
+        lines = f.readlines()
+    line = ''
+    blowups = 0
+    for l in lines:
+        if 'E=' in l:
+            line = l
+        elif 'blowup' in l:
+            blowups += 1
+    modtime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(path.stat().st_mtime),)
+    return {'modtime': modtime, 'blowups': blowups, 'line': line.strip()}
+
+
+def get_status_multi(paths):
+    for path in sorted(paths):
+        yield {'path': (p := Path(path)).parent, **get_status(p)}
+
+
+@cli.command()
+@click.argument('paths', nargs=-1, type=click.Path(exists=True, dir_okay=False))
+def status(paths):
+    for x in get_status_multi(paths):
+        click.echo('{line} -- {modtime}, blowups: {blowups} | {path}'.format_map(x))
 
 
 @cli.command()
