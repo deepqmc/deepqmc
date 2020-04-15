@@ -69,7 +69,10 @@ class Molecule(nn.Module):
         )
 
     def as_pyscf(self):
-        return [(str(int(charge.numpy())), coord.numpy()) for coord, charge in self]
+        return [
+            (str(int(charge.cpu().numpy())), coord.cpu().numpy())
+            for coord, charge in self
+        ]
 
     @classmethod
     def from_name(cls, name, **kwargs):
