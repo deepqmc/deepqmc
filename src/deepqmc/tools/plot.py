@@ -42,7 +42,16 @@ def plot_func(
     return ax.plot(x, y, **kwargs)
 
 
-def plot_func_2d(func, bounds, density=0.02, xy_plane=False, device=None, ax=None):
+def plot_func_2d(
+    func,
+    bounds,
+    density=0.02,
+    xy_plane=False,
+    device=None,
+    ax=None,
+    plot='contour',
+    **kwargs,
+):
     if not ax:
         import matplotlib.pyplot as plt
 
@@ -51,11 +60,12 @@ def plot_func_2d(func, bounds, density=0.02, xy_plane=False, device=None, ax=Non
     xy, x_y = get_flat_mesh(bounds, ns_pts, device=device)
     if xy_plane:
         xy = torch.cat([xy, xy.new_zeros(len(xy), 1)], dim=1)
-    res = plt.contour(
+    res = getattr(ax, plot)(
         *(z.cpu().numpy() for z in x_y),
         func(xy).detach().view(len(x_y[0]), -1).cpu().numpy().T,
+        **kwargs,
     )
-    plt.gca().set_aspect(1)
+    ax.set_aspect(1)
     return res
 
 
