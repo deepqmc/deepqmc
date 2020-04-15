@@ -119,6 +119,7 @@ class PauliNet(WaveFunction):
         dist_feat_cutoff=10.0,
         backflow_type='orbital',
         backflow_channels=1,
+        backflow_transform='mult',
         rc_scaling=1.0,
         cusp_alpha=10.0,
         freeze_embed=False,
@@ -161,10 +162,13 @@ class PauliNet(WaveFunction):
             else None
         )
         backflow_spec = {
-            'orbital': (n_orbitals, backflow_channels),
-            'det': (max(n_up, n_down), len(self.confs) * backflow_channels),
+            'orbital': [n_orbitals, backflow_channels],
+            'det': [max(n_up, n_down), len(self.confs) * backflow_channels],
         }[backflow_type]
+        if backflow_transform == 'both':
+            backflow_spec[1] *= 2
         self.backflow_type = backflow_type
+        self.backflow_transform = backflow_transform
         self.backflow = (
             backflow_factory(len(mol), dist_feat_dim, n_up, n_down, *backflow_spec)
             if backflow_factory
@@ -324,6 +328,21 @@ class PauliNet(WaveFunction):
         wf.mf = mf
         return wf
 
+    def _backflow_op(self, xs, fs):
+        if self.backflow_transform == 'mult':
+            fs_mult, fs_add = fs, None
+        elif self.backflow_transform == 'add':
+            fs_mult, fs_add = None, fs
+        elif self.backflow_transform == 'both':
+            fs_mult, fs_add = fs[:, : fs.shape[1] // 2], fs[:, fs.shape[1] // 2 :]
+        if fs_add is not None:
+            envel = (xs ** 2).mean(dim=-1, keepdim=True).sqrt()
+        if fs_mult is not None:
+            xs = xs * (1 + 2 * torch.tanh(fs_mult / 4))
+        if fs_add is not None:
+            xs = xs + 0.1 * envel * torch.tanh(fs_add / 4)
+        return xs
+
     def forward(self, rs, debug=NULL_DEBUG):
         batch_dim, n_elec = rs.shape[:2]
         assert n_elec == self.confs.shape[1]
@@ -353,7 +372,7 @@ class PauliNet(WaveFunction):
             with debug.cd('backflow'):
                 fs = self.backflow(*edges, debug=debug)  # [bs, q, i, mu/nu]
             if self.backflow_type == 'orbital':
-                xs = xs * fs
+                xs = self._backflow_op(xs, fs)
         # form dets as [bs, q, p, i, nu]
         conf_up, conf_down = self.confs[:, : self.n_up], self.confs[:, self.n_up :]
         det_up = xs[:, :, : self.n_up, conf_up].transpose(-3, -2)
@@ -361,8 +380,8 @@ class PauliNet(WaveFunction):
         if self.backflow and self.backflow_type == 'det':
             n_conf = len(self.confs)
             fs = fs.unflatten(1, ((None, fs.shape[1] // n_conf), (None, n_conf)))
-            det_up = det_up * fs[..., : self.n_up, : self.n_up]
-            det_down = det_down * fs[..., self.n_up :, : self.n_down]
+            det_up = self._backflow_op(det_up, fs[..., : self.n_up, : self.n_up])
+            det_down = self._backflow_op(det_down, fs[..., self.n_up :, : self.n_down])
             # with open-shell systems, part of the backflow output is not used
         if self.return_log:
             sign_up, det_up = eval_log_slater(det_up)
