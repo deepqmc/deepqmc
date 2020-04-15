@@ -98,7 +98,8 @@ def train_at(workdir, save_every, cuda, max_restarts, min_rewind):
 @cli.command('evaluate')
 @click.argument('workdir', type=click.Path(exists=True))
 @click.option('--cuda/--no-cuda', default=True)
-def evaluate_at(workdir, cuda):
+@click.option('--store-steps/--no-store-steps', default=False)
+def evaluate_at(workdir, cuda, store_steps):
     workdir = Path(workdir).resolve()
     state = torch.load(workdir / 'state.pt', map_location=None if cuda else 'cpu')
     for _ in range(20):
@@ -111,7 +112,12 @@ def evaluate_at(workdir, cuda):
             break
     if cuda:
         wf.cuda()
-    evaluate(wf, workdir=workdir, **params.get('evaluate_kwargs', {}))
+    evaluate(
+        wf,
+        store_steps=store_steps,
+        workdir=workdir,
+        **params.get('evaluate_kwargs', {}),
+    )
 
 
 def get_status(path):
