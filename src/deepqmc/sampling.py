@@ -43,7 +43,7 @@ def sample_wf(  # noqa: C901
         block_size (int): size of a block (a sequence of samples)
         writer (:class:`torch.utils.tensorboard.writer.SummaryWriter`):
             Tensorboard writer
-        log_dict (dict-like): batch data will be stored in this dictionary if given
+        log_dict (dict-like): step data will be stored in this dictionary if given
         blocks (list): used as storage of blocks. If not given, the iterator
             uses a local storage.
         equilibrate (bool/int): if false, local energies are calculated and accumulated
@@ -53,12 +53,12 @@ def sample_wf(  # noqa: C901
     blocks = blocks if blocks is not None else []
     calculating_energy = not equilibrate
     buffer = []
-    buffer_rs = []
+    energy = None
     for step, (rs, log_psis, _, info) in zip(steps, sampler):
         if step == 0:
             dist_means = rs.new_zeros(5 * block_size)
             if not equilibrate:
-                yield 0, None, None
+                yield 0, 'eq'
         if not calculating_energy:
             if not type(equilibrate) == int:
                 dist_means[:-1] = dist_means[1:].clone()
@@ -68,29 +68,26 @@ def sample_wf(  # noqa: C901
                 and dist_means[:block_size].std() < dist_means[-block_size:].std()
             ):
                 calculating_energy = True
-                yield step, None, None
+                yield step, 'eq'
         if calculating_energy:
             Es_loc = local_energy(rs, wf, keep_graph=False)[0]
             buffer.append(Es_loc)
-            buffer_rs.append(rs)
+            if log_dict:
+                log_dict['coords'] = rs.cpu().numpy()
+                log_dict['E_loc'] = Es_loc.cpu().numpy()
+                log_dict['log_psis'] = log_psis.cpu().numpy()
             if len(buffer) == block_size:
                 buffer = torch.stack(buffer)
                 block = unp.uarray(
                     buffer.mean(dim=0).cpu(),
                     buffer.std(dim=0).cpu() / np.sqrt(len(buffer)),
                 )
-                if log_dict is not None:
-                    log_dict['energy'] = np.stack(
-                        [unp.nominal_values(block), unp.std_devs(block)], -1
-                    )
                 blocks.append(block)
                 buffer = []
             if not buffer:
                 blocks_arr = unp.nominal_values(np.stack(blocks, -1))
                 err = blocks_arr.mean(-1).std() / np.sqrt(len(blocks_arr))
                 energy = ufloat(blocks_arr.mean(), err)
-                yield step, energy, torch.stack(buffer_rs)
-                buffer_rs = []
         if writer:
             if calculating_energy:
                 writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
@@ -123,6 +120,8 @@ def sample_wf(  # noqa: C901
                         ax = fig.subplots()
                         ax.hist(blocks_arr.flatten(), bins=100)
                         writer.add_figure('E_block', fig, step)
+        if calculating_energy:
+            yield step, energy
 
 
 def samples_from(sampler, steps):

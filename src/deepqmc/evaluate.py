@@ -1,9 +1,11 @@
 from itertools import count
 from pathlib import Path
 
+import numpy as np
 import tables
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
+from uncertainties import unumpy as unp
 
 from .sampling import LangevinSampler, sample_wf
 
@@ -13,7 +15,7 @@ __all__ = ['evaluate']
 
 def evaluate(
     wf,
-    store_coords=False,
+    store_steps=False,
     workdir=None,
     *,
     n_steps=500,
@@ -39,7 +41,7 @@ def evaluate(
             :func:`~deepqmc.sampling.sample_wf`
         workdir (str): path where to store Tensorboard event file and HDF5 file with
             sampling block energies
-        store_coords (bool): whether to store sampled electron coordinates
+        store_steps (bool): whether to store individual sampled electron configuraitons
 
     Returns:
         dict: Expectation values with standard errors.
@@ -47,7 +49,7 @@ def evaluate(
     if workdir:
         workdir = Path(workdir)
         writer = SummaryWriter(log_dir=workdir, flush_secs=15)
-        h5file = tables.open_file(workdir / 'blocks.h5', 'a')
+        h5file = tables.open_file(workdir / 'sample.h5', 'a')
         if 'blocks' not in h5file.root:
             table_blocks = h5file.create_table(
                 '/', 'blocks', {'energy': tables.Float32Col((sample_size, 2))}
@@ -55,7 +57,11 @@ def evaluate(
             table_steps = h5file.create_table(
                 '/',
                 'steps',
-                {'coords': tables.Float32Col((sample_size, wf.n_up + wf.n_down, 3))},
+                {
+                    'E_loc': tables.Float32Col((sample_size,)),
+                    'log_psis': tables.Float32Col((sample_size,)),
+                    'coords': tables.Float32Col((sample_size, wf.n_up + wf.n_down, 3)),
+                },
             )
         else:
             table_blocks = h5file.root['blocks']
@@ -70,27 +76,33 @@ def evaluate(
         **{'n_decorrelate': 4, **(sampler_kwargs or {})},
     )
     steps = tqdm(count(), desc='equilibrating')
+    blocks = []
     try:
-        for step, energy, rs in sample_wf(
+        for step, energy in sample_wf(
             wf,
             sampler.iter_with_info(),
             steps,
-            log_dict=table_blocks.row if workdir else None,
+            blocks=blocks,
+            log_dict=table_steps.row if workdir else None,
             writer=writer,
             **(sample_kwargs or {}),
         ):
-            if energy is None:
+            if energy == 'eq':
                 steps.total = step + n_steps
                 steps.set_description('evaluating')
                 continue
-            steps.set_postfix(E=f'{energy:S}')
+            if energy is not None:
+                steps.set_postfix(E=f'{energy:S}')
             if workdir:
-                table_blocks.row.append()
-                table_blocks.flush()
-                if store_coords:
-                    for rs in rs:
-                        table_steps.row['coords'] = rs.cpu().numpy()
-                        table_steps.row.append()
+                if len(blocks) > len(table_blocks['energy']):
+                    block = blocks[-1]
+                    table_blocks.row['energy'] = np.stack(
+                        [unp.nominal_values(block), unp.std_devs(block)], -1
+                    )
+                    table_blocks.row.append()
+                    table_blocks.flush()
+                if store_steps:
+                    table_steps.row.append()
                     table_steps.flush()
             if step >= (steps.total or n_steps) - 1:
                 break
