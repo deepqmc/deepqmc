@@ -1,3 +1,4 @@
+import importlib
 import logging
 import sys
 import time
@@ -18,12 +19,23 @@ from .defaults import DEEPQMC_MAPPING, collect_kwarg_defaults
 log = logging.getLogger(__name__)
 
 
+def import_fullname(fullname):
+    module_name, qualname = fullname.split(':')
+    module = importlib.import_module(module_name)
+    return getattr(module, qualname)
+
+
 def wf_from_file(path, state=None):
     params = toml.loads(Path(path).read_text())
     system = params.pop('system')
     if isinstance(system, str):
-        system = {'name': system}
-    mol = Molecule.from_name(**system)
+        name, system = system, {}
+    else:
+        name = system.pop('name')
+    if ':' in name:
+        mol = import_fullname(name)(**system)
+    else:
+        mol = Molecule.from_name(name, **system)
     wf = PauliNet.from_hf(mol, **params.pop('model_kwargs', {}))
     if state:
         wf.load_state_dict(state['wf'])
@@ -81,7 +93,7 @@ def train_at(workdir, save_every, cuda, max_restarts, min_rewind):
             )
         except TrainingBlowup as e:
             if attempt == max_restarts:
-                log.error(f'Detected blowup, maximum number of restarts reached')
+                log.error('Detected blowup, maximum number of restarts reached')
                 break
             for step, sf in reversed(e.chkpts):
                 if step >= e.step - min_rewind:
@@ -90,7 +102,7 @@ def train_at(workdir, save_every, cuda, max_restarts, min_rewind):
                 log.warning(f'Detected blowup, restarting from step {step + 1}')
                 break
             else:
-                log.warning(f'Detected blowup, restarting from beginnig')
+                log.warning('Detected blowup, restarting from beginnig')
         else:
             break
 
