@@ -46,8 +46,9 @@ def sample_wf(  # noqa: C901
         log_dict (dict-like): batch data will be stored in this dictionary if given
         blocks (list): used as storage of blocks. If not given, the iterator
             uses a local storage.
-        equilibrate (bool): if false, local energies are calculated and accumulated
-            from the first sampling step, otherwise equilibrium is first detected
+        equilibrate (bool/int): if false, local energies are calculated and accumulated
+            from the first sampling step, if true equilibrium is detected 
+            automatically, if int argument specifies number of equilibration steps
     """
     blocks = blocks if blocks is not None else []
     calculating_energy = not equilibrate
@@ -58,10 +59,14 @@ def sample_wf(  # noqa: C901
             dist_means = rs.new_zeros(5 * block_size)
             if not equilibrate:
                 yield 0, None, None
-        dist_means[:-1] = dist_means[1:].clone()
-        dist_means[-1] = pairwise_self_distance(rs).mean()
-        if not calculating_energy and dist_means[0] > 0:
-            if dist_means[:block_size].std() < dist_means[-block_size:].std():
+        if not calculating_energy:
+            if not type(equilibrate) == int:
+                dist_means[:-1] = dist_means[1:].clone()
+                dist_means[-1] = pairwise_self_distance(rs).mean()
+            if (type(equilibrate) == int and step >= equilibrate) or (
+                dist_means[0] > 0
+                and dist_means[:block_size].std() < dist_means[-block_size:].std()
+            ):
                 calculating_energy = True
                 yield step, None, None
         if calculating_energy:
