@@ -245,11 +245,11 @@ class PauliNet(WaveFunction):
                 conf_cutoff = max(
                     np.sort(abs(mf.ci.flatten()))[-conf_limit] - 1e-10, conf_cutoff
                 )
-            conf_coeff, *confs = zip(
-                *mf.fcisolver.large_ci(
-                    mf.ci, mf.ncas, mf.nelecas, tol=conf_cutoff, return_strs=False
-                )
+            ci = mf.fcisolver.large_ci(
+                mf.ci, mf.ncas, mf.nelecas, tol=conf_cutoff, return_strs=False
             )
+            conf_coeff, *confs = zip(*ci[: None if len(ci) <= conf_limit else -2])
+            # discard the last ci wave function if degenerate
             ns_dbl = n_up - mf.nelecas[0], n_down - mf.nelecas[1]
             conf_coeff = torch.tensor(conf_coeff)
             confs = [
