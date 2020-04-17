@@ -182,6 +182,16 @@ class PauliNet(WaveFunction):
         self.return_log = return_log
         if freeze_embed:
             self.requires_grad_embeddings_(False)
+        self.n_determinants = len(self.confs) * backflow_channels
+        self.n_backflows = (
+            0
+            if not self.backflow
+            else (
+                len(self.confs) * backflow_channels
+                if (self.backflow_type == "det")
+                else backflow_channels
+            )
+        )
 
     def requires_grad_classes_(self, classes, requires_grad):
         for m in self.modules():
