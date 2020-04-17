@@ -48,6 +48,12 @@ charges = [8, 6, 8]
 charge = 0
 spin = 0
 
+[C2]
+coords = [[-1.1739, 0.0, 0.0], [1.1739, 0.0, 0.0]]
+charges = [6,6]
+charge = 0
+spin = 0
+
 [bicyclobutane]
 coords = [
     [0.7507, 0.0000, -0.3193],
