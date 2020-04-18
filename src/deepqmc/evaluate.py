@@ -1,13 +1,14 @@
 from itertools import count
 from pathlib import Path
 
+import h5py
 import numpy as np
-import tables
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 from uncertainties import unumpy as unp
 
 from .sampling import LangevinSampler, sample_wf
+from .utils import H5LogTable
 
 __version__ = '0.1.0'
 __all__ = ['evaluate']
@@ -49,23 +50,19 @@ def evaluate(
     if workdir:
         workdir = Path(workdir)
         writer = SummaryWriter(log_dir=workdir, flush_secs=15)
-        h5file = tables.open_file(workdir / 'sample.h5', 'a')
-        if 'blocks' not in h5file.root:
-            table_blocks = h5file.create_table(
-                '/', 'blocks', {'energy': tables.Float32Col((sample_size, 2))}
-            )
-            table_steps = h5file.create_table(
-                '/',
-                'steps',
-                {
-                    'E_loc': tables.Float32Col((sample_size,)),
-                    'log_psis': tables.Float32Col((sample_size,)),
-                    'coords': tables.Float32Col((sample_size, wf.n_up + wf.n_down, 3)),
-                },
-            )
-        else:
-            table_blocks = h5file.root['blocks']
-            table_steps = h5file.root['steps']
+        h5file = h5py.File(workdir / 'sample.h5', 'a', libver='v110')
+        h5file.swmr_mode = True
+        table_blocks = H5LogTable(
+            h5file.require_group('blocks'), {'energy': (sample_size, 2)}
+        )
+        table_steps = H5LogTable(
+            h5file.require_group('steps'),
+            {
+                'E_loc': (sample_size,),
+                'log_psis': (sample_size,),
+                'coords': (sample_size, wf.n_up + wf.n_down, 3),
+            },
+        )
     else:
         writer = None
     sampler = LangevinSampler.from_mf(
@@ -83,7 +80,7 @@ def evaluate(
             sampler.iter_with_info(),
             steps,
             blocks=blocks,
-            log_dict=table_steps.row if workdir else None,
+            log_dict=table_steps.row if workdir and store_steps else None,
             writer=writer,
             **(sample_kwargs or {}),
         ):
@@ -99,11 +96,7 @@ def evaluate(
                     table_blocks.row['energy'] = np.stack(
                         [unp.nominal_values(block), unp.std_devs(block)], -1
                     )
-                    table_blocks.row.append()
-                    table_blocks.flush()
-                if store_steps:
-                    table_steps.row.append()
-                    table_steps.flush()
+                h5file.flush()
             if step >= (steps.total or n_steps) - 1:
                 break
     finally:

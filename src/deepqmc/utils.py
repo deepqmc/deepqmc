@@ -197,3 +197,32 @@ def estimate_optimal_batch_size_cuda(
         )
     max_memory = max_memory or unused_cuda_memory()
     return int(max_memory / memory_per_batch)
+
+
+class H5LogTable:
+    def __init__(self, group, columns, dtype=np.float32):
+        self._datasets = {}
+        for label, shape in columns.items():
+            if label not in group:
+                group.create_dataset(
+                    label, (0, *shape), maxshape=(None, *shape), dtype=dtype,
+                )
+            self._datasets[label] = group[label]
+
+    def __getitem__(self, label):
+        return self._datasets[label]
+
+    def resize(self, size):
+        for ds in self._datasets.values():
+            ds.resize(size, axis=0)
+
+    # mimicking Pytables API
+    @property
+    def row(self):
+        class Appender:
+            def __setitem__(_, label, row):  # noqa: B902, N805
+                ds = self._datasets[label]
+                ds.resize(ds.shape[0] + 1, axis=0)
+                ds[-1, ...] = row
+
+        return Appender()

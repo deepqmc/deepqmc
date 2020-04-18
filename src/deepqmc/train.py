@@ -2,7 +2,7 @@ from functools import partial
 from itertools import count
 from pathlib import Path
 
-import tables
+import h5py
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm, trange
@@ -10,6 +10,7 @@ from tqdm.auto import tqdm, trange
 from .errors import NanGradients, NanLoss, TrainingBlowup
 from .fit import LossEnergy, fit_wf
 from .sampling import LangevinSampler, sample_wf
+from .utils import H5LogTable
 
 __version__ = '0.1.0'
 __all__ = ['train']
@@ -144,17 +145,15 @@ def train(  # noqa: C901
         )
         chkpts_dir = workdir / 'chkpts'
         chkpts_dir.mkdir(exist_ok=True)
-        h5file = tables.open_file(workdir / 'fit.h5', 'a')
-        if 'fit' not in h5file.root:
-            desc = {
-                label: tables.Float32Col(batch_size)
-                for label in ['E_loc', 'E_loc_loss', 'log_psis', 'sign_psis', 'log_ws']
-            }
-            desc['learning_rate'] = tables.Float32Col()
-            table = h5file.create_table('/', 'fit', desc)
-        else:
-            table = h5file.root['fit']
-            table.remove_rows(init_step)
+        h5file = h5py.File(workdir / 'fit.h5', 'a', libver='v110')
+        h5file.swmr_mode = True
+        columns = {
+            label: (batch_size,)
+            for label in ['E_loc', 'E_loc_loss', 'log_psis', 'sign_psis', 'log_ws']
+        }
+        columns['learning_rate'] = ()
+        table = H5LogTable(h5file, columns)
+        table.resize(init_step)
     else:
         writer = None
     if _sampler_factory:
@@ -200,8 +199,7 @@ def train(  # noqa: C901
             if scheduler:
                 scheduler.step()
             if workdir:
-                table.row.append()
-                table.flush()
+                h5file.flush()
                 if save_every and (step + 1) % save_every == 0:
                     state = {
                         'step': step,
