@@ -72,7 +72,7 @@ def sample_wf(  # noqa: C901
         if calculating_energy:
             Es_loc = local_energy(rs, wf, keep_graph=False)[0]
             buffer.append(Es_loc)
-            if log_dict:
+            if log_dict is not None:
                 log_dict['coords'] = rs.cpu().numpy()
                 log_dict['E_loc'] = Es_loc.cpu().numpy()
                 log_dict['log_psis'] = log_psis.cpu().numpy()
