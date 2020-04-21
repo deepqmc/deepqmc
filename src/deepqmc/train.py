@@ -215,6 +215,9 @@ def train(  # noqa: C901
                     torch.save(state, state_file)
     except (NanLoss, NanGradients, TrainingBlowup) as e:
         raise TrainingCrash(step, chkpts) from e
+    except RuntimeError as e:
+        if 'svd_cuda: the updating process of SBDSDC did not converge' in e.args[0]:
+            raise TrainingCrash(step, chkpts) from e
     finally:
         steps.close()
         if workdir:
