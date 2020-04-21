@@ -20,6 +20,10 @@ class NanGradients(DeepQMCError):
 
 
 class TrainingBlowup(DeepQMCError):
+    pass
+
+
+class TrainingCrash(DeepQMCError):
     def __init__(self, step, chkpts):
         super().__init__()
         self.step = step

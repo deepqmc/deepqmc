@@ -11,7 +11,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from deepqmc import Molecule, evaluate, train
-from deepqmc.errors import TrainingBlowup
+from deepqmc.errors import TrainingCrash
 from deepqmc.wf import PauliNet
 
 from .defaults import DEEPQMC_MAPPING, collect_kwarg_defaults
@@ -91,18 +91,19 @@ def train_at(workdir, save_every, cuda, max_restarts, min_rewind):
                 **params.get('train_kwargs', {}),
                 **hooks,
             )
-        except TrainingBlowup as e:
+        except TrainingCrash as e:
+            log.warning(f'Caught exception: {e.__cause__!r}')
             if attempt == max_restarts:
-                log.error('Detected blowup, maximum number of restarts reached')
+                log.error('Maximum number of restarts reached')
                 break
             for step, sf in reversed(e.chkpts):
                 if step >= e.step - min_rewind:
                     continue
                 state_file = sf
-                log.warning(f'Detected blowup, restarting from step {step + 1}')
+                log.warning(f'Restarting from step {step + 1}')
                 break
             else:
-                log.warning('Detected blowup, restarting from beginnig')
+                log.warning('Restarting from beginnig')
         else:
             break
 
@@ -137,14 +138,14 @@ def get_status(path):
     with path.open() as f:
         lines = f.readlines()
     line = ''
-    blowups = 0
+    restarts = 0
     for l in lines:
         if 'E=' in l:
             line = l
-        elif 'blowup' in l:
-            blowups += 1
+        elif 'Restarting' in l:
+            restarts += 1
     modtime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(path.stat().st_mtime),)
-    return {'modtime': modtime, 'blowups': blowups, 'line': line.strip()}
+    return {'modtime': modtime, 'restarts': restarts, 'line': line.strip()}
 
 
 def get_status_multi(paths):
@@ -156,7 +157,7 @@ def get_status_multi(paths):
 @click.argument('paths', nargs=-1, type=click.Path(exists=True, dir_okay=False))
 def status(paths):
     for x in get_status_multi(paths):
-        click.echo('{line} -- {modtime}, blowups: {blowups} | {path}'.format_map(x))
+        click.echo('{line} -- {modtime}, restarts: {restarts} | {path}'.format_map(x))
 
 
 @cli.command()

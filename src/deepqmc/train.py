@@ -7,7 +7,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm, trange
 
-from .errors import NanGradients, NanLoss, TrainingBlowup
+from .errors import NanGradients, NanLoss, TrainingBlowup, TrainingCrash
 from .fit import LossEnergy, fit_wf
 from .sampling import LangevinSampler, sample_wf
 from .utils import H5LogTable
@@ -194,7 +194,8 @@ def train(  # noqa: C901
             elif outlier_count < max_outliers:
                 outlier_count += 1
             else:
-                raise TrainingBlowup(step, chkpts)
+                outlier_sigma = abs(energy - ewm_mean) / ewm_std
+                raise TrainingBlowup(f'Outlier sigma: {outlier_sigma}')
             steps.set_postfix(E=f'{ewm_mean:S} (s={ewm_std:.3f})')
             if scheduler:
                 scheduler.step()
@@ -212,8 +213,8 @@ def train(  # noqa: C901
                     state_file = chkpts_dir / f'state-{step + 1:05d}.pt'
                     chkpts.append((step, state_file))
                     torch.save(state, state_file)
-    except (NanLoss, NanGradients) as e:
-        raise TrainingBlowup(step, chkpts) from e
+    except (NanLoss, NanGradients, TrainingBlowup) as e:
+        raise TrainingCrash(step, chkpts) from e
     finally:
         steps.close()
         if workdir:
