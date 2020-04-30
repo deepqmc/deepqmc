@@ -3,12 +3,13 @@ import inspect
 import tomlkit
 from tomlkit.items import Comment, Trivia
 
-from deepqmc import evaluate, train
-from deepqmc.fit import fit_wf
-from deepqmc.sampling import LangevinSampler, sample_wf
-from deepqmc.utils import NULL_DEBUG
-from deepqmc.wf import PauliNet
-from deepqmc.wf.paulinet import ElectronicSchNet, OmniSchNet, SubnetFactory
+from .evaluate import evaluate
+from .fit import fit_wf
+from .sampling import LangevinSampler, sample_wf
+from .train import train
+from .utils import NULL_DEBUG
+from .wf import PauliNet
+from .wf.paulinet import ElectronicSchNet, OmniSchNet, SubnetFactory
 
 DEEPQMC_MAPPING = {
     (train, 'sampler_kwargs'): LangevinSampler.from_mf,

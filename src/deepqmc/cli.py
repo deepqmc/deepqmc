@@ -10,11 +10,12 @@ import tomlkit
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from deepqmc import Molecule, evaluate, train
-from deepqmc.errors import TrainingCrash
-from deepqmc.wf import PauliNet
-
 from .defaults import DEEPQMC_MAPPING, collect_kwarg_defaults
+from .errors import TrainingCrash
+from .evaluate import evaluate
+from .molecule import Molecule
+from .train import train
+from .wf import PauliNet
 
 log = logging.getLogger(__name__)
 
