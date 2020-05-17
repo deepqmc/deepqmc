@@ -150,7 +150,8 @@ def get_status(path):
 
 def get_status_multi(paths):
     for path in sorted(paths):
-        yield {'path': (p := Path(path)).parent, **get_status(p)}
+        p = Path(path)
+        yield {'path': (p).parent, **get_status(p)}
 
 
 @cli.command()
