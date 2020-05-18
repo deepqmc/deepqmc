@@ -1,12 +1,16 @@
 from collections import OrderedDict
+from functools import lru_cache
+from itertools import combinations, permutations
 
+# TODO remove use of numpy (torch, math)
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from .errors import LUFactError
-from .utils import batch_eval
+from ..errors import LUFactError
+from ..utils import batch_eval
+
 
 __all__ = ()
 
@@ -53,8 +57,13 @@ def shuffle_tensor(x):
 
 
 def triu_flat(x):
+    # TODO use idx_comb()
     i, j = np.triu_indices(x.shape[1], k=1)
     return x[:, i, j, ...]
+
+
+def bdiag(A):
+    return A.diagonal(dim1=-1, dim2=-2)
 
 
 def pow_int(xs, exps):
@@ -65,6 +74,21 @@ def pow_int(xs, exps):
         mask = exps == exp
         zs[..., mask] = xs_expanded[..., mask] ** exp.item()
     return zs
+
+
+@lru_cache()
+def idx_perm(n, r, device=torch.device('cpu')):  # noqa: B008
+    idx = list(permutations(range(n), r))
+    idx = torch.tensor(idx, device=device).t()
+    idx = idx.view(r, *range(n, n - r, -1))
+    return idx
+
+
+@lru_cache()
+def idx_comb(n, r, device=torch.device('cpu')):  # noqa: B008
+    idx = list(combinations(range(n), r))
+    idx = torch.tensor(idx, device=device).t()
+    return idx
 
 
 def ssp(*args, **kwargs):
