@@ -1,8 +1,8 @@
+from .bdet import bdet
 from .utils import (
     SSP,
     assign_where,
     bdiag,
-    bdet,
     get_custom_dnn,
     get_log_dnn,
     idx_comb,
