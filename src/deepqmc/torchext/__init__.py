@@ -1,4 +1,5 @@
 from .bdet import bdet
+from .sloglindet import sloglindet
 from .utils import (
     SSP,
     assign_where,
@@ -34,6 +35,7 @@ __all__ = [
     'number_of_parameters',
     'pow_int',
     'shuffle_tensor',
+    'sloglindet',
     'ssp',
     'state_dict_copy',
     'triu_flat',
