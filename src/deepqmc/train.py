@@ -156,15 +156,18 @@ def train(  # noqa: C901
     else:
         writer = None
         log_dict = {}
-    if 'sampler_factory' in PLUGINS:
-        sampler = PLUGINS['sampler_factory'](wf, writer=writer)
-    else:
-        sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
     steps = trange(
         init_step, n_steps, initial=init_step, total=n_steps, desc='training'
     )
     chkpts = []
     try:
+        # this can blowup if the backprop of SVD in determiants fail
+        if 'sampler_factory' in PLUGINS:
+            sampler = PLUGINS['sampler_factory'](wf, writer=writer)
+        else:
+            sampler = LangevinSampler.from_mf(
+                wf, writer=writer, **(sampler_kwargs or {})
+            )
         if equilibrate:
             with tqdm(count(), desc='equilibrating') as eq_steps:
                 next(sample_wf(wf, sampler.iter_with_info(), eq_steps))
