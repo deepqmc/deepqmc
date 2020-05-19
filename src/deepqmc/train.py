@@ -147,6 +147,7 @@ def train(  # noqa: C901
         h5file.swmr_mode = True
         table = H5LogTable(h5file)
         table.resize(init_step)
+        h5file.flush()
     else:
         writer = None
     if 'sampler_factory' in PLUGINS:
