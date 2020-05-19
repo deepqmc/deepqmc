@@ -200,20 +200,14 @@ def estimate_optimal_batch_size_cuda(
 
 
 class H5LogTable:
-    def __init__(self, group, columns, dtype=np.float32):
-        self._datasets = {}
-        for label, shape in columns.items():
-            if label not in group:
-                group.create_dataset(
-                    label, (0, *shape), maxshape=(None, *shape), dtype=dtype,
-                )
-            self._datasets[label] = group[label]
+    def __init__(self, group):
+        self._group = group
 
     def __getitem__(self, label):
-        return self._datasets[label]
+        return self._group[label] if label in self._group else []
 
     def resize(self, size):
-        for ds in self._datasets.values():
+        for ds in self._group.values():
             ds.resize(size, axis=0)
 
     # mimicking Pytables API
@@ -221,7 +215,21 @@ class H5LogTable:
     def row(self):
         class Appender:
             def __setitem__(_, label, row):  # noqa: B902, N805
-                ds = self._datasets[label]
+                if isinstance(row, np.ndarray):
+                    shape = row.shape
+                elif isinstance(row, (float, int)):
+                    shape = ()
+                if label not in self._group:
+                    if isinstance(row, np.ndarray):
+                        dtype = row.dtype
+                    elif isinstance(row, float):
+                        dtype = float
+                    else:
+                        dtype = None
+                    self._group.create_dataset(
+                        label, (0, *shape), maxshape=(None, *shape), dtype=dtype,
+                    )
+                ds = self._group[label]
                 ds.resize(ds.shape[0] + 1, axis=0)
                 ds[-1, ...] = row
 
