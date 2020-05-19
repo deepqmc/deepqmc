@@ -1,10 +1,8 @@
 import torch
 from torch import nn
 
-from deepqmc.torchext import SSP, get_log_dnn
+from deepqmc.torchext import SSP, get_log_dnn, idx_perm
 from deepqmc.utils import NULL_DEBUG
-
-from .indexing import pair_idxs
 
 __all__ = ()
 
@@ -29,16 +27,12 @@ class Backflow(nn.Module):
 
     def forward(self, rs, xs, debug=NULL_DEBUG):
         batch_dim, n_elec = rs.shape[:2]
-        i, j = pair_idxs(n_elec).T
+        i, j = idx_perm(n_elec, 2, rs.device)
         diffs_elec = rs[..., i, :] - rs[..., j, :]
         bf_elec = (
-            (
-                self.bf_elec(xs[..., i, :] * xs[..., j, :]).squeeze(dim=-1)[..., None]
-                * diffs_elec
-            )
-            .view(batch_dim, n_elec, n_elec - 1, 3)
-            .sum(dim=-2)
-        )
+            self.bf_elec(xs[..., i, :] * xs[..., j, :]).squeeze(dim=-1)[..., None]
+            * diffs_elec
+        ).sum(dim=-2)
         diffs_nuc = rs[..., :, None, :] - self.mol.coords
         bf_nuc = (self.bf_nuc(xs)[..., None] * diffs_nuc).sum(dim=-2)
         cutoff = backflow_cutoff(diffs_nuc.norm(dim=-1)).prod(dim=-1)
