@@ -1,5 +1,5 @@
 import time
-from collections import UserDict
+from collections import UserDict, defaultdict
 from contextlib import contextmanager
 from datetime import datetime
 from functools import wraps
@@ -232,6 +232,22 @@ class H5LogTable:
                 ds = self._group[label]
                 ds.resize(ds.shape[0] + 1, axis=0)
                 ds[-1, ...] = row
+
+        return Appender()
+
+
+class DebugLogTable:
+    def __init__(self):
+        self._data = defaultdict(list)
+
+    def __getitem__(self, label):
+        return self._data[label]
+
+    @property
+    def row(self):
+        class Appender:
+            def __setitem__(_, label, row):  # noqa: B902, N805
+                self._data[label].append(row)
 
         return Appender()
 
