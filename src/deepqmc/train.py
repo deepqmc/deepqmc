@@ -9,6 +9,7 @@ from tqdm.auto import tqdm, trange
 
 from .errors import NanGradients, NanLoss, TrainingBlowup, TrainingCrash
 from .fit import LossEnergy, fit_wf
+from .plugins import PLUGINS
 from .sampling import LangevinSampler, sample_wf
 from .utils import H5LogTable
 
@@ -43,9 +44,6 @@ def train(  # noqa: C901
     workdir=None,
     save_every=None,
     state=None,
-    _optimizer_factory=None,
-    _sampler_factory=None,
-    _scheduler_factory=None,
     *,
     n_steps=10_000,
     batch_size=10_000,
@@ -90,8 +88,8 @@ def train(  # noqa: C901
         save_every (int): number of steps between storing current parameter state
         state (dict): restore optimizer and scheduler states from a stored state
     """
-    if _optimizer_factory:
-        opt = _optimizer_factory(wf.parameters())
+    if 'optimizer_factory' in PLUGINS:
+        opt = PLUGINS['optimizer_factory'](wf.parameters())
     else:
         optimizer_kwargs = {
             **OPTIMIZER_KWARGS.get(optimizer, {}),
@@ -100,8 +98,8 @@ def train(  # noqa: C901
         opt = getattr(torch.optim, optimizer)(
             wf.parameters(), lr=learning_rate, **optimizer_kwargs
         )
-    if _scheduler_factory:
-        scheduler = _scheduler_factory(opt)
+    if 'scheduler_factory' in PLUGINS:
+        scheduler = PLUGINS['scheduler_factory'](opt)
     elif lr_scheduler:
         scheduler_kwargs = {
             **SCHEDULER_KWARGS.get(lr_scheduler, {}),
@@ -156,8 +154,8 @@ def train(  # noqa: C901
         table.resize(init_step)
     else:
         writer = None
-    if _sampler_factory:
-        sampler = _sampler_factory(wf, writer=writer)
+    if 'sampler_factory' in PLUGINS:
+        sampler = PLUGINS['sampler_factory'](wf, writer=writer)
     else:
         sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
     steps = trange(

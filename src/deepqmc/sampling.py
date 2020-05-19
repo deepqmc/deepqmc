@@ -9,6 +9,7 @@ from uncertainties import ufloat, unumpy as unp
 
 from .errors import LUFactError
 from .physics import clean_force, local_energy, pairwise_self_distance, quantum_force
+from .plugins import PLUGINS
 from .torchext import assign_where, is_cuda
 
 __version__ = '0.3.0'
@@ -78,6 +79,8 @@ def sample_wf(  # noqa: C901
                 log_dict['coords'] = rs.cpu().numpy()
                 log_dict['E_loc'] = Es_loc.cpu().numpy()
                 log_dict['log_psis'] = log_psis.cpu().numpy()
+            if 'sample_plugin' in PLUGINS:
+                PLUGINS['sample_plugin'](wf, rs, log_dict)
             if len(buffer) == block_size:
                 buffer = torch.stack(buffer)
                 block = unp.uarray(

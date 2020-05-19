@@ -68,8 +68,12 @@ def defaults(commented):
 @click.option('--cuda/--no-cuda', default=True)
 @click.option('--max-restarts', default=3, show_default=True)
 @click.option('--min-rewind', default=30, show_default=True)
-def train_at(workdir, save_every, cuda, max_restarts, min_rewind):
+@click.option('--hook', is_flag=True)
+def train_at(workdir, save_every, cuda, max_restarts, min_rewind, hook):
     workdir = Path(workdir).resolve()
+    if hook:
+        sys.path.append(str(workdir))
+        import dlqmc_hook  # noqa: F401
     state_file = workdir / 'state.pt'
     if not state_file.is_file():
         state_file = None
@@ -78,11 +82,6 @@ def train_at(workdir, save_every, cuda, max_restarts, min_rewind):
         wf, params = wf_from_file(workdir / 'param.toml', state)
         if cuda:
             wf.cuda()
-        if params.pop('hooks', False):
-            sys.path.append('.')
-            from hooks import hooks
-        else:
-            hooks = {}
         try:
             train(
                 wf,
@@ -90,7 +89,6 @@ def train_at(workdir, save_every, cuda, max_restarts, min_rewind):
                 state=state,
                 save_every=save_every,
                 **params.get('train_kwargs', {}),
-                **hooks,
             )
         except TrainingCrash as e:
             log.warning(f'Caught exception: {e.__cause__!r}')
@@ -104,7 +102,7 @@ def train_at(workdir, save_every, cuda, max_restarts, min_rewind):
                 log.warning(f'Restarting from step {step + 1}')
                 break
             else:
-                log.warning('Restarting from beginnig')
+                log.warning('Restarting from beginning')
         else:
             break
 
@@ -113,8 +111,12 @@ def train_at(workdir, save_every, cuda, max_restarts, min_rewind):
 @click.argument('workdir', type=click.Path(exists=True))
 @click.option('--cuda/--no-cuda', default=True)
 @click.option('--store-steps/--no-store-steps', default=False)
-def evaluate_at(workdir, cuda, store_steps):
+@click.option('--hook', is_flag=True)
+def evaluate_at(workdir, cuda, store_steps, hook):
     workdir = Path(workdir).resolve()
+    if hook:
+        sys.path.append(str(workdir))
+        import dlqmc_hook  # noqa: F401
     state = torch.load(workdir / 'state.pt', map_location=None if cuda else 'cpu')
     for _ in range(20):
         try:
