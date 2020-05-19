@@ -52,17 +52,8 @@ def evaluate(
         writer = SummaryWriter(log_dir=workdir, flush_secs=15)
         h5file = h5py.File(workdir / 'sample.h5', 'a', libver='v110')
         h5file.swmr_mode = True
-        table_blocks = H5LogTable(
-            h5file.require_group('blocks'), {'energy': (sample_size, 2)}
-        )
-        table_steps = H5LogTable(
-            h5file.require_group('steps'),
-            {
-                'E_loc': (sample_size,),
-                'log_psis': (sample_size,),
-                'coords': (sample_size, wf.n_up + wf.n_down, 3),
-            },
-        )
+        table_blocks = H5LogTable(h5file.require_group('blocks'))
+        table_steps = H5LogTable(h5file.require_group('steps'))
     else:
         writer = None
     sampler = LangevinSampler.from_mf(

@@ -145,12 +145,7 @@ def train(  # noqa: C901
         chkpts_dir.mkdir(exist_ok=True)
         h5file = h5py.File(workdir / 'fit.h5', 'a', libver='v110')
         h5file.swmr_mode = True
-        columns = {
-            label: (batch_size,)
-            for label in ['E_loc', 'E_loc_loss', 'log_psis', 'sign_psis', 'log_ws']
-        }
-        columns['learning_rate'] = ()
-        table = H5LogTable(h5file, columns)
+        table = H5LogTable(h5file)
         table.resize(init_step)
     else:
         writer = None
