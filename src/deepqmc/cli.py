@@ -26,7 +26,7 @@ def import_fullname(fullname):
     return getattr(module, qualname)
 
 
-def wf_from_file(path, state=None):
+def wf_from_file(path):
     params = toml.loads(Path(path).read_text())
     system = params.pop('system')
     if isinstance(system, str):
@@ -38,8 +38,6 @@ def wf_from_file(path, state=None):
     else:
         mol = Molecule.from_name(name, **system)
     wf = PauliNet.from_hf(mol, **params.pop('model_kwargs', {}))
-    if state:
-        wf.load_state_dict(state['wf'])
     return wf, params
 
 
@@ -67,21 +65,18 @@ def defaults(commented):
 @click.option('--save-every', default=100, show_default=True)
 @click.option('--cuda/--no-cuda', default=True)
 @click.option('--max-restarts', default=3, show_default=True)
-@click.option('--min-rewind', default=30, show_default=True)
 @click.option('--hook', is_flag=True)
-def train_at(workdir, save_every, cuda, max_restarts, min_rewind, hook):
+def train_at(workdir, save_every, cuda, max_restarts, hook):
     workdir = Path(workdir).resolve()
     if hook:
         sys.path.append(str(workdir))
         import dlqmc_hook  # noqa: F401
     state_file = workdir / 'state.pt'
-    if not state_file.is_file():
-        state_file = None
+    state = torch.load(state_file) if state_file.is_file() else None
+    wf, params = wf_from_file(workdir / 'param.toml')
+    if cuda:
+        wf.cuda()
     for attempt in range(max_restarts + 1):
-        state = torch.load(state_file) if state_file else None
-        wf, params = wf_from_file(workdir / 'param.toml', state)
-        if cuda:
-            wf.cuda()
         try:
             train(
                 wf,
@@ -95,12 +90,9 @@ def train_at(workdir, save_every, cuda, max_restarts, min_rewind, hook):
             if attempt == max_restarts:
                 log.error('Maximum number of restarts reached')
                 break
-            for step, sf in reversed(e.chkpts):
-                if step >= e.step - min_rewind:
-                    continue
-                state_file = sf
-                log.warning(f'Restarting from step {step + 1}')
-                break
+            state = e.state
+            if state:
+                log.warning(f'Restarting from step {state["step"]}')
             else:
                 log.warning('Restarting from beginning')
         else:

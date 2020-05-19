@@ -1,3 +1,4 @@
+from copy import deepcopy
 from functools import partial
 from itertools import count
 from pathlib import Path
@@ -8,6 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm, trange
 
 from .errors import NanGradients, NanLoss, TrainingBlowup, TrainingCrash
+from .ewm import EWMElocMonitor
 from .fit import LossEnergy, fit_wf
 from .plugins import PLUGINS
 from .sampling import LangevinSampler, sample_wf
@@ -44,6 +46,7 @@ def train(  # noqa: C901
     workdir=None,
     save_every=None,
     state=None,
+    min_rewind=10,
     *,
     n_steps=10_000,
     batch_size=10_000,
@@ -56,9 +59,6 @@ def train(  # noqa: C901
     equilibrate=True,
     fit_kwargs=None,
     sampler_kwargs=None,
-    ewm_decay_rate=20,
-    outlier_sigma=3,
-    max_outliers=3,
 ):
     r"""Train a wave function model.
 
@@ -125,15 +125,20 @@ def train(  # noqa: C901
             )
     else:
         scheduler = None
+    # The convention here is that states/steps are numbered as slices/elements
+    # in a Python list. For example, step 0 takes state 0 to state 1. The
+    # progress bar really displays states, not steps, as it goes from 0 to
+    # n_steps, that is, it goes through n_steps+1 states.
     if state:
-        init_step = state['step'] + 1
+        init_step = state['step']
+        wf.load_state_dict(state['wf'])
         opt.load_state_dict(state['opt'])
         if scheduler:
             scheduler.load_state_dict(state['scheduler'])
-        ewm_mean, ewm_std = state['ewm']
+        monitor = state['monitor']
     else:
         init_step = 0
-        ewm_mean = None
+        monitor = EWMElocMonitor()
     if workdir:
         workdir = Path(workdir)
         writer = SummaryWriter(log_dir=workdir, flush_secs=15, purge_step=init_step - 1)
@@ -150,6 +155,7 @@ def train(  # noqa: C901
         h5file.flush()
     else:
         writer = None
+        log_dict = {}
     if 'sampler_factory' in PLUGINS:
         sampler = PLUGINS['sampler_factory'](wf, writer=writer)
     else:
@@ -158,13 +164,12 @@ def train(  # noqa: C901
         init_step, n_steps, initial=init_step, total=n_steps, desc='training'
     )
     chkpts = []
-    outlier_count = 0
     try:
         if equilibrate:
             with tqdm(count(), desc='equilibrating') as eq_steps:
                 next(sample_wf(wf, sampler.iter_with_info(), eq_steps))
             steps.unpause()
-        for step, energy in fit_wf(
+        for step, _ in fit_wf(
             wf,
             LossEnergy(),
             opt,
@@ -174,44 +179,54 @@ def train(  # noqa: C901
                 range=partial(trange, desc='sampling', leave=False),
             ),
             steps,
-            log_dict=table.row if workdir else None,
+            log_dict=table.row if workdir else log_dict,
             writer=writer,
             **(fit_kwargs or {}),
         ):
-            ewm_decay = 1 - 1 / (2 + step / ewm_decay_rate)
-            if ewm_mean is None:
-                ewm_mean, ewm_std = energy, energy.std_dev
-            elif abs(energy - ewm_mean) < outlier_sigma * ewm_std:
-                ewm_mean = (1 - ewm_decay) * energy + ewm_decay * ewm_mean
-                ewm_std = (1 - ewm_decay) * energy.std_dev + ewm_decay * ewm_std
-                outlier_count = 0
-            elif outlier_count < max_outliers:
-                outlier_count += 1
-            else:
-                outlier_sigma = abs(energy - ewm_mean) / ewm_std
-                raise TrainingBlowup(f'Outlier sigma: {outlier_sigma}')
-            steps.set_postfix(E=f'{ewm_mean:S} (s={ewm_std:.3f})')
+            # at this point, the wf model and optimizer are already at state step+1
+            monitor.update(table['E_loc'][-1] if workdir else log_dict['E_loc'])
+            # now monitor is at state `step+1`. if blowup was detected, the
+            # blowup is reported to occur at step `step`.
+            if monitor.blowup_detection.get('indicator', 0) > 0.5:
+                raise TrainingBlowup(repr(monitor.blowup_detection))
+            if monitor.energy.std_dev > 0:
+                steps.set_postfix(E=f'{monitor.energy:S}')
+            state = {
+                'step': step + 1,
+                'wf': wf.state_dict(),
+                'opt': opt.state_dict(),
+                'monitor': deepcopy(monitor),
+            }
             if scheduler:
                 scheduler.step()
+                # now scheduler is at state step+1
+                state['scheduler'] = scheduler.state_dict()
+            chkpts.append((step + 1, state))
+            chkpts = chkpts[-100:]
             if workdir:
                 h5file.flush()
                 if save_every and (step + 1) % save_every == 0:
-                    state = {
-                        'step': step,
-                        'wf': wf.state_dict(),
-                        'opt': opt.state_dict(),
-                        'ewm': (ewm_mean, ewm_std),
-                    }
-                    if scheduler:
-                        state['scheduler'] = scheduler.state_dict()
                     state_file = chkpts_dir / f'state-{step + 1:05d}.pt'
-                    chkpts.append((step, state_file))
-                    torch.save(state, state_file)
-    except (NanLoss, NanGradients, TrainingBlowup) as e:
-        raise TrainingCrash(step, chkpts) from e
-    except RuntimeError as e:
-        if 'svd_cuda: the updating process of SBDSDC did not converge' in e.args[0]:
-            raise TrainingCrash(step, chkpts) from e
+                    torch.save(state, chkpts_dir / f'state-{step + 1:05d}.pt')
+    except (NanLoss, NanGradients, TrainingBlowup, RuntimeError) as e:
+        if isinstance(e, RuntimeError):
+            if (
+                'svd_cuda: the updating process of SBDSDC did not converge'
+                not in e.args[0]
+            ):
+                raise
+        blowup_step = (
+            monitor.blowup_detection['init'] if monitor.blowup_detection else step
+        )
+        target_step = blowup_step - min_rewind
+        for step, state in reversed(chkpts):
+            if step <= target_step:
+                raise TrainingCrash(state) from e
+        for state_file in sorted(chkpts_dir.glob('state-*.pt'), reverse=True):
+            step = int(state_file.stem.split('-')[1])
+            if step <= target_step:
+                raise TrainingCrash(torch.load(state_file)) from e
+        raise TrainingCrash(None) from e
     finally:
         steps.close()
         if workdir:
