@@ -24,10 +24,9 @@ class TrainingBlowup(DeepQMCError):
 
 
 class TrainingCrash(DeepQMCError):
-    def __init__(self, step, chkpts):
+    def __init__(self, state):
         super().__init__()
-        self.step = step
-        self.chkpts = chkpts
+        self.state = state
 
 
 class LUFactError(InfoException, DeepQMCError):
