@@ -16,11 +16,6 @@ from .gto import GTOBasis
 from .molorb import MolecularOrbital
 from .omni import OmniSchNet
 
-if torch.__version__ >= '1.2.0':
-    from torch import det
-else:
-    from ..torchext import bdet as det
-
 __version__ = '0.1.0'
 __all__ = ['PauliNet']
 
@@ -28,7 +23,7 @@ __all__ = ['PauliNet']
 def eval_slater(xs):
     if xs.shape[-1] == 0:
         return xs.new_ones(xs.shape[:-2])
-    return det(xs.contiguous())
+    return torch.det(xs.contiguous())
 
 
 def eval_log_slater(xs):

@@ -19,7 +19,7 @@ python = "^3.7"
 toml = "^0.10.0"
 uncertainties = "^3.1.2"
 numpy = "^1.16"
-torch = "^1.1"
+torch = "^1.2"
 scipy = { version = "^1.2", optional = true }
 pyscf = { version = "^1.6", optional = true }
 pytest = { version = "^4.4", optional = true }
