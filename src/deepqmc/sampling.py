@@ -11,6 +11,7 @@ from .errors import LUFactError
 from .physics import clean_force, local_energy, pairwise_self_distance, quantum_force
 from .plugins import PLUGINS
 from .torchext import assign_where, is_cuda
+from .utils import energy_offset
 
 __version__ = '0.3.0'
 __all__ = ['sample_wf', 'MetropolisSampler', 'LangevinSampler']
@@ -95,12 +96,14 @@ def sample_wf(  # noqa: C901
                 energy = ufloat(blocks_arr.mean(), err)
         if writer:
             if calculating_energy:
-                writer.add_scalar('E_loc/mean', Es_loc.mean(), step)
+                writer.add_scalar('E_loc/mean', Es_loc.mean() - energy_offset, step)
                 writer.add_scalar('E_loc/var', Es_loc.var(), step)
                 writer.add_scalar('E_loc/min', Es_loc.min(), step)
                 writer.add_scalar('E_loc/max', Es_loc.max(), step)
                 if not buffer:
-                    writer.add_scalar('E/value', energy.nominal_value, step)
+                    writer.add_scalar(
+                        'E/value', energy.nominal_value - energy_offset, step
+                    )
                     writer.add_scalar('E/error', energy.std_dev, step)
             try:
                 from matplotlib.figure import Figure

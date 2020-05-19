@@ -226,3 +226,26 @@ class H5LogTable:
                 ds[-1, ...] = row
 
         return Appender()
+
+
+class _EnergyOffset:
+    value = None
+
+    def __call__(self, offset):
+        assert self.value is None
+        self.value = offset
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        assert self.value is not None
+        self.value = None
+        return None
+
+    def __rsub__(self, base):
+        return base - self.value if self.value else base
+
+
+energy_offset = _EnergyOffset()
