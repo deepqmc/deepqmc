@@ -1,12 +1,10 @@
-from itertools import product
+from functools import lru_cache
 
 import torch
 from torch import nn
 
-from deepqmc.torchext import SSP, get_log_dnn
+from deepqmc.torchext import SSP, get_log_dnn, idx_perm
 from deepqmc.utils import NULL_DEBUG
-
-from .indexing import pair_idxs, spin_pair_idxs
 
 __version__ = '0.1.0'
 __all__ = ['ElectronicSchNet']
@@ -73,14 +71,23 @@ class SchNetLayer(nn.Module):
     def forward(self, x, Y, edges_elec, edges_nuc):
         *batch_dims, n_elec = edges_nuc.shape[:-2]
         h = self.h(x)
-        i, j = pair_idxs(n_elec).T
-        z_elec = (
-            (self.w(edges_elec[..., i, j, :]) * h[..., j, :])
-            .view(*batch_dims, n_elec, -1, h.shape[-1])
-            .sum(dim=-2)
-        )
+        i, j = idx_perm(n_elec, 2, x.device)
+        z_elec = (self.w(edges_elec[..., i, j, :]) * h[..., j, :]).sum(dim=-2)
         z_nuc = (self.w(edges_nuc) * Y[..., None, :, :]).sum(dim=-2)
         return self.g(z_elec + z_nuc)
+
+
+@lru_cache()
+def idx_pair_spin(n_up, n_down, device=torch.device('cpu')):  # noqa: B008
+    # indexes for up-up, up-down, down-up, down-down
+    ij = idx_perm(n_up + n_down, 2, device=device)
+    mask = ij < n_up
+    return [
+        ('same', ij[:, mask[0] & mask[1]].view(2, n_up, -1)),
+        ('anti', ij[:, mask[0] & ~mask[1]].view(2, n_up, -1)),
+        ('anti', ij[:, ~mask[0] & mask[1]].view(2, n_down, -1)),
+        ('same', ij[:, ~mask[0] & ~mask[1]].view(2, n_down, -1)),
+    ]
 
 
 class SchNetSpinLayer(nn.Module):
@@ -97,17 +104,8 @@ class SchNetSpinLayer(nn.Module):
         n_up, n_down = self.n_up, n_elec - self.n_up
         h = self.h(x)
         z_elec_uu, z_elec_ud, z_elec_du, z_elec_dd = (
-            (
-                self.w['same' if si == sj else 'anti'](edges_elec[..., i, j, :])
-                * h[..., j, :]
-            )
-            .view(*batch_dims, n_si, -1, h.shape[-1])
-            .sum(dim=-2)
-            for (si, sj), (i, j), n_si in zip(
-                product('ud', repeat=2),
-                spin_pair_idxs(n_up, n_down, transposed=True),
-                [n_up, n_up, n_down, n_down],
-            )
+            (self.w[l](edges_elec[..., i, j, :]) * h[..., j, :]).sum(dim=-2)
+            for l, (i, j) in idx_pair_spin(n_up, n_down, x.device)
         )
         z_elec_same = torch.cat([z_elec_uu, z_elec_dd], dim=-2)
         z_elec_anti = torch.cat([z_elec_ud, z_elec_du], dim=-2)
