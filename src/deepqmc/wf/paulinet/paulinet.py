@@ -6,7 +6,7 @@ from torch import nn
 
 from deepqmc import Molecule
 from deepqmc.physics import pairwise_diffs, pairwise_distance
-from deepqmc.torchext import triu_flat
+from deepqmc.torchext import sloglindet, triu_flat
 from deepqmc.utils import NULL_DEBUG
 from deepqmc.wf import WaveFunction
 
@@ -107,6 +107,7 @@ class PauliNet(WaveFunction):
         configurations=None,
         mo_factory=None,
         return_log=True,
+        use_sloglindet=False,
         *,
         cusp_correction=False,
         cusp_electrons=False,
@@ -119,6 +120,7 @@ class PauliNet(WaveFunction):
         cusp_alpha=10.0,
         freeze_embed=False,
     ):
+        assert return_log or not use_sloglindet
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
         self.dist_basis = (
@@ -183,6 +185,7 @@ class PauliNet(WaveFunction):
             self.requires_grad_embeddings_(False)
         self.n_determinants = len(self.confs) * backflow_channels
         self.n_backflows = 0 if not self.backflow else backflow_spec[1]
+        self.use_sloglindet = use_sloglindet
 
     def requires_grad_classes_(self, classes, requires_grad):
         for m in self.modules():
@@ -334,7 +337,7 @@ class PauliNet(WaveFunction):
             xs = xs + 0.1 * envel * torch.tanh(fs_add / 4)
         return xs
 
-    def forward(self, rs, debug=NULL_DEBUG):
+    def forward(self, rs, debug=NULL_DEBUG):  # noqa: C901
         batch_dim, n_elec = rs.shape[:2]
         assert n_elec == self.confs.shape[1]
         n_atoms = len(self.mol)
@@ -374,20 +377,28 @@ class PauliNet(WaveFunction):
             det_up = self._backflow_op(det_up, fs[..., : self.n_up, : self.n_up])
             det_down = self._backflow_op(det_down, fs[..., self.n_up :, : self.n_down])
             # with open-shell systems, part of the backflow output is not used
-        if self.return_log:
-            sign_up, det_up = eval_log_slater(det_up)
-            sign_down, det_down = eval_log_slater(det_down)
-            xs = det_up + det_down
-            xs_shift = xs.flatten(start_dim=1).max(dim=-1).values
-            # the exp-normalize trick, to avoid over/underflow of the exponential
-            xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None, None])
+        if self.use_sloglindet:
+            bf_dim = det_up.shape[-4]
+            conf_coeff = self.conf_coeff.weight[0]
+            conf_coeff = conf_coeff.expand(bf_dim, -1).flatten() / np.sqrt(bf_dim)
+            det_up = det_up.flatten(start_dim=-4, end_dim=-3).contiguous()
+            det_down = det_down.flatten(start_dim=-4, end_dim=-3).contiguous()
+            sign, psi = sloglindet(conf_coeff, det_up, det_down)
         else:
-            det_up = debug['det_up'] = eval_slater(det_up)
-            det_down = debug['det_down'] = eval_slater(det_down)
-            xs = det_up * det_down
-        psi = self.conf_coeff(xs).squeeze(dim=-1).mean(dim=-1)
-        if self.return_log:
-            psi, sign = psi.abs().log() + xs_shift, psi.sign().detach()
+            if self.return_log:
+                sign_up, det_up = eval_log_slater(det_up)
+                sign_down, det_down = eval_log_slater(det_down)
+                xs = det_up + det_down
+                xs_shift = xs.flatten(start_dim=1).max(dim=-1).values
+                # the exp-normalize trick, to avoid over/underflow of the exponential
+                xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None, None])
+            else:
+                det_up = debug['det_up'] = eval_slater(det_up)
+                det_down = debug['det_down'] = eval_slater(det_down)
+                xs = det_up * det_down
+            psi = self.conf_coeff(xs).squeeze(dim=-1).mean(dim=-1)
+            if self.return_log:
+                psi, sign = psi.abs().log() + xs_shift, psi.sign().detach()
         if self.cusp_same:
             cusp_same = self.cusp_same(
                 torch.cat(
