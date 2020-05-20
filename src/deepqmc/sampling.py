@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from uncertainties import ufloat, unumpy as unp
 
-from . import torchext
+from .errors import LUFactError
 from .physics import clean_force, local_energy, pairwise_self_distance, quantum_force
 from .torchext import assign_where, is_cuda
 
@@ -418,7 +418,7 @@ class LangevinSampler(MetropolisSampler):
     def qforce(self, rs):
         try:
             forces, (log_psis, sign_psis) = quantum_force(rs, self.wf)
-        except torchext.LUFactError as e:
+        except LUFactError as e:
             e.info['rs'] = rs[e.info['idxs']]
             raise
         forces = clean_force(forces, rs, self.wf.mol, tau=self.tau)
