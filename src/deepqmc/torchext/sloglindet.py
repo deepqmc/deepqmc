@@ -50,7 +50,9 @@ def log_rho(s):
 
 
 def _slogcof(A):
-    U, s, V = A.svd()
+    # SVD seems to be hugely suboptimal on GPU, especially for small matrices,
+    # so we do everything on a CPU
+    U, s, V = (x.to(A.device) for x in A.cpu().svd())
     sgn_UV = U.det().sign() * V.det().sign()
     log_g = log_gamma(s)
     idx = ..., None, None
