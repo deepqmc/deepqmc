@@ -379,8 +379,11 @@ class PauliNet(WaveFunction):
             # with open-shell systems, part of the backflow output is not used
         if self.use_sloglindet:
             bf_dim = det_up.shape[-4]
-            conf_coeff = self.conf_coeff.weight[0]
-            conf_coeff = conf_coeff.expand(bf_dim, -1).flatten() / np.sqrt(bf_dim)
+            if isinstance(self.conf_coeff, nn.Linear):
+                conf_coeff = self.conf_coeff.weight[0]
+                conf_coeff = conf_coeff.expand(bf_dim, -1).flatten() / np.sqrt(bf_dim)
+            else:
+                conf_coeff = det_up.new_ones(1)
             det_up = det_up.flatten(start_dim=-4, end_dim=-3).contiguous()
             det_down = det_down.flatten(start_dim=-4, end_dim=-3).contiguous()
             sign, psi = sloglindet(conf_coeff, det_up, det_down)
