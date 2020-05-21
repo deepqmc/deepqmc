@@ -387,6 +387,7 @@ class PauliNet(WaveFunction):
             det_up = det_up.flatten(start_dim=-4, end_dim=-3).contiguous()
             det_down = det_down.flatten(start_dim=-4, end_dim=-3).contiguous()
             sign, psi = sloglindet(conf_coeff, det_up, det_down)
+            sign = sign.detach()
         else:
             if self.return_log:
                 sign_up, det_up = eval_log_slater(det_up)
