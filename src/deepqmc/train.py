@@ -160,6 +160,7 @@ def train(  # noqa: C901
         init_step, n_steps, initial=init_step, total=n_steps, desc='training'
     )
     chkpts = []
+    step = init_step - 1
     try:
         # this can blowup if the backprop of SVD in determiants fail
         if 'sampler_factory' in PLUGINS:
