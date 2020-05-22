@@ -13,6 +13,7 @@ class WaveFunction(nn.Module, Debuggable):
 
     def __init__(self, mol):
         super().__init__()
+        self.sampling = True
         self.mol = mol
         n_elec = int(mol.charges.sum() - mol.charge)
         self.n_up = (n_elec + mol.spin) // 2
@@ -27,3 +28,7 @@ class WaveFunction(nn.Module, Debuggable):
 
     def forward(self, rs, debug=NULL_DEBUG):
         return NotImplemented
+
+    def sample(self, mode=True):
+        self.sampling = mode
+        return self

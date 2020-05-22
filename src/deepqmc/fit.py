@@ -171,7 +171,7 @@ def fit_wf(  # noqa: C901
             with kfac.track_forward() if kfac else nullcontext():
                 Es_loc, log_psis, sign_psis = local_energy(
                     rs,
-                    wf,
+                    wf.sample(False),
                     create_graph=require_energy_gradient,
                     keep_graph=require_psi_gradient,
                 )
@@ -182,6 +182,7 @@ def fit_wf(  # noqa: C901
                 loss.backward()
             if kfac:
                 kfac.step_update(loss_func.weights)
+            wf.sample(True)
             subbatches.append(
                 (
                     loss.detach().view(1),
