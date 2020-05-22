@@ -213,10 +213,7 @@ def train(  # noqa: C901
                     torch.save(state, chkpts_dir / f'state-{step + 1:05d}.pt')
     except (NanLoss, NanGradients, TrainingBlowup, RuntimeError) as e:
         if isinstance(e, RuntimeError):
-            if (
-                'svd_cuda: the updating process of SBDSDC did not converge'
-                not in e.args[0]
-            ):
+            if 'the updating process of SBDSDC did not converge' not in e.args[0]:
                 raise
         blowup_step = (
             monitor.blowup_detection['init'] if monitor.blowup_detection else step
