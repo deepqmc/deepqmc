@@ -107,7 +107,7 @@ class PauliNet(WaveFunction):
         configurations=None,
         mo_factory=None,
         return_log=True,
-        use_sloglindet=False,
+        use_sloglindet='training',
         *,
         cusp_correction=False,
         cusp_electrons=False,
@@ -120,7 +120,8 @@ class PauliNet(WaveFunction):
         cusp_alpha=10.0,
         freeze_embed=False,
     ):
-        assert return_log or not use_sloglindet
+        assert use_sloglindet in {'never', 'training', 'always'}
+        assert return_log or use_sloglindet == 'never'
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
         self.dist_basis = (
@@ -377,7 +378,9 @@ class PauliNet(WaveFunction):
             det_up = self._backflow_op(det_up, fs[..., : self.n_up, : self.n_up])
             det_down = self._backflow_op(det_down, fs[..., self.n_up :, : self.n_down])
             # with open-shell systems, part of the backflow output is not used
-        if self.use_sloglindet:
+        if self.use_sloglindet == 'always' or (
+            self.use_sloglindet == 'training' and not self.sampling
+        ):
             bf_dim = det_up.shape[-4]
             if isinstance(self.conf_coeff, nn.Linear):
                 conf_coeff = self.conf_coeff.weight[0]
