@@ -80,7 +80,6 @@ class PauliNet(WaveFunction):
             :math:`(M,\dim(\mathbf e),N^\uparrow,N^\downarrow,N_\text{orb})`
             :math:`\rightarrow(\varphi_\mu(\mathbf r_i),\mathbf e_{ij},\mathbf e_{iI})`
             :math:`\rightarrow\tilde\varphi_{\mu i}(\mathbf r)`
-        r_backflow_factory (callable): constructor for a real-space backflow
         omni_factory (callable): constructor for a combined Jastrow factor and backflow,
             with interface identical to :class:`~deepqmc.wf.paulinet.OmniSchNet`
         configuration (:class:`~torch.Tensor`:math:`(N_\text{det},N)`): :math:`\mu_p`,
@@ -102,7 +101,6 @@ class PauliNet(WaveFunction):
         basis,
         jastrow_factory=None,
         backflow_factory=None,
-        r_backflow_factory=None,
         omni_factory=None,
         configurations=None,
         mo_factory=None,
