@@ -1,7 +1,9 @@
 import importlib
 import logging
+import shutil
 import sys
 import time
+from functools import partial
 from pathlib import Path
 
 import click
@@ -16,6 +18,7 @@ from .evaluate import evaluate
 from .molecule import Molecule
 from .train import train
 from .wf import PauliNet
+from .wf.paulinet.omni import OmniSchNet
 
 log = logging.getLogger(__name__)
 
@@ -26,8 +29,11 @@ def import_fullname(fullname):
     return getattr(module, qualname)
 
 
-def wf_from_file(path):
-    params = toml.loads(Path(path).read_text())
+def wf_from_file(workdir):
+    params = toml.loads((workdir / 'param.toml').read_text())
+    state_file = workdir / 'state.pt'
+    state = torch.load(state_file) if state_file.is_file() else None
+    pyscf_file = workdir / 'baseline.pyscf'
     system = params.pop('system')
     if isinstance(system, str):
         name, system = system, {}
@@ -37,8 +43,42 @@ def wf_from_file(path):
         mol = import_fullname(name)(**system)
     else:
         mol = Molecule.from_name(name, **system)
-    wf = PauliNet.from_hf(mol, **params.pop('model_kwargs', {}))
-    return wf, params
+    if pyscf_file.is_file():
+        mf, mc = pyscf_from_file(pyscf_file)
+        # TODO refactor initialisation to avoid duplicate with PauliNet.from_hf
+        # TODO as part of that, validate that requested/restored cas/basis match
+        wf = PauliNet.from_pyscf(
+            mc or mf,
+            **{
+                'omni_factory': partial(OmniSchNet, **params.pop('omni_kwargs', {})),
+                'cusp_correction': True,
+                'cusp_electrons': True,
+                **params.pop('pauli_kwargs', {}),
+            },
+        )
+        wf.mf = mf
+    else:
+        wf = PauliNet.from_hf(mol, **params.pop('model_kwargs', {}))
+        shutil.move(wf.mf.chkfile, pyscf_file)
+    return wf, params, state
+
+
+def pyscf_from_file(chkfile):
+    import pyscf.gto.mole
+    from pyscf import scf, mcscf, lib
+
+    pyscf.gto.mole.float32 = float
+
+    mol = lib.chkfile.load_mol(chkfile)
+    mf = scf.RHF(mol)
+    mf.__dict__.update(lib.chkfile.load(chkfile, 'scf'))
+    mc_dict = lib.chkfile.load(chkfile, 'mcscf')
+    if mc_dict:
+        mc = mcscf.CASSCF(mf, 0, 0)
+        mc.__dict__.update(mc_dict)
+    else:
+        mc = None
+    return mf, mc
 
 
 @click.group()
@@ -71,9 +111,7 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
     if hook:
         sys.path.append(str(workdir))
         import dlqmc_hook  # noqa: F401
-    state_file = workdir / 'state.pt'
-    state = torch.load(state_file) if state_file.is_file() else None
-    wf, params = wf_from_file(workdir / 'param.toml')
+    wf, params, state = wf_from_file(workdir)
     if cuda:
         wf.cuda()
     for attempt in range(max_restarts + 1):
@@ -109,15 +147,9 @@ def evaluate_at(workdir, cuda, store_steps, hook):
     if hook:
         sys.path.append(str(workdir))
         import dlqmc_hook  # noqa: F401
-    state = torch.load(workdir / 'state.pt', map_location=None if cuda else 'cpu')
-    for _ in range(20):
-        try:
-            wf, params = wf_from_file(workdir / 'param.toml', state)
-        except RuntimeError as exp:
-            if 'size mismatch for conf_coeff.weight' not in exp.args[0]:
-                raise
-        else:
-            break
+    wf, params, state = wf_from_file(workdir)
+    if state:
+        wf.load_state_dict(state['wf'])
     if cuda:
         wf.cuda()
     evaluate(
