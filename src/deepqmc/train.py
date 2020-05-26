@@ -1,3 +1,4 @@
+import logging
 from copy import deepcopy
 from functools import partial
 from itertools import count
@@ -17,6 +18,8 @@ from .utils import H5LogTable
 
 __version__ = '0.1.0'
 __all__ = ['train']
+
+log = logging.getLogger(__name__)
 
 OPTIMIZER_KWARGS = {
     'Adam': {'betas': [0.9, 0.9]},
@@ -212,6 +215,7 @@ def train(  # noqa: C901
                 if save_every and (step + 1) % save_every == 0:
                     state_file = chkpts_dir / f'state-{step + 1:05d}.pt'
                     torch.save(state, chkpts_dir / f'state-{step + 1:05d}.pt')
+                    log.debug(torch.cuda.memory_summary(abbreviated=True))
     except (NanLoss, NanGradients, TrainingBlowup, RuntimeError) as e:
         if isinstance(e, RuntimeError):
             if 'the updating process of SBDSDC did not converge' not in e.args[0]:
