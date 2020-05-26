@@ -102,7 +102,8 @@ class PauliNet(WaveFunction):
         jastrow_factory=None,
         backflow_factory=None,
         omni_factory=None,
-        configurations=None,
+        n_configurations=1,
+        n_orbitals=None,
         mo_factory=None,
         return_log=True,
         use_sloglindet='training',
@@ -127,17 +128,17 @@ class PauliNet(WaveFunction):
             if mo_factory or jastrow_factory or backflow_factory or omni_factory
             else None
         )
-        if configurations is not None:
-            assert configurations.shape[1] == n_up + n_down
-            n_orbitals = configurations.max().item() + 1
-            self.confs = configurations
-            self.conf_coeff = nn.Linear(len(configurations), 1, bias=False)
-        else:
-            n_orbitals = max(n_up, n_down)
-            self.confs = torch.cat(
-                [torch.arange(n_up), torch.arange(n_down)]
-            ).unsqueeze(dim=0)
-            self.conf_coeff = nn.Identity()
+        n_orbitals = n_orbitals or max(n_up, n_down)
+        confs = [list(range(n_up)) + list(range(n_down))] + [
+            sum((torch.randperm(n_orbitals)[:n].tolist() for n in (n_up, n_down)), [])
+            for _ in range(n_configurations - 1)
+        ]
+        self.register_buffer('confs', torch.tensor(confs))
+        self.conf_coeff = (
+            nn.Linear(n_configurations, 1, bias=False)
+            if n_configurations > 1
+            else nn.Identity()
+        )
         self.mo = MolecularOrbital(
             mol,
             basis,
@@ -267,11 +268,19 @@ class PauliNet(WaveFunction):
             mf.mol.spin,
         )
         basis = GTOBasis.from_pyscf(mf.mol)
-        wf = cls(mol, basis, configurations=confs, **kwargs)
+        wf = cls(
+            mol,
+            basis,
+            n_configurations=1 if confs is None else len(confs),
+            n_orbitals=None if confs is None else confs.max().item() + 1,
+            **kwargs,
+        )
         if init_weights:
             wf.mo.init_from_pyscf(mf, freeze_mos=freeze_mos)
             if confs is not None:
-                wf.conf_coeff.weight.detach().copy_(conf_coeff)
+                wf.confs.detach().copy_(confs)
+                if len(confs) > 1:
+                    wf.conf_coeff.weight.detach().copy_(conf_coeff)
                 if freeze_confs:
                     wf.conf_coeff.weight.requires_grad_(False)
         return wf
