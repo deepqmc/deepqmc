@@ -2,6 +2,7 @@ import logging
 from copy import deepcopy
 from functools import partial
 from itertools import count
+from math import inf
 from pathlib import Path
 
 import h5py
@@ -50,6 +51,8 @@ def train(  # noqa: C901
     save_every=None,
     state=None,
     min_rewind=10,
+    blowup_threshold=0.5,
+    return_every=None,
     *,
     n_steps=10_000,
     batch_size=10_000,
@@ -194,7 +197,7 @@ def train(  # noqa: C901
             monitor.update(table['E_loc'][-1] if workdir else log_dict['E_loc'])
             # now monitor is at state `step+1`. if blowup was detected, the
             # blowup is reported to occur at step `step`.
-            if monitor.blowup_detection.get('indicator', 0) > 0.5:
+            if monitor.blowup_detection.get('indicator', 0) > blowup_threshold:
                 raise TrainingBlowup(repr(monitor.blowup_detection))
             if monitor.energy.std_dev > 0:
                 steps.set_postfix(E=f'{monitor.energy:S}')
@@ -211,17 +214,22 @@ def train(  # noqa: C901
             chkpts.append((step + 1, state))
             chkpts = chkpts[-100:]
             if workdir:
+                table.row['E_ewm'] = monitor.energy.n
                 h5file.flush()
                 if save_every and (step + 1) % save_every == 0:
                     state_file = chkpts_dir / f'state-{step + 1:05d}.pt'
                     torch.save(state, chkpts_dir / f'state-{step + 1:05d}.pt')
                     log.debug(torch.cuda.memory_summary(abbreviated=True))
+            if return_every and (step + 1) % return_every == 0:
+                return True
     except (NanLoss, NanGradients, TrainingBlowup, RuntimeError) as e:
         if isinstance(e, RuntimeError):
             if 'the updating process of SBDSDC did not converge' not in e.args[0]:
                 raise
         blowup_step = (
-            monitor.blowup_detection['init'] if monitor.blowup_detection else step
+            monitor.blowup_detection['init']
+            if monitor.blowup_detection and blowup_threshold < inf
+            else step
         )
         target_step = blowup_step - min_rewind
         for step, state in reversed(chkpts):

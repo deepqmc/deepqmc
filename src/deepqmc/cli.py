@@ -4,6 +4,8 @@ import shutil
 import sys
 import time
 from functools import partial
+from itertools import count
+from math import inf
 from pathlib import Path
 
 import click
@@ -134,6 +136,93 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
             else:
                 log.warning('Restarting from beginning')
         else:
+            break
+
+
+@cli.command('train-multi')
+@click.argument('workdir', type=click.Path(exists=True))
+@click.argument('respawn', type=int)
+@click.option('--multi-part', default=0)
+@click.option('--timeout', default=30 * 60)
+@click.option('--check-interval', default=30)
+@click.option('--cuda/--no-cuda', default=True)
+@click.option('--max-restarts', default=3, show_default=True)
+@click.option('--hook', is_flag=True)
+def train_multi_at(
+    workdir, respawn, multi_part, timeout, check_interval, cuda, max_restarts, hook
+):
+    workdir = Path(workdir).resolve()
+    rank = int(workdir.parts[::-1][multi_part])
+    if hook:
+        sys.path.append(str(workdir))
+        import dlqmc_hook  # noqa: F401
+    wf, params, state = wf_from_file(workdir)
+    if cuda:
+        wf.cuda()
+    for cycle in count():
+        end_step = (cycle + 1) * respawn
+        for attempt in range(max_restarts + 1):
+            try:
+                interrupted = train(
+                    wf,
+                    workdir=workdir,
+                    state=state,
+                    save_every=respawn,
+                    return_every=respawn,
+                    blowup_threshold=inf,
+                    min_rewind=5,
+                    **params.get('train_kwargs', {}),
+                )
+            except TrainingCrash as e:
+                log.warning(f'Caught exception: {e.__cause__!r}')
+                state = e.state
+                if (
+                    attempt == max_restarts
+                    or not state
+                    or state['step'] < cycle * respawn
+                ):
+                    log.warning('Aborting cycle')
+                    (workdir / 'chkpts' / f'state-{end_step:05d}.STOP').touch()
+                    interrupted = True
+                    break
+                log.warning(f'Restarting from step {state["step"]}')
+            else:
+                break
+        if not interrupted:
+            return
+        start = time.time()
+        while True:
+            now = time.time()
+            if now - start > timeout:
+                log.error('Timeout reached, aborting')
+                return
+            root = workdir.parents[multi_part]
+            stem = ('*',) + workdir.parts[::-1][:multi_part]
+            root.glob('/'.join(stem + ('param.toml',)))
+            n_tasks = len(list(root.glob('/'.join(stem + ('param.toml',)))))
+            all_states = {
+                int(p.parts[-3 - multi_part]): p
+                for p in root.glob(
+                    '/'.join(stem + (f'chkpts/state-{end_step:05d}.pt',))
+                )
+            }
+            all_stops = {
+                int(p.parts[-3 - multi_part]): None
+                for p in root.glob(
+                    '/'.join(stem + (f'chkpts/state-{end_step:05d}.STOP',))
+                )
+            }
+            all_states = {**all_states, **all_stops}
+            if len(all_states) < n_tasks:
+                log.info(f'Missing {n_tasks - len(all_states)} states')
+                time.sleep(check_interval)
+                continue
+            all_states = [(p, torch.load(p)) for p in all_states.values() if p]
+            log.info(f'Have {len(all_states)} states for respawning')
+            all_states.sort(key=lambda x: x[1]['monitor'].energy)
+            all_states = all_states[: n_tasks // 2]
+            path, state = all_states[rank % len(all_states)]
+            log.info(f'Respawning from {path}')
             break
 
 
