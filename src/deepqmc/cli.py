@@ -76,6 +76,8 @@ def pyscf_from_file(chkfile):
     mf.__dict__.update(lib.chkfile.load(chkfile, 'scf'))
     mc_dict = lib.chkfile.load(chkfile, 'mcscf')
     if mc_dict:
+        mc_dict['ci'] = lib.chkfile.load(chkfile, 'ci')
+        mc_dict['nelecas'] = tuple(map(int, lib.chkfile.load(chkfile, 'nelecas')))
         mc = mcscf.CASSCF(mf, 0, 0)
         mc.__dict__.update(mc_dict)
     else:

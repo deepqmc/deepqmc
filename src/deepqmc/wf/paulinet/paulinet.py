@@ -303,7 +303,7 @@ class PauliNet(WaveFunction):
             pauli_kwargs: arguments passed to :func:`PauliNet.from_pyscf`
             omni_kwargs: arguments passed to :class:`~deepqmc.wf.paulinet.OmniSchNet`
         """
-        from pyscf import gto, mcscf, scf
+        from pyscf import gto, mcscf, scf, lib
 
         mol = gto.M(
             atom=mol.as_pyscf(),
@@ -318,6 +318,8 @@ class PauliNet(WaveFunction):
         if cas:
             mc = mcscf.CASSCF(mf, *cas)
             mc.kernel()
+            lib.chkfile.dump(mc.chkfile, 'ci', mc.ci)
+            lib.chkfile.dump(mc.chkfile, 'nelecas', mc.nelecas)
         wf = PauliNet.from_pyscf(
             mc if cas else mf,
             **{
