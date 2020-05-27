@@ -61,7 +61,7 @@ def wf_from_file(workdir):
         wf.mf = mf
     else:
         wf = PauliNet.from_hf(mol, **params.pop('model_kwargs', {}))
-        shutil.move(wf.mf.chkfile, pyscf_file)
+        shutil.copy(wf.mf.chkfile, pyscf_file)
     return wf, params, state
 
 
