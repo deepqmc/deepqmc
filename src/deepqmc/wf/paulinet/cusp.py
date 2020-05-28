@@ -115,6 +115,7 @@ class CuspCorrection(nn.Module):
             for x in (phi_gto_boundary, mos0, self.shifts, charges, rc)
         )
         phi0, phi, dphi, d2phi = phi_gto_boundary
+        phi0 = phi0 + shifts
         sgn = phi0.sign()
         C = torch.where(
             (sgn == phi.sign()) & (phi0.abs() < phi.abs()),
@@ -125,8 +126,8 @@ class CuspCorrection(nn.Module):
         X1 = torch.log(torch.abs(phi_m_C))
         X2 = dphi / phi_m_C
         X3 = d2phi / phi_m_C
-        X4 = -charges * (mos0 + shifts) / (phi0 + shifts - C)
-        X5 = torch.log(torch.abs(phi0 + shifts - C))
+        X4 = -charges * (mos0 + shifts) / (phi0 - C)
+        X5 = torch.log(torch.abs(phi0 - C))
         return C, sgn, fit_cusp_poly(rc, X1, X2, X3, X4, X5), has_s_part
 
     def forward(self, rs_2, phi_gto_boundary, mos0):
