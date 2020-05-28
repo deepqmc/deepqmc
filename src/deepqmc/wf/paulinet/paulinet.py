@@ -236,6 +236,7 @@ class PauliNet(WaveFunction):
 
         .. _PySCF: http://pyscf.org
         """
+        assert not (set(kwargs) & {'n_configurations', 'n_orbitals'})
         n_up, n_down = mf.mol.nelec
         if hasattr(mf, 'fcisolver'):
             if conf_limit:
@@ -262,6 +263,8 @@ class PauliNet(WaveFunction):
             ]
             confs = [torch.cat(cfs, dim=-1) for cfs in confs]
             confs = torch.cat(confs, dim=-1)
+            kwargs['n_configurations'] = len(confs)
+            kwargs['n_orbitals'] = confs.max().item() + 1
         else:
             confs = None
         mol = Molecule(
@@ -271,13 +274,7 @@ class PauliNet(WaveFunction):
             mf.mol.spin,
         )
         basis = GTOBasis.from_pyscf(mf.mol)
-        wf = cls(
-            mol,
-            basis,
-            n_configurations=1 if confs is None else len(confs),
-            n_orbitals=None if confs is None else confs.max().item() + 1,
-            **kwargs,
-        )
+        wf = cls(mol, basis, **kwargs)
         if init_weights:
             wf.mo.init_from_pyscf(mf, freeze_mos=freeze_mos)
             if confs is not None:
