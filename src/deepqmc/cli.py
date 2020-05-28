@@ -138,10 +138,11 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
         log.info('Importing a dlqmc hook')
         sys.path.append(str(workdir))
         import dlqmc_hook  # noqa: F401
-    wf, state = None, None
+    state = None
     for attempt in range(max_restarts + 1):
         log.info('Initializing a new wave function')
-        wf, params, state = wf_from_file(workdir)
+        wf, params, state_from_file = wf_from_file(workdir)
+        state = state or state_from_file
         if cuda:
             log.info('Moving to GPU...')
             wf.cuda()
@@ -186,11 +187,13 @@ def train_multi_at(  # noqa: C901
         log.info('Importing a dlqmc hook')
         sys.path.append(str(workdir))
         import dlqmc_hook  # noqa: F401
+    state = None
     for cycle in count():
         end_step = (cycle + 1) * respawn
         for attempt in range(max_restarts + 1):
             log.info('Initializing a new wave function')
-            wf, params, state = wf_from_file(workdir)
+            wf, params, state_from_file = wf_from_file(workdir)
+            state = state or state_from_file
             if cuda:
                 log.info('Moving to GPU...')
                 wf.cuda()
@@ -229,9 +232,6 @@ def train_multi_at(  # noqa: C901
         start = time.time()
         while True:
             now = time.time()
-            if now - start > timeout:
-                log.error('Timeout reached, aborting')
-                return
             root = workdir.parents[multi_part]
             stem = ('*',) + workdir.parts[::-1][:multi_part]
             root.glob('/'.join(stem + ('param.toml',)))
@@ -249,12 +249,19 @@ def train_multi_at(  # noqa: C901
                 )
             }
             all_states = {**all_states, **all_stops}
-            if len(all_states) < n_tasks:
-                log.info(f'Missing {n_tasks - len(all_states)} states')
+            n_all_states = len(all_states)
+            log.info(f'{n_all_states}/{n_tasks} states ready')
+            if n_all_states < n_tasks / 2 and now - start < timeout:
+                log.info(
+                    'Missing more than half of states and timeout not up, waiting...'
+                )
                 time.sleep(check_interval)
                 continue
             all_states = [(p, torch.load(p)) for p in all_states.values() if p]
             log.info(f'Have {len(all_states)} states for respawning')
+            if not all_states:
+                log.error('No states for respawning, abort')
+                return
             all_states.sort(key=lambda x: x[1]['monitor'].energy)
             all_states = all_states[: n_tasks // 2]
             path, state = all_states[rank % len(all_states)]
