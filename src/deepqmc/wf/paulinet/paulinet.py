@@ -1,3 +1,4 @@
+import logging
 from functools import partial
 
 import numpy as np
@@ -18,6 +19,8 @@ from .omni import OmniSchNet
 
 __version__ = '0.1.0'
 __all__ = ['PauliNet']
+
+log = logging.getLogger(__name__)
 
 
 def eval_slater(xs):
@@ -313,9 +316,11 @@ class PauliNet(WaveFunction):
             spin=mol.spin,
             cart=True,
         )
+        log.info('Running HF...')
         mf = scf.RHF(mol)
         mf.kernel()
         if cas:
+            log.info('Running MCSCF...')
             mc = mcscf.CASSCF(mf, *cas)
             mc.kernel()
             lib.chkfile.dump(mc.chkfile, 'ci', mc.ci)

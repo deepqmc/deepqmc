@@ -3,6 +3,7 @@ import logging
 import shutil
 import sys
 import time
+import traceback
 from functools import partial
 from itertools import count
 from math import inf
@@ -13,6 +14,7 @@ import toml
 import tomlkit
 import torch
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 from .defaults import DEEPQMC_MAPPING, collect_kwarg_defaults
 from .errors import TrainingCrash
@@ -35,6 +37,8 @@ def wf_from_file(workdir):
     params = toml.loads((workdir / 'param.toml').read_text())
     state_file = workdir / 'state.pt'
     state = torch.load(state_file) if state_file.is_file() else None
+    if state:
+        log.info('State loaded from file')
     pyscf_file = workdir / 'baseline.pyscf'
     system = params.pop('system')
     if isinstance(system, str):
@@ -47,6 +51,7 @@ def wf_from_file(workdir):
         mol = Molecule.from_name(name, **system)
     if pyscf_file.is_file():
         mf, mc = pyscf_from_file(pyscf_file)
+        log.info('Restored PySCF object from file')
         # TODO refactor initialisation to avoid duplicate with PauliNet.from_hf
         # TODO as part of that, validate that requested/restored cas/basis match
         wf = PauliNet.from_pyscf(
@@ -85,10 +90,27 @@ def pyscf_from_file(chkfile):
     return mf, mc
 
 
+class TqdmStream:
+    def write(self, msg):
+        tqdm.write(msg, end='')
+
+
 @click.group()
-def cli():
-    logging.basicConfig(style='{', format='{message}', datefmt='%H:%M:%S')
-    logging.getLogger('deepqmc').setLevel(logging.DEBUG)
+@click.option('-v', '--verbose', count=True)
+@click.option('-q', '--quiet', is_flag=True)
+def cli(verbose, quiet):
+    assert not (quiet and verbose)
+    logging.basicConfig(
+        style='{',
+        format='[{asctime}.{msecs:03.0f}] {levelname}:{name}: {message}',
+        datefmt='%H:%M:%S',
+        stream=TqdmStream(),
+    )
+    if quiet:
+        level = logging.ERROR
+    else:
+        level = [logging.WARNING, logging.INFO, logging.DEBUG][verbose]
+    logging.getLogger('deepqmc').setLevel(level)
 
 
 @cli.command()
@@ -113,11 +135,15 @@ def defaults(commented):
 def train_at(workdir, save_every, cuda, max_restarts, hook):
     workdir = Path(workdir).resolve()
     if hook:
+        log.info('Importing a dlqmc hook')
         sys.path.append(str(workdir))
         import dlqmc_hook  # noqa: F401
+    log.info('Initializing a new wave function')
     wf, params, state = wf_from_file(workdir)
     if cuda:
+        log.info('Moving to GPU...')
         wf.cuda()
+        log.info('Moved to GPU')
     for attempt in range(max_restarts + 1):
         try:
             train(
@@ -129,10 +155,10 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
             )
         except TrainingCrash as e:
             log.warning(f'Caught exception: {e.__cause__!r}')
+            state = e.state
             if attempt == max_restarts:
                 log.error('Maximum number of restarts reached')
                 break
-            state = e.state
             if state:
                 log.warning(f'Restarting from step {state["step"]}')
             else:
@@ -156,11 +182,15 @@ def train_multi_at(
     workdir = Path(workdir).resolve()
     rank = int(workdir.parts[::-1][multi_part])
     if hook:
+        log.info('Importing a dlqmc hook')
         sys.path.append(str(workdir))
         import dlqmc_hook  # noqa: F401
+    log.info('Initializing a new wave function')
     wf, params, state = wf_from_file(workdir)
     if cuda:
+        log.info('Moving to GPU...')
         wf.cuda()
+        log.info('Moved to GPU')
     for cycle in count():
         end_step = (cycle + 1) * respawn
         for attempt in range(max_restarts + 1):
@@ -176,7 +206,8 @@ def train_multi_at(
                     **params.get('train_kwargs', {}),
                 )
             except TrainingCrash as e:
-                log.warning(f'Caught exception: {e.__cause__!r}')
+                log.warning(f'Training crash in cycle {cycle}, attempt {attempt}')
+                log.warning('\n' + traceback.format_exc().strip())
                 state = e.state
                 if (
                     attempt == max_restarts

@@ -64,7 +64,7 @@ def evaluate(
         n_discard=0,
         **{'n_decorrelate': 4, **(sampler_kwargs or {})},
     )
-    steps = tqdm(count(), desc='equilibrating')
+    steps = tqdm(count(), desc='equilibrating', disable=None)
     blocks = []
     try:
         for step, energy in sample_wf(

@@ -1,4 +1,5 @@
 import logging
+import time
 from copy import deepcopy
 from functools import partial
 from itertools import count
@@ -95,22 +96,29 @@ def train(  # noqa: C901
         state (dict): restore optimizer and scheduler states from a stored state
     """
     if 'optimizer_factory' in PLUGINS:
+        log.info('Using a plugin for optimizer_factory')
         opt = PLUGINS['optimizer_factory'](wf.parameters())
     else:
         optimizer_kwargs = {
             **OPTIMIZER_KWARGS.get(optimizer, {}),
             **optimizer_kwargs[optimizer],
         }
+        log.info(
+            f'Using {optimizer} optimizer, '
+            f'lr = {learning_rate}, params = {optimizer_kwargs!r}'
+        )
         opt = getattr(torch.optim, optimizer)(
             wf.parameters(), lr=learning_rate, **optimizer_kwargs
         )
     if 'scheduler_factory' in PLUGINS:
+        log.info('Using a plugin for scheduler_factory')
         scheduler = PLUGINS['scheduler_factory'](opt)
     elif lr_scheduler:
         scheduler_kwargs = {
             **SCHEDULER_KWARGS.get(lr_scheduler, {}),
             **lr_scheduler_kwargs[lr_scheduler],
         }
+        log.info(f'Using {lr_scheduler} scheduler, params = {scheduler_kwargs!r}')
         if lr_scheduler[0].islower():
             if lr_scheduler == 'inverse':
 
@@ -142,10 +150,14 @@ def train(  # noqa: C901
         if scheduler:
             scheduler.load_state_dict(state['scheduler'])
         monitor = state['monitor']
+        log.info(
+            f'Restored from a state at step {init_step}, energy {monitor.energy:S}'
+        )
     else:
         init_step = 0
         monitor = EWMElocMonitor()
     if workdir:
+        log.info(f'Will work in {workdir}')
         workdir = Path(workdir)
         writer = SummaryWriter(log_dir=workdir, flush_secs=15, purge_step=init_step - 1)
         writer.add_text(
@@ -163,22 +175,38 @@ def train(  # noqa: C901
         writer = None
         log_dict = {}
     steps = trange(
-        init_step, n_steps, initial=init_step, total=n_steps, desc='training'
+        init_step,
+        n_steps,
+        initial=init_step,
+        total=n_steps,
+        desc='training',
+        disable=None,
     )
     chkpts = []
     step = init_step - 1
     try:
         # this can blowup if the backprop of SVD in determiants fail
         if 'sampler_factory' in PLUGINS:
+            log.info('Using a plugin for sampler_factory')
             sampler = PLUGINS['sampler_factory'](wf, writer=writer)
         else:
+            log.info(f'Using LangevinSampler, params = {sampler_kwargs!r}')
             sampler = LangevinSampler.from_mf(
                 wf, writer=writer, **(sampler_kwargs or {})
             )
         if equilibrate:
-            with tqdm(count(), desc='equilibrating') as eq_steps:
-                next(sample_wf(wf, sampler.iter_with_info(), eq_steps))
-            steps.unpause()
+            log.info('Equilibrating...')
+            with tqdm(count(), desc='equilibrating', disable=None) as eq_steps:
+                next(
+                    sample_wf(
+                        wf, sampler.iter_with_info(), eq_steps, equilibrate=equilibrate
+                    )
+                )
+            log.info('Equilibrated')
+            if not steps.disable:
+                steps.unpause()
+        log.info('Initializing training')
+        last_log = 0
         for step, _ in fit_wf(
             wf,
             LossEnergy(),
@@ -186,7 +214,7 @@ def train(  # noqa: C901
             sampler.iter_batches(
                 batch_size=batch_size,
                 epoch_size=epoch_size,
-                range=partial(trange, desc='sampling', leave=False),
+                range=partial(trange, desc='sampling', leave=False, disable=None),
             ),
             steps,
             log_dict=table.row if workdir else log_dict,
@@ -201,6 +229,12 @@ def train(  # noqa: C901
                 raise TrainingBlowup(repr(monitor.blowup_detection))
             if monitor.energy.std_dev > 0:
                 steps.set_postfix(E=f'{monitor.energy:S}')
+                now = time.time()
+                if (now - last_log) > 60:
+                    log.info(
+                        f'Progress: {step + 1}/{n_steps}, energy = {monitor.energy:S}'
+                    )
+                    last_log = now
             state = {
                 'step': step + 1,
                 'wf': wf.state_dict(),
@@ -219,26 +253,33 @@ def train(  # noqa: C901
                 if save_every and (step + 1) % save_every == 0:
                     state_file = chkpts_dir / f'state-{step + 1:05d}.pt'
                     torch.save(state, chkpts_dir / f'state-{step + 1:05d}.pt')
-                    log.debug(torch.cuda.memory_summary(abbreviated=True))
+                    log.debug(
+                        '\n' + torch.cuda.memory_summary(abbreviated=True).strip()
+                    )
             if return_every and (step + 1) % return_every == 0:
                 return True
     except (NanLoss, NanGradients, TrainingBlowup, RuntimeError) as e:
+        log.warning(f'Caught exception in step {step}: {e!r}')
         if isinstance(e, RuntimeError):
             if 'the updating process of SBDSDC did not converge' not in e.args[0]:
                 raise
-        blowup_step = (
-            monitor.blowup_detection['init']
-            if monitor.blowup_detection and blowup_threshold < inf
-            else step
-        )
+        if monitor.blowup_detection and blowup_threshold < inf:
+            log.info('Exception while in blowup detection mode')
+            blowup_step = monitor.blowup_detection['init']
+        else:
+            blowup_step = step
         target_step = blowup_step - min_rewind
+        log.debug(f'Need to rewind at least to: {target_step}')
         for step, state in reversed(chkpts):
             if step <= target_step:
+                log.debug(f'Found a restart step in memory: {step}')
                 raise TrainingCrash(state) from e
         for state_file in sorted(chkpts_dir.glob('state-*.pt'), reverse=True):
             step = int(state_file.stem.split('-')[1])
             if step <= target_step:
+                log.debug(f'Found a restart step on disk: {step}')
                 raise TrainingCrash(torch.load(state_file)) from e
+        log.debug('Found no restart step')
         raise TrainingCrash(None) from e
     finally:
         steps.close()
