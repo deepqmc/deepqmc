@@ -177,7 +177,7 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
 @click.option('--cuda/--no-cuda', default=True)
 @click.option('--max-restarts', default=3, show_default=True)
 @click.option('--hook', is_flag=True)
-def train_multi_at(
+def train_multi_at(  # noqa: C901
     workdir, respawn, multi_part, timeout, check_interval, cuda, max_restarts, hook
 ):
     workdir = Path(workdir).resolve()
@@ -203,7 +203,6 @@ def train_multi_at(
                     save_every=respawn,
                     return_every=respawn,
                     blowup_threshold=inf,
-                    min_rewind=5,
                     **params.get('train_kwargs', {}),
                 )
             except TrainingCrash as e:
@@ -212,14 +211,17 @@ def train_multi_at(
                 state = e.state
                 if (
                     attempt == max_restarts
-                    or not state
-                    or state['step'] < cycle * respawn
+                    or (cycle > 0 and not state)
+                    or (state and state['step'] < cycle * respawn)
                 ):
                     log.warning('Aborting cycle')
                     (workdir / 'chkpts' / f'state-{end_step:05d}.STOP').touch()
                     interrupted = True
                     break
-                log.warning(f'Restarting from step {state["step"]}')
+                if state:
+                    log.warning(f'Restarting from step {state["step"]}')
+                else:
+                    log.warning('Restarting from beginning')
             else:
                 break
         if not interrupted:
