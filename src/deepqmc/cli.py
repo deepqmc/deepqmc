@@ -138,13 +138,14 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
         log.info('Importing a dlqmc hook')
         sys.path.append(str(workdir))
         import dlqmc_hook  # noqa: F401
-    log.info('Initializing a new wave function')
-    wf, params, state = wf_from_file(workdir)
-    if cuda:
-        log.info('Moving to GPU...')
-        wf.cuda()
-        log.info('Moved to GPU')
+    wf, state = None, None
     for attempt in range(max_restarts + 1):
+        log.info('Initializing a new wave function')
+        wf, params, state = wf_from_file(workdir)
+        if cuda:
+            log.info('Moving to GPU...')
+            wf.cuda()
+            log.info('Moved to GPU')
         try:
             train(
                 wf,
@@ -185,15 +186,15 @@ def train_multi_at(
         log.info('Importing a dlqmc hook')
         sys.path.append(str(workdir))
         import dlqmc_hook  # noqa: F401
-    log.info('Initializing a new wave function')
-    wf, params, state = wf_from_file(workdir)
-    if cuda:
-        log.info('Moving to GPU...')
-        wf.cuda()
-        log.info('Moved to GPU')
     for cycle in count():
         end_step = (cycle + 1) * respawn
         for attempt in range(max_restarts + 1):
+            log.info('Initializing a new wave function')
+            wf, params, state = wf_from_file(workdir)
+            if cuda:
+                log.info('Moving to GPU...')
+                wf.cuda()
+                log.info('Moved to GPU')
             try:
                 interrupted = train(
                     wf,
