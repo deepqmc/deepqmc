@@ -1,6 +1,7 @@
 import logging
 import time
 from copy import deepcopy
+from datetime import datetime
 from functools import partial
 from itertools import count
 from math import inf
@@ -11,7 +12,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm, trange
 
-from .errors import NanGradients, NanLoss, TrainingBlowup, TrainingCrash
+from .errors import NanError, TrainingBlowup, TrainingCrash
 from .ewm import EWMElocMonitor
 from .fit import LossEnergy, fit_wf
 from .plugins import PLUGINS
@@ -258,8 +259,12 @@ def train(  # noqa: C901
                     )
             if return_every and (step + 1) % return_every == 0:
                 return True
-    except (NanLoss, NanGradients, TrainingBlowup, RuntimeError) as e:
+    except (NanError, TrainingBlowup, RuntimeError) as e:
         log.warning(f'Caught exception in step {step}: {e!r}')
+        if isinstance(e, NanError) and workdir:
+            dump = {'wf': wf.state_dict(), 'rs': e.rs}
+            now = datetime.now().isoformat(timespec='seconds')
+            torch.save(dump, workdir / f'nanerror-{step + 1:05d}-{now}.pt')
         if isinstance(e, RuntimeError):
             if 'the updating process of SBDSDC did not converge' not in e.args[0]:
                 raise

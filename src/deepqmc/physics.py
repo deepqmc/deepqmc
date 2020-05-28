@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+from .errors import NanError
 from .grad import grad, laplacian
 from .utils import NULL_DEBUG
 
@@ -55,6 +56,10 @@ def electronic_potential(rs):
 
 def quantum_force(rs, wf):
     forces, psis = grad(rs, wf)
+    if torch.isnan(psis[0]).any():
+        raise NanError(rs)
+    if torch.isnan(forces).any():
+        raise NanError(rs)
     return forces, psis
 
 
@@ -117,6 +122,12 @@ def local_energy(
     ) = laplacian(
         rs, wf, create_graph=create_graph, keep_graph=keep_graph, return_grad=True,
     )
+    if torch.isnan(log_psis).any():
+        raise NanError(rs)
+    if torch.isnan(quantum_force).any():
+        raise NanError(rs)
+    if torch.isnan(lap_log_psis).any():
+        raise NanError(rs)
     Es_loc = (
         -0.5 * (lap_log_psis + (quantum_force ** 2).sum(dim=(-2, -1)))
         + Vs_nuc

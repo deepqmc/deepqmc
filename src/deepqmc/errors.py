@@ -11,12 +11,10 @@ class DeepQMCError(Exception):
     pass
 
 
-class NanLoss(DeepQMCError):
-    pass
-
-
-class NanGradients(DeepQMCError):
-    pass
+class NanError(DeepQMCError):
+    def __init__(self, rs):
+        super().__init__()
+        self.rs = rs
 
 
 class TrainingBlowup(DeepQMCError):
