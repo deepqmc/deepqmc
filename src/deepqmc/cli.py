@@ -262,7 +262,7 @@ def train_multi_at(  # noqa: C901
             if not all_states:
                 log.error('No states for respawning, abort')
                 return
-            all_states.sort(key=lambda x: x[1]['monitor'].energy)
+            all_states.sort(key=lambda x: x[1]['monitor'].mean_of('mean_slow'))
             all_states = all_states[: n_tasks // 2]
             path, state = all_states[rank % len(all_states)]
             log.info(f'Respawning from {path}')

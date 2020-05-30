@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm, trange
 
 from .errors import NanError, TrainingBlowup, TrainingCrash
-from .ewm import EWMElocMonitor
+from .ewm import EWMMonitor
 from .fit import LossEnergy, fit_wf
 from .plugins import PLUGINS
 from .sampling import LangevinSampler, sample_wf
@@ -152,11 +152,12 @@ def train(  # noqa: C901
             scheduler.load_state_dict(state['scheduler'])
         monitor = state['monitor']
         log.info(
-            f'Restored from a state at step {init_step}, energy {monitor.energy:S}'
+            f'Restored from a state at step {init_step}, '
+            f'energy {monitor.mean_of("mean_slow"):S}'
         )
     else:
         init_step = 0
-        monitor = EWMElocMonitor()
+        monitor = EWMMonitor(blowup_thre=blowup_threshold)
     if workdir:
         log.info(f'Will work in {workdir}')
         workdir = Path(workdir)
@@ -226,15 +227,14 @@ def train(  # noqa: C901
             monitor.update(table['E_loc'][-1] if workdir else log_dict['E_loc'])
             # now monitor is at state `step+1`. if blowup was detected, the
             # blowup is reported to occur at step `step`.
-            if monitor.blowup_detection.get('indicator', 0) > blowup_threshold:
-                raise TrainingBlowup(repr(monitor.blowup_detection))
-            if monitor.energy.std_dev > 0:
-                steps.set_postfix(E=f'{monitor.energy:S}')
+            if monitor.blowup.get('in_blowup'):
+                raise TrainingBlowup(repr(monitor.blowup))
+            energy = monitor.mean_of('mean_slow')
+            if energy.std_dev > 0:
+                steps.set_postfix(E=f'{energy:S}')
                 now = time.time()
                 if (now - last_log) > 60:
-                    log.info(
-                        f'Progress: {step + 1}/{n_steps}, energy = {monitor.energy:S}'
-                    )
+                    log.info(f'Progress: {step + 1}/{n_steps}, energy = {energy:S}')
                     last_log = now
             state = {
                 'step': step + 1,
@@ -249,7 +249,7 @@ def train(  # noqa: C901
             chkpts.append((step + 1, state))
             chkpts = chkpts[-100:]
             if workdir:
-                table.row['E_ewm'] = monitor.energy.n
+                table.row['E_ewm'] = energy.n
                 h5file.flush()
                 if save_every and (step + 1) % save_every == 0:
                     state_file = chkpts_dir / f'state-{step + 1:05d}.pt'
@@ -268,9 +268,9 @@ def train(  # noqa: C901
         if isinstance(e, RuntimeError):
             if 'the updating process of SBDSDC did not converge' not in e.args[0]:
                 raise
-        if monitor.blowup_detection and blowup_threshold < inf:
+        if monitor.blowup and blowup_threshold < inf:
             log.info('Exception while in blowup detection mode')
-            blowup_step = monitor.blowup_detection['init']
+            blowup_step = monitor.blowup['init']
         else:
             blowup_step = step
         target_step = blowup_step - min_rewind

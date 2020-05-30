@@ -2,64 +2,121 @@ import logging
 import math
 
 import numpy as np
-from uncertainties import ufloat
+from uncertainties import ufloat, unumpy as unp
 
 log = logging.getLogger(__name__)
 
 
-class EWMElocMonitor:
-    _PERCENTILES = (
-        100
-        * (1 + np.array([math.erf(x / math.sqrt(2)) for x in [0, -3, -2, -1, 1, 2, 3]]))
-        / 2
-    )
-    _LABELS = 'med -3s -2s -1s +1s +2s +3s mean mean_slow'.split()
+def ewm(x, X, Y, alpha, thre=1e-10, with_err=False):
+    if x is None:
+        x = X
+    deltas = -np.log(alpha) * (x[:, None] - X)
+    mask = (0 <= deltas) & (deltas < -np.log(thre))
+    ws = np.zeros_like(deltas)
+    ws[mask] = np.exp(-deltas[mask])
+    ws = ws / ws.sum(axis=-1)[:, None]
+    mean = (ws * Y).sum(axis=-1)
+    if not with_err:
+        return mean
+    err = np.sqrt((ws ** 2 * (mean[:, None] - Y) ** 2).sum(axis=-1))
+    return unp.uarray(mean, err)
 
-    def __init__(self):
+
+class EWMAverage:
+    def __init__(
+        self, init=5, outlier=3, outlier_maxlen=3, max_alpha=0.999, decay_alpha=10
+    ):
         self.step = 0
-        self.blowup_detection = {}
+        self._init = init
+        self._outlier = outlier
+        self._outlier_maxlen = outlier_maxlen
+        self._max_alpha = max_alpha
+        self._decay_alpha = decay_alpha
+
+    def _alpha(self, n):
+        return min(self._max_alpha, 1 - 1 / (2 + n / self._decay_alpha))
 
     @property
-    def energy(self):
-        return ufloat(self.ewm_mean[-1], np.sqrt(self.ewm_err[-1]))
+    def mean(self):
+        return unp.uarray(self._mean, np.sqrt(self._sqerr))
 
-    def update(self, E_loc):
-        stat = np.empty(len(self._LABELS))
-        a = np.empty_like(stat)
-        stat[:-2] = np.percentile(E_loc, self._PERCENTILES)
-        stat[-2:] = E_loc.mean()
-        a[:-1] = min(0.96, 1 - 1 / (2 + self.step / 10))
-        a[-1] = min(0.99, 1 - 1 / (2 + self.step / 10))
+    @property
+    def var(self):
+        return self._var
+
+    @property
+    def std(self):
+        return np.sqrt(self._var)
+
+    def update(self, x, alpha=None):
+        x = np.array(x)
+        a = alpha if alpha is not None else self._alpha(self.step)
         is_outlier = (
-            np.abs(stat - self.ewm_mean) > 3 * np.sqrt(self.ewm_var)
-            if self.step > 5
-            else np.zeros_like(stat, dtype=bool)
+            (np.abs(x - self._mean) > self._outlier * np.sqrt(self._var))
+            & (self._n_outlier <= self._outlier_maxlen)
+            if self.step >= self._init
+            else np.zeros_like(x, dtype=bool)
         )
-        if is_outlier[:8].sum() >= 5:
-            log.info(f'Detected EWM outlier: step {self.step}')
-            if not self.blowup_detection:
-                self.blowup_detection = {
+        if self.step == 0:
+            self._mean = x.copy()
+            self._var = np.zeros_like(x)
+            self._sqerr = np.zeros_like(x)
+            self._n_outlier = np.zeros_like(x)
+        else:
+            var = (1 - a) * (x - self._mean) ** 2 + a * self._var
+            mean = (1 - a) * x + a * self._mean
+            sqerr = (1 - a) ** 2 * self._var + a ** 2 * self._sqerr
+            self._var = np.where(is_outlier, self._var, var)
+            self._mean = np.where(is_outlier, self._mean, mean)
+            self._sqerr = np.where(is_outlier, self._sqerr, sqerr)
+            self._n_outlier = np.where(is_outlier, self._n_outlier + 1, 0)
+        self.step += 1
+        return is_outlier
+
+
+class EWMMonitor(EWMAverage):
+    _PERCENTILES = [math.erf(x / np.sqrt(2)) for x in range(-3, 4)]
+    _PERCENTILES = 100 * (1 + np.array(_PERCENTILES)) / 2
+    I = '-3s -2s -1s med +1s +2s +3s mean mean_slow'.split()
+    I = {l: i for i, l in enumerate(I)}
+
+    def __init__(
+        self, stat_outlier=6, blowup_maxlen=25, blowup_thre=0.5, **kwargs,
+    ):
+        super().__init__(max_alpha=1, **kwargs)
+        self.blowup = {}
+        self._stat_outlier = stat_outlier
+        self._blowup_maxlen = blowup_maxlen
+        self._blowup_thre = blowup_thre
+
+    def mean_of(self, label):
+        i = self.I[label]
+        return ufloat(self._mean[i], np.sqrt(self._sqerr[i]))
+
+    def update(self, x):
+        I = self.I
+        stat = np.empty(len(self.I))
+        a = np.empty_like(stat)
+        stat[: len(self._PERCENTILES)] = np.percentile(x, self._PERCENTILES)
+        stat[I['mean'] :] = x.mean()
+        alpha = self._alpha(self.step)
+        a[: I['mean_slow']] = min(0.96, alpha)
+        a[I['mean_slow']] = min(0.999, alpha)
+        is_outlier = super().update(stat, a)
+        if is_outlier[: I['mean_slow']].sum() >= self._stat_outlier:
+            if not self.blowup:
+                self.blowup = {
                     'init': self.step,
                     'step': self.step,
-                    'start': self.ewm_mean[-2],
+                    'start': self._mean[I['mean']],
                 }
             else:
-                self.blowup_detection['step'] = self.step
-        if self.step == 0:
-            self.ewm_mean = stat.copy()
-            self.ewm_var = np.zeros_like(stat)
-            self.ewm_err = np.zeros_like(stat)
-        else:
-            ewm_var = (1 - a) * (stat - self.ewm_mean) ** 2 + a * self.ewm_var
-            ewm_mean = (1 - a) * stat + a * self.ewm_mean
-            ewm_err = (1 - a) ** 2 * self.ewm_var + a ** 2 * self.ewm_err
-            self.ewm_var = np.where(is_outlier, self.ewm_var, ewm_var)
-            self.ewm_mean = np.where(is_outlier, self.ewm_mean, ewm_mean)
-            self.ewm_err = np.where(is_outlier, self.ewm_err, ewm_err)
-        if self.blowup_detection and self.step - self.blowup_detection['step'] > 50:
-            self.blowup_detection = {}
-        if self.blowup_detection:
-            self.blowup_detection['indicator'] = (
-                self.ewm_mean[-2] - self.blowup_detection['start']
-            ) / np.sqrt(self.ewm_var[-2])
-        self.step += 1
+                self.blowup['step'] = self.step
+        if self.blowup and self.step - self.blowup['step'] > self._blowup_maxlen:
+            self.blowup = {}
+        if self.blowup:
+            self.blowup['indicator'] = (
+                self._mean[I['mean']] - self.blowup['start']
+            ) / np.sqrt(self._var[I['mean']])
+            self.blowup['in_blowup'] = self.blowup['indicator'] > self._blowup_thre
+        return is_outlier, stat
