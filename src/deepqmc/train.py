@@ -176,6 +176,20 @@ def train(  # noqa: C901
     else:
         writer = None
         log_dict = {}
+    if 'sampler_factory' in PLUGINS:
+        log.info('Using a plugin for sampler_factory')
+        sampler = PLUGINS['sampler_factory'](wf, writer=writer)
+    else:
+        log.info(f'Using LangevinSampler, params = {sampler_kwargs!r}')
+        sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
+    if equilibrate:
+        log.info('Equilibrating...')
+        with tqdm(count(), desc='equilibrating', disable=None) as steps:
+            next(
+                sample_wf(wf, sampler.iter_with_info(), steps, equilibrate=equilibrate)
+            )
+        log.info('Equilibrated')
+    log.info('Initializing training')
     steps = trange(
         init_step,
         n_steps,
@@ -185,30 +199,8 @@ def train(  # noqa: C901
         disable=None,
     )
     chkpts = []
-    step = init_step - 1
+    last_log = 0
     try:
-        # this can blowup if the backprop of SVD in determiants fail
-        if 'sampler_factory' in PLUGINS:
-            log.info('Using a plugin for sampler_factory')
-            sampler = PLUGINS['sampler_factory'](wf, writer=writer)
-        else:
-            log.info(f'Using LangevinSampler, params = {sampler_kwargs!r}')
-            sampler = LangevinSampler.from_mf(
-                wf, writer=writer, **(sampler_kwargs or {})
-            )
-        if equilibrate:
-            log.info('Equilibrating...')
-            with tqdm(count(), desc='equilibrating', disable=None) as eq_steps:
-                next(
-                    sample_wf(
-                        wf, sampler.iter_with_info(), eq_steps, equilibrate=equilibrate
-                    )
-                )
-            log.info('Equilibrated')
-            if not steps.disable:
-                steps.unpause()
-        log.info('Initializing training')
-        last_log = 0
         for step, _ in fit_wf(
             wf,
             LossEnergy(),
@@ -259,15 +251,12 @@ def train(  # noqa: C901
                     )
             if return_every and (step + 1) % return_every == 0:
                 return True
-    except (NanError, TrainingBlowup, RuntimeError) as e:
+    except (NanError, TrainingBlowup) as e:
         log.warning(f'Caught exception in step {step}: {e!r}')
         if isinstance(e, NanError) and workdir:
             dump = {'wf': wf.state_dict(), 'rs': e.rs}
             now = datetime.now().isoformat(timespec='seconds')
             torch.save(dump, workdir / f'nanerror-{step + 1:05d}-{now}.pt')
-        if isinstance(e, RuntimeError):
-            if 'the updating process of SBDSDC did not converge' not in e.args[0]:
-                raise
         if monitor.blowup and blowup_threshold < inf:
             log.info('Exception while in blowup detection mode')
             blowup_step = monitor.blowup['init']
