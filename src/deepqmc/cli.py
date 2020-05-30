@@ -293,13 +293,13 @@ def evaluate_at(workdir, cuda, store_steps, hook):
 
 
 def get_status(path):
-    path = Path(path)
+    path = Path(path).resolve()
     with path.open() as f:
         lines = f.readlines()
     line = ''
     restarts = 0
     for l in lines:
-        if 'E=' in l:
+        if 'E=' in l or 'energy =' in l:
             line = l
         elif 'Restarting' in l:
             restarts += 1
