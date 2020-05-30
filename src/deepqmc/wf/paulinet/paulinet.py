@@ -434,11 +434,8 @@ class PauliNet(WaveFunction):
             )
         if self.jastrow:
             with debug.cd('jastrow'):
-                psi = (
-                    psi + self.jastrow(*edges, debug=debug)
-                    if self.return_log
-                    else psi * torch.exp(self.jastrow(*edges, debug=debug))
-                )
+                J = self.jastrow(*edges, debug=debug)
+                psi = psi + J if self.return_log else psi * torch.exp(J)
         if self.omni:
             self.omni.forward_close()
         return (psi, sign) if self.return_log else psi
