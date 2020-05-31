@@ -251,6 +251,8 @@ class PauliNet(WaveFunction):
                 )
                 if conf_limit and len(conf_coeff) <= conf_limit:
                     break
+            else:
+                raise AssertionError()
             # discard the last ci wave function if degenerate
             ns_dbl = n_up - mf.nelecas[0], n_down - mf.nelecas[1]
             conf_coeff = torch.tensor(conf_coeff)

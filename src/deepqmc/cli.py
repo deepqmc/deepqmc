@@ -49,23 +49,29 @@ def wf_from_file(workdir):
         mol = import_fullname(name)(**system)
     else:
         mol = Molecule.from_name(name, **system)
+    model_kwargs = params.pop('model_kwargs', {})
     if pyscf_file.is_file():
         mf, mc = pyscf_from_file(pyscf_file)
         log.info(f'Restored PySCF object from {pyscf_file}')
         # TODO refactor initialisation to avoid duplicate with PauliNet.from_hf
-        # TODO as part of that, validate that requested/restored cas/basis match
+        assert mf.mol.basis == model_kwargs.pop('basis', '6-311g')
+        cas = model_kwargs.pop('cas', None)
+        assert not mc and not cas or (mc.ncas == cas[0] and sum(mc.nelecas) == cas[1])
+        omni_kwargs = model_kwargs.pop('omni_kwargs', None)
+        pauli_kwargs = model_kwargs.pop('pauli_kwargs', None)
+        assert not model_kwargs
         wf = PauliNet.from_pyscf(
             mc or mf,
             **{
-                'omni_factory': partial(OmniSchNet, **params.pop('omni_kwargs', {})),
+                'omni_factory': partial(OmniSchNet, **(omni_kwargs or {})),
                 'cusp_correction': True,
                 'cusp_electrons': True,
-                **params.pop('pauli_kwargs', {}),
+                **(pauli_kwargs or {}),
             },
         )
         wf.mf = mf
     else:
-        wf = PauliNet.from_hf(mol, **params.pop('model_kwargs', {}))
+        wf = PauliNet.from_hf(mol, **model_kwargs)
         shutil.copy(wf.mf.chkfile, pyscf_file)
     return wf, params, state
 
