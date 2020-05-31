@@ -38,7 +38,7 @@ def wf_from_file(workdir):
     state_file = workdir / 'state.pt'
     state = torch.load(state_file) if state_file.is_file() else None
     if state:
-        log.info('State loaded from file')
+        log.info(f'State loaded from {state_file}')
     pyscf_file = workdir / 'baseline.pyscf'
     system = params.pop('system')
     if isinstance(system, str):
@@ -51,7 +51,7 @@ def wf_from_file(workdir):
         mol = Molecule.from_name(name, **system)
     if pyscf_file.is_file():
         mf, mc = pyscf_from_file(pyscf_file)
-        log.info('Restored PySCF object from file')
+        log.info(f'Restored PySCF object from {pyscf_file}')
         # TODO refactor initialisation to avoid duplicate with PauliNet.from_hf
         # TODO as part of that, validate that requested/restored cas/basis match
         wf = PauliNet.from_pyscf(
@@ -173,13 +173,22 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
 @click.argument('workdir', type=click.Path(exists=True))
 @click.argument('respawn', type=int)
 @click.option('--multi-part', default=0)
-@click.option('--timeout', default=30 * 60)
+@click.option('--timeout-short', default=30 * 60)
+@click.option('--timeout-long', default=2 * 60 * 60)
 @click.option('--check-interval', default=30)
 @click.option('--cuda/--no-cuda', default=True)
 @click.option('--max-restarts', default=3, show_default=True)
 @click.option('--hook', is_flag=True)
 def train_multi_at(  # noqa: C901
-    workdir, respawn, multi_part, timeout, check_interval, cuda, max_restarts, hook
+    workdir,
+    respawn,
+    multi_part,
+    timeout_short,
+    timeout_long,
+    check_interval,
+    cuda,
+    max_restarts,
+    hook,
 ):
     workdir = Path(workdir).resolve()
     rank = int(workdir.parts[::-1][multi_part])
@@ -188,6 +197,7 @@ def train_multi_at(  # noqa: C901
         sys.path.append(str(workdir))
         import dlqmc_hook  # noqa: F401
     state = None
+    chkpts = None
     for cycle in count():
         end_step = (cycle + 1) * respawn
         for attempt in range(max_restarts + 1):
@@ -203,6 +213,8 @@ def train_multi_at(  # noqa: C901
                     wf,
                     workdir=workdir,
                     state=state,
+                    chkpts=chkpts,
+                    raise_blowup=False,
                     save_every=respawn,
                     return_every=respawn,
                     blowup_threshold=inf,
@@ -211,11 +223,11 @@ def train_multi_at(  # noqa: C901
             except TrainingCrash as e:
                 log.warning(f'Training crash in cycle {cycle}, attempt {attempt}')
                 log.warning('\n' + traceback.format_exc().strip())
-                state = e.state
+                state, chkpts = e.state, e.chkpts
                 if (
                     attempt == max_restarts
-                    or (cycle > 0 and not state)
-                    or (state and state['step'] < cycle * respawn)
+                    or not state
+                    or state['step'] <= cycle * respawn
                 ):
                     log.warning('Aborting cycle')
                     (workdir / 'chkpts' / f'state-{end_step:05d}.STOP').touch()
@@ -251,10 +263,12 @@ def train_multi_at(  # noqa: C901
             all_states = {**all_states, **all_stops}
             n_all_states = len(all_states)
             log.info(f'{n_all_states}/{n_tasks} states ready')
-            if n_all_states < n_tasks / 2 and now - start < timeout:
-                log.info(
-                    'Missing more than half of states and timeout not up, waiting...'
-                )
+            if n_all_states < n_tasks / 2 and now - start < timeout_long:
+                log.info('Missing >1/2 states and long timeout not up, waiting...')
+                time.sleep(check_interval)
+                continue
+            if n_all_states < n_tasks and now - start < timeout_short:
+                log.info('Missing some states and short timeout not up, waiting...')
                 time.sleep(check_interval)
                 continue
             all_states = [(p, torch.load(p)) for p in all_states.values() if p]

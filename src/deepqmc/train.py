@@ -4,7 +4,6 @@ from copy import deepcopy
 from datetime import datetime
 from functools import partial
 from itertools import count
-from math import inf
 from pathlib import Path
 
 import h5py
@@ -54,7 +53,9 @@ def train(  # noqa: C901
     state=None,
     min_rewind=10,
     blowup_threshold=0.5,
+    raise_blowup=True,
     return_every=None,
+    chkpts=None,
     *,
     n_steps=10_000,
     batch_size=10_000,
@@ -198,7 +199,7 @@ def train(  # noqa: C901
         desc='training',
         disable=None,
     )
-    chkpts = []
+    chkpts = chkpts if chkpts is not None else []
     last_log = 0
     try:
         for step, _ in fit_wf(
@@ -217,10 +218,15 @@ def train(  # noqa: C901
         ):
             # at this point, the wf model and optimizer are already at state step+1
             monitor.update(table['E_loc'][-1] if workdir else log_dict['E_loc'])
+            if monitor.blowup.get('step') == monitor.step - 1:
+                log.info(f'Detected EWM outlier in step {step}')
             # now monitor is at state `step+1`. if blowup was detected, the
             # blowup is reported to occur at step `step`.
             if monitor.blowup.get('in_blowup'):
-                raise TrainingBlowup(repr(monitor.blowup))
+                if raise_blowup:
+                    raise TrainingBlowup(repr(monitor.blowup))
+                else:
+                    log.warning(f'Detected training blowup in step {step}')
             energy = monitor.mean_of('mean_slow')
             if energy.std_dev > 0:
                 steps.set_postfix(E=f'{energy:S}')
@@ -236,7 +242,6 @@ def train(  # noqa: C901
             }
             if scheduler:
                 scheduler.step()
-                # now scheduler is at state step+1
                 state['scheduler'] = scheduler.state_dict()
             chkpts.append((step + 1, state))
             chkpts = chkpts[-100:]
@@ -245,36 +250,39 @@ def train(  # noqa: C901
                 h5file.flush()
                 if save_every and (step + 1) % save_every == 0:
                     state_file = chkpts_dir / f'state-{step + 1:05d}.pt'
-                    torch.save(state, chkpts_dir / f'state-{step + 1:05d}.pt')
+                    torch.save(state, state_file)
+                    log.info(f'Saved state in {state_file}')
                     log.debug(
                         '\n' + torch.cuda.memory_summary(abbreviated=True).strip()
                     )
             if return_every and (step + 1) % return_every == 0:
                 return True
     except (NanError, TrainingBlowup) as e:
+        step = steps.n
         log.warning(f'Caught exception in step {step}: {e!r}')
         if isinstance(e, NanError) and workdir:
             dump = {'wf': wf.state_dict(), 'rs': e.rs}
             now = datetime.now().isoformat(timespec='seconds')
-            torch.save(dump, workdir / f'nanerror-{step + 1:05d}-{now}.pt')
-        if monitor.blowup and blowup_threshold < inf:
+            torch.save(dump, workdir / f'nanerror-{step:05d}-{now}.pt')
+        if monitor.blowup:
             log.info('Exception while in blowup detection mode')
             blowup_step = monitor.blowup['init']
         else:
             blowup_step = step
         target_step = blowup_step - min_rewind
         log.debug(f'Need to rewind at least to: {target_step}')
-        for step, state in reversed(chkpts):
+        for i, (step, state) in enumerate(reversed(chkpts)):
             if step <= target_step:
                 log.debug(f'Found a restart step in memory: {step}')
-                raise TrainingCrash(state) from e
+                chkpts = chkpts[:-i]
+                raise TrainingCrash(state, chkpts) from e
         for state_file in sorted(chkpts_dir.glob('state-*.pt'), reverse=True):
             step = int(state_file.stem.split('-')[1])
             if step <= target_step:
                 log.debug(f'Found a restart step on disk: {step}')
                 raise TrainingCrash(torch.load(state_file)) from e
         log.debug('Found no restart step')
-        raise TrainingCrash(None) from e
+        raise TrainingCrash() from e
     finally:
         steps.close()
         if workdir:
