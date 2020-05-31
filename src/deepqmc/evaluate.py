@@ -72,7 +72,11 @@ def evaluate(
             sampler.iter_with_info(),
             steps,
             blocks=blocks,
-            log_dict=log_dict or (table_steps.row if workdir and store_steps else None),
+            log_dict=log_dict
+            if log_dict is not None
+            else table_steps.row
+            if workdir and store_steps
+            else None,
             writer=writer,
             **(sample_kwargs or {}),
         ):
