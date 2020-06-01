@@ -188,7 +188,12 @@ class PauliNet(WaveFunction):
             self.requires_grad_embeddings_(False)
         self.n_determinants = len(self.confs) * backflow_channels
         self.n_backflows = 0 if not self.backflow else backflow_spec[1]
-        self.use_sloglindet = use_sloglindet
+        if n_up <= 1 or n_down <= 1:
+            self.use_sloglindet = 'never'
+            log.warning(f'Setting use_sloglindet to \'never\' as not implemented for n=0 and n=1.')
+        #TODO implement sloglindet for special cases n=0 and n=1
+        else:
+            self.use_sloglindet = use_sloglindet
 
     def requires_grad_classes_(self, classes, requires_grad):
         for m in self.modules():
