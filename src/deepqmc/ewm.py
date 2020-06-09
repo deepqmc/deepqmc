@@ -57,6 +57,7 @@ class EWMAverage:
             if self.step >= self._init
             else np.zeros_like(x, dtype=bool)
         )
+        no_update = is_outlier | np.isnan(x)
         if self.step == 0:
             self._mean = x.copy()
             self._var = np.zeros_like(x)
@@ -66,9 +67,9 @@ class EWMAverage:
             var = (1 - a) * (x - self._mean) ** 2 + a * self._var
             mean = (1 - a) * x + a * self._mean
             sqerr = (1 - a) ** 2 * self._var + a ** 2 * self._sqerr
-            self._var = np.where(is_outlier, self._var, var)
-            self._mean = np.where(is_outlier, self._mean, mean)
-            self._sqerr = np.where(is_outlier, self._sqerr, sqerr)
+            self._var = np.where(no_update, self._var, var)
+            self._mean = np.where(no_update, self._mean, mean)
+            self._sqerr = np.where(no_update, self._sqerr, sqerr)
             self._n_outlier = np.where(is_outlier, self._n_outlier + 1, 0)
         self.step += 1
         return is_outlier
