@@ -105,6 +105,7 @@ class PauliNet(WaveFunction):
         mol,
         basis,
         jastrow_factory=None,
+        jastrow_stream='edges',
         backflow_factory=None,
         omni_factory=None,
         n_configurations=1,
@@ -158,6 +159,8 @@ class PauliNet(WaveFunction):
             if cusp_electrons
             else (None, None)
         )
+        assert jastrow_stream in {'edges', 'distances'}
+        self.jastrow_stream = jastrow_stream
         self.jastrow = (
             jastrow_factory(len(mol), dist_feat_dim, n_up, n_down)
             if jastrow_factory
@@ -366,17 +369,17 @@ class PauliNet(WaveFunction):
         n_atoms = len(self.mol)
         coords = self.mol.coords
         diffs_nuc = pairwise_diffs(torch.cat([coords, rs.flatten(end_dim=1)]), coords)
-        edges_nuc = (
-            self.dist_basis(diffs_nuc[:, :, 3].sqrt())
-            if self.jastrow or self.mo.net
-            else None
-        )
+        dists_nuc = diffs_nuc[:, :, 3].sqrt()
+        edges_nuc = self.dist_basis(dists_nuc) if self.jastrow or self.mo.net else None
         if self.r_backflow or self.backflow or self.cusp_same or self.jastrow:
             dists_elec = pairwise_distance(rs, rs)
         if self.r_backflow or self.backflow or self.jastrow:
-            edges_nuc = edges_nuc[n_atoms:].view(batch_dim, n_elec, n_atoms, -1)
-            edges = self.dist_basis(dists_elec), edges_nuc
+            edges = (
+                self.dist_basis(dists_elec),
+                edges_nuc[n_atoms:].view(batch_dim, n_elec, n_atoms, -1),
+            )
         if self.r_backflow:
+            # diffs for mos are updated, edges and dists for jastrow remain unchanged
             rs_flowed = self.r_backflow(rs, *edges, debug=debug)
             diffs_nuc = pairwise_diffs(
                 torch.cat([coords, rs_flowed.flatten(end_dim=1)]), coords
@@ -445,7 +448,14 @@ class PauliNet(WaveFunction):
             )
         if self.jastrow:
             with debug.cd('jastrow'):
-                J = self.jastrow(*edges, debug=debug)
+                jastrow_stream = {
+                    'edges': edges,
+                    'distances': (
+                        dists_elec,
+                        dists_nuc[n_atoms:].view(batch_dim, n_elec, n_atoms),
+                    ),
+                }
+                J = self.jastrow(*jastrow_stream[self.jastrow_stream], debug=debug)
                 psi = psi + J if self.return_log else psi * torch.exp(J)
         if self.omni:
             self.omni.forward_close()
