@@ -78,24 +78,30 @@ def train(  # noqa: C901
 
     Args:
         wf (:class:`~deepqmc.wf.WaveFunction`): wave function model to be trained
+        workdir (str): path where to store Tensorboard event file, intermediate
+            parameter states, and HDF5 file with the fit trajectory
+        save_every (int): number of steps between storing current parameter state
+        state (dict): restore optimizer and scheduler states from a stored state
         n_steps (int): number of optimization steps
         batch_size (int): number of samples used in a single step
         epoch_size (int): number of steps between sampling from the wave function
         optimizer (str): name of the optimizer from :mod:`torch.optim`
         learning_rate (float): learning rate for gradient-descent optimizers
+        optimizer_kwargs (dict): extra arguments passed to the optimizers, organized
+            by optimizer name
         lr_scheduler (str): name of the learning rate scheduling scheme
 
             - :data:`None` -- no learning rate scheduling
+            - uppercase name -- name from :mod:`torch.optim.lr_scheduler`
             - ``'inverse'`` -- :math:`\mathrm{lr}(n):=1/(1+n/r)`, where *r*
               is decay rate
-        decay_rate (int): *r*, decay rate for learning rate scheduling
+            - ``'scan'`` -- :math:`\mathrm{lr})(n):=sr^{n-n_0}`
+        lr_scheduler_kwargs (dict): extra arguments passed to the scheduler,
+            organized by scheduler name
+        equilibrate (bool): whether to equilibrate sampler before training
+        fit_kwargs (dict): arguments passed to :func:`~deepqmc.fit.fit_wf`
         sampler_kwargs (dict): arguments passed to
             :class:`~deepqmc.sampling.LangevinSampler`
-        fit_kwargs (dict): arguments passed to :func:`~deepqmc.fit.fit_wf`
-        workdir (str): path where to store Tensorboard event file, intermediate
-            parameter states, and HDF5 file with the fit trajectory
-        save_every (int): number of steps between storing current parameter state
-        state (dict): restore optimizer and scheduler states from a stored state
     """
     if 'optimizer_factory' in PLUGINS:
         log.info('Using a plugin for optimizer_factory')

@@ -3,7 +3,7 @@
 Tutorial
 ========
 
-This section describes the use of the high-level API of DeepQMC. For the lower-level API, go directly to the :ref:`api` documentation.
+This section describes the use of the high-level API of DeepQMC. For the lower-level API, consult directly the :ref:`api` documentation.
 
 Create a molecule
 -----------------
@@ -31,10 +31,10 @@ Molecule can be also crated from scratch, by specifying the nuclear coordinates 
 Create a wave function ansatz
 -----------------------------
 
-All wave function ansatzes are available in the :mod:`deepqmc.wf` package. At the moment, the only available ansatz is :class:`~deepqmc.wf.PauliNet`. The PauliNet class has three different constructors, differing in how low-level they are. The high-level :meth:`PauliNet.from_hf` constructor has default parameters for everything except for the molecule, and it runs the underlying multireference Hartree--Fock calculation which provides the orbitals on which the ansatz is built::
+All wave function ansatzes are available in the :mod:`deepqmc.wf` subpackage. At the moment, the only available ansatz is :class:`~deepqmc.wf.PauliNet`. The PauliNet class has three different constructors, differing in how low-level they are. The high-level :meth:`PauliNet.from_hf` constructor has default parameters for everything except for the molecule, and it runs the underlying multireference Hartree--Fock calculation which provides the orbitals on which the ansatz is built::
 
     >>> from deepqmc.wf import PauliNet
-    >>> net = PauliNet.from_hf(mol).cuda()
+    >>> net = PauliNet.from_hf(mol, cas=(2, 4)).cuda()
     converged SCF energy = -7.9846409186467
     CASSCF energy = -8.00439006914284
     CASCI E = -8.00439006914284  E(CI) = -1.10200121173341  S^2 = 0.0000000
@@ -48,17 +48,16 @@ The high-level :func:`~deepqmc.train` function is used to train the deep neural 
 
     >>> from deepqmc import train
     >>> train(net)
-    training:   0%|                                  | 0/10000 [00:00<?, ?it/s]
-    sampling:  51%|█████████████             | 256/500 [00:26<00:25,  9.88it/s]
+    training:   0%|▍       | 49/10000 [01:41<5:43:40,  2.07s/it, E=-8.0378(27)]
 
-The terminal output shows only how far has the training progressed. All monitoring of how well the training goes is done via `Tensorboard <https://www.tensorflow.org/tensorboard>`_. The training run creates a Tensorboard event file in the `runs/` directory, which can be observed from Tensorboard::
+The terminal output shows only how far has the training progressed and the current estimate of the energy. More detailed monitoring of the training goes is available via `Tensorboard <https://www.tensorflow.org/tensorboard>`_. The training run creates a Tensorboard event file in the `runs/` directory, which can be observed from Tensorboard::
 
     $ tensorboard --logdir runs/
     TensorFlow installation not found - running with reduced feature set.
     Serving TensorBoard on localhost; to expose to the network, use a proxy or pass --bind_all
     TensorBoard 2.1.0 at http://localhost:6007/ (Press CTRL+C to quit)
 
-This launches a Tensorboard server which can be accessed in a web browser.
+This launches a Tensorboard server which can be accessed via a web browser at the printed URL.
 
 Get the energy
 --------------

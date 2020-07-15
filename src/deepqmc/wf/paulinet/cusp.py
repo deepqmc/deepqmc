@@ -67,7 +67,7 @@ class CuspCorrection(nn.Module):
         \bigg|_{\mathbf r=\mathbf R_I}=-Z_I
 
     The value of the corrected *s*-type part at the center,
-    :math:`s_{\mu I}(0)`, is further adjusted by a trainable shift,
+    :math:`s_{\mu I}(0)`, is further adjusted by a trainable relative shift,
     :math:`\Delta_{\mu I}`.
 
     Args:
@@ -95,7 +95,7 @@ class CuspCorrection(nn.Module):
 
     Attributes:
         shifts: orbital shifts :math:`\Delta_{\mu I}` of shape
-            :math:`(M,N_\text{orb})`), initialized to zero
+            :math:`(M,N_\text{orb})`, initialized to zero
     """
 
     def __init__(self, charges, n_orbitals, rc, eps=1e-6):

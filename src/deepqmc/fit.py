@@ -123,17 +123,13 @@ def fit_wf(  # noqa: C901
         opt (:class:`torch.optim.Optimizer`): optimizer
         sampler (iterator): yields batches of electron coordinate samples
         steps (iterator): yields step indexes
+        writer (:class:`torch.utils.tensorboard.writer.SummaryWriter`):
+            Tensorboard writer
+        log_dict (dict-like): batch data will be stored in this dictionary if given
         require_energy_gradient (bool): whether the loss function requires
             gradients of the local energy
         require_psi_gradient (bool): whether the loss function requires
             gradients of the wave function
-        max_grad_norm (float): maximum gradient norm passed to
-            :func:`torch.nn.utils.clip_grad_norm_`
-        writer (:class:`torch.utils.tensorboard.writer.SummaryWriter`):
-            Tensorboard writer
-        log_dict (dict-like): batch data will be stored in this dictionary if given
-        clip_outliers (bool): whether to clip local energy outliers
-        q (float): multiple of MAE defining outliers
         subbatch_size (int): number of samples for a single vectorized loss evaluation.
             If None and on a GPU, subbatch_size is estimated, else if None and on a CPU,
             no subbatching is done.
@@ -141,6 +137,10 @@ def fit_wf(  # noqa: C901
             considered if automatically estimating the subbatch_size. If :data:`None`
             and subbatch_size is estimated, the maximum memory is set to the total
             free GPU memory. When training on CPU always set to :data:`None`.
+        clip_outliers (bool): whether to clip local energy outliers
+        q (float): multiple of MAE defining outliers
+        max_grad_norm (float): maximum gradient norm passed to
+            :func:`torch.nn.utils.clip_grad_norm_`
     """
     if not is_cuda(wf) and max_memory:
         raise DeepQMCError(

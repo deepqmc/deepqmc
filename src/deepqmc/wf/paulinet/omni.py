@@ -24,21 +24,21 @@ class OmniSchNet(nn.Module):
     assumptions about parameter sharing by the Jastrow factor and backflow
     network modules.
 
-    The Jastrow factor and backflowed orbitals are obtained as
+    The Jastrow factor and backflow are obtained as
 
     .. math::
         J:=\eta_{\boldsymbol\theta}\big(\textstyle\sum_i\mathbf x_i^{(L)}\big),\qquad
-        \tilde\varphi_{\mu i}(\mathbf r)
-        :=\bigg(1+2\tanh\Big(\kappa_{\boldsymbol\theta,\mu}
-        \big(\mathbf x_i^{(L)}\big)\!\Big)\!\bigg)\varphi_\mu(\mathbf r_i)
+        \kappa_{q\mu i}(\mathbf r)
+        :=\Big(\boldsymbol\kappa_{\boldsymbol\theta,q}\big(\mathbf
+        x_i^{(L)}\big)\Big)_\mu
 
     where :math:`\eta_{\boldsymbol\theta}` and
-    :math:`\boldsymbol\kappa_{\boldsymbol\theta}` are vanilla deep neural networks.
+    :math:`\boldsymbol\kappa_{\boldsymbol\theta,q}` are vanilla deep neural networks.
 
     The Jastrow and backflow are obtained by calling :meth:`forward_jastrow` and
     :meth:`forward_backflow`, which calls SchNet only once under the hood. After
     the forward pass is finished, :math:`close` must be called, which ensures
-    that SchNet is called a new in the next pass.
+    that SchNet is called anew in the next pass.
 
     Args:
         mol (:class:`~deepqmc.Molecule`): molecule whose wave function is represented
@@ -46,11 +46,12 @@ class OmniSchNet(nn.Module):
         n_up (int): passed to :class:`ElectronicSchNet`
         n_down (int): passed to :class:`ElectronicSchNet`
         n_orbitals (int): :math:`N_\text{orb}`, number of molecular orbitals
+        n_channels (int): :math:`C`, number of backflow channels
         embedding_dim (int): :math:`\dim(\mathbf x_i^{(L)})`, dimension of SchNet
             embeddings
-        with_jastrow (bool): if false, :meth:``
+        with_jastrow (bool): if false, the Jastrow part is void
         n_jastrow_layers (int): number of layers in the Jastrow factor network
-        with_backflow (bool): if false,
+        with_backflow (bool): if false, the backflow part is void
             :math:`\tilde\varphi_{\mu i}(\mathbf r):=\varphi_\mu(\mathbf r_i)`
         n_backflow_layers (int): number of layers in the backflow network
         with_r_backflow (bool): whether real-space backflow is used
@@ -65,13 +66,12 @@ class OmniSchNet(nn.Module):
               :math:`(*,N,M,\dim(\mathbf e))`
             - Output, :math:`J`: :math:`(*)`
         - :meth:`forward_backflow`:
-            - Input1, :math:`\varphi_\mu(\mathbf r_i)`: :math:`(*,N,N_\text{orb})`
-            - Input2, :math:`\mathbf e(\lvert\mathbf r_i-\mathbf r_j\rvert)`:
+            - Input1, :math:`\mathbf e(\lvert\mathbf r_i-\mathbf r_j\rvert)`:
               :math:`(*,N,N,\dim(\mathbf e))`
-            - Input3, :math:`\mathbf e(\lvert\mathbf r_i-\mathbf R_I\rvert)`:
+            - Input2, :math:`\mathbf e(\lvert\mathbf r_i-\mathbf R_I\rvert)`:
               :math:`(*,N,M,\dim(\mathbf e))`
-            - Output, :math:`\tilde\varphi_{\mu i}(\mathbf r)`:
-              :math:`(*,N,N_\text{orb})`
+            - Output, :math:`\kappa_{q\mu i}`:
+              :math:`(*,C,N,N_\text{orb})`
 
     Attributes:
         schnet: :class:`ElectronicSchNet` network

@@ -170,12 +170,12 @@ class ElectronicSchNet(nn.Module):
         n_nuclei (int): *M*, number of nuclei in a molecule
         embedding_dim (int): :math:`\dim(\mathbf X)`, dimension of electron embeddings
         dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of distance features
-        n_interactions (int): *L*, number of message passing iterations
-        kernel_dim (int): :math:`\dim(\mathbf w)`, dimension of the convolution kernel
         subnet_metafactory (callable): factory,
             :math:`(\dim(\mathbf e),\dim(\mathbf w),\dim(\mathbf X))`
             :math:`\rightarrow(\mathbf w,\mathbf h,\mathbf g)`, with the
             interface of :class:`SubnetFactory`
+        n_interactions (int): *L*, number of message passing iterations
+        kernel_dim (int): :math:`\dim(\mathbf w)`, dimension of the convolution kernel
         version (int): architecture version, one of ``1`` or ``2``
 
     Shape:

@@ -8,7 +8,8 @@ class WaveFunction(nn.Module, Debuggable):
 
     Shape:
         - Input, :math:`\mathbf r`, a.u.: :math:`(\cdot,N,3)`
-        - Output, :math:`\psi(\mathbf r)`: :math:`(\cdot)`
+        - Output1, :math:`\ln|\psi(\mathbf r)|`: :math:`(\cdot)`
+        - Output2, :math:`\operatorname{sgn}\psi(\mathbf r)`: :math:`(\cdot)`
     """
 
     def __init__(self, mol):

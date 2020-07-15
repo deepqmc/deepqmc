@@ -52,43 +52,45 @@ class PauliNet(WaveFunction):
     .. math::
         \psi_{\boldsymbol\theta}(\mathbf r)
           =\mathrm e^{\gamma(\mathbf r)+J_{\boldsymbol\theta}(\mathbf r)}
-          \sum_p c_p
-          \det[\tilde\varphi_{\boldsymbol\theta,{\mu_p}i}^\uparrow(\mathbf r)]
-          \det[\tilde\varphi_{\boldsymbol\theta,{\mu_p}i}^\downarrow(\mathbf r)]
+          \sum_{pq} c_p
+          \det[\tilde\varphi_{\boldsymbol\theta,q{\mu_p}i}^\uparrow(\mathbf r)]
+          \det[\tilde\varphi_{\boldsymbol\theta,q{\mu_p}i}^\downarrow(\mathbf r)] \\
+        \tilde\varphi_{\boldsymbol\theta,q\mu i}(\mathbf r)
+          :=\big(1+2\tanh(\kappa_{\boldsymbol\theta,q\mu i}(\mathbf r))\big)
+          \varphi_\mu(\mathbf r_i)
 
     Here, :math:`c_p,\mu_p` define the multideterminant expansion,
-    :math:`\tilde\varphi_{\boldsymbol\theta,{\mu_p}i}(\mathbf r)` are the
-    backflow-transformed molecular orbitals (equivariant with respect to the
-    exchange of same-spin electrons), :math:`J_{\boldsymbol\theta}(\mathbf r)`
-    is the many-body Jastrow factor and :math:`\gamma` enforces correct
-    electronic cusp conditions.
-
-    The PauliNet ansatz is implemented in logspace to avoid numerical instabilities
-    introduced by wave functions having meaningful values among various orders of
-    magnitude. :class:`~deepqmc.wf.paulinet` returns a tuple of the form
-    :math:`\big(ln|\psi|,\text{sign}(\psi)\big)`.
+    :math:`\varphi_\mu(\mathbf r)` are the baseline
+    single-electron molecular orbitals, :math:`J_{\boldsymbol\theta}(\mathbf r)`
+    is the permutation-invariant deep Jastrow factor,
+    :math:`\kappa_{\boldsymbol\theta,q\mu i}(\mathbf r)` is the :math:`q`-th
+    channel of the permutation-equivariant deep backflow, and :math:`\gamma`
+    enforces correct electronic cusp conditions.
 
     Args:
         mol (:class:`~deepqmc.Molecule`): molecule whose wave function is represented
         basis (:class:`~deepqmc.wf.paulinet.GTOBasis`): basis for the molecular orbitals
+        jastrow_factory (callable): constructor for a Jastrow factor,
+            :math:`(M,\dim(\mathbf e),N^\uparrow,N^\downarrow)`
+            :math:`\rightarrow(\mathbf e_{ij},\mathbf e_{iI})\rightarrow J`
+        backflow_factory (callable): constructor for a backflow,
+            :math:`(M,\dim(\mathbf e),N^\uparrow,N^\downarrow,N_\text{orb},C)`
+            :math:`\rightarrow(\mathbf e_{ij},\mathbf e_{iI})`
+            :math:`\rightarrow\kappa_{q\mu i}`
+        omni_factory (callable): constructor for a combined Jastrow factor and backflow,
+            with interface identical to :class:`~deepqmc.wf.paulinet.OmniSchNet`
+        n_configurations (int): number of electron configurations
+        n_orbitals (int): number of distinct molecular orbitals used across all
+            configurations if given, otherwise the larger of the number of spin-up
+            and spin-down electrons
+        mo_factory (callable): passed to :class:`~deepqmc.wf.paulinet.MolecularOrbital`
+            as ``net_factory``
         cusp_correction (bool): whether nuclear cusp correction is used
         cusp_electrons (bool): whether electronic cusp function is used
         dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of distance features
         dist_feat_cutoff (float, a.u.): distance at which distance features
             go to zero
-        jastrow_factory (callable): constructor for a Jastrow factor,
-            :math:`(M,\dim(\mathbf e),N^\uparrow,N^\downarrow)`
-            :math:`\rightarrow(\mathbf e_{ij},\mathbf e_{iI})\rightarrow J`
-        backflow_factory (callable): constructor for a backflow,
-            :math:`(M,\dim(\mathbf e),N^\uparrow,N^\downarrow,N_\text{orb})`
-            :math:`\rightarrow(\varphi_\mu(\mathbf r_i),\mathbf e_{ij},\mathbf e_{iI})`
-            :math:`\rightarrow\tilde\varphi_{\mu i}(\mathbf r)`
-        omni_factory (callable): constructor for a combined Jastrow factor and backflow,
-            with interface identical to :class:`~deepqmc.wf.paulinet.OmniSchNet`
-        configuration (:class:`~torch.Tensor`:math:`(N_\text{det},N)`): :math:`\mu_p`,
-            orbital indexes of multireference configurations
-        mo_factory (callable): passed to :class:`~deepqmc.wf.paulinet.MolecularOrbital`
-            as ``net_factory``
+        backflow_channels (int): :math:`C`, number of backflow channels
 
     Attributes:
         jastrow: :class:`torch.nn.Module` representing the Jastrow factor
@@ -236,6 +238,8 @@ class PauliNet(WaveFunction):
                 frozen for gradient optimization
             conf_cutoff (float): determinants with a linear coefficient above
                 this threshold are included in the determinant expansion
+            conf_limit (int): if given, at maximum the given number of configurations
+                with the largest linear coefficients are used in the ansatz
             kwargs: all other arguments are passed to the :class:`PauliNet`
                 constructor
 
@@ -304,8 +308,8 @@ class PauliNet(WaveFunction):
             mol (:class:`~deepqmc.Molecule`): molecule whose wave function
                 is represented
             basis (str): basis of the internal HF calculation
-            cas ((int, int)): tuple of the number of active orbitals and number of
-                active electrons for a complete active space multireference
+            cas ((int, int)): tuple of the number of active electrons and number of
+                active orbitals for a complete active space multireference
                 HF calculation
             pauli_kwargs: arguments passed to :func:`PauliNet.from_pyscf`
             omni_kwargs: arguments passed to :class:`~deepqmc.wf.paulinet.OmniSchNet`

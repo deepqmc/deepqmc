@@ -41,13 +41,14 @@ def sample_wf(  # noqa: C901
 
     Args:
         wf (:class:`~deepqmc.wf.WaveFunction`): wave function model to be sampled
+        sampler (iterator): yields batches of electron coordinate samples
         steps (iterator): yields step indexes
-        block_size (int): size of a block (a sequence of samples)
         writer (:class:`torch.utils.tensorboard.writer.SummaryWriter`):
             Tensorboard writer
         log_dict (dict-like): step data will be stored in this dictionary if given
         blocks (list): used as storage of blocks. If not given, the iterator
             uses a local storage.
+        block_size (int): size of a block (a sequence of samples)
         equilibrate (bool or int): if false, local energies are calculated and
             accumulated from the first sampling step, if true equilibrium is
             detected automatically, if integer argument, specifies number of
@@ -168,16 +169,16 @@ class MetropolisSampler(Sampler):
         rs (:class:`torch.Tensor`:math:`(\cdot,N,3)`): initial positions of the
             Markov-chain walkers
         tau (float): :math:`\tau`, proposal step size
-        max_age (int): maximum age of a walker without a move after which it is
-            moved with 100% acceptance
         n_first_certain (int): number of initial steps done with 100% acceptance
-        log_psi_threshold (float): steps into proposals with log wave function values
-            below this threshold are always rejected
         target_acceptance (float): initial step size is automatically adjusted
             to achieve this requested acceptance
         n_discard (int): number of steps in the beginning of the sampling that are
             discarded
         n_decorrelate (int): number of extra steps between yielded samples
+        max_age (int): maximum age of a walker without a move after which it is
+            moved with 100% acceptance
+        log_psi_threshold (float): steps into proposals with log wave function values
+            below this threshold are always rejected
     """
 
     def __init__(
@@ -264,9 +265,9 @@ class MetropolisSampler(Sampler):
 
         Args:
             wf (:class:`~deepqmc.wf.WaveFunction`): wave function to be sampled from
-            sample_size (int): number of Markov-chain walkers
             mf (:class:`pyscf.scf.hf.RHF`): HF calculation used to get Mulliken
                 partial charges, taken from ``wf.mf`` if not given
+            sample_size (int): number of Markov-chain walkers
             kwargs: all other arguments are passed to the constructor
         """
         rs = rand_from_mf(mf or wf.mf, sample_size)

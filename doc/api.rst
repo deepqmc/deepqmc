@@ -19,6 +19,8 @@ Training
 Wave functions
 --------------
 
+.. module:: deepqmc.wf
+
 .. autoclass:: deepqmc.wf.WaveFunction
 
 PauliNet
