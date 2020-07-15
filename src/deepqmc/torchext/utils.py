@@ -10,7 +10,7 @@ from torch import nn
 
 __all__ = ()
 
-DNN_NAMED_MODULES = False
+DNN_NAMED_MODULES = True
 
 
 def is_cuda(net):
