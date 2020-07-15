@@ -23,7 +23,7 @@ class DistanceBasis(nn.Module):
         - Output, :math:`\mathbf e(d)`: :math:`(*,\dim(\mathbf e))`
     """
 
-    def __init__(self, dist_feat_dim, cutoff=10.0, envelope='physnet'):
+    def __init__(self, dist_feat_dim, cutoff=10.0, envelope='physnet', smooth=None):
         super().__init__()
         delta = 1 / (2 * dist_feat_dim)
         qs = torch.linspace(delta, 1 - delta, dist_feat_dim)
@@ -31,8 +31,13 @@ class DistanceBasis(nn.Module):
         self.envelope = envelope
         self.register_buffer('mus', cutoff * qs ** 2)
         self.register_buffer('sigmas', (1 + cutoff * qs) / 7)
+        self.smooth = smooth
 
     def forward(self, dists):
+        if self.smooth is not None:
+            dists = dists + 1 / self.smooth * torch.log(
+                1 + torch.exp(-2 * self.smooth * dists)
+            )
         if self.envelope == 'physnet':
             dists_rel = dists / self.cutoff
             envelope = torch.where(
