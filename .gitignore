@@ -5,5 +5,5 @@
 /dist/
 /htmlcov/
 /.coverage
-/docs/build/
+/doc/build/
 /runs
