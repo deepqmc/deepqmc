@@ -258,7 +258,7 @@ class PauliNet(WaveFunction):
                         mf.ci, mf.ncas, mf.nelecas, tol=tol, return_strs=False
                     )
                 )
-                if conf_limit and len(conf_coeff) <= conf_limit:
+                if not conf_limit or len(conf_coeff) <= conf_limit:
                     break
             else:
                 raise AssertionError()
