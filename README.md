@@ -1,6 +1,6 @@
 # DeepQMC
 
-[![build](https://img.shields.io/travis/deepqmc/deepqmc/master.svg)](https://travis-ci.org/deepqmc/deepqmc)
+[![build](https://img.shields.io/travis/deepqmc/deepqmc/master.svg)](https://travis-ci.com/deepqmc/deepqmc)
 [![coverage](https://img.shields.io/codecov/c/github/deepqmc/deepqmc.svg)](https://codecov.io/gh/deepqmc/deepqmc)
 ![python](https://img.shields.io/badge/python-3.7%7C3.8-blue)
 [![last commit](https://img.shields.io/github/last-commit/deepqmc/deepqmc.svg)](https://github.com/deepqmc/deepqmc/commits/master)
