@@ -20,7 +20,6 @@ jobs:
       script:
         - poetry install -E all -E doc
         - sphinx-build -E doc doc/build
-      after_success: skip
       deploy:
         provider: pages
         skip_cleanup: true
