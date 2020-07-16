@@ -256,7 +256,7 @@ def fit_wf_mem_test_func(wf, loss_func, require_psi_gradient, size):
     loss = loss_func(
         E_loc.detach() if require_psi_gradient else E_loc,
         log_psi,
-        torch.ones(len(rs)).cuda(),
+        rs.new_ones(len(rs)),
     )
     loss.backward()
 

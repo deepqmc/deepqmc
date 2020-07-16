@@ -17,6 +17,7 @@ from .fit import LossEnergy, fit_wf
 from .plugins import PLUGINS
 from .sampling import LangevinSampler, sample_wf
 from .utils import H5LogTable
+from .torchext import is_cuda
 
 __version__ = '0.1.0'
 __all__ = ['train']
@@ -258,9 +259,10 @@ def train(  # noqa: C901
                     state_file = chkpts_dir / f'state-{step + 1:05d}.pt'
                     torch.save(state, state_file)
                     log.info(f'Saved state in {state_file}')
-                    log.debug(
-                        '\n' + torch.cuda.memory_summary(abbreviated=True).strip()
-                    )
+                    if is_cuda(wf):
+                        log.debug(
+                            '\n' + torch.cuda.memory_summary(abbreviated=True).strip()
+                        )
             if return_every and (step + 1) % return_every == 0:
                 return True
     except (NanError, TrainingBlowup) as e:
