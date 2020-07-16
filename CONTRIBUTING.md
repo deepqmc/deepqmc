@@ -2,7 +2,7 @@
 
 ### Commit messages
 
-- Imperative style (has to work in "If this commit is applied, it will <commit message>."
+- Imperative style (has to work in "If this commit is applied, it will \<commit message\>.")
 - The first line <80 characters, the second line empty
 
 ### Python code
