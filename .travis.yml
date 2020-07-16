@@ -1,0 +1,31 @@
+os: linux
+dist: xenial
+language: python
+install:
+  - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
+  - source $HOME/.poetry/env
+  - echo VIRTUAL_ENV=$VIRTUAL_ENV
+script:
+  - poetry build
+  - pip install deepqmc[wf,train,test] -f ./dist
+  - coverage run -m pytest
+after_success: bash <(curl -s https://codecov.io/bash)
+jobs:
+  include:
+    - python: 3.7
+    - python: 3.8
+    - name: Documentation
+      python: 3.7
+      stage: deploy
+      script:
+        - poetry install -E all -E doc
+        - sphinx-build -E doc doc/build
+      after_success: skip
+      deploy:
+        provider: pages
+        skip_cleanup: true
+        token: $GITHUB_TOKEN
+        keep_history: true
+        local_dir: doc/build
+        on:
+          branch: master
