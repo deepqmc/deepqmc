@@ -30,4 +30,4 @@ evaluate(net)
 
 ## Links
 
-- Documentation: https://noegroup.github.io/deepqmc/
+- Documentation: https://deepqmc.github.io/deepqmc/

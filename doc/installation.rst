@@ -47,18 +47,18 @@ Install DeepQMC
 
 Within the activated virtual environment, DeepQMC can be installed with::
 
-    $ pip install deepqmc
+    $ pip install -U git+https://github.com/deepqmc/deepqmc.git
 
 To install all optional dependencies, use::
 
-    $ pip install deepqmc[wf,train]
+    $ pip install -U git+https://github.com/deepqmc/deepqmc.git#egg=deepqmc[wf,train]
 
 Developing
 ----------
 
 To install DeepQMC from a local Git repository, use `Poetry <https://python-poetry.org>`_::
 
-    $ git clone https://github.com/noegroup/deepqmc
+    $ git clone https://github.com/deepqmc/deepqmc
     $ cd deepqmc
     $ poetry install -E all
 

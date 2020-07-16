@@ -22,7 +22,7 @@ extensions = [
     'sphinx.ext.githubpages',
     'sphinx.ext.autodoc',
     'sphinx.ext.todo',
-    # 'sphinx.ext.viewcode',  # TODO uncomment after release
+    'sphinx.ext.viewcode',
     'sphinx.ext.intersphinx',
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon',
@@ -39,7 +39,7 @@ html_theme = 'alabaster'
 html_theme_options = {
     'description': description,
     'github_button': True,
-    'github_user': 'noegroup',
+    'github_user': 'deepqmc',
     'github_repo': 'deepqmc',
     'badge_branch': 'master',
     'codecov_button': True,
