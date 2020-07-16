@@ -13,7 +13,7 @@ DeepQMC implements variational quantum Monte Carlo for electrons in molecules, u
 Install and update using [Pip](https://pip.pypa.io/en/stable/quickstart/).
 
 ```
-pip install -U deepqmc[wf,train]
+pip install -U git+https://github.com/deepqmc/deepqmc.git#egg=deepqmc[wf,train]
 ```
 
 ## A simple example
