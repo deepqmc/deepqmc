@@ -33,4 +33,4 @@ evaluate(net)
 
 ## Links
 
-- Documentation: https://deepqmc.github.io/deepqmc/
+- Documentation: https://deepqmc.github.io

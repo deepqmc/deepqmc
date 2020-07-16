@@ -26,5 +26,7 @@ jobs:
         token: $GITHUB_TOKEN
         keep_history: true
         local_dir: doc/build
+        repo: deepqmc/deepqmc.github.io
+        target_branch: master
         on:
           branch: master
