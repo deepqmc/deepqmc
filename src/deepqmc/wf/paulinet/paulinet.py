@@ -192,8 +192,10 @@ class PauliNet(WaveFunction):
         self.n_backflows = 0 if not self.backflow else backflow_spec[1]
         if n_up <= 1 or n_down <= 1:
             self.use_sloglindet = 'never'
-            log.warning(f'Setting use_sloglindet to \'never\' as not implemented for n=0 and n=1.')
-        #TODO implement sloglindet for special cases n=0 and n=1
+            log.warning(
+                'Setting use_sloglindet to "never" as not implemented for n=0 and n=1.'
+            )
+        # TODO implement sloglindet for special cases n=0 and n=1
         else:
             self.use_sloglindet = use_sloglindet
 
@@ -308,8 +310,8 @@ class PauliNet(WaveFunction):
             mol (:class:`~deepqmc.Molecule`): molecule whose wave function
                 is represented
             basis (str): basis of the internal HF calculation
-            cas ((int, int)): tuple of the number of active electrons and number of
-                active orbitals for a complete active space multireference
+            cas ((int, int)): tuple of the number of active orbitals and number of
+                active electrons for a complete active space multireference
                 HF calculation
             pauli_kwargs: arguments passed to :func:`PauliNet.from_pyscf`
             omni_kwargs: arguments passed to :class:`~deepqmc.wf.paulinet.OmniSchNet`

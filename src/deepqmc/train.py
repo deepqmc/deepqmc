@@ -16,8 +16,8 @@ from .ewm import EWMMonitor
 from .fit import LossEnergy, fit_wf
 from .plugins import PLUGINS
 from .sampling import LangevinSampler, sample_wf
-from .utils import H5LogTable
 from .torchext import is_cuda
+from .utils import H5LogTable
 
 __version__ = '0.1.0'
 __all__ = ['train']

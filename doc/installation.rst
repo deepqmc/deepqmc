@@ -28,7 +28,7 @@ The following dependencies are required only by non-essential parts of DeepQMC a
 - `Tensorboard <https://www.tensorflow.org/tensorboard>`_ is a practical tool for monitoring training of neural networks.
 - `Pillow <https://pillow.readthedocs.io/>`_ is used by Tensorboard to store pictures in the event files.
 - `TQDM <https://github.com/tqdm/tqdm>`_ provides progress bars.
-- `h5py <https://www.h5py.org>`_ handles IO for `<HDF5 <http://hdfgroup.org>`_ files.
+- `h5py <https://www.h5py.org>`_ handles IO for `HDF5 <http://hdfgroup.org>`_ files.
 
 Virtual environments
 --------------------
