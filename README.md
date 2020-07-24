@@ -2,7 +2,10 @@
 
 [![build](https://img.shields.io/travis/deepqmc/deepqmc/master.svg)](https://travis-ci.com/deepqmc/deepqmc)
 [![coverage](https://img.shields.io/codecov/c/github/deepqmc/deepqmc.svg)](https://codecov.io/gh/deepqmc/deepqmc)
-![python](https://img.shields.io/badge/python-3.7%7C3.8-blue)
+![python](https://img.shields.io/pypi/pyversions/deepqmc.svg)
+[![release](https://img.shields.io/github/release/deepqmc/deepqmc.svg)](https://github.com/deepqmc/deepqmc/releases)
+[![pypi](https://img.shields.io/pypi/v/deepqmc.svg)](https://pypi.org/project/deepqmc/)
+[![commits since](https://img.shields.io/github/commits-since/deepqmc/deepqmc/latest.svg)](https://github.com/deepqmc/deepqmc/releases)
 [![last commit](https://img.shields.io/github/last-commit/deepqmc/deepqmc.svg)](https://github.com/deepqmc/deepqmc/commits/master)
 [![license](https://img.shields.io/github/license/deepqmc/deepqmc.svg)](https://github.com/deepqmc/deepqmc/blob/master/LICENSE)
 [![code style](https://img.shields.io/badge/code%20style-black-202020.svg)](https://github.com/ambv/black)
@@ -16,7 +19,7 @@ DeepQMC implements variational quantum Monte Carlo for electrons in molecules, u
 Install and update using [Pip](https://pip.pypa.io/en/stable/quickstart/).
 
 ```
-pip install -U git+https://github.com/deepqmc/deepqmc.git#egg=deepqmc[wf,train]
+pip install -U deepqmc[wf,train]
 ```
 
 ## A simple example
