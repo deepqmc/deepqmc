@@ -24,6 +24,7 @@ def sample_wf(  # noqa: C901
     sampler,
     steps,
     writer=None,
+    write_figures=False,
     log_dict=None,
     blocks=None,
     *,
@@ -106,11 +107,9 @@ def sample_wf(  # noqa: C901
                         'E/value', energy.nominal_value - energy_offset, step
                     )
                     writer.add_scalar('E/error', energy.std_dev, step)
-            try:
+            if write_figures:
                 from matplotlib.figure import Figure
-            except ImportError:
-                log.warning('Matplotlib not installed, will not generate figures')
-            else:
+
                 fig = Figure(dpi=300)
                 ax = fig.subplots()
                 ax.hist(log_psis.cpu(), bins=100)
