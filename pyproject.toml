@@ -4,14 +4,29 @@ build-backend = "poetry.masonry.api"
 
 [tool.poetry]
 name = "deepqmc"
-version = "0.1.0"
+version = "0.1.1"
 description = "Deep-learning quantum Monte Carlo for electrons in real space"
 authors = [
     "Jan Hermann <jan.hermann@fu-berlin.de>",
     "Zeno Schätzle <zenoone@physik.fu-berlin.de>",
 ]
+readme = "README.md"
 packages = [
     { include = "deepqmc", from = "src" },
+]
+repository = "https://github.com/deepqmc/deepqmc"
+documentation = "https://deepqmc.github.io"
+license = "MIT"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
 ]
 
 [tool.poetry.dependencies]
