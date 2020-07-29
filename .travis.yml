@@ -10,6 +10,11 @@ script:
   - pip install deepqmc[wf,train,test] -f ./dist
   - coverage run -m pytest
 after_success: bash <(curl -s https://codecov.io/bash)
+before_cache: pip uninstall -y deepqmc
+cache:
+  directories:
+    - $VIRTUAL_ENV/bin
+    - $VIRTUAL_ENV/lib/python$TRAVIS_PYTHON_VERSION/site-packages
 jobs:
   include:
     - name: Style
@@ -21,6 +26,7 @@ jobs:
         - black . --check
         - isort . --check
         - pydocstyle src
+      env: CACHE_NAME=lint
     - python: 3.7
     - python: 3.8
     - name: Documentation
@@ -29,6 +35,7 @@ jobs:
         - pip install sphinx sphinxcontrib-katex toml
       script:
         - sphinx-build -E doc doc/build
+      env: CACHE_NAME=deploy
       workspaces:
         create:
           name: ws1
