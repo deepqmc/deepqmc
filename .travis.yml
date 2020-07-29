@@ -25,10 +25,21 @@ jobs:
     - python: 3.8
     - name: Documentation
       python: 3.7
-      stage: deploy
-      script:
+      install:
         - pip install sphinx sphinxcontrib-katex toml
+      script:
         - sphinx-build -E doc doc/build
+      workspaces:
+        create:
+          name: ws1
+          paths:
+            - doc/build
+    - stage: deploy
+      name: Documentation
+      language: generic
+      install: skip
+      script: skip
+      if: branch = master
       deploy:
         provider: pages
         skip_cleanup: true
@@ -37,5 +48,3 @@ jobs:
         local_dir: doc/build
         repo: deepqmc/deepqmc.github.io
         target_branch: master
-        on:
-          branch: master
