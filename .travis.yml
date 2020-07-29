@@ -9,8 +9,11 @@ script:
   - poetry build
   - pip install deepqmc[wf,train,test] -f ./dist
   - coverage run -m pytest
-after_success: bash <(curl -s https://codecov.io/bash)
-before_cache: pip uninstall -y deepqmc
+after_success:
+  - bash <(curl -s https://codecov.io/bash) -X coveragepy
+before_cache:
+  - coverage xml
+  - pip uninstall -y deepqmc
 cache:
   directories:
     - $VIRTUAL_ENV/bin
