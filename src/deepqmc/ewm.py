@@ -76,8 +76,6 @@ class EWMAverage:
 
 
 class EWMMonitor(EWMAverage):
-    _PERCENTILES = [math.erf(x / np.sqrt(2)) for x in range(-3, 4)]
-    _PERCENTILES = 100 * (1 + np.array(_PERCENTILES)) / 2
     I = '-3s -2s -1s med +1s +2s +3s mean mean_slow'.split()
     I = {l: i for i, l in enumerate(I)}
 
@@ -89,6 +87,8 @@ class EWMMonitor(EWMAverage):
         self._stat_outlier = stat_outlier
         self._blowup_maxlen = blowup_maxlen
         self._blowup_thre = blowup_thre
+        percentiles = [math.erf(x / math.sqrt(2)) for x in range(-3, 4)]
+        self._PERCENTILES = 100 * (1 + np.array(percentiles)) / 2
 
     def mean_of(self, label):
         i = self.I[label]

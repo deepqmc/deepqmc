@@ -86,4 +86,4 @@ class BDetTripleBackward(torch.autograd.Function):
         ).transpose(-1, -2)
 
 
-bdet = BDet.apply
+bdet = getattr(BDet, 'apply', None)  # works also when torch is mocked by sphinx

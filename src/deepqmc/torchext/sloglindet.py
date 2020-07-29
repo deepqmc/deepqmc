@@ -245,4 +245,5 @@ class SLogLinearDetDoubleBackward(torch.autograd.Function):
         return Pbt, ct, A1t, A2t
 
 
-sloglindet = SLogLinearDet.apply
+sloglindet = getattr(SLogLinearDet, 'apply', None)
+# works also when torch is mocked by sphinx

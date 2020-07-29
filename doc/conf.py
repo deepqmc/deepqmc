@@ -1,7 +1,10 @@
 import datetime
+import os
+import sys
 
 import toml
 
+sys.path.insert(0, os.path.abspath('../src'))
 with open('../pyproject.toml') as f:
     metadata = toml.load(f)['tool']['poetry']
 
@@ -54,6 +57,7 @@ html_static_path = ['_static']
 
 autodoc_default_options = {'members': True}
 autodoc_inherit_docstrings = False
+autodoc_mock_imports = ['h5py', 'numpy', 'torch', 'tqdm', 'uncertainties', 'scipy']
 todo_include_todos = True
 napoleon_numpy_docstring = False
 napoleon_use_ivar = True
