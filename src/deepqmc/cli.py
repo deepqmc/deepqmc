@@ -24,6 +24,8 @@ from .train import train
 from .wf import PauliNet
 from .wf.paulinet.omni import OmniSchNet
 
+__all__ = ()
+
 log = logging.getLogger(__name__)
 
 
@@ -78,7 +80,7 @@ def wf_from_file(workdir):
 
 def pyscf_from_file(chkfile):
     import pyscf.gto.mole
-    from pyscf import scf, mcscf, lib
+    from pyscf import lib, mcscf, scf
 
     pyscf.gto.mole.float32 = float
 
@@ -175,7 +177,7 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
             break
 
 
-@cli.command('train-multi')
+@cli.command('train-multi')  # noqa: C901
 @click.argument('workdir', type=click.Path(exists=True))
 @click.argument('respawn', type=int)
 @click.option('--multi-part', default=0)
@@ -185,7 +187,7 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
 @click.option('--cuda/--no-cuda', default=True)
 @click.option('--max-restarts', default=3, show_default=True)
 @click.option('--hook', is_flag=True)
-def train_multi_at(  # noqa: C901
+def train_multi_at(
     workdir,
     respawn,
     multi_part,

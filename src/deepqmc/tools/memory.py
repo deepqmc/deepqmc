@@ -2,6 +2,8 @@ import collections
 
 import torch
 
+__all__ = ()
+
 EMPTY_TYPES = (str, type(None), type({}.keys()))
 UNKNWON_CLASSES = set()
 

@@ -316,7 +316,7 @@ class PauliNet(WaveFunction):
             pauli_kwargs: arguments passed to :func:`PauliNet.from_pyscf`
             omni_kwargs: arguments passed to :class:`~deepqmc.wf.paulinet.OmniSchNet`
         """
-        from pyscf import gto, mcscf, scf, lib
+        from pyscf import gto, lib, mcscf, scf
 
         mol = gto.M(
             atom=mol.as_pyscf(),

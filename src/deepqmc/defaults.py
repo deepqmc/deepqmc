@@ -11,6 +11,8 @@ from .utils import NULL_DEBUG
 from .wf import PauliNet
 from .wf.paulinet import ElectronicSchNet, OmniSchNet, SubnetFactory
 
+__all__ = ()
+
 DEEPQMC_MAPPING = {
     (train, 'sampler_kwargs'): LangevinSampler.from_mf,
     (train, 'fit_kwargs'): fit_wf,
