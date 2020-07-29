@@ -12,6 +12,15 @@ script:
 after_success: bash <(curl -s https://codecov.io/bash)
 jobs:
   include:
+    - name: Style
+      python: 3.7
+      install:
+        - pip install black flake8 flake8-bugbear flake8-comprehensions flake8-quotes pep8-naming isort pydocstyle
+      script:
+        - flake8
+        - black . --check
+        - isort . --check
+        - pydocstyle src
     - python: 3.7
     - python: 3.8
     - name: Documentation
