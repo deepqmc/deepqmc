@@ -47,6 +47,8 @@ jobs:
       install: skip
       script: skip
       if: branch = master
+      workspaces:
+        use: ws1
       deploy:
         provider: pages
         skip_cleanup: true
