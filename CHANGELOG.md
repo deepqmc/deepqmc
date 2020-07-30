@@ -18,5 +18,5 @@ This is the first official release of DeepQMC.
 At this moment, DeepQMC should be still considered a research code.
 
 [unreleased]: https://github.com/deepqmc/deepqmc/compare/0.1.1...HEAD
-[0.1.1]: https://github.com/deepqmc/deepqmc/releases/tag/0.1.0...0.1.1
+[0.1.1]: https://github.com/deepqmc/deepqmc/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/deepqmc/deepqmc/releases/tag/0.1.0
