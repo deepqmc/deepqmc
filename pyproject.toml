@@ -46,14 +46,15 @@ sphinx = { version = "^2.2", optional = true }
 Pillow = { version = "^7", optional = true }
 sphinxcontrib-katex = { version = "^0.5.1", optional = true }
 click = { version = "^7.0", optional = true }
+tomlkit = { version = "^0.7.0", optional = true }
 
 [tool.poetry.extras]
 wf = ["scipy", "pyscf"]
 test = ["pytest", "coverage"]
 train = ["tensorboard", "tqdm", "h5py", "Pillow"]
-cli = ["click"]
+cli = ["click", "tomlkit"]
 doc = ["sphinx", "sphinxcontrib-katex"]
-all = ["scipy", "pyscf", "pytest", "coverage", "tensorboard", "tqdm", "h5py", "Pillow", "click"]
+all = ["scipy", "pyscf", "pytest", "coverage", "tensorboard", "tqdm", "h5py", "Pillow", "click", "tomlkit"]
 
 [tool.poetry.dev-dependencies]
 flake8 = "^3.5"
