@@ -46,7 +46,7 @@ jobs:
             - doc/build
     - stage: deploy
       name: Documentation
-      language: generic
+      language: minimal
       install: skip
       script: skip
       if: branch = master
