@@ -2,7 +2,6 @@ import torch
 from torch import nn
 
 from deepqmc.torchext import SSP, get_log_dnn, idx_perm
-from deepqmc.utils import NULL_DEBUG
 
 __all__ = ()
 
@@ -25,7 +24,7 @@ class Backflow(nn.Module):
         super().__init__()
         self.bf_elec, self.bf_nuc = subnets_factory(embedding_dim)
 
-    def forward(self, rs, xs, debug=NULL_DEBUG):
+    def forward(self, rs, xs):
         batch_dim, n_elec = rs.shape[:2]
         i, j = idx_perm(n_elec, 2, rs.device)
         diffs_elec = rs[..., i, :] - rs[..., j, :]

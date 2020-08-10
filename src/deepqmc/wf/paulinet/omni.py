@@ -4,7 +4,6 @@ import torch
 from torch import nn
 
 from deepqmc.torchext import SSP, get_log_dnn
-from deepqmc.utils import NULL_DEBUG
 
 from .backflow import Backflow
 from .schnet import ElectronicSchNet, SubnetFactory
@@ -131,30 +130,27 @@ class OmniSchNet(nn.Module):
             self.forward_r_backflow = None
         self._cache = {}
 
-    def _get_embeddings(self, edges_elec, edges_nuc, debug):
+    def _get_embeddings(self, edges_elec, edges_nuc):
         edges_id = id(edges_elec) + id(edges_nuc)
         if self._cache.get('dist_feats_id') != edges_id:
             self._cache['dist_feats_id'] = edges_id
-            with debug.cd('schnet'):
-                self._cache['embeddings'] = self.schnet(
-                    edges_elec, edges_nuc, debug=debug
-                )
+            self._cache['embeddings'] = self.schnet(edges_elec, edges_nuc)
         return self._cache['embeddings']
 
-    def forward_jastrow(self, edges_elec, edges_nuc, debug=NULL_DEBUG):
+    def forward_jastrow(self, edges_elec, edges_nuc):
         """Evaluate Jastrow factor."""
-        xs = self._get_embeddings(edges_elec, edges_nuc, debug)
+        xs = self._get_embeddings(edges_elec, edges_nuc)
         J = self.jastrow(xs.sum(dim=-2)).squeeze(dim=-1)
-        return debug.result(J)
+        return J
 
-    def forward_backflow(self, edges_elec, edges_nuc, debug=NULL_DEBUG):
+    def forward_backflow(self, edges_elec, edges_nuc):
         """Evaluate backflow."""
-        xs = self._get_embeddings(edges_elec, edges_nuc, debug)
+        xs = self._get_embeddings(edges_elec, edges_nuc)
         xs = torch.stack([bf(xs) for bf in self.backflow], dim=1)
         return xs
 
-    def forward_r_backflow(self, rs, edges_elec, edges_nuc, debug=NULL_DEBUG):
-        xs = self._get_embeddings(edges_elec, edges_nuc, debug)
+    def forward_r_backflow(self, rs, edges_elec, edges_nuc):
+        xs = self._get_embeddings(edges_elec, edges_nuc)
         return self.r_backflow(rs, xs)
 
     def forward_close(self):

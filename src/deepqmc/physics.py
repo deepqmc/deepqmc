@@ -3,7 +3,6 @@ import torch
 
 from .errors import NanError
 from .grad import grad, laplacian
-from .utils import NULL_DEBUG
 
 __all__ = ()
 
@@ -103,23 +102,13 @@ def clean_force(forces, rs, mol, *, tau, return_a=False):
 
 
 def local_energy(
-    rs,
-    wf,
-    mol=None,
-    create_graph=False,
-    keep_graph=None,
-    debug=NULL_DEBUG,
-    return_grad=False,
+    rs, wf, mol=None, create_graph=False, keep_graph=None, return_grad=False,
 ):
     mol = mol or wf.mol
-    Es_nuc = debug['Es_nuc'] = nuclear_energy(mol)
-    Vs_nuc = debug['Vs_nuc'] = nuclear_potential(rs, mol)
-    Vs_el = debug['Vs_el'] = electronic_potential(rs)
-    lap_log_psis, (log_psis, sign_psis), quantum_force = (
-        debug['lap_psis'],
-        (debug['log_psis'], debug['sign_psis']),
-        debug['quantum_force'],
-    ) = laplacian(
+    Es_nuc = nuclear_energy(mol)
+    Vs_nuc = nuclear_potential(rs, mol)
+    Vs_el = electronic_potential(rs)
+    lap_log_psis, (log_psis, sign_psis), quantum_force = laplacian(
         rs, wf, create_graph=create_graph, keep_graph=keep_graph, return_grad=True,
     )
     if torch.isnan(log_psis).any():

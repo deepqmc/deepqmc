@@ -6,7 +6,6 @@ from torch import nn
 
 from deepqmc.physics import pairwise_diffs, pairwise_distance
 from deepqmc.torchext import merge_tensors
-from deepqmc.utils import NULL_DEBUG
 
 from .cusp import CuspCorrection
 
@@ -121,11 +120,11 @@ class MolecularOrbital(nn.Module):
         diffs_nuc = pairwise_diffs(torch.cat([coords, rs]), coords)
         return self(diffs_nuc)
 
-    def forward(self, diffs, dist_feats=None, debug=NULL_DEBUG):
+    def forward(self, diffs, dist_feats=None):
         # first n_atoms rows of diffs and dist_feats correspond to electrons on
         # nuclei
         n_atoms = self.n_atoms
-        aos = debug['aos'] = self.basis(diffs)
+        aos = self.basis(diffs)
         mos = self.mo_coeff(aos)
         if self.net:
             mos = self.net(mos, dist_feats)
@@ -155,7 +154,7 @@ class MolecularOrbital(nn.Module):
                 mos[corrected] + phi_cusped - phi_gto[corrected],
                 mos[~corrected],
             )
-        return debug.result(mos)
+        return mos
 
     def _mo_coeff_s_type_at(self, idx, xs):
         mo_coeff = self.mo_coeff.weight.t()

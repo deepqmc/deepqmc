@@ -1,9 +1,7 @@
 from torch import nn
 
-from ..utils import NULL_DEBUG, Debuggable
 
-
-class WaveFunction(nn.Module, Debuggable):
+class WaveFunction(nn.Module):
     r"""Base class for all trial wave functions.
 
     Shape:
@@ -27,7 +25,7 @@ class WaveFunction(nn.Module, Debuggable):
     def spin_slices(self):
         return slice(None, self.n_up), slice(self.n_up, None)
 
-    def forward(self, rs, debug=NULL_DEBUG):
+    def forward(self, rs):
         return NotImplemented
 
     def sample(self, mode=True):

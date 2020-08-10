@@ -61,12 +61,3 @@ autodoc_mock_imports = ['h5py', 'numpy', 'torch', 'tqdm', 'uncertainties', 'scip
 todo_include_todos = True
 napoleon_numpy_docstring = False
 napoleon_use_ivar = True
-
-
-def _strip_debug(app, what, name, obj, options, signature, return_annotation):
-    if signature:
-        return signature.replace(', debug={}', ''), return_annotation
-
-
-def setup(app):
-    app.connect('autodoc-process-signature', _strip_debug)
