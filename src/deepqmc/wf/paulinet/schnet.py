@@ -4,7 +4,6 @@ import torch
 from torch import nn
 
 from deepqmc.torchext import SSP, get_log_dnn, idx_perm
-from deepqmc.utils import NULL_DEBUG
 
 __version__ = '0.1.0'
 __all__ = ['ElectronicSchNet']
@@ -238,15 +237,15 @@ class ElectronicSchNet(nn.Module):
         self.register_buffer('spin_idxs', spin_idxs)
         self.register_buffer('nuclei_idxs', torch.arange(n_nuclei))
 
-    def forward(self, edges_elec, edges_nuc, debug=NULL_DEBUG):
+    def forward(self, edges_elec, edges_nuc):
         *batch_dims, n_elec, n_nuclei = edges_nuc.shape[:-1]
         assert edges_elec.shape[:-1] == (*batch_dims, n_elec, n_elec)
         assert n_elec == len(self.spin_idxs)
-        x = debug[0] = self.X(self.spin_idxs.expand(*batch_dims, -1))
+        x = self.X(self.spin_idxs.expand(*batch_dims, -1))
         Y = self.Y(self.nuclei_idxs.expand(*batch_dims, -1))
-        for n, (layer, norm) in enumerate(zip(self.layers, self.layer_norms)):
+        for (layer, norm) in zip(self.layers, self.layer_norms):
             z = layer(x, Y, edges_elec, edges_nuc)
             if norm:
                 z = 0.1 * norm(z)
-            x = debug[n + 1] = x + z
+            x = x + z
         return x

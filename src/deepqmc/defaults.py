@@ -7,7 +7,6 @@ from .evaluate import evaluate
 from .fit import fit_wf
 from .sampling import LangevinSampler, sample_wf
 from .train import train
-from .utils import NULL_DEBUG
 from .wf import PauliNet
 from .wf.paulinet import ElectronicSchNet, OmniSchNet, SubnetFactory
 
@@ -66,7 +65,7 @@ def collect_kwarg_defaults(func, mapping):
                 sub_kwargs = _get_subkwargs(func, p.name, mapping)
                 kwargs[p.name] = sub_kwargs
         elif p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD:
-            assert p.default in (p.empty, p.default, NULL_DEBUG)
+            assert p.default in (p.empty, p.default)
         else:
             assert p.kind is inspect.Parameter.KEYWORD_ONLY
             if p.default is None:

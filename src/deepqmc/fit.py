@@ -11,7 +11,7 @@ from uncertainties import ufloat
 from .errors import DeepQMCError, NanError
 from .physics import local_energy
 from .torchext import is_cuda, normalize_mean, state_dict_copy, weighted_mean_var
-from .utils import NULL_DEBUG, estimate_optimal_batch_size_cuda
+from .utils import estimate_optimal_batch_size_cuda
 
 __version__ = '0.1.0'
 __all__ = ['fit_wf', 'WaveFunctionLoss', 'LossEnergy']
@@ -95,7 +95,6 @@ def fit_wf(  # noqa: C901
     steps,
     writer=None,
     log_dict=None,
-    debug=NULL_DEBUG,
     require_energy_gradient=False,
     require_psi_gradient=True,
     subbatch_size=None,
@@ -157,13 +156,6 @@ def fit_wf(  # noqa: C901
     for step, (rs, log_psi0s, sign_psi0s) in zip(steps, sampler):
         rs_batch = rs
         opt.zero_grad()
-        d = debug[step]
-        d['log_psi0s'], d['sign_psi0s'], d['rs'], d['state_dict'] = (
-            log_psi0s,
-            sign_psi0s,
-            rs,
-            state_dict_copy(wf),
-        )
         subbatch_size = subbatch_size or len(rs)
         subbatches = []
         for rs, log_psi0s, _ in DataLoader(
@@ -203,8 +195,7 @@ def fit_wf(  # noqa: C901
             torch.isnan(p.grad).any() for p in wf.parameters() if p.grad is not None
         ):
             raise NanError(rs_batch)
-        loss = d['loss'] = loss.sum()
-        d['Es_loc'], d['log_psis'], d['sign_psis'] = Es_loc, log_psis, sign_psis
+        loss = loss.sum()
         if max_grad_norm is not None:
             clip_grad_norm_(wf.parameters(), max_grad_norm)
         E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, log_ws.exp())

@@ -8,7 +8,6 @@ from torch import nn
 from deepqmc import Molecule
 from deepqmc.physics import pairwise_diffs, pairwise_distance
 from deepqmc.torchext import sloglindet, triu_flat
-from deepqmc.utils import NULL_DEBUG
 from deepqmc.wf import WaveFunction
 
 from .cusp import CuspCorrection, ElectronicAsymptotic
@@ -362,7 +361,7 @@ class PauliNet(WaveFunction):
             xs = xs + 0.1 * envel * torch.tanh(fs_add / 4)
         return xs
 
-    def forward(self, rs, debug=NULL_DEBUG):  # noqa: C901
+    def forward(self, rs):  # noqa: C901
         batch_dim, n_elec = rs.shape[:2]
         assert n_elec == self.confs.shape[1]
         n_atoms = len(self.mol)
@@ -379,17 +378,15 @@ class PauliNet(WaveFunction):
             edges_nuc = edges_nuc[n_atoms:].view(batch_dim, n_elec, n_atoms, -1)
             edges = self.dist_basis(dists_elec), edges_nuc
         if self.r_backflow:
-            rs_flowed = self.r_backflow(rs, *edges, debug=debug)
+            rs_flowed = self.r_backflow(rs, *edges)
             diffs_nuc = pairwise_diffs(
                 torch.cat([coords, rs_flowed.flatten(end_dim=1)]), coords
             )
-        with debug.cd('mos'):
-            xs = self.mo(diffs_nuc, edges_nuc, debug=debug)
+        xs = self.mo(diffs_nuc, edges_nuc)
         # get orbitals as [bs, 1, i, mu]
-        xs = debug['slaters'] = xs.view(batch_dim, 1, n_elec, -1)
+        xs = xs.view(batch_dim, 1, n_elec, -1)
         if self.backflow:
-            with debug.cd('backflow'):
-                fs = self.backflow(*edges, debug=debug)  # [bs, q, i, mu/nu]
+            fs = self.backflow(*edges)  # [bs, q, i, mu/nu]
             if self.backflow_type == 'orbital':
                 xs = self._backflow_op(xs, fs)
         # form dets as [bs, q, p, i, nu]
@@ -424,8 +421,8 @@ class PauliNet(WaveFunction):
                 # the exp-normalize trick, to avoid over/underflow of the exponential
                 xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None, None])
             else:
-                det_up = debug['det_up'] = eval_slater(det_up)
-                det_down = debug['det_down'] = eval_slater(det_down)
+                det_up = eval_slater(det_up)
+                det_down = eval_slater(det_down)
                 xs = det_up * det_down
             psi = self.conf_coeff(xs).squeeze(dim=-1).mean(dim=-1)
             if self.return_log:
@@ -446,9 +443,8 @@ class PauliNet(WaveFunction):
                 else psi * torch.exp(cusp_same + cusp_anti)
             )
         if self.jastrow:
-            with debug.cd('jastrow'):
-                J = self.jastrow(*edges, debug=debug)
-                psi = psi + J if self.return_log else psi * torch.exp(J)
+            J = self.jastrow(*edges)
+            psi = psi + J if self.return_log else psi * torch.exp(J)
         if self.omni:
             self.omni.forward_close()
         return (psi, sign) if self.return_log else psi
