@@ -9,21 +9,6 @@ __all__ = ()
 log = logging.getLogger(__name__)
 
 
-def ewm(x, X, Y, alpha, thre=1e-10, with_err=False):
-    if x is None:
-        x = X
-    deltas = -np.log(alpha) * (x[:, None] - X)
-    mask = (0 <= deltas) & (deltas < -np.log(thre))
-    ws = np.zeros_like(deltas)
-    ws[mask] = np.exp(-deltas[mask])
-    ws = ws / ws.sum(axis=-1)[:, None]
-    mean = (ws * Y).sum(axis=-1)
-    if not with_err:
-        return mean
-    err = np.sqrt((ws ** 2 * (mean[:, None] - Y) ** 2).sum(axis=-1))
-    return unp.uarray(mean, err)
-
-
 class EWMAverage:
     def __init__(
         self, init=5, outlier=3, outlier_maxlen=3, max_alpha=0.999, decay_alpha=10

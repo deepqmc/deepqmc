@@ -2,7 +2,7 @@ from functools import partial
 
 import torch
 
-from ..utils import get_flat_mesh
+from .analysis import get_flat_mesh
 
 __all__ = ()
 

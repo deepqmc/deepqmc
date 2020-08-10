@@ -1,7 +1,7 @@
 import torch
 
 from ..errors import LUFactError
-from ..utils import batch_eval
+from .utils import batch_eval
 
 __all__ = ()
 

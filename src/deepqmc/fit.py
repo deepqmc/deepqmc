@@ -10,8 +10,12 @@ from uncertainties import ufloat
 
 from .errors import DeepQMCError, NanError
 from .physics import local_energy
-from .torchext import is_cuda, normalize_mean, state_dict_copy, weighted_mean_var
-from .utils import estimate_optimal_batch_size_cuda
+from .torchext import (
+    estimate_optimal_batch_size_cuda,
+    is_cuda,
+    normalize_mean,
+    weighted_mean_var,
+)
 
 __version__ = '0.1.0'
 __all__ = ['fit_wf', 'WaveFunctionLoss', 'LossEnergy']
@@ -36,13 +40,6 @@ class WaveFunctionLoss(nn.Module):
     pass
 
 
-class LossVariance(WaveFunctionLoss):
-    def forward(self, Es_loc, psis, ws, E_ref=None, p=1):
-        assert psis.grad_fn is None
-        E0 = E_ref if E_ref is not None else (ws * Es_loc).mean()
-        return (ws * (Es_loc - E0).abs() ** p).mean()
-
-
 class LossEnergy(WaveFunctionLoss):
     r"""Total energy loss function.
 
@@ -58,22 +55,6 @@ class LossEnergy(WaveFunctionLoss):
         assert Es_loc.grad_fn is None
         self.weights = 2 * (Es_loc - (ws * Es_loc).mean()) / len(Es_loc)
         return (self.weights * ws * log_psis).sum()
-
-
-def loss_least_squares(y_pred, y_true):
-    return ((y_pred - y_true) ** 2).mean()
-
-
-def outlier_mask(x, p, q, dim=None):
-    x = x.detach()
-    dim = dim if dim is not None else -1
-    n = x.shape[dim]
-    lb = x.kthvalue(int(p * n), dim=dim).values
-    ub = x.kthvalue(int((1 - p) * n), dim=dim).values
-    return (
-        (x - (lb + ub).unsqueeze(dim) / 2).abs() > q * (ub - lb).unsqueeze(dim),
-        (lb, ub),
-    )
 
 
 def log_clipped_outliers(x, q):
@@ -250,36 +231,3 @@ def fit_wf_mem_test_func(wf, loss_func, require_psi_gradient, size):
         rs.new_ones(len(rs)),
     )
     loss.backward()
-
-
-def fit_wf_supervised(
-    fit_net,
-    true_net,
-    loss_func,
-    opt,
-    sample_gen,
-    correlated_sampling=True,
-    acc_grad=1,
-    writer=None,
-    start=0,
-    debug=NULL_DEBUG,
-    scheduler=None,
-    epoch_size=100,
-):
-    for step, (rs, psi0s) in enumerate(sample_gen, start=start):
-        d = debug[step]
-        d['psi0s'], d['rs'] = psi0s, rs
-        psis_fit = fit_net(rs)
-        psis_true = true_net(rs)
-        loss = loss_func(psis_fit, psis_true)
-        if writer:
-            writer.add_scalar('loss', loss, step)
-            for label, value in fit_net.tracked_parameters():
-                writer.add_scalar(f'param/{label}', value, step)
-        loss.backward()
-        if (step + 1) % acc_grad == 0:
-            opt.step()
-            opt.zero_grad()
-        d['state_dict'] = state_dict_copy(fit_net)
-        if scheduler and (step + 1) % epoch_size == 0:
-            scheduler.step()
