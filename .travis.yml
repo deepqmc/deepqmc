@@ -7,7 +7,7 @@ install:
   - echo VIRTUAL_ENV=$VIRTUAL_ENV
 script:
   - poetry build
-  - pip install deepqmc[wf,train,test] -f ./dist
+  - pip install deepqmc[wf,train,cli,test] -f ./dist
   - coverage run -m pytest
 after_success:
   - bash <(curl -s https://codecov.io/bash) -X coveragepy
