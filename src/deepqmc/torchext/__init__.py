@@ -1,8 +1,11 @@
 from .bdet import bdet
+from .cuda import estimate_optimal_batch_size_cuda
 from .sloglindet import sloglindet
 from .utils import (
     SSP,
     assign_where,
+    batch_eval,
+    batch_eval_tuple,
     bdiag,
     get_custom_dnn,
     get_log_dnn,
@@ -23,8 +26,11 @@ from .utils import (
 __all__ = [
     'SSP',
     'assign_where',
-    'bdiag',
+    'batch_eval',
+    'batch_eval_tuple',
     'bdet',
+    'bdiag',
+    'estimate_optimal_batch_size_cuda',
     'get_custom_dnn',
     'get_log_dnn',
     'idx_comb',

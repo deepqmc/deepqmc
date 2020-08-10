@@ -72,6 +72,15 @@ def pow_int(xs, exps):
     return zs
 
 
+def batch_eval(func, batches, *args, **kwargs):
+    return torch.cat([func(batch, *args, **kwargs) for batch in batches])
+
+
+def batch_eval_tuple(func, batches, *args, **kwargs):
+    results = list(zip(*(func(batch, *args, **kwargs) for batch in batches)))
+    return tuple(torch.cat(result) for result in results)
+
+
 @lru_cache()
 def idx_perm(n, r, device=torch.device('cpu')):  # noqa: B008
     idx = list(permutations(range(n), r))

@@ -1,9 +1,9 @@
 import numpy as np
 import torch
+from uncertainties import unumpy as unp
 
 from ..physics import pairwise_distance, pairwise_self_distance
-from ..torchext import shuffle_tensor
-from ..utils import batch_eval
+from ..torchext import batch_eval, shuffle_tensor
 
 __all__ = ()
 
@@ -82,3 +82,31 @@ def pair_correlations_from_samples(rs, n_up, bw=0.1):
         'ud': GaussianKDEstimator(R_ud[:, None], bw=bw),
         'decorr': GaussianKDEstimator(R_decorr[:, None], bw=bw),
     }
+
+
+def ewm(x, X, Y, alpha, thre=1e-10, with_err=False):
+    if x is None:
+        x = X
+    deltas = -np.log(alpha) * (x[:, None] - X)
+    mask = (0 <= deltas) & (deltas < -np.log(thre))
+    ws = np.zeros_like(deltas)
+    ws[mask] = np.exp(-deltas[mask])
+    ws = ws / ws.sum(axis=-1)[:, None]
+    mean = (ws * Y).sum(axis=-1)
+    if not with_err:
+        return mean
+    err = np.sqrt((ws ** 2 * (mean[:, None] - Y) ** 2).sum(axis=-1))
+    return unp.uarray(mean, err)
+
+
+def get_flat_mesh(bounds, npts, device=None):
+    edges = [torch.linspace(*b, n, device=device) for b, n in zip(bounds, npts)]
+    grids = torch.meshgrid(*edges)
+    return torch.stack(grids).flatten(start_dim=1).t(), edges
+
+
+def integrate_on_mesh(func, bounds, density=0.02):
+    ns_pts = [int((bs[1] - bs[0]) / density) for bs in bounds]
+    vol = np.array([bs[1] - bs[0] for bs in bounds]).prod()
+    mesh = get_flat_mesh(bounds, ns_pts)[0]
+    return sum(func(x).sum() for x in mesh.chunk(100)) * (vol / mesh.shape[0])
