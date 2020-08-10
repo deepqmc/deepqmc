@@ -5,8 +5,8 @@ from pyscf import dft, gto, scf
 from pytest import approx
 from torch.testing import assert_allclose
 
+from deepqmc.extra.pyscfext import eval_ao_normed
 from deepqmc.physics import pairwise_diffs
-from deepqmc.tools.pyscfext import eval_ao_normed
 from deepqmc.wf import PauliNet
 
 
