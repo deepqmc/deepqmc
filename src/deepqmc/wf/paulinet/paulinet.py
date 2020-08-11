@@ -1,5 +1,4 @@
 import logging
-from functools import partial
 
 import numpy as np
 import torch
@@ -90,6 +89,7 @@ class PauliNet(WaveFunction):
         dist_feat_cutoff (float, a.u.): distance at which distance features
             go to zero
         backflow_channels (int): :math:`C`, number of backflow channels
+        omni_kwargs: arguments passed to :class:`~deepqmc.wf.paulinet.OmniSchNet`
 
     Attributes:
         jastrow: :class:`torch.nn.Module` representing the Jastrow factor
@@ -112,8 +112,8 @@ class PauliNet(WaveFunction):
         return_log=True,
         use_sloglindet='training',
         *,
-        cusp_correction=False,
-        cusp_electrons=False,
+        cusp_correction=True,
+        cusp_electrons=True,
         dist_feat_dim=32,
         dist_feat_cutoff=10.0,
         backflow_type='orbital',
@@ -122,6 +122,7 @@ class PauliNet(WaveFunction):
         rc_scaling=1.0,
         cusp_alpha=10.0,
         freeze_embed=False,
+        omni_kwargs=None,
     ):
         assert use_sloglindet in {'never', 'training', 'always'}
         assert return_log or use_sloglindet == 'never'
@@ -178,7 +179,9 @@ class PauliNet(WaveFunction):
         self.r_backflow = None
         if omni_factory:
             assert not backflow_factory and not jastrow_factory
-            self.omni = omni_factory(mol, dist_feat_dim, n_up, n_down, *backflow_spec)
+            self.omni = omni_factory(
+                mol, dist_feat_dim, n_up, n_down, *backflow_spec, **(omni_kwargs or {})
+            )
             self.backflow = self.omni.forward_backflow
             self.r_backflow = self.omni.forward_r_backflow
             self.jastrow = self.omni.forward_jastrow
@@ -286,7 +289,7 @@ class PauliNet(WaveFunction):
             mf.mol.spin,
         )
         basis = GTOBasis.from_pyscf(mf.mol)
-        wf = cls(mol, basis, **kwargs)
+        wf = cls(mol, basis, **{'omni_factory': OmniSchNet, **kwargs})
         if init_weights:
             wf.mo.init_from_pyscf(mf, freeze_mos=freeze_mos)
             if confs is not None:
@@ -298,9 +301,7 @@ class PauliNet(WaveFunction):
         return wf
 
     @classmethod
-    def from_hf(
-        cls, mol, *, basis='6-311g', cas=None, pauli_kwargs=None, omni_kwargs=None
-    ):
+    def from_hf(cls, mol, *, basis='6-311g', cas=None, **kwargs):
         r"""Construct a :class:`PauliNet` instance by running a HF calculation.
 
         This is the top-level interface.
@@ -312,8 +313,7 @@ class PauliNet(WaveFunction):
             cas ((int, int)): tuple of the number of active orbitals and number of
                 active electrons for a complete active space multireference
                 HF calculation
-            pauli_kwargs: arguments passed to :func:`PauliNet.from_pyscf`
-            omni_kwargs: arguments passed to :class:`~deepqmc.wf.paulinet.OmniSchNet`
+            kwargs: all other arguments are passed to :func:`PauliNet.from_pyscf`
         """
         from pyscf import gto, lib, mcscf, scf
 
@@ -334,15 +334,7 @@ class PauliNet(WaveFunction):
             mc.kernel()
             lib.chkfile.dump(mc.chkfile, 'ci', mc.ci)
             lib.chkfile.dump(mc.chkfile, 'nelecas', mc.nelecas)
-        wf = PauliNet.from_pyscf(
-            mc if cas else mf,
-            **{
-                'omni_factory': partial(OmniSchNet, **(omni_kwargs or {})),
-                'cusp_correction': True,
-                'cusp_electrons': True,
-                **(pauli_kwargs or {}),
-            },
-        )
+        wf = PauliNet.from_pyscf(mc if cas else mf, **kwargs)
         wf.mf = mf
         return wf
 

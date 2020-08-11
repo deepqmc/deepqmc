@@ -1,7 +1,6 @@
 import importlib
 import logging
 import shutil
-from functools import partial
 
 import toml
 import torch
@@ -9,7 +8,6 @@ import torch
 from .errors import TomlError
 from .molecule import Molecule
 from .wf import PauliNet
-from .wf.paulinet.omni import OmniSchNet
 
 log = logging.getLogger(__name__)
 
@@ -59,18 +57,7 @@ def wf_from_file(workdir):
         assert mf.mol.basis == model_kwargs.pop('basis', '6-311g')
         cas = model_kwargs.pop('cas', None)
         assert not mc and not cas or (mc.ncas == cas[0] and sum(mc.nelecas) == cas[1])
-        omni_kwargs = model_kwargs.pop('omni_kwargs', None)
-        pauli_kwargs = model_kwargs.pop('pauli_kwargs', None)
-        assert not model_kwargs
-        wf = PauliNet.from_pyscf(
-            mc or mf,
-            **{
-                'omni_factory': partial(OmniSchNet, **(omni_kwargs or {})),
-                'cusp_correction': True,
-                'cusp_electrons': True,
-                **(pauli_kwargs or {}),
-            },
-        )
+        wf = PauliNet.from_pyscf(mc or mf, **model_kwargs)
         wf.mf = mf
     else:
         wf = PauliNet.from_hf(mol, **model_kwargs)

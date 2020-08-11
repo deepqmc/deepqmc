@@ -69,14 +69,7 @@ def wf(net_factory, mol):
         mole = pyscf.gto.M(atom=mol.as_pyscf(), unit='bohr', basis='6-311g', cart=True)
         basis = GTOBasis.from_pyscf(mole)
         args += (basis,)
-        kwargs.update(
-            {
-                'cusp_correction': True,
-                'cusp_electrons': True,
-                'jastrow_factory': JastrowNet,
-                'dist_feat_dim': 4,
-            }
-        )
+        kwargs.update({'jastrow_factory': JastrowNet, 'dist_feat_dim': 4})
     return net_factory(*args, **kwargs)
 
 
