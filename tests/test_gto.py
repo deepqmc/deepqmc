@@ -30,7 +30,9 @@ def mf(mol):
 
 @pytest.fixture
 def gtowf(mf):
-    return PauliNet.from_pyscf(mf).double()
+    return PauliNet.from_pyscf(
+        mf, omni_factory=None, cusp_correction=False, cusp_electrons=False
+    ).double()
 
 
 def test_eval_ao_normed(mol, grids):

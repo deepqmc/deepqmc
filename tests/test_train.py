@@ -4,7 +4,7 @@ from deepqmc.wf import PauliNet
 
 def test_simple_example(tmp_path):
     mol = Molecule.from_name('LiH')
-    net = PauliNet.from_hf(mol, cas=(4, 2), pauli_kwargs={'conf_limit': 2})
+    net = PauliNet.from_hf(mol, cas=(4, 2), conf_limit=2)
     chkpts = []
     train(
         net,

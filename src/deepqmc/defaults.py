@@ -23,12 +23,9 @@ DEEPQMC_MAPPING = {
         [('n_decorrelate', 4), 'n_discard', 'sample_size'],
     ),
     (evaluate, 'sample_kwargs'): sample_wf,
-    (PauliNet.from_hf, 'pauli_kwargs'): (
-        PauliNet.from_pyscf,
-        [('cusp_correction', True), ('cusp_electrons', True)],
-    ),
-    (PauliNet.from_hf, 'omni_kwargs'): OmniSchNet,
+    (PauliNet.from_hf, 'kwargs'): PauliNet.from_pyscf,
     (PauliNet.from_pyscf, 'kwargs'): PauliNet,
+    (PauliNet, 'omni_kwargs'): OmniSchNet,
     (OmniSchNet, 'schnet_kwargs'): ElectronicSchNet,
     (OmniSchNet, 'subnet_kwargs'): SubnetFactory,
 }
