@@ -323,6 +323,13 @@ class PauliNet(WaveFunction):
         wf.mf = mf
         return wf
 
+    def pop_chargse(self):
+        try:
+            mf = self.mf
+        except AttributeError:
+            return super().pop_charges()
+        return mf.pop(verbose=0)[1]
+
     def _backflow_op(self, xs, fs):
         if self.backflow_transform == 'mult':
             fs_mult, fs_add = fs, None

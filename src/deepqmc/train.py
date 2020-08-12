@@ -189,7 +189,7 @@ def train(  # noqa: C901
         sampler = PLUGINS['sampler_factory'](wf, writer=writer)
     else:
         log.info(f'Using LangevinSampler, params = {sampler_kwargs!r}')
-        sampler = LangevinSampler.from_mf(wf, writer=writer, **(sampler_kwargs or {}))
+        sampler = LangevinSampler.from_wf(wf, writer=writer, **(sampler_kwargs or {}))
     if equilibrate:
         log.info('Equilibrating...')
         with tqdm(count(), desc='equilibrating', disable=None) as steps:

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Nuclear and electronic cusp corrections on by default
     - `omni_kwargs` accepted by `PauliNet()` instead of `from_hf()`
     - All keyword arguments to `from_hf()` are passed to `PauliNet()`
+- `Sampler`:
+    - `from_mf()` changed to `from_wf()`, doesn't use PySCF object by default
 
 ## [0.1.1] - 2020-07-24
 
