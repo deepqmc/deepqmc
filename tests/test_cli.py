@@ -29,7 +29,7 @@ def test_train():
         result = runner.invoke(cli, ['train', '.', '--no-cuda'], catch_exceptions=False)
         files = os.listdir()
     assert 'fit.h5' in files
-    assert 'baseline.pyscf' in files
+    assert 'pyscf.chk' in files
     assert 'chkpts' in files
     assert any(f.startswith('events.out.tfevents.') for f in files)
     assert 'converged SCF energy' in result.output
@@ -39,7 +39,7 @@ def test_pyscf_reload():
     with runner.isolated_filesystem():
         with open('param.toml', 'w') as f:
             toml.dump(
-                PARAM_H2, f,
+                {**PARAM_H2, 'model_kwargs': {'cas': [2, 2]}}, f,
             )
         result = runner.invoke(cli, ['train', '.', '--no-cuda'], catch_exceptions=False)
         result_repeated = runner.invoke(
@@ -60,7 +60,7 @@ def test_evaluate():
         )
         files = os.listdir()
     assert 'sample.h5' in files
-    assert 'baseline.pyscf' in files
+    assert 'pyscf.chk' in files
     assert any(f.startswith('events.out.tfevents.') for f in files)
     assert 'converged SCF energy' in result.output
 
