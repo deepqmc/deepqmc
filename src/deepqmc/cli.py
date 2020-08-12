@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from .defaults import DEEPQMC_MAPPING, collect_kwarg_defaults
-from .errors import TrainingCrash
+from .errors import TomlError, TrainingCrash
 from .evaluate import evaluate
 from .molecule import Molecule
 from .train import train
@@ -29,6 +29,18 @@ __all__ = ()
 log = logging.getLogger(__name__)
 
 
+def validate_params(params):
+    REQUIRED = {'system'}
+    OPTIONAL = {'model_kwargs', 'train_kwargs', 'evaluate_kwargs'}
+    params = set(params)
+    missing = REQUIRED - params
+    if missing:
+        raise TomlError(f'Missing keywords: {missing}')
+    unknown = params - REQUIRED - OPTIONAL
+    if unknown:
+        raise TomlError(f'Unknown keywords: {unknown}')
+
+
 def import_fullname(fullname):
     module_name, qualname = fullname.split(':')
     module = importlib.import_module(module_name)
@@ -37,6 +49,7 @@ def import_fullname(fullname):
 
 def wf_from_file(workdir):
     params = toml.loads((workdir / 'param.toml').read_text())
+    validate_params(params)
     state_file = workdir / 'state.pt'
     state = torch.load(state_file) if state_file.is_file() else None
     if state:

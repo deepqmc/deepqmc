@@ -30,3 +30,7 @@ class TrainingCrash(DeepQMCError):
 
 class LUFactError(InfoException, DeepQMCError):
     pass
+
+
+class TomlError(DeepQMCError):
+    pass
