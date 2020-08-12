@@ -49,7 +49,10 @@ jobs:
       language: minimal
       install: skip
       script: skip
-      if: branch = master
+      before_cache: skip
+      cache: skip
+      after_success: skip
+      if: (branch = master) AND (NOT type IN (pull_request))
       workspaces:
         use: ws1
       deploy:
