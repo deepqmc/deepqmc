@@ -29,6 +29,8 @@ The following dependencies are required only by non-essential parts of DeepQMC a
 - `Pillow <https://pillow.readthedocs.io/>`_ is used by Tensorboard to store pictures in the event files.
 - `TQDM <https://github.com/tqdm/tqdm>`_ provides progress bars.
 - `h5py <https://www.h5py.org>`_ handles IO for `HDF5 <http://hdfgroup.org>`_ files.
+- `Click <https://click.palletsprojects.com>`_ helps with constructing command-line interfaces.
+- `TOML Kit <https://github.com/sdispater/tomlkit>`_ supports advanced TOML file manipulations.
 
 Virtual environments
 --------------------
@@ -51,7 +53,7 @@ Within the activated virtual environment, DeepQMC can be installed with::
 
 To install all optional dependencies, use::
 
-    $ pip install -U deepqmc[wf,train]
+    $ pip install -U deepqmc[wf,train,cli]
 
 Developing
 ----------
@@ -62,4 +64,4 @@ To install DeepQMC from a local Git repository, use `Poetry <https://python-poet
     $ cd deepqmc
     $ poetry install -E all
 
-In addition to all the optional dependencies above, this also installs `pytest <https://docs.pytest.org/>`_, `Coverage.py <https://coverage.readthedocs.io>`_, and `Click <https://click.palletsprojects.com/>`_.
+In addition to all the optional dependencies above, this also installs `pytest <https://docs.pytest.org/>`_ and `Coverage.py <https://coverage.readthedocs.io>`_.

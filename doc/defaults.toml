@@ -1,0 +1,109 @@
+[train_kwargs]
+n_steps = 10000
+batch_size = 10000
+epoch_size = 100
+optimizer = "AdamW"
+learning_rate = 0.01
+lr_scheduler = "CyclicLR"
+equilibrate = true
+
+[train_kwargs.optimizer_kwargs]
+[train_kwargs.optimizer_kwargs.Adam]
+betas = [0.9, 0.9]
+
+[train_kwargs.optimizer_kwargs.AdamW]
+betas = [0.9, 0.9]
+weight_decay = 0.01
+
+[train_kwargs.lr_scheduler_kwargs]
+[train_kwargs.lr_scheduler_kwargs.CyclicLR]
+base_lr = 0.0001
+max_lr = 0.01
+step_size_up = 250
+mode = "triangular2"
+cycle_momentum = false
+
+[train_kwargs.lr_scheduler_kwargs.OneCycleLR]
+max_lr = 0.005
+total_steps = 5000
+pct_start = 0.075
+anneal_strategy = "linear"
+
+[train_kwargs.lr_scheduler_kwargs.inverse]
+decay_rate = 200
+
+[train_kwargs.lr_scheduler_kwargs.scan]
+eq_steps = 100
+start = 0.1
+rate = 1.05
+
+[train_kwargs.fit_kwargs]
+clip_outliers = true
+q = 5
+#: max_grad_norm = ...
+#: kfac = ...
+
+[train_kwargs.sampler_kwargs]
+sample_size = 2000
+tau = 0.1
+n_first_certain = 3
+target_acceptance = 0.57
+n_discard = 50
+n_decorrelate = 1
+#: max_age = ...
+#: log_psi_threshold = ...
+
+[evaluate_kwargs]
+n_steps = 500
+sample_size = 1000
+
+[evaluate_kwargs.sample_kwargs]
+block_size = 10
+equilibrate = true
+
+[evaluate_kwargs.sampler_kwargs]
+tau = 0.1
+n_first_certain = 3
+target_acceptance = 0.57
+n_decorrelate = 4
+#: max_age = ...
+#: log_psi_threshold = ...
+
+[paulinet_kwargs]
+basis = "6-311g"
+#: cas = ...
+#: workdir = ...
+init_weights = true
+freeze_mos = true
+freeze_confs = false
+conf_cutoff = 0.01
+#: conf_limit = ...
+cusp_correction = true
+cusp_electrons = true
+dist_feat_dim = 32
+dist_feat_cutoff = 10.0
+backflow_type = "orbital"
+backflow_channels = 1
+backflow_transform = "mult"
+rc_scaling = 1.0
+cusp_alpha = 10.0
+freeze_embed = false
+
+[paulinet_kwargs.omni_kwargs]
+embedding_dim = 128
+with_jastrow = true
+n_jastrow_layers = 3
+with_backflow = true
+n_backflow_layers = 3
+with_r_backflow = false
+
+[paulinet_kwargs.omni_kwargs.schnet_kwargs]
+n_interactions = 3
+kernel_dim = 64
+version = 2
+layer_norm = false
+
+[paulinet_kwargs.omni_kwargs.subnet_kwargs]
+n_layers_w = 2
+n_layers_h = 1
+n_layers_g = 1
