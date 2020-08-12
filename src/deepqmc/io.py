@@ -1,6 +1,5 @@
 import importlib
 import logging
-import shutil
 
 import toml
 import torch
@@ -39,7 +38,6 @@ def wf_from_file(workdir):
     state = torch.load(state_file) if state_file.is_file() else None
     if state:
         log.info(f'State loaded from {state_file}')
-    pyscf_file = workdir / 'baseline.pyscf'
     system = params.pop('system')
     if isinstance(system, str):
         name, system = system, {}
@@ -50,36 +48,5 @@ def wf_from_file(workdir):
     else:
         mol = Molecule.from_name(name, **system)
     model_kwargs = params.pop('model_kwargs', {})
-    if pyscf_file.is_file():
-        mf, mc = pyscf_from_file(pyscf_file)
-        log.info(f'Restored PySCF object from {pyscf_file}')
-        # TODO refactor initialisation to avoid duplicate with PauliNet.from_hf
-        assert mf.mol.basis == model_kwargs.pop('basis', '6-311g')
-        cas = model_kwargs.pop('cas', None)
-        assert not mc and not cas or (mc.ncas == cas[0] and sum(mc.nelecas) == cas[1])
-        wf = PauliNet.from_pyscf(mc or mf, **model_kwargs)
-        wf.mf = mf
-    else:
-        wf = PauliNet.from_hf(mol, **model_kwargs)
-        shutil.copy(wf.mf.chkfile, pyscf_file)
+    wf = PauliNet.from_hf(mol, workdir=workdir, **model_kwargs)
     return wf, params, state
-
-
-def pyscf_from_file(chkfile):
-    import pyscf.gto.mole
-    from pyscf import lib, mcscf, scf
-
-    pyscf.gto.mole.float32 = float
-
-    mol = lib.chkfile.load_mol(chkfile)
-    mf = scf.RHF(mol)
-    mf.__dict__.update(lib.chkfile.load(chkfile, 'scf'))
-    mc_dict = lib.chkfile.load(chkfile, 'mcscf')
-    if mc_dict:
-        mc_dict['ci'] = lib.chkfile.load(chkfile, 'ci')
-        mc_dict['nelecas'] = tuple(map(int, lib.chkfile.load(chkfile, 'nelecas')))
-        mc = mcscf.CASSCF(mf, 0, 0)
-        mc.__dict__.update(mc_dict)
-    else:
-        mc = None
-    return mf, mc

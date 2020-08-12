@@ -14,6 +14,7 @@ from .distbasis import DistanceBasis
 from .gto import GTOBasis
 from .molorb import MolecularOrbital
 from .omni import OmniSchNet
+from .pyscfext import pyscf_from_mol
 
 __version__ = '0.1.0'
 __all__ = ['PauliNet']
@@ -301,7 +302,7 @@ class PauliNet(WaveFunction):
         return wf
 
     @classmethod
-    def from_hf(cls, mol, *, basis='6-311g', cas=None, **kwargs):
+    def from_hf(cls, mol, *, basis='6-311g', cas=None, workdir=None, **kwargs):
         r"""Construct a :class:`PauliNet` instance by running a HF calculation.
 
         This is the top-level interface.
@@ -313,28 +314,12 @@ class PauliNet(WaveFunction):
             cas ((int, int)): tuple of the number of active orbitals and number of
                 active electrons for a complete active space multireference
                 HF calculation
+            workdir (str): path where PySCF calculations are cached
             kwargs: all other arguments are passed to :func:`PauliNet.from_pyscf`
         """
-        from pyscf import gto, lib, mcscf, scf
-
-        mol = gto.M(
-            atom=mol.as_pyscf(),
-            unit='bohr',
-            basis=basis,
-            charge=mol.charge,
-            spin=mol.spin,
-            cart=True,
-        )
-        log.info('Running HF...')
-        mf = scf.RHF(mol)
-        mf.kernel()
-        if cas:
-            log.info('Running MCSCF...')
-            mc = mcscf.CASSCF(mf, *cas)
-            mc.kernel()
-            lib.chkfile.dump(mc.chkfile, 'ci', mc.ci)
-            lib.chkfile.dump(mc.chkfile, 'nelecas', mc.nelecas)
-        wf = PauliNet.from_pyscf(mc if cas else mf, **kwargs)
+        mf, mc = pyscf_from_mol(mol, basis, cas, workdir)
+        assert bool(cas) == bool(mc)
+        wf = PauliNet.from_pyscf(mc or mf, **kwargs)
         wf.mf = mf
         return wf
 

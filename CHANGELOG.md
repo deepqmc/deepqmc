@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `PauliNet`:
+    - Nuclear and electronic cusp corrections on by default
+    - `omni_kwargs` accepted by `PauliNet()` instead of `from_hf()`
+    - All keyword arguments to `from_hf()` are passed to `PauliNet()`
+
 ## [0.1.1] - 2020-07-24
 
 Rerelease of 0.1.0 with added package metadata.
