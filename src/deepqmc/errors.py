@@ -32,5 +32,5 @@ class LUFactError(InfoException, DeepQMCError):
     pass
 
 
-class CheckTomlError(Exception):
+class TomlError(DeepQMCError):
     pass

@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from .defaults import DEEPQMC_MAPPING, collect_kwarg_defaults
-from .errors import TrainingCrash, CheckTomlError
+from .errors import TomlError, TrainingCrash
 from .evaluate import evaluate
 from .molecule import Molecule
 from .train import train
@@ -28,18 +28,18 @@ __all__ = ()
 
 log = logging.getLogger(__name__)
 
-def check_toml_file(dict):
-    req_sections = ['system', 'model_kwargs', 'evaluate_kwargs', 'train_kwargs']
-    if set(list(dict.keys())) == set(req_sections):
-        # TODO: Do we need to check each subsection here?
-        pass
-    else:
-        if all(name in list(dict.keys()) for name in req_sections):
-            raise CheckTomlError('Unknown section {} in param.toml'.format(set(list(dict.keys()))-set(req_sections)))
-        elif all(name in req_sections for name in list(dict.keys())):
-            raise CheckTomlError('Missing section section {} in param.toml'.format(set(req_sections)-set(list(dict.keys()))))
-        else:
-            raise CheckTomlError('Error while reading param.toml')
+
+def validate_params(params):
+    REQUIRED = {'system'}
+    OPTIONAL = {'model_kwargs', 'train_kwargs', 'evaluate_kwargs'}
+    params = set(params)
+    missing = REQUIRED - params
+    if missing:
+        raise TomlError(f'Missing keywords: {missing}')
+    unknown = params - REQUIRED - OPTIONAL
+    if unknown:
+        raise TomlError(f'Unknown keywords: {unknown}')
+
 
 def import_fullname(fullname):
     module_name, qualname = fullname.split(':')
@@ -49,7 +49,7 @@ def import_fullname(fullname):
 
 def wf_from_file(workdir):
     params = toml.loads((workdir / 'param.toml').read_text())
-    check_toml_file(params)
+    validate_params(params)
     state_file = workdir / 'state.pt'
     state = torch.load(state_file) if state_file.is_file() else None
     if state:
