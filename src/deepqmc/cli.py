@@ -6,16 +6,31 @@ import click
 import tomlkit
 from tqdm import tqdm
 
-from .defaults import DEEPQMC_MAPPING, collect_kwarg_defaults
 from .errors import TrainingCrash
 from .evaluate import evaluate
+from .fit import fit_wf
 from .io import wf_from_file
+from .sampling import LangevinSampler, sample_wf
 from .train import train
-from .wf import PauliNet
+from .utils import collect_kwarg_defaults
+from .wf import ANSATZES
 
 __all__ = ()
 
 log = logging.getLogger(__name__)
+
+DEEPQMC_DEFAULTS = {
+    (train, 'sampler_kwargs'): LangevinSampler.from_wf,
+    (train, 'fit_kwargs'): fit_wf,
+    (train, 'optimizer_kwargs'): True,
+    (train, 'lr_scheduler_kwargs'): True,
+    (LangevinSampler.from_wf, 'kwargs'): LangevinSampler,
+    (evaluate, 'sampler_kwargs'): (
+        LangevinSampler.from_wf,
+        [('n_decorrelate', 4), 'n_discard', 'sample_size'],
+    ),
+    (evaluate, 'sample_kwargs'): sample_wf,
+}
 
 
 class TqdmStream:
@@ -61,9 +76,10 @@ def cli(verbose, quiet):
 @click.option('--commented', '-c', is_flag=True)
 def defaults(commented):
     table = tomlkit.table()
-    table['model_kwargs'] = collect_kwarg_defaults(PauliNet.from_hf, DEEPQMC_MAPPING)
-    table['train_kwargs'] = collect_kwarg_defaults(train, DEEPQMC_MAPPING)
-    table['evaluate_kwargs'] = collect_kwarg_defaults(evaluate, DEEPQMC_MAPPING)
+    table['train_kwargs'] = collect_kwarg_defaults(train, DEEPQMC_DEFAULTS)
+    table['evaluate_kwargs'] = collect_kwarg_defaults(evaluate, DEEPQMC_DEFAULTS)
+    for label, ansatz in ANSATZES.items():
+        table[f'{label}_kwargs'] = collect_kwarg_defaults(ansatz.entry, ansatz.defaults)
     lines = tomlkit.dumps(table).split('\n')
     if commented:
         lines = ['# ' + l if ' = ' in l and l[0] != '#' else l for l in lines]

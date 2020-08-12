@@ -9,6 +9,7 @@ from deepqmc.errors import TomlError
 
 PARAM_H2 = {
     'system': 'H2',
+    'ansatz': 'paulinet',
     'train_kwargs': {'n_steps': 0, 'equilibrate': False},
     'evaluate_kwargs': {'n_steps': 0, 'sample_kwargs': {'equilibrate': False}},
 }
@@ -39,7 +40,7 @@ def test_pyscf_reload():
     with runner.isolated_filesystem():
         with open('param.toml', 'w') as f:
             toml.dump(
-                {**PARAM_H2, 'model_kwargs': {'cas': [2, 2]}}, f,
+                {**PARAM_H2, 'paulinet_kwargs': {'cas': [2, 2]}}, f,
             )
         result = runner.invoke(cli, ['train', '.', '--no-cuda'], catch_exceptions=False)
         result_repeated = runner.invoke(

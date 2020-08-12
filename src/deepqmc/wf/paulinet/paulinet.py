@@ -13,8 +13,9 @@ from .cusp import CuspCorrection, ElectronicAsymptotic
 from .distbasis import DistanceBasis
 from .gto import GTOBasis
 from .molorb import MolecularOrbital
-from .omni import OmniSchNet
+from .omni import OmniSchNet, SubnetFactory
 from .pyscfext import pyscf_from_mol
+from .schnet import ElectronicSchNet
 
 __version__ = '0.1.0'
 __all__ = ['PauliNet']
@@ -217,6 +218,16 @@ class PauliNet(WaveFunction):
 
     def requires_grad_nets_(self, requires_grad):
         return self.requires_grad_classes_(nn.Linear, requires_grad)
+
+    @classmethod
+    def DEFAULTS(cls):
+        return {
+            (cls.from_hf, 'kwargs'): cls.from_pyscf,
+            (cls.from_pyscf, 'kwargs'): cls,
+            (cls, 'omni_kwargs'): OmniSchNet,
+            (OmniSchNet, 'schnet_kwargs'): ElectronicSchNet,
+            (OmniSchNet, 'subnet_kwargs'): SubnetFactory,
+        }
 
     @classmethod
     def from_pyscf(
