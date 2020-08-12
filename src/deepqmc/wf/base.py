@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 
 
@@ -24,6 +25,9 @@ class WaveFunction(nn.Module):
     @property
     def spin_slices(self):
         return slice(None, self.n_up), slice(self.n_up, None)
+
+    def pop_charges(self):
+        return torch.zeros_like(self.mol.charges)
 
     def forward(self, rs):
         return NotImplemented

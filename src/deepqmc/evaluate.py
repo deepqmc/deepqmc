@@ -57,7 +57,7 @@ def evaluate(
         table_steps = H5LogTable(h5file.require_group('steps'))
     else:
         writer = None
-    sampler = LangevinSampler.from_mf(
+    sampler = LangevinSampler.from_wf(
         wf,
         sample_size=sample_size,
         writer=writer,

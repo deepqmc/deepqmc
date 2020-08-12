@@ -13,13 +13,13 @@ from .wf.paulinet import ElectronicSchNet, OmniSchNet, SubnetFactory
 __all__ = ()
 
 DEEPQMC_MAPPING = {
-    (train, 'sampler_kwargs'): LangevinSampler.from_mf,
+    (train, 'sampler_kwargs'): LangevinSampler.from_wf,
     (train, 'fit_kwargs'): fit_wf,
     (train, 'optimizer_kwargs'): True,
     (train, 'lr_scheduler_kwargs'): True,
-    (LangevinSampler.from_mf, 'kwargs'): LangevinSampler,
+    (LangevinSampler.from_wf, 'kwargs'): LangevinSampler,
     (evaluate, 'sampler_kwargs'): (
-        LangevinSampler.from_mf,
+        LangevinSampler.from_wf,
         [('n_decorrelate', 4), 'n_discard', 'sample_size'],
     ),
     (evaluate, 'sample_kwargs'): sample_wf,

@@ -10,7 +10,7 @@ from uncertainties import ufloat, unumpy as unp
 from .errors import LUFactError
 from .physics import clean_force, local_energy, pairwise_self_distance, quantum_force
 from .plugins import PLUGINS
-from .torchext import assign_where, is_cuda
+from .torchext import assign_where
 from .utils import energy_offset
 
 __version__ = '0.3.0'
@@ -255,23 +255,19 @@ class MetropolisSampler(Sampler):
         )
 
     @classmethod
-    def from_mf(cls, wf, mf=None, *, sample_size=2_000, **kwargs):
-        """Initialize a sampler from a HF calculation.
+    def from_wf(cls, wf, *, sample_size=2_000, **kwargs):
+        """Initialize a sampler with random initial walker positions.
 
-        The initial walker positions are sampled from Gaussians centered
-        on atoms, with charge distribution corresponding to the charge analysis
-        of the HF wave function.
+        The walker positions are sampled from Gaussians centered on atoms, with
+        charge distribution optionally supplied by the wave function ansatz,
+        otherwise taken from the nuclear charges.
 
         Args:
             wf (:class:`~deepqmc.wf.WaveFunction`): wave function to be sampled from
-            mf (:class:`pyscf.scf.hf.RHF`): HF calculation used to get Mulliken
-                partial charges, taken from ``wf.mf`` if not given
             sample_size (int): number of Markov-chain walkers
             kwargs: all other arguments are passed to the constructor
         """
-        rs = rand_from_mf(mf or wf.mf, sample_size)
-        if is_cuda(wf):
-            rs = rs.cuda()
+        rs = rand_from_mol(wf.mol, sample_size, wf.pop_charges())
         return cls(wf, rs, **kwargs)
 
     def step(self):
@@ -369,12 +365,13 @@ class MetropolisSampler(Sampler):
         self.restart()
 
 
-def rand_from_mf(mf, bs, elec_std=1.0, idxs=None):
-    mol = mf.mol
-    n_atoms = mol.natm
-    charges = mol.atom_charges()
-    n_electrons = charges.sum() - mol.charge
-    cs = torch.tensor(charges - mf.pop(verbose=0)[1]).float()
+def rand_from_mol(mol, bs, pop_charges=None, elec_std=1.0):
+    n_atoms = len(mol)
+    charges = mol.charges
+    n_electrons = (charges.sum() - mol.charge).type(torch.int).item()
+    cs = charges
+    if pop_charges is not None:
+        cs = cs - pop_charges
     base = cs.floor()
     repeats = base.to(torch.long)[None, :].repeat(bs, 1)
     rem = cs - base
@@ -385,10 +382,10 @@ def rand_from_mf(mf, bs, elec_std=1.0, idxs=None):
             torch.arange(bs, dtype=torch.long).expand(rem_size, -1).t(), samples
         ] += 1
     idxs = torch.repeat_interleave(
-        torch.arange(n_atoms).expand(bs, -1), repeats.flatten()
+        torch.arange(n_atoms, device=cs.device).expand(bs, -1), repeats.flatten()
     ).view(bs, n_electrons)
     idxs = torch.stack([idxs[i, torch.randperm(idxs.shape[-1])] for i in range(bs)])
-    centers = torch.tensor(mol.atom_coords()).float()[idxs]
+    centers = mol.coords[idxs]
     rs = centers + elec_std * torch.randn_like(centers)
     return rs
 
