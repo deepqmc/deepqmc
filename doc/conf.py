@@ -57,7 +57,15 @@ html_static_path = ['_static']
 
 autodoc_default_options = {'members': True}
 autodoc_inherit_docstrings = False
-autodoc_mock_imports = ['h5py', 'numpy', 'torch', 'tqdm', 'uncertainties', 'scipy']
+autodoc_mock_imports = [
+    'h5py',
+    'numpy',
+    'pyscf',
+    'scipy',
+    'torch',
+    'tqdm',
+    'uncertainties',
+]
 todo_include_todos = True
 napoleon_numpy_docstring = False
 napoleon_use_ivar = True
