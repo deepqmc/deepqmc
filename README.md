@@ -26,17 +26,13 @@ pip install -U deepqmc[wf,train]
 ## A simple example
 
 ```python
->>> from deepqmc import Molecule, evaluate, train
->>> from deepqmc.wf import PauliNet
->>> mol = Molecule.from_name('LiH')
->>> net = PauliNet.from_hf(mol).cuda()
-converged SCF energy = -7.9846409186467
->>> train(net)
-equilibrating: 64it [00:08,  7.58it/s]
-training:   0%|  | 46/10000 [01:37<5:50:59,  2.12s/it, E=-8.0371(24)]
-KeyboardInterrupt
->>> evaluate(net)
-evaluating:  23%|▋  | 134/571 [01:08<03:44,  1.94it/s, E=-8.0455(32)]
+from deepqmc import Molecule, evaluate, train
+from deepqmc.wf import PauliNet
+
+mol = Molecule.from_name('LiH')
+net = PauliNet.from_hf(mol).cuda()
+train(net)
+evaluate(net)
 ```
 
 ## Links
