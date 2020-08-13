@@ -55,9 +55,10 @@ class CLI(click.Group):
 
 
 @click.group(cls=CLI)
-@click.option('-v', '--verbose', count=True)
-@click.option('-q', '--quiet', is_flag=True)
-def cli(verbose, quiet):
+@click.option('-v', '--verbose', count=True, help='Increase verbosity.')
+@click.option('-q', '--quiet', is_flag=True, help='Suppres all output.')
+def cli(verbose, quiet):  # noqa: D403
+    """DeepQMC runs quantum Monte Carlo with deep neural networks."""
     assert not (quiet and verbose)
     logging.basicConfig(
         style='{',
@@ -73,8 +74,15 @@ def cli(verbose, quiet):
 
 
 @cli.command()
-@click.option('--commented', '-c', is_flag=True)
+@click.option(
+    '--commented', '-c', is_flag=True, help='Comment out all hyperparameters.'
+)
 def defaults(commented):
+    """Print all hyperparameters and their default values.
+
+    The hyperparameters are printed in the TOML format that is expected by other
+    deepqmc commands.
+    """
     table = tomlkit.table()
     table['train_kwargs'] = collect_kwarg_defaults(train, DEEPQMC_DEFAULTS)
     table['evaluate_kwargs'] = collect_kwarg_defaults(evaluate, DEEPQMC_DEFAULTS)
@@ -88,11 +96,32 @@ def defaults(commented):
 
 @cli.command('train')
 @click.argument('workdir', type=click.Path(exists=True))
-@click.option('--save-every', default=100, show_default=True)
-@click.option('--cuda/--no-cuda', default=True)
-@click.option('--max-restarts', default=3, show_default=True)
-@click.option('--hook', is_flag=True)
+@click.option(
+    '--save-every',
+    default=100,
+    show_default=True,
+    help='Frequency in steps of saving the curent state of the optimization.',
+)
+@click.option(
+    '--cuda/--no-cuda',
+    default=True,
+    show_default=True,
+    help='Toggle training on a GPU.',
+)
+@click.option(
+    '--max-restarts',
+    default=3,
+    show_default=True,
+    help='Maximum number of attempted restarts before aborting.',
+)
+@click.option('--hook', is_flag=True, help='Import a deepqmc hook from WORKDIR.')
 def train_at(workdir, save_every, cuda, max_restarts, hook):
+    """Train an ansatz with variational quantum Monte Carlo.
+
+    The calculation details must be specified in a "param.toml" file in WORKDIR,
+    which must contain at least the keywords "system" and "ansatz", and
+    optionally any keywords printed by the "defaults" command.
+    """
     workdir = Path(workdir).resolve()
     if hook:
         log.info('Importing a dlqmc hook')
@@ -131,10 +160,28 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
 
 @cli.command('evaluate')
 @click.argument('workdir', type=click.Path(exists=True))
-@click.option('--cuda/--no-cuda', default=True)
-@click.option('--store-steps/--no-store-steps', default=False)
+@click.option(
+    '--cuda/--no-cuda',
+    default=True,
+    show_default=True,
+    help='Toggle training on a GPU.',
+)
+@click.option(
+    '--store-steps/--no-store-steps',
+    default=False,
+    show_default=True,
+    help='Toggle storing of individual sampling steps.',
+)
 @click.option('--hook', is_flag=True)
 def evaluate_at(workdir, cuda, store_steps, hook):
+    """Estimate total energy of an ansatz via Monte Carlo sampling.
+
+    The calculation details must be specified in a "param.toml" file in WORKDIR,
+    which must contain at least the keywords "system" and "ansatz", and
+    optionally any keywords printed by the "defaults" command. The wave function
+    ansatz must be stored in a "state.pt" file in WORKDIR, which was generated
+    with the "train" command.
+    """
     workdir = Path(workdir).resolve()
     if hook:
         sys.path.append(str(workdir))
