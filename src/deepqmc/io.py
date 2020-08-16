@@ -42,8 +42,10 @@ def wf_from_file(workdir):
     if isinstance(system, str):
         name, system = system, {}
     else:
-        name = system.pop('name')
-    if ':' in name:
+        name = system.pop('name', None)
+    if name is None:
+        mol = Molecule(**system)
+    elif ':' in name:
         mol = import_fullname(name)(**system)
     else:
         mol = Molecule.from_name(name, **system)
