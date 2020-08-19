@@ -4,7 +4,7 @@ build-backend = "poetry.masonry.api"
 
 [tool.poetry]
 name = "deepqmc"
-version = "0.1.1"
+version = "0.2.0"
 description = "Deep-learning quantum Monte Carlo for electrons in real space"
 authors = [
     "Jan Hermann <jan.hermann@fu-berlin.de>",

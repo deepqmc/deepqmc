@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2020-08-19
+
 ### Added
 
 - Command-line interface
@@ -35,6 +37,7 @@ At this moment, DeepQMC should be still considered a research code.
 - Core functionality to run variational quantum Monte Carlo with Pytorch
 - PauliNet, a deep neural network ansatz
 
-[unreleased]: https://github.com/deepqmc/deepqmc/compare/0.1.1...HEAD
+[unreleased]: https://github.com/deepqmc/deepqmc/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/deepqmc/deepqmc/compare/0.1.1...0.2.0
 [0.1.1]: https://github.com/deepqmc/deepqmc/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/deepqmc/deepqmc/releases/tag/0.1.0
