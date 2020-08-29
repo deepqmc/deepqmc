@@ -92,7 +92,7 @@ class SLogLinearDet(torch.autograd.Function):
         # This solution is hugely suboptimal if only forward pass is needed (by
         # ~1.5 order of magnitude), but that never happens in normal use of our code
         ctx.save_for_backward(
-            c, A1, A2, *_slogcof(A1), *_slogcof(A2), *sl_Psi, *sl_D, *sl_D1, *sl_D2,
+            c, A1, A2, *_slogcof(A1), *_slogcof(A2), *sl_Psi, *sl_D, *sl_D1, *sl_D2
         )
         return sl_Psi
 

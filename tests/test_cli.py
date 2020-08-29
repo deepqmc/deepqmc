@@ -39,9 +39,7 @@ def test_train():
 def test_pyscf_reload():
     with runner.isolated_filesystem():
         with open('param.toml', 'w') as f:
-            toml.dump(
-                {**PARAM_H2, 'paulinet_kwargs': {'cas': [2, 2]}}, f,
-            )
+            toml.dump({**PARAM_H2, 'paulinet_kwargs': {'cas': [2, 2]}}, f)
         result = runner.invoke(cli, ['train', '.', '--no-cuda'], catch_exceptions=False)
         result_repeated = runner.invoke(
             cli, ['train', '.', '--no-cuda'], catch_exceptions=False
@@ -53,9 +51,7 @@ def test_pyscf_reload():
 def test_evaluate():
     with runner.isolated_filesystem():
         with open('param.toml', 'w') as f:
-            toml.dump(
-                PARAM_H2, f,
-            )
+            toml.dump(PARAM_H2, f)
         result = runner.invoke(
             cli, ['evaluate', '.', '--no-cuda'], catch_exceptions=False
         )

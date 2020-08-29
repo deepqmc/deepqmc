@@ -144,7 +144,7 @@ def get_status(path):
             line = l
         elif 'Restarting' in l:
             restarts += 1
-    modtime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(path.stat().st_mtime),)
+    modtime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(path.stat().st_mtime))
     return {'modtime': modtime, 'restarts': restarts, 'line': line.strip()}
 
 

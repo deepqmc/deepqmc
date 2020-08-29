@@ -90,11 +90,7 @@ def test_antisymmetry(wf, rs):
 def test_antisymmetry_trained(wf, rs):
     sampler = LangevinSampler(wf, torch.rand_like(rs), tau=0.1)
     fit_wf(
-        wf,
-        LossEnergy(),
-        torch.optim.Adam(wf.parameters(), lr=1e-2),
-        sampler,
-        range(10),
+        wf, LossEnergy(), torch.optim.Adam(wf.parameters(), lr=1e-2), sampler, range(10)
     )
     assert_alltrue_named(
         (name, torch.allclose(wf(rs[:, [0, 2, 1]])[i], (-1) ** i * wf(rs)[i]))

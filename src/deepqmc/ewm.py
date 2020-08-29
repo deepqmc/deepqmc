@@ -66,9 +66,7 @@ class EWMMonitor(EWMAverage):
     I = '-3s -2s -1s med +1s +2s +3s mean mean_slow'.split()
     I = {l: i for i, l in enumerate(I)}
 
-    def __init__(
-        self, stat_outlier=6, blowup_maxlen=25, blowup_thre=0.5, **kwargs,
-    ):
+    def __init__(self, stat_outlier=6, blowup_maxlen=25, blowup_thre=0.5, **kwargs):
         super().__init__(max_alpha=1, **kwargs)
         self.blowup = {}
         self._stat_outlier = stat_outlier

@@ -266,7 +266,7 @@ class PauliNet(WaveFunction):
         if hasattr(mf, 'fcisolver'):
             if conf_limit:
                 conf_cutoff = max(
-                    np.sort(abs(mf.ci.flatten()))[-conf_limit:][0] - 1e-10, conf_cutoff,
+                    np.sort(abs(mf.ci.flatten()))[-conf_limit:][0] - 1e-10, conf_cutoff
                 )
             for tol in [conf_cutoff, conf_cutoff + 2e-10]:
                 conf_coeff, *confs = zip(

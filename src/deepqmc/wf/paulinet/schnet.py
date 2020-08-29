@@ -50,13 +50,13 @@ class SubnetFactory:
     def h_subnet(self):
         r"""Create the :math:`\mathbf h` network."""
         return get_log_dnn(
-            self.embedding_dim, self.kernel_dim, SSP, n_layers=self.n_layers_h,
+            self.embedding_dim, self.kernel_dim, SSP, n_layers=self.n_layers_h
         )
 
     def g_subnet(self):
         r"""Create the :math:`\mathbf g` network."""
         return get_log_dnn(
-            self.kernel_dim, self.embedding_dim, SSP, n_layers=self.n_layers_g,
+            self.kernel_dim, self.embedding_dim, SSP, n_layers=self.n_layers_g
         )
 
 

@@ -102,14 +102,14 @@ def clean_force(forces, rs, mol, *, tau, return_a=False):
 
 
 def local_energy(
-    rs, wf, mol=None, create_graph=False, keep_graph=None, return_grad=False,
+    rs, wf, mol=None, create_graph=False, keep_graph=None, return_grad=False
 ):
     mol = mol or wf.mol
     Es_nuc = nuclear_energy(mol)
     Vs_nuc = nuclear_potential(rs, mol)
     Vs_el = electronic_potential(rs)
     lap_log_psis, (log_psis, sign_psis), quantum_force = laplacian(
-        rs, wf, create_graph=create_graph, keep_graph=keep_graph, return_grad=True,
+        rs, wf, create_graph=create_graph, keep_graph=keep_graph, return_grad=True
     )
     if torch.isnan(log_psis).any():
         raise NanError(rs)
@@ -123,11 +123,7 @@ def local_energy(
         + Vs_el
         + Es_nuc
     )
-    result = (
-        Es_loc,
-        log_psis if keep_graph else log_psis.detach(),
-        sign_psis,
-    )
+    result = Es_loc, log_psis if keep_graph else log_psis.detach(), sign_psis
     if return_grad:
         result += (quantum_force,)
     return result

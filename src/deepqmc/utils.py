@@ -35,7 +35,7 @@ class H5LogTable:
                     else:
                         dtype = None
                     self._group.create_dataset(
-                        label, (0, *shape), maxshape=(None, *shape), dtype=dtype,
+                        label, (0, *shape), maxshape=(None, *shape), dtype=dtype
                     )
                 ds = self._group[label]
                 ds.resize(ds.shape[0] + 1, axis=0)

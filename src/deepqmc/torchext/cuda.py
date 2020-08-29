@@ -16,7 +16,7 @@ def unused_cuda_memory():
 
 
 def estimate_optimal_batch_size_cuda(
-    test_func, test_batch_sizes, mem_margin=0.9, max_memory=None,
+    test_func, test_batch_sizes, mem_margin=0.9, max_memory=None
 ):
     assert len(test_batch_sizes) >= 4
     test_batch_sizes = torch.as_tensor(test_batch_sizes).float()
