@@ -7,7 +7,7 @@ install:
   - echo VIRTUAL_ENV=$VIRTUAL_ENV
 script:
   - poetry build
-  - pip install deepqmc[wf,train,cli,test] -f ./dist
+  - pip install -U deepqmc[wf,train,cli,test] -f ./dist
   - coverage run -m pytest
 after_success:
   - bash <(curl -s https://codecov.io/bash) -X coveragepy
@@ -23,7 +23,7 @@ jobs:
     - name: Style
       python: 3.7
       install:
-        - pip install black flake8 flake8-bugbear flake8-comprehensions flake8-quotes pep8-naming isort pydocstyle
+        - pip install -U black flake8 flake8-bugbear flake8-comprehensions flake8-quotes pep8-naming isort pydocstyle
       script:
         - flake8
         - black . --check
@@ -35,7 +35,7 @@ jobs:
     - name: Documentation
       python: 3.7
       install:
-        - pip install sphinx sphinxcontrib-katex toml
+        - pip install -U sphinx sphinxcontrib-katex toml
       script:
         - sphinx-build -E doc doc/build
       env: CACHE_NAME=deploy
