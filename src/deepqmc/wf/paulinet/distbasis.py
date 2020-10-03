@@ -16,7 +16,7 @@ class DistanceBasis(nn.Module):
         envelope (str): type of envelope for distance features
 
             - ``'physnet'``: taken from [UnkeJCTC19]_
-            - ``'nocusp'``: used in [Hermann19]_
+            - ``'nocusp'``: used in [HermannNC20]_
 
     Shape:
         - Input, *d*: :math:`(*)`

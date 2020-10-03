@@ -36,7 +36,7 @@ def eval_log_slater(xs):
 
 
 class PauliNet(WaveFunction):
-    r"""Implements the PauliNet ansatz from [Hermann19]_.
+    r"""Implements the PauliNet ansatz from [HermannNC20]_.
 
     Derived from :class:`WaveFunction`. This constructor provides a fully
     flexible low-level interface. See the alternative constructors for the
