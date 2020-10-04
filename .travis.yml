@@ -37,7 +37,7 @@ jobs:
       install:
         - pip install -U sphinx sphinxcontrib-katex toml
       script:
-        - sphinx-build -E doc doc/build
+        - sphinx-build -W -E doc doc/build
       env: CACHE_NAME=deploy
       workspaces:
         create:
