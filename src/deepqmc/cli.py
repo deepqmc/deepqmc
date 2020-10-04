@@ -1,9 +1,11 @@
+import inspect
 import logging
 import sys
 from pathlib import Path
 
 import click
 import tomlkit
+from tomlkit.items import Comment, Trivia
 from tqdm import tqdm
 
 from .errors import TrainingCrash
@@ -12,7 +14,6 @@ from .fit import fit_wf
 from .io import wf_from_file
 from .sampling import LangevinSampler, sample_wf
 from .train import train
-from .utils import collect_kwarg_defaults
 from .wf import ANSATZES
 
 __all__ = ()
@@ -31,6 +32,51 @@ DEEPQMC_DEFAULTS = {
     ),
     (evaluate, 'sample_kwargs'): sample_wf,
 }
+
+
+def _get_subkwargs(func, name, mapping):
+    target = mapping[func, name]
+    target, override = target if isinstance(target, tuple) else (target, [])
+    sub_kwargs = collect_kwarg_defaults(target, mapping)
+    for x in override:
+        if isinstance(x, tuple):
+            key, val = x
+            sub_kwargs[key] = val
+        else:
+            del sub_kwargs[x]
+    return sub_kwargs
+
+
+def collect_kwarg_defaults(func, mapping):
+    kwargs = tomlkit.table()
+    for p in inspect.signature(func).parameters.values():
+        if p.name == 'kwargs':
+            assert p.default is p.empty
+            assert p.kind is inspect.Parameter.VAR_KEYWORD
+            sub_kwargs = _get_subkwargs(func, 'kwargs', mapping)
+            for item in sub_kwargs.value.body:
+                kwargs.add(*item)
+        elif p.name.endswith('_kwargs'):
+            if mapping.get((func, p.name)) is True:
+                kwargs[p.name] = p.default
+            else:
+                assert p.default is None
+                assert p.kind is inspect.Parameter.KEYWORD_ONLY
+                sub_kwargs = _get_subkwargs(func, p.name, mapping)
+                kwargs[p.name] = sub_kwargs
+        elif p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD:
+            assert p.default in (p.empty, p.default)
+        else:
+            assert p.kind is inspect.Parameter.KEYWORD_ONLY
+            if p.default is None:
+                kwargs.add(Comment(Trivia(comment=f'#: {p.name} = ...')))
+            else:
+                try:
+                    kwargs[p.name] = p.default
+                except ValueError:
+                    print(func, p.name, p.kind, p.default)
+                    raise
+    return kwargs
 
 
 class TqdmStream:
