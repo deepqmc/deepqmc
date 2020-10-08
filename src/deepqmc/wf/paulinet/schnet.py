@@ -82,10 +82,10 @@ def idx_pair_spin(n_up, n_down, device=torch.device('cpu')):  # noqa: B008
     ij = idx_perm(n_up + n_down, 2, device=device)
     mask = ij < n_up
     return [
-        ('same', ij[:, mask[0] & mask[1]].view(2, n_up, -1)),
-        ('anti', ij[:, mask[0] & ~mask[1]].view(2, n_up, -1)),
-        ('anti', ij[:, ~mask[0] & mask[1]].view(2, n_down, -1)),
-        ('same', ij[:, ~mask[0] & ~mask[1]].view(2, n_down, -1)),
+        ('same', ij[:, mask[0] & mask[1]].view(2, n_up, max(n_up - 1, 0))),
+        ('anti', ij[:, mask[0] & ~mask[1]].view(2, n_up, n_down)),
+        ('anti', ij[:, ~mask[0] & mask[1]].view(2, n_down, n_up)),
+        ('same', ij[:, ~mask[0] & ~mask[1]].view(2, n_down, max(n_down - 1, 0))),
     ]
 
 
