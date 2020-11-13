@@ -83,8 +83,6 @@ class PauliNet(WaveFunction):
         n_orbitals (int): number of distinct molecular orbitals used across all
             configurations if given, otherwise the larger of the number of spin-up
             and spin-down electrons
-        mo_factory (callable): passed to :class:`~deepqmc.wf.paulinet.MolecularOrbital`
-            as ``net_factory``
         cusp_correction (bool): whether nuclear cusp correction is used
         cusp_electrons (bool): whether electronic cusp function is used
         dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of distance features
@@ -110,7 +108,6 @@ class PauliNet(WaveFunction):
         omni_factory=None,
         n_configurations=1,
         n_orbitals=None,
-        mo_factory=None,
         return_log=True,
         use_sloglindet='training',
         *,
@@ -132,7 +129,7 @@ class PauliNet(WaveFunction):
         n_up, n_down = self.n_up, self.n_down
         self.dist_basis = (
             DistanceBasis(dist_feat_dim, cutoff=dist_feat_cutoff, envelope='nocusp')
-            if mo_factory or jastrow_factory or backflow_factory or omni_factory
+            if jastrow_factory or backflow_factory or omni_factory
             else None
         )
         n_orbitals = n_orbitals or max(n_up, n_down)
@@ -150,8 +147,6 @@ class PauliNet(WaveFunction):
             mol,
             basis,
             n_orbitals,
-            net_factory=mo_factory,
-            dist_feat_dim=dist_feat_dim,
             cusp_correction=cusp_correction,
             rc_scaling=rc_scaling,
         )
@@ -377,7 +372,7 @@ class PauliNet(WaveFunction):
             diffs_nuc = pairwise_diffs(
                 torch.cat([coords, rs_flowed.flatten(end_dim=1)]), coords
             )
-        xs = self.mo(diffs_nuc, edges_nuc)
+        xs = self.mo(diffs_nuc)
         # get orbitals as [bs, 1, i, mu]
         xs = xs.view(batch_dim, 1, n_elec, -1)
         if self.backflow:

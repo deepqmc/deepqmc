@@ -72,8 +72,6 @@ class MolecularOrbital(nn.Module):
         mol,
         basis,
         n_orbitals,
-        net_factory=None,
-        dist_feat_dim=None,
         cusp_correction=True,
         rc_scaling=1.0,
         eps=1e-6,
@@ -83,9 +81,6 @@ class MolecularOrbital(nn.Module):
         self.n_orbitals = n_orbitals
         self.basis = basis
         self.mo_coeff = nn.Linear(len(basis), n_orbitals, bias=False)
-        self.net = (
-            net_factory(len(mol), dist_feat_dim, n_orbitals) if net_factory else None
-        )
         if cusp_correction:
             rc = rc_scaling / mol.charges.float()
             dists = pairwise_distance(mol.coords, mol.coords)
@@ -120,14 +115,11 @@ class MolecularOrbital(nn.Module):
         diffs_nuc = pairwise_diffs(torch.cat([coords, rs]), coords)
         return self(diffs_nuc)
 
-    def forward(self, diffs, dist_feats=None):
-        # first n_atoms rows of diffs and dist_feats correspond to electrons on
-        # nuclei
+    def forward(self, diffs):
+        # first n_atoms rows of diffs correspond to electrons on nuclei
         n_atoms = self.n_atoms
         aos = self.basis(diffs)
         mos = self.mo_coeff(aos)
-        if self.net:
-            mos = self.net(mos, dist_feats)
         mos, mos0 = mos[n_atoms:], mos[:n_atoms]
         if self.cusp_corr:
             dists_2_nuc, aos = diffs[n_atoms:, :, 3], aos[n_atoms:]
