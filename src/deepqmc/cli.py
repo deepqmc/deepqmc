@@ -37,7 +37,10 @@ DEEPQMC_DEFAULTS = {
 def _get_subkwargs(func, name, mapping):
     target = mapping[func, name]
     target, override = target if isinstance(target, tuple) else (target, [])
-    sub_kwargs = collect_kwarg_defaults(target, mapping)
+    if isinstance(target, dict):
+        sub_kwargs = {k: collect_kwarg_defaults(v, mapping) for k, v in target.items()}
+    else:
+        sub_kwargs = collect_kwarg_defaults(target, mapping)
     for x in override:
         if isinstance(x, tuple):
             key, val = x
