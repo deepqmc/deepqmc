@@ -97,6 +97,8 @@ class PauliNet(WaveFunction):
             variable of shape :math:`(1,N_\text{det})`
     """
 
+    OMNI_FACTORIES = {'omni_schnet': OmniSchNet}
+
     def __init__(
         self,
         mol,
@@ -114,7 +116,7 @@ class PauliNet(WaveFunction):
         rc_scaling=1.0,
         cusp_alpha=10.0,
         freeze_embed=False,
-        omni_factory=OmniSchNet,
+        omni_factory='omni_schnet',
         omni_kwargs=None,
     ):
         assert use_sloglindet in {'never', 'training', 'always'}
@@ -152,6 +154,10 @@ class PauliNet(WaveFunction):
             backflow_spec[1] *= 2
         self.backflow_type = backflow_type
         self.backflow_transform = backflow_transform
+        if isinstance(omni_factory, str):
+            if omni_kwargs:
+                omni_kwargs = omni_kwargs[omni_factory]
+            omni_factory = self.OMNI_FACTORIES[omni_factory]
         self.omni = (
             omni_factory(
                 len(mol.coords), n_up, n_down, *backflow_spec, **(omni_kwargs or {})
@@ -196,7 +202,7 @@ class PauliNet(WaveFunction):
         return {
             (cls.from_hf, 'kwargs'): cls.from_pyscf,
             (cls.from_pyscf, 'kwargs'): cls,
-            (cls, 'omni_kwargs'): OmniSchNet,
+            (cls, 'omni_kwargs'): cls.OMNI_FACTORIES,
             (OmniSchNet, 'schnet_kwargs'): ElectronicSchNet,
             (OmniSchNet, 'subnet_kwargs'): SubnetFactory,
             (OmniSchNet, 'jastrow_kwargs'): Jastrow,
