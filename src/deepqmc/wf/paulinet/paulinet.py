@@ -6,6 +6,7 @@ from torch import nn
 
 from deepqmc import Molecule
 from deepqmc.physics import pairwise_diffs, pairwise_distance
+from deepqmc.plugins import PLUGINS
 from deepqmc.torchext import sloglindet, triu_flat
 from deepqmc.wf import WaveFunction
 
@@ -154,7 +155,10 @@ class PauliNet(WaveFunction):
             backflow_spec[1] *= 2
         self.backflow_type = backflow_type
         self.backflow_transform = backflow_transform
-        if isinstance(omni_factory, str):
+        if 'paulinet.omni_factory' in PLUGINS:
+            log.info('Using a plugin for paulinet.omni_factory')
+            omni_factory = PLUGINS['paulinet.omni_factory']
+        elif isinstance(omni_factory, str):
             if omni_kwargs:
                 omni_kwargs = omni_kwargs[omni_factory]
             omni_factory = self.OMNI_FACTORIES[omni_factory]
