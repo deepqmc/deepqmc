@@ -5,10 +5,9 @@ from torch import nn
 
 from deepqmc.torchext import SSP, get_log_dnn
 
-from .backflow import Backflow
 from .schnet import ElectronicSchNet, SubnetFactory
 
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 __all__ = ['OmniSchNet']
 
 
@@ -53,7 +52,6 @@ class OmniSchNet(nn.Module):
         with_backflow (bool): if false, the backflow part is void
             :math:`\tilde\varphi_{\mu i}(\mathbf r):=\varphi_\mu(\mathbf r_i)`
         n_backflow_layers (int): number of layers in the backflow network
-        with_r_backflow (bool): whether real-space backflow is used
         schnet_kwargs (dict): extra arguments passed to :class:`ElectronicSchNet`
         subnet_kwargs (dict): extra arguments passed to :class:`SubnetFactory`
 
@@ -92,7 +90,6 @@ class OmniSchNet(nn.Module):
         n_jastrow_layers=3,
         with_backflow=True,
         n_backflow_layers=3,
-        with_r_backflow=False,
         schnet_kwargs=None,
         subnet_kwargs=None,
     ):
@@ -124,10 +121,6 @@ class OmniSchNet(nn.Module):
             self.backflow = nn.ModuleList(backflow)
         else:
             self.forward_backflow = None
-        if with_r_backflow:
-            self.r_backflow = Backflow(mol, embedding_dim)
-        else:
-            self.forward_r_backflow = None
         self._cache = {}
 
     def _get_embeddings(self, edges_elec, edges_nuc):
@@ -148,10 +141,6 @@ class OmniSchNet(nn.Module):
         xs = self._get_embeddings(edges_elec, edges_nuc)
         xs = torch.stack([bf(xs) for bf in self.backflow], dim=1)
         return xs
-
-    def forward_r_backflow(self, rs, edges_elec, edges_nuc):
-        xs = self._get_embeddings(edges_elec, edges_nuc)
-        return self.r_backflow(rs, xs)
 
     def forward_close(self):
         """Clear the cached SchNet embeddings."""
