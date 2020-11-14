@@ -115,6 +115,38 @@ class Backflow(nn.Module):
         return torch.stack([net(xs) for net in self.nets], dim=1)
 
 
+class SchNetMeanFieldLayer(nn.Module):
+    def __init__(self, factory, n_up):
+        super().__init__()
+        self.w = factory.w_subnet()
+        self.g = factory.g_subnet()
+
+    def forward(self, x, Y, edges_elec, edges_nuc):
+        z_nuc = (self.w(edges_nuc) * Y[..., None, :, :]).sum(dim=-2)
+        return self.g(z_nuc)
+
+
+class MeanFieldElectronicSchNet(ElectronicSchNet):
+    r"""Mean-field variant of :class:`ElectronicSchNet`.
+
+    This mean-field variant of the graph neural nework :class:`ElectronicSchNet`
+    uses :class:`SchNetMeanFieldLayer` as default, removing electronic
+    interactions and returning mean-field electronic embeddings. In contrast
+    to :class:`ElectronicSchNet` the :meth:`forward` only uses nuclear edges.
+
+    """
+
+    LAYER_FACTORIES = {'mean-field': SchNetMeanFieldLayer}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, version='mean-field', **kwargs)
+
+    def forward(self, edges_nuc):
+        *batch_dims, n_elec = edges_nuc.shape[:-2]
+        edges_elec_dummy = edges_nuc.new_empty(*batch_dims, n_elec, n_elec, 0)
+        return super().forward(edges_elec_dummy, edges_nuc)
+
+
 class OmniSchNet(nn.Module):
     r"""Combined Jastrow/backflow neural network based on SchNet.
 
@@ -158,6 +190,9 @@ class OmniSchNet(nn.Module):
         n_backflow_layers (int): number of layers in the backflow network
         schnet_kwargs (dict): extra arguments passed to :class:`ElectronicSchNet`
         subnet_kwargs (dict): extra arguments passed to :class:`SubnetFactory`
+        mf_schnet_kwargs (dict): extra arguments passed to
+            :class:`MeanFieldElectronicSchNet`
+        mf_subnet_kwargs (dict): extra arguments passed to :class:`SubnetFactory`
 
     Shape:
         - :meth:`forward_jastrow`:
@@ -190,33 +225,57 @@ class OmniSchNet(nn.Module):
         *,
         dist_feat_dim=32,
         dist_feat_cutoff=10.0,
-        embedding_dim=128,
-        with_jastrow=True,
+        mb_embedding_dim=128,
+        mf_embedding_dim=128,
+        jastrow='many-body',
         jastrow_kwargs=None,
-        with_backflow=True,
+        backflow='many-body',
         backflow_kwargs=None,
         schnet_kwargs=None,
         subnet_kwargs=None,
+        mf_schnet_kwargs=None,
+        mf_subnet_kwargs=None,
     ):
+        assert jastrow in [None, 'mean-field', 'many-body']
+        assert backflow in [None, 'mean-field', 'many-body']
         super().__init__()
         self.dist_basis = DistanceBasis(
             dist_feat_dim, cutoff=dist_feat_cutoff, envelope='nocusp'
         )
-        self.schnet = ElectronicSchNet(
-            n_up,
-            n_down,
-            n_atoms,
-            dist_feat_dim=dist_feat_dim,
-            embedding_dim=embedding_dim,
-            subnet_metafactory=partial(SubnetFactory, **(subnet_kwargs or {})),
-            **(schnet_kwargs or {}),
+        self.schnet = (
+            ElectronicSchNet(
+                n_up,
+                n_down,
+                n_atoms,
+                dist_feat_dim=dist_feat_dim,
+                embedding_dim=mb_embedding_dim,
+                subnet_metafactory=partial(SubnetFactory, **(subnet_kwargs or {})),
+                **(schnet_kwargs or {}),
+            )
+            if 'many-body' in [jastrow, backflow]
+            else None
         )
-        self.jastrow = (
-            Jastrow(embedding_dim, **(jastrow_kwargs or {})) if with_jastrow else None
+        self.mf_schnet = (
+            MeanFieldElectronicSchNet(
+                n_up,
+                n_down,
+                n_atoms,
+                dist_feat_dim=dist_feat_dim,
+                embedding_dim=mf_embedding_dim,
+                subnet_metafactory=partial(SubnetFactory, **(mf_subnet_kwargs or {})),
+                **(mf_schnet_kwargs or {}),
+            )
+            if 'mean-field' in [jastrow, backflow]
+            else None
         )
-        if with_backflow:
+        embedding_dim = {'mean-field': mf_embedding_dim, 'many-body': mb_embedding_dim}
+        self.jastrow_type = jastrow
+        if jastrow:
+            self.jastrow = Jastrow(embedding_dim[jastrow], **(jastrow_kwargs or {}))
+        self.backflow_type = backflow
+        if backflow:
             self.backflow = Backflow(
-                embedding_dim,
+                embedding_dim[backflow],
                 n_orbitals,
                 n_backflows,
                 **(backflow_kwargs or {}),
@@ -224,8 +283,18 @@ class OmniSchNet(nn.Module):
 
     def forward(self, dists_nuc, dists_elec):
         edges_nuc = self.dist_basis(dists_nuc)
-        edges_elec = self.dist_basis(dists_elec)
-        embeddings = self.schnet(edges_elec, edges_nuc)
-        jastrow = self.jastrow(embeddings) if self.jastrow else None
-        backflow = self.backflow(embeddings) if self.backflow else None
+        embeddings = {}
+        if self.mf_schnet:
+            embeddings['mean-field'] = self.mf_schnet(edges_nuc)
+        if self.schnet:
+            edges_elec = self.dist_basis(dists_elec)
+            embeddings['many-body'] = self.schnet(edges_elec, edges_nuc)
+        jastrow = (
+            self.jastrow(embeddings[self.jastrow_type]) if self.jastrow_type else None
+        )
+        backflow = (
+            self.backflow(embeddings[self.backflow_type])
+            if self.backflow_type
+            else None
+        )
         return jastrow, backflow
