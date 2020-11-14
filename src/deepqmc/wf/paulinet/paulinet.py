@@ -208,7 +208,9 @@ class PauliNet(WaveFunction):
             (cls.from_pyscf, 'kwargs'): cls,
             (cls, 'omni_kwargs'): cls.OMNI_FACTORIES,
             (OmniSchNet, 'schnet_kwargs'): ElectronicSchNet,
+            (OmniSchNet, 'mf_schnet_kwargs'): (ElectronicSchNet, ['version']),
             (OmniSchNet, 'subnet_kwargs'): SubnetFactory,
+            (OmniSchNet, 'mf_subnet_kwargs'): SubnetFactory,
             (OmniSchNet, 'jastrow_kwargs'): Jastrow,
             (OmniSchNet, 'backflow_kwargs'): Backflow,
         }
