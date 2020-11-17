@@ -150,69 +150,65 @@ class MeanFieldElectronicSchNet(ElectronicSchNet):
 class OmniSchNet(nn.Module):
     r"""Combined Jastrow/backflow neural network based on SchNet.
 
-    This module uses a single :class:`ElectronicSchNet` instance to build
-    many-body feature representations of electrons, which are subsequently
-    passed as an input into additional trainable functions to obtain the Jastrow
-    factor and backflow transformations. This enables the use of a single SchNet
-    module within :class:`~deepqmc.wf.PauliNet`, which itself makes no
-    assumptions about parameter sharing by the Jastrow factor and backflow
-    network modules.
+    This module uses an instance of :class:`ElectronicSchNet` to build a
+    many-body or a mean-field feature representation of electrons, which are
+    subsequently passed as an input into additional trainable functions to
+    obtain many-body or mean-field Jastrow factor and backflow transformations.
+    The mean-field embeddings are obtained with a variant of
+    :class:`ElectronicSchNet` with the electron--electron message passing omitted.
+    The type of embeddings used for Jastrow and backflow can be chosen
+    individually and equivalent embbedings are shared. The module is used to
+    generate the Jastrow factor and backflow transformation within
+    :class:`~deepqmc.wf.PauliNet`.
 
     The Jastrow factor and backflow are obtained as
 
     .. math::
-        J:=\eta_{\boldsymbol\theta}\big(\textstyle\sum_i\mathbf x_i^{(L)}\big),\qquad
-        \kappa_{q\mu i}(\mathbf r)
+        J:=\eta_{\boldsymbol\theta}\big(\textstyle\sum_i\mathbf
+        x_i^{(L)}\big),\qquad
+        f_{q\mu i}(\mathbf r)
         :=\Big(\boldsymbol\kappa_{\boldsymbol\theta,q}\big(\mathbf
         x_i^{(L)}\big)\Big)_\mu
 
     where :math:`\eta_{\boldsymbol\theta}` and
-    :math:`\boldsymbol\kappa_{\boldsymbol\theta,q}` are vanilla deep neural networks.
-
-    The Jastrow and backflow are obtained by calling :meth:`forward_jastrow` and
-    :meth:`forward_backflow`, which calls SchNet only once under the hood. After
-    the forward pass is finished, :math:`close` must be called, which ensures
-    that SchNet is called anew in the next pass.
+    :math:`\boldsymbol\kappa_{\boldsymbol\theta,q}` are vanilla deep
+    neural networks and :math:`\mathbf x_i^{(L)}` are either the many-body or
+    mean-field embedding.
 
     Args:
-        mol (:class:`~deepqmc.Molecule`): molecule whose wave function is represented
-        dist_feat_dim (int): passed to :class:`ElectronicSchNet`
-        n_up (int): passed to :class:`ElectronicSchNet`
-        n_down (int): passed to :class:`ElectronicSchNet`
+        n_atoms (int): :math:`M`, number of atoms
+        n_up (int): :math:`N^\uparrow`, number of spin-up electrons
+        n_down (int): :math:`N^\downarrow`, number of spin-down electrons
         n_orbitals (int): :math:`N_\text{orb}`, number of molecular orbitals
-        n_channels (int): :math:`C`, number of backflow channels
-        embedding_dim (int): :math:`\dim(\mathbf x_i^{(L)})`, dimension of SchNet
-            embeddings
-        with_jastrow (bool): if false, the Jastrow part is void
-        n_jastrow_layers (int): number of layers in the Jastrow factor network
-        with_backflow (bool): if false, the backflow part is void
-            :math:`\tilde\varphi_{\mu i}(\mathbf r):=\varphi_\mu(\mathbf r_i)`
-        n_backflow_layers (int): number of layers in the backflow network
+        n_backflows (int): :math:`N_\text{bf}`, number of backflow channnels
+        dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of distance features
+        dist_feat_cutoff (float, a.u.): distance at which distance features
+            go to zero
+        mb_embedding_dim (int): dimension of many-body SchNet embeddings
+        mf_embedding_dim (int): dimension of mean-field SchNet embeddings
+        jastrow (str): type of Jastrow -- :data:`None`, ``'mean-field'``, or
+            ``'many-body'``
+        jastrow_kwargs (dict): extra arguments passed to :class:`Jastrow`
+        backflow (str): type of backflow -- :data:`None`, ``'mean-field'``, or
+            ``'many-body'``
+        backflow_kwargs (dict): extra arguments passed to :class:`Backflow`
         schnet_kwargs (dict): extra arguments passed to :class:`ElectronicSchNet`
         subnet_kwargs (dict): extra arguments passed to :class:`SubnetFactory`
-        mf_schnet_kwargs (dict): extra arguments passed to
-            :class:`MeanFieldElectronicSchNet`
+        mf_schnet_kwargs (dict): extra arguments passed to the mean-field variant
+            of :class:`ElectronicSchNet`
         mf_subnet_kwargs (dict): extra arguments passed to :class:`SubnetFactory`
 
     Shape:
-        - :meth:`forward_jastrow`:
-            - Input1, :math:`\mathbf e(\lvert\mathbf r_i-\mathbf r_j\rvert)`:
-              :math:`(*,N,N,\dim(\mathbf e))`
-            - Input2, :math:`\mathbf e(\lvert\mathbf r_i-\mathbf R_I\rvert)`:
-              :math:`(*,N,M,\dim(\mathbf e))`
-            - Output, :math:`J`: :math:`(*)`
-        - :meth:`forward_backflow`:
-            - Input1, :math:`\mathbf e(\lvert\mathbf r_i-\mathbf r_j\rvert)`:
-              :math:`(*,N,N,\dim(\mathbf e))`
-            - Input2, :math:`\mathbf e(\lvert\mathbf r_i-\mathbf R_I\rvert)`:
-              :math:`(*,N,M,\dim(\mathbf e))`
-            - Output, :math:`\kappa_{q\mu i}`:
-              :math:`(*,C,N,N_\text{orb})`
+        - Input1, :math:`\lvert\mathbf r_i-\mathbf r_j\rvert`: :math:`(*,N,N)`
+        - Input2, :math:`\lvert\mathbf r_i-\mathbf R_I\rvert`: :math:`(*,N,M)`
+        - Output1, :math:`J`: :math:`(*)`
+        - Output2, :math:`f_{q\mu i}`: :math:`(*,N_\text{bf},N,N_\text{orb})`
 
     Attributes:
         schnet: :class:`ElectronicSchNet` network
-        jastrow: :class:`torch.nn.Sequential` representing a vanilla DNN
-        backflow: :class:`torch.nn.Sequential` representing a vanilla DNN
+        mf_schnet: mean-field variant of :class:`ElectronicSchNet` network
+        jastrow: :class:`Jastrow` network
+        backflow: :class:`Backflow` network
     """
 
     def __init__(
