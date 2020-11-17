@@ -43,56 +43,59 @@ class PauliNet(WaveFunction):
 
     The PauliNet ansatz combines a multireference Slater determinant expansion,
     Gaussian-type cusp-corrected molecular orbitals (:class:`MolecularOrbital`),
-    electronic cusp Jastrow factor (:class:`ElectronicAsymptotic`) and many-body
-    Jastrow factor and backflow transformation represented by neural networks
-    that use featurized particle distances,
-    :math:`\mathbf e(|\mathbf r-\mathbf r'|)` (:class:`DistanceBasis`), as input,
+    electronic cusp Jastrow factor (:class:`ElectronicAsymptotic`) and
+    trainable Jastrow factor and backflow transformation (:class:`OmniSchNet`).
 
     .. math::
-        \psi_{\boldsymbol\theta}(\mathbf r)
-          =\mathrm e^{\gamma(\mathbf r)+J_{\boldsymbol\theta}(\mathbf r)}
-          \sum_{pq} c_p
-          \det[\tilde\varphi_{\boldsymbol\theta,q{\mu_p}i}^\uparrow(\mathbf r)]
-          \det[\tilde\varphi_{\boldsymbol\theta,q{\mu_p}i}^\downarrow(\mathbf r)] \\
-        \tilde\varphi_{\boldsymbol\theta,q\mu i}(\mathbf r)
-          :=\big(1+2\tanh(\kappa_{\boldsymbol\theta,q\mu i}(\mathbf r))\big)
-          \varphi_\mu(\mathbf r_i)
+        \psi_{\boldsymbol\theta}(\mathbf r) =\mathrm e^{\gamma(\mathbf
+        r)+J_{\boldsymbol\theta}(\mathbf x_i^{(L)})}
+        \sum_{pq}\frac{c_p}{N_\text{bf}}
+        \det[\tilde{\boldsymbol\varphi}_{\boldsymbol\theta,pq}^\uparrow(\mathbf
+        r)]
+        \det[\tilde{\boldsymbol\varphi}_{\boldsymbol\theta,pq}^\downarrow(\mathbf
+        r)] \\ \tilde\varphi_{\boldsymbol\theta,pq\nu i}(\mathbf r)
+        :=\varphi_{\mu_{p\nu}}(\mathbf r_i)\star\big(\mathbf f_{*_1}(\mathbf
+        x_i^{(L)})\big)_{*_2} \\ (*_1,*_2)=\begin{cases} (q,\mu_{p\nu}) &
+        \text{orbital-type backflow} \\ (pq,\nu) & \text{determinant-type
+        backflow} \end{cases}
 
-    Here, :math:`c_p,\mu_p` define the multideterminant expansion,
-    :math:`\varphi_\mu(\mathbf r)` are the baseline
-    single-electron molecular orbitals, :math:`J_{\boldsymbol\theta}(\mathbf r)`
-    is the permutation-invariant deep Jastrow factor,
-    :math:`\kappa_{\boldsymbol\theta,q\mu i}(\mathbf r)` is the :math:`q`-th
-    channel of the permutation-equivariant deep backflow, and :math:`\gamma`
+    Here, :math:`\mathbf x_i^{(L)}` are the permutation-equivariant electron
+    embeddings obtained from a graph neural network, :math:`\mu_{p\nu}`
+    defines the electron configurations with the corresponding linear coefficients
+    :math:`c_p`, :math:`\varphi_\mu(\mathbf r)` are
+    the baseline single-electron molecular orbitals,
+    :math:`J_{\boldsymbol\theta}` is the permutation-invariant deep Jastrow
+    factor, :math:`\mathbf f_{\boldsymbol\theta}` is the
+    permutation-equivariant deep backflow, and :math:`\gamma`
     enforces correct electronic cusp conditions.
+    Based on the type of the backflow, the backflow is applied either
+    orbital-wise or determinant-wise, and :math:`\star` can be either multiplication
+    or addition.
+    :math:`N_\text{bf}` different backflows indexed by :math:`q` are used with
+    each electron configuration.
 
     Args:
         mol (:class:`~deepqmc.Molecule`): molecule whose wave function is represented
         basis (:class:`~deepqmc.wf.paulinet.GTOBasis`): basis for the molecular orbitals
-        jastrow_factory (callable): constructor for a Jastrow factor,
-            :math:`(M,\dim(\mathbf e),N^\uparrow,N^\downarrow)`
-            :math:`\rightarrow(\mathbf e_{ij},\mathbf e_{iI})\rightarrow J`
-        backflow_factory (callable): constructor for a backflow,
-            :math:`(M,\dim(\mathbf e),N^\uparrow,N^\downarrow,N_\text{orb},C)`
-            :math:`\rightarrow(\mathbf e_{ij},\mathbf e_{iI})`
-            :math:`\rightarrow\kappa_{q\mu i}`
-        omni_factory (callable): constructor for a combined Jastrow factor and backflow,
-            with interface identical to :class:`~deepqmc.wf.paulinet.OmniSchNet`
         n_configurations (int): number of electron configurations
         n_orbitals (int): number of distinct molecular orbitals used across all
             configurations if given, otherwise the larger of the number of spin-up
             and spin-down electrons
         cusp_correction (bool): whether nuclear cusp correction is used
         cusp_electrons (bool): whether electronic cusp function is used
-        dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of distance features
-        dist_feat_cutoff (float, a.u.): distance at which distance features
-            go to zero
-        backflow_channels (int): :math:`C`, number of backflow channels
-        omni_kwargs: arguments passed to :class:`~deepqmc.wf.paulinet.OmniSchNet`
+        backflow_type (str): ``'orbital'`` for orbital-type backflow, ``'det'``
+            for determinant-type backflow
+        backflow_channels (int): :math:`N_\text{bf}`, number of backflow channels
+        backflow_transform (str): specifies the :math:`\star` operation:
+
+            - ``'mult'`` -- :math:`x\star y:=x\big(1+2\tanh(y)\big)`
+        omni_factory (callable): constructor for combined a Jastrow and backflow,
+            :math:`(M,N^\uparrow,N^\downarrow,N_\text{orb},N_\text{bf})`
+            :math:`\rightarrow(r_{ij},R_{iI})\rightarrow (J,f_{q\mu i})`
+        omni_kwargs: extra arguments passed to ``omni_factory``
 
     Attributes:
-        jastrow: :class:`torch.nn.Module` representing the Jastrow factor
-        backflow: :class:`torch.nn.Module` representing the backflow transformation
+        omni: :class:`torch.nn.Module` representing Jastrow and backflow
         conf_coeff: :class:`torch.nn.Linear` with no bias that represents
             the multireference coefficients :math:`c_p` via its :attr:`weight`
             variable of shape :math:`(1,N_\text{det})`
