@@ -10,14 +10,12 @@ from deepqmc.torchext import sloglindet, triu_flat
 from deepqmc.wf import WaveFunction
 
 from .cusp import CuspCorrection, ElectronicAsymptotic
-from .distbasis import DistanceBasis
 from .gto import GTOBasis
 from .molorb import MolecularOrbital
-from .omni import OmniSchNet, SubnetFactory
+from .omni import OmniSchNet
 from .pyscfext import pyscf_from_mol
-from .schnet import ElectronicSchNet
 
-__version__ = '0.1.1'
+__version__ = '0.2.0'
 __all__ = ['PauliNet']
 
 log = logging.getLogger(__name__)
@@ -103,9 +101,6 @@ class PauliNet(WaveFunction):
         self,
         mol,
         basis,
-        jastrow_factory=None,
-        backflow_factory=None,
-        omni_factory=None,
         n_configurations=1,
         n_orbitals=None,
         return_log=True,
@@ -113,25 +108,19 @@ class PauliNet(WaveFunction):
         *,
         cusp_correction=True,
         cusp_electrons=True,
-        dist_feat_dim=32,
-        dist_feat_cutoff=10.0,
         backflow_type='orbital',
         backflow_channels=1,
         backflow_transform='mult',
         rc_scaling=1.0,
         cusp_alpha=10.0,
         freeze_embed=False,
+        omni_factory=OmniSchNet,
         omni_kwargs=None,
     ):
         assert use_sloglindet in {'never', 'training', 'always'}
         assert return_log or use_sloglindet == 'never'
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
-        self.dist_basis = (
-            DistanceBasis(dist_feat_dim, cutoff=dist_feat_cutoff, envelope='nocusp')
-            if jastrow_factory or backflow_factory or omni_factory
-            else None
-        )
         n_orbitals = n_orbitals or max(n_up, n_down)
         confs = [list(range(n_up)) + list(range(n_down))] + [
             sum((torch.randperm(n_orbitals)[:n].tolist() for n in (n_up, n_down)), [])
@@ -155,11 +144,6 @@ class PauliNet(WaveFunction):
             if cusp_electrons
             else (None, None)
         )
-        self.jastrow = (
-            jastrow_factory(len(mol), dist_feat_dim, n_up, n_down)
-            if jastrow_factory
-            else None
-        )
         backflow_spec = {
             'orbital': [n_orbitals, backflow_channels],
             'det': [max(n_up, n_down), len(self.confs) * backflow_channels],
@@ -168,25 +152,17 @@ class PauliNet(WaveFunction):
             backflow_spec[1] *= 2
         self.backflow_type = backflow_type
         self.backflow_transform = backflow_transform
-        self.backflow = (
-            backflow_factory(len(mol), dist_feat_dim, n_up, n_down, *backflow_spec)
-            if backflow_factory
+        self.omni = (
+            omni_factory(
+                len(mol.coords), n_up, n_down, *backflow_spec, **(omni_kwargs or {})
+            )
+            if omni_factory
             else None
         )
-        if omni_factory:
-            assert not backflow_factory and not jastrow_factory
-            self.omni = omni_factory(
-                mol, dist_feat_dim, n_up, n_down, *backflow_spec, **(omni_kwargs or {})
-            )
-            self.backflow = self.omni.forward_backflow
-            self.jastrow = self.omni.forward_jastrow
-        else:
-            self.omni = None
         self.return_log = return_log
         if freeze_embed:
             self.requires_grad_embeddings_(False)
         self.n_determinants = len(self.confs) * backflow_channels
-        self.n_backflows = 0 if not self.backflow else backflow_spec[1]
         if n_up <= 1 or n_down <= 1:
             self.use_sloglindet = 'never'
             log.warning(
@@ -214,12 +190,17 @@ class PauliNet(WaveFunction):
 
     @classmethod
     def DEFAULTS(cls):
+        from .omni import Backflow, Jastrow
+        from .schnet import ElectronicSchNet, SubnetFactory
+
         return {
             (cls.from_hf, 'kwargs'): cls.from_pyscf,
             (cls.from_pyscf, 'kwargs'): cls,
             (cls, 'omni_kwargs'): OmniSchNet,
             (OmniSchNet, 'schnet_kwargs'): ElectronicSchNet,
             (OmniSchNet, 'subnet_kwargs'): SubnetFactory,
+            (OmniSchNet, 'jastrow_kwargs'): Jastrow,
+            (OmniSchNet, 'backflow_kwargs'): Backflow,
         }
 
     @classmethod
@@ -294,7 +275,7 @@ class PauliNet(WaveFunction):
             mf.mol.spin,
         )
         basis = GTOBasis.from_pyscf(mf.mol)
-        wf = cls(mol, basis, **{'omni_factory': OmniSchNet, **kwargs})
+        wf = cls(mol, basis, **kwargs)
         if init_weights:
             wf.mo.init_from_pyscf(mf, freeze_mos=freeze_mos)
             if confs is not None:
@@ -355,28 +336,23 @@ class PauliNet(WaveFunction):
         n_atoms = len(self.mol)
         coords = self.mol.coords
         diffs_nuc = pairwise_diffs(torch.cat([coords, rs.flatten(end_dim=1)]), coords)
-        edges_nuc = (
-            self.dist_basis(diffs_nuc[:, :, 3].sqrt())
-            if self.jastrow or self.mo.net
-            else None
-        )
-        if self.backflow or self.cusp_same or self.jastrow:
-            dists_elec = pairwise_distance(rs, rs)
-        if self.backflow or self.jastrow:
-            edges_nuc = edges_nuc[n_atoms:].view(batch_dim, n_elec, n_atoms, -1)
-            edges = self.dist_basis(dists_elec), edges_nuc
+        dists_elec = pairwise_distance(rs, rs)
+        if self.omni:
+            dists_nuc = (
+                diffs_nuc[n_atoms:, :, 3].sqrt().view(batch_dim, n_elec, n_atoms)
+            )
         xs = self.mo(diffs_nuc)
         # get orbitals as [bs, 1, i, mu]
         xs = xs.view(batch_dim, 1, n_elec, -1)
-        if self.backflow:
-            fs = self.backflow(*edges)  # [bs, q, i, mu/nu]
-            if self.backflow_type == 'orbital':
-                xs = self._backflow_op(xs, fs)
+        # get jastrow J and backflow fs (as [bs, q, i, mu/nu])
+        J, fs = self.omni(dists_nuc, dists_elec) if self.omni else (None, None)
+        if fs is not None and self.backflow_type == 'orbital':
+            xs = self._backflow_op(xs, fs)
         # form dets as [bs, q, p, i, nu]
         conf_up, conf_down = self.confs[:, : self.n_up], self.confs[:, self.n_up :]
         det_up = xs[:, :, : self.n_up, conf_up].transpose(-3, -2)
         det_down = xs[:, :, self.n_up :, conf_down].transpose(-3, -2)
-        if self.backflow and self.backflow_type == 'det':
+        if fs is not None and self.backflow_type == 'det':
             n_conf = len(self.confs)
             fs = fs.unflatten(1, ((None, fs.shape[1] // n_conf), (None, n_conf)))
             det_up = self._backflow_op(det_up, fs[..., : self.n_up, : self.n_up])
@@ -425,9 +401,6 @@ class PauliNet(WaveFunction):
                 if self.return_log
                 else psi * torch.exp(cusp_same + cusp_anti)
             )
-        if self.jastrow:
-            J = self.jastrow(*edges)
+        if J is not None:
             psi = psi + J if self.return_log else psi * torch.exp(J)
-        if self.omni:
-            self.omni.forward_close()
         return (psi, sign) if self.return_log else psi
