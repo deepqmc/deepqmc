@@ -7,6 +7,7 @@ from deepqmc.fit import LossEnergy, fit_wf
 from deepqmc.physics import local_energy
 from deepqmc.sampling import LangevinSampler
 from deepqmc.wf import PauliNet
+from deepqmc.wf.paulinet.distbasis import DistanceBasis
 from deepqmc.wf.paulinet.gto import GTOBasis
 from deepqmc.wf.paulinet.schnet import ElectronicSchNet
 
@@ -41,14 +42,15 @@ def net_factory(request):
     return request.param
 
 
-class JastrowNet(nn.Module):
-    def __init__(self, n_atoms, dist_feat_dim, n_up, n_down):
+class OmniNet(nn.Module):
+    def __init__(self, n_atoms, n_up, n_down, n_orbitals, n_backflows):
         super().__init__()
+        self.dist_basis = DistanceBasis(4, envelope='nocusp')
         self.schnet = ElectronicSchNet(
             n_up,
             n_down,
             n_atoms,
-            dist_feat_dim=dist_feat_dim,
+            dist_feat_dim=4,
             n_interactions=2,
             kernel_dim=8,
             embedding_dim=16,
@@ -56,9 +58,11 @@ class JastrowNet(nn.Module):
         )
         self.orbital = nn.Linear(16, 1, bias=False)
 
-    def forward(self, *xs, **kwargs):
-        xs = self.schnet(*xs)
-        return self.orbital(xs).squeeze(dim=-1).sum(dim=-1)
+    def forward(self, dists_nuc, dists_elec):
+        edges_nuc = self.dist_basis(dists_nuc)
+        edges_elec = self.dist_basis(dists_elec)
+        xs = self.schnet(edges_elec, edges_nuc)
+        return self.orbital(xs).squeeze(dim=-1).sum(dim=-1), None
 
 
 @pytest.fixture
@@ -69,7 +73,7 @@ def wf(net_factory, mol):
         mole = pyscf.gto.M(atom=mol.as_pyscf(), unit='bohr', basis='6-311g', cart=True)
         basis = GTOBasis.from_pyscf(mole)
         args += (basis,)
-        kwargs.update({'jastrow_factory': JastrowNet, 'dist_feat_dim': 4})
+        kwargs.update({'omni_factory': OmniNet})
     return net_factory(*args, **kwargs)
 
 

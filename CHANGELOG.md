@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `PauliNet`/`OmniSchNet`:
+    - API
+
 ### Removed
 
 - `PauliNet`:
+    - Separate Jastrow and backflow factories
     - `mo_factory`, functionality replaced with a mean-field backflow
     - Real-space backflow
 

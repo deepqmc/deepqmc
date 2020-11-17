@@ -5,10 +5,114 @@ from torch import nn
 
 from deepqmc.torchext import SSP, get_log_dnn
 
+from .distbasis import DistanceBasis
 from .schnet import ElectronicSchNet, SubnetFactory
 
-__version__ = '0.2.1'
+__version__ = '0.3.0'
 __all__ = ['OmniSchNet']
+
+
+class Jastrow(nn.Module):
+    r"""Jastrow network :math:`\eta_{\boldsymbol \theta}`.
+
+    The Jastrow factor consists of a vanilla neural network with logarithmically
+    progressing layer widths that maps the electronic embeddings to the final
+    Jastrow factor,
+
+    .. math::
+        J :=
+        \begin{cases}
+        \eta_{\boldsymbol \theta}\big(\textstyle\sum_i \mathbf x_i^
+        {(L)}\big) & \text{if }\texttt{sum\_first}\\
+        \textstyle\sum_i\eta_{\boldsymbol \theta}\big(\mathbf x_i^
+        {(L)}\big) & \text{otherwise}
+        \end{cases}
+
+    Args:
+        embedding_dim (int):  :math:`\dim(\mathbf x_i^{(L)})`,
+            dimension of electronic embedding input
+        activation_factory (callable): creates activation functions between
+            layers
+        n_layers (int): number of neural network layers
+        sum_first (bool): whether embeddings are summed before passed to the
+            network
+
+    Shape:
+        - Input, :math:`\mathbf x_i^{(L)}`: :math:`(*,N,D)`
+        - Output, :math:`J`: :math:`(*)`
+
+    Attributes:
+        net: :class:`torch.nn.Sequential` representing vanilla neural network
+    """
+
+    def __init__(
+        self, embedding_dim, activation_factory=SSP, *, n_layers=3, sum_first=True
+    ):
+        super().__init__()
+        self.net = get_log_dnn(embedding_dim, 1, activation_factory, n_layers=n_layers)
+        self.sum_first = sum_first
+
+    def forward(self, xs):
+        if self.sum_first:
+            xs = self.net(xs.sum(dim=-2))
+        else:
+            xs = self.net(xs).sum(dim=-2)
+        return xs.squeeze(dim=-1)
+
+
+class Backflow(nn.Module):
+    r"""Represents backflow networks :math:`\boldsymbol\kappa_{\boldsymbol\theta,q}`.
+
+    The backflow transformation consists of :math:`N_\text{bf}` vanilla neural
+    networks with logarithmically progressing layer width maping the electronic
+    embeddings to the backflow transformations,
+
+    .. math::
+        \mathbf f_i := \mathbf \kappa_{\boldsymbol \theta}\big(\mathbf x_i^{(L,
+        \text{mf/bf})}\big)
+
+    Args:
+        embedding_dim (int): :math:`\dim(\mathbf x_i^{(L)})`,
+            dimension of electronic embedding input
+        n_orbitals (int): :math:`N_\text{orb}` number of orbitals
+        n_backflows (int): :math:`N_\text{bf}` number of backflows
+        activation_factory (callable): creates activation functions between
+            layers
+        n_layers (int): number of neural network layers
+
+    Shape:
+        - Input, :math:`\mathbf x_i^{(L)}`: :math:`(*,N,D)`
+        - Output, :math:`f_{q\mu i}`: :math:`(*,N_\text{bf},N,N_\text{orb})`
+
+    Attributes:
+        nets: :class:`torch.nn.ModuleList` containing :math:`N_text{bf}`
+            vanilla neural networks
+    """
+
+    def __init__(
+        self,
+        embedding_dim,
+        n_orbitals,
+        n_backflows,
+        activation_factory=SSP,
+        *,
+        n_layers=3,
+    ):
+        super().__init__()
+        nets = [
+            get_log_dnn(
+                embedding_dim,
+                n_orbitals,
+                activation_factory,
+                n_layers=n_layers,
+                last_bias=True,
+            )
+            for _ in range(n_backflows)
+        ]
+        self.nets = nn.ModuleList(nets)
+
+    def forward(self, xs):
+        return torch.stack([net(xs) for net in self.nets], dim=1)
 
 
 class OmniSchNet(nn.Module):
@@ -78,70 +182,50 @@ class OmniSchNet(nn.Module):
 
     def __init__(
         self,
-        mol,
-        dist_feat_dim,
+        n_atoms,
         n_up,
         n_down,
         n_orbitals,
-        n_channels,
+        n_backflows,
         *,
+        dist_feat_dim=32,
+        dist_feat_cutoff=10.0,
         embedding_dim=128,
         with_jastrow=True,
-        n_jastrow_layers=3,
+        jastrow_kwargs=None,
         with_backflow=True,
-        n_backflow_layers=3,
+        backflow_kwargs=None,
         schnet_kwargs=None,
         subnet_kwargs=None,
     ):
         super().__init__()
+        self.dist_basis = DistanceBasis(
+            dist_feat_dim, cutoff=dist_feat_cutoff, envelope='nocusp'
+        )
         self.schnet = ElectronicSchNet(
             n_up,
             n_down,
-            len(mol),
+            n_atoms,
             dist_feat_dim=dist_feat_dim,
             embedding_dim=embedding_dim,
             subnet_metafactory=partial(SubnetFactory, **(subnet_kwargs or {})),
             **(schnet_kwargs or {}),
         )
-        if with_jastrow:
-            self.jastrow = get_log_dnn(embedding_dim, 1, SSP, n_layers=n_jastrow_layers)
-        else:
-            self.forward_jastrow = None
+        self.jastrow = (
+            Jastrow(embedding_dim, **(jastrow_kwargs or {})) if with_jastrow else None
+        )
         if with_backflow:
-            backflow = [
-                get_log_dnn(
-                    embedding_dim,
-                    n_orbitals,
-                    SSP,
-                    n_layers=n_backflow_layers,
-                    last_bias=True,
-                )
-                for _ in range(n_channels)
-            ]
-            self.backflow = nn.ModuleList(backflow)
-        else:
-            self.forward_backflow = None
-        self._cache = {}
+            self.backflow = Backflow(
+                embedding_dim,
+                n_orbitals,
+                n_backflows,
+                **(backflow_kwargs or {}),
+            )
 
-    def _get_embeddings(self, edges_elec, edges_nuc):
-        edges_id = id(edges_elec) + id(edges_nuc)
-        if self._cache.get('dist_feats_id') != edges_id:
-            self._cache['dist_feats_id'] = edges_id
-            self._cache['embeddings'] = self.schnet(edges_elec, edges_nuc)
-        return self._cache['embeddings']
-
-    def forward_jastrow(self, edges_elec, edges_nuc):
-        """Evaluate Jastrow factor."""
-        xs = self._get_embeddings(edges_elec, edges_nuc)
-        J = self.jastrow(xs.sum(dim=-2)).squeeze(dim=-1)
-        return J
-
-    def forward_backflow(self, edges_elec, edges_nuc):
-        """Evaluate backflow."""
-        xs = self._get_embeddings(edges_elec, edges_nuc)
-        xs = torch.stack([bf(xs) for bf in self.backflow], dim=1)
-        return xs
-
-    def forward_close(self):
-        """Clear the cached SchNet embeddings."""
-        self._cache.clear()
+    def forward(self, dists_nuc, dists_elec):
+        edges_nuc = self.dist_basis(dists_nuc)
+        edges_elec = self.dist_basis(dists_elec)
+        embeddings = self.schnet(edges_elec, edges_nuc)
+        jastrow = self.jastrow(embeddings) if self.jastrow else None
+        backflow = self.backflow(embeddings) if self.backflow else None
+        return jastrow, backflow
