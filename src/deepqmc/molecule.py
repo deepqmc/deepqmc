@@ -21,6 +21,19 @@ _SYSTEM_FACTORIES = {
         'charge': 0,
         'spin': n % 2,
     },
+    'H4_rect': lambda dist: {
+        'coords': np.array(
+            [
+                [-dist / (2 * angstrom), -0.635, 0],
+                [dist / (2 * angstrom), 0.635, 0],
+                [-dist / (2 * angstrom), 0.635, 0],
+                [dist / (2 * angstrom), -0.635, 0],
+            ]
+        ),
+        'charges': np.ones(4),
+        'charge': 0,
+        'spin': 0,
+    },
 }
 
 
