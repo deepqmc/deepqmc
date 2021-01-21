@@ -65,3 +65,5 @@ To install DeepQMC from a local Git repository, use `Poetry <https://python-poet
     $ poetry install -E all
 
 In addition to all the optional dependencies above, this also installs `pytest <https://docs.pytest.org/>`_ and `Coverage.py <https://coverage.readthedocs.io>`_.
+
+For a proper versioning support while developing install the `Dynamic versioning plugin <https://github.com/mtkennerly/poetry-dynamic-versioning>`_ for Poetry.

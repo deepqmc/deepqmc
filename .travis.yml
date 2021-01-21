@@ -3,11 +3,12 @@ dist: xenial
 language: python
 install:
   - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
+  - python -m pip install poetry-dynamic-versioning
   - source $HOME/.poetry/env
   - echo VIRTUAL_ENV=$VIRTUAL_ENV
 script:
   - poetry build
-  - pip install -U deepqmc[wf,train,cli,test] -f ./dist
+  - pip install -U deepqmc[wf,train,cli,test] --pre -f ./dist
   - coverage run -m pytest
 after_success:
   - bash <(curl -s https://codecov.io/bash) -X coveragepy

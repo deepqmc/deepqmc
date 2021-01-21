@@ -1,10 +1,10 @@
 [build-system]
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "deepqmc"
-version = "0.2.0"
+version = "0.0.0"
 description = "Deep-learning quantum Monte Carlo for electrons in real space"
 authors = [
     "Jan Hermann <jan.hermann@fu-berlin.de>",
@@ -68,6 +68,10 @@ pydocstyle = "^5.0.1"
 
 [tool.poetry.scripts]
 deepqmc = "deepqmc.cli:cli"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+pattern = '^(?P<base>\d+\.\d+\.\d+)$'
 
 [tool.black]
 target-version = ["py37"]
