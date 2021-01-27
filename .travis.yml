@@ -33,6 +33,7 @@ jobs:
       env: CACHE_NAME=lint
     - python: 3.7
     - python: 3.8
+    - python: 3.9
     - name: Documentation
       python: 3.7
       install:
@@ -62,3 +63,5 @@ jobs:
         local_dir: doc/build
         repo: deepqmc/deepqmc.github.io
         target_branch: master
+  allow_failures:
+    - python: 3.9  # for some reason there's a segmentation fault on Travis CI
