@@ -36,9 +36,8 @@ jobs:
     - python: 3.9
     - name: Documentation
       python: 3.7
-      install:
-        - pip install -U "sphinx<3" sphinxcontrib-katex toml
       script:
+        - pip install -U "sphinx<3" sphinxcontrib-katex toml
         - sphinx-build -W -E doc doc/build
       env: CACHE_NAME=deploy
       workspaces:
@@ -49,7 +48,6 @@ jobs:
     - stage: deploy
       name: Documentation
       language: minimal
-      install: skip
       script: skip
       before_cache: skip
       if: (branch = master) AND (NOT type IN (pull_request))

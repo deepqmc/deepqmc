@@ -1,5 +1,6 @@
 import datetime
 import os
+import subprocess
 import sys
 
 import toml
@@ -10,7 +11,11 @@ with open('../pyproject.toml') as f:
 
 project = 'DeepQMC'
 author = ' '.join(metadata['authors'][0].split()[:-1])
-release = version = metadata['version']
+release = version = (
+    subprocess.run(['poetry', 'version'], capture_output=True, cwd='..')
+    .stdout.decode()
+    .split()[1]
+)
 description = metadata['description']
 year_range = (2019, datetime.date.today().year)
 year_str = (
