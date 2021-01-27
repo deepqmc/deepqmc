@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 class MolecularOrbital(nn.Module):
     r"""Evaluates molecular orbitals from electron coordinates.
 
-    This module combines up to four submodules that sequentially transform
+    This module combines three submodules that sequentially transform
     electron coordinates into molecular orbitals (MOs).
 
     1. :class:`~deepqmc.wf.paulinet.GTOBasis` transforms
@@ -31,13 +31,6 @@ class MolecularOrbital(nn.Module):
            \varphi_\mu(\mathbf r):=\sum_p C_{p\mu}\xi_p(\mathbf r)
     3. (optional) :class:`CuspCorrection` corrects
        :math:`\varphi_\mu(\mathbf r)` to satisfy nuclear cusp conditions
-    4. (optional) Some trainable function :class:`torch.nn.Module`
-       updates the MOs using distance features
-       :math:`\mathbf e(|\mathbf r-\mathbf R_I|)`,
-
-       .. math::
-           \varphi_\mu(\mathbf r):=\boldsymbol\Phi_{\boldsymbol\theta}
-           (\varphi_\mu(\mathbf r), \{\mathbf e(|\mathbf r-\mathbf R_I|)\})
 
     If (3) applies, this module also determines the cusp correction cutoff radii
     as :math:`r_\text c:=q/Z`, where *q* is a global factor and *Z* is a nuclear
@@ -47,18 +40,12 @@ class MolecularOrbital(nn.Module):
         mol (:class:`~deepqmc.Molecule`): target molecule
         basis (:class:`~deepqmc.wf.paulinet.GTOBasis`): basis functions
         n_orbitals (int): :math:`N_\text{orb}`, number of molecular orbitals
-        net_factory (callable): factory,
-            :math:`(M,\dim(\mathbf e),N_\text{orb})`
-            :math:`\rightarrow\boldsymbol\Phi_{\boldsymbol\theta}`
-        dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of distance features
         cusp_correction (bool): whether the cusp correction should be applied
         rc_scaling (float): *q*, global scaling for cusp correction cutoff radii
         eps (float): numerical zero, passed to :class:`CuspCorrection`
 
     Shape:
         - Input1, :math:`(\mathbf r-\mathbf R_I)`: :math:`(*,M,4)`, see [dim4]_
-        - Input2, optional, :math:`\mathbf e(|\mathbf r-\mathbf R_I|)`:
-          :math:`(*,M,\dim(\mathbf e))`
         - Output, :math:`\varphi_\mu(\mathbf r)`: :math:`(*,N_\text{orb})`
 
     Attributes:
