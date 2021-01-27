@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2021-01-27
+
 ### Added
 
 - `PauliNet`:
     - Mean-field Jastrow and backflow
+- H2O and H4 rectangle systems
+- Support for Python 3.9
 
 ### Changed
 
@@ -23,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Separate Jastrow and backflow factories
     - `mo_factory`, functionality replaced with a mean-field backflow
     - Real-space backflow
+
+### Fixed
+
+- Systems with n_up/n_down = 0
 
 ## [0.2.0] - 2020-08-19
 
@@ -54,7 +62,8 @@ At this moment, DeepQMC should be still considered a research code.
 - Core functionality to run variational quantum Monte Carlo with Pytorch
 - PauliNet, a deep neural network ansatz
 
-[unreleased]: https://github.com/deepqmc/deepqmc/compare/0.2.0...HEAD
+[unreleased]: https://github.com/deepqmc/deepqmc/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/deepqmc/deepqmc/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/deepqmc/deepqmc/compare/0.1.1...0.2.0
 [0.1.1]: https://github.com/deepqmc/deepqmc/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/deepqmc/deepqmc/releases/tag/0.1.0
