@@ -232,8 +232,8 @@ class OmniSchNet(nn.Module):
         mf_schnet_kwargs=None,
         mf_subnet_kwargs=None,
     ):
-        assert jastrow in [None, 'mean-field', 'many-body']
-        assert backflow in [None, 'mean-field', 'many-body']
+        assert not jastrow or jastrow in ['mean-field', 'many-body']
+        assert not backflow or backflow in ['mean-field', 'many-body']
         super().__init__()
         self.dist_basis = DistanceBasis(
             dist_feat_dim, cutoff=dist_feat_cutoff, envelope='nocusp'
