@@ -176,11 +176,6 @@ def train(  # noqa: C901
         )
         chkpts_dir = workdir / 'chkpts'
         chkpts_dir.mkdir(exist_ok=True)
-        h5file = h5py.File(workdir / 'fit.h5', 'a', libver='v110')
-        h5file.swmr_mode = True
-        table = H5LogTable(h5file)
-        table.resize(init_step)
-        h5file.flush()
     else:
         writer = None
         log_dict = {}
@@ -206,6 +201,12 @@ def train(  # noqa: C901
         desc='training',
         disable=None,
     )
+    if workdir:
+        h5file = h5py.File(workdir / 'fit.h5', 'a', libver='v110')
+        h5file.swmr_mode = True
+        table = H5LogTable(h5file)
+        table.resize(init_step)
+        h5file.flush()
     chkpts = chkpts if chkpts is not None else []
     last_log = 0
     try:
