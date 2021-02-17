@@ -5,7 +5,9 @@ from torch import nn
 
 from deepqmc.torchext import SSP, get_log_dnn, idx_perm
 
-__version__ = '0.1.0'
+from .distbasis import DistanceBasis
+
+__version__ = '0.2.0'
 __all__ = ['ElectronicSchNet']
 
 
@@ -168,11 +170,13 @@ class ElectronicSchNet(nn.Module):
         n_down (int): :math:`N^\downarrow`, number of spin-down electrons
         n_nuclei (int): *M*, number of nuclei in a molecule
         embedding_dim (int): :math:`\dim(\mathbf X)`, dimension of electron embeddings
-        dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of distance features
         subnet_metafactory (callable): factory,
             :math:`(\dim(\mathbf e),\dim(\mathbf w),\dim(\mathbf X))`
             :math:`\rightarrow(\mathbf w,\mathbf h,\mathbf g)`, with the
             interface of :class:`SubnetFactory`
+        dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of distance features
+        dist_feat_cutoff (float, a.u.): distance at which distance features
+            go to zero
         n_interactions (int): *L*, number of message passing iterations
         kernel_dim (int): :math:`\dim(\mathbf w)`, dimension of the convolution kernel
         version (int): architecture version, one of ``1`` or ``2``
@@ -208,9 +212,10 @@ class ElectronicSchNet(nn.Module):
         n_down,
         n_nuclei,
         embedding_dim,
-        dist_feat_dim,
         subnet_metafactory=None,
         *,
+        dist_feat_dim=32,
+        dist_feat_cutoff=10.0,
         n_interactions=3,
         kernel_dim=64,
         version=2,
@@ -220,6 +225,9 @@ class ElectronicSchNet(nn.Module):
         subnet_metafactory = subnet_metafactory or SubnetFactory
         subnet_factory = subnet_metafactory(dist_feat_dim, kernel_dim, embedding_dim)
         super().__init__()
+        self.dist_basis = DistanceBasis(
+            dist_feat_dim, cutoff=dist_feat_cutoff, envelope='nocusp'
+        )
         self.Y = nn.Embedding(n_nuclei, kernel_dim)
         self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
         self.layers = nn.ModuleList(
@@ -237,10 +245,12 @@ class ElectronicSchNet(nn.Module):
         self.register_buffer('spin_idxs', spin_idxs)
         self.register_buffer('nuclei_idxs', torch.arange(n_nuclei))
 
-    def forward(self, edges_elec, edges_nuc):
-        *batch_dims, n_elec, n_nuclei = edges_nuc.shape[:-1]
-        assert edges_elec.shape[:-1] == (*batch_dims, n_elec, n_elec)
+    def forward(self, dists_elec, dists_nuc):
+        *batch_dims, n_elec, n_nuclei = dists_nuc.shape
+        assert dists_elec.shape == (*batch_dims, n_elec, n_elec)
         assert n_elec == len(self.spin_idxs)
+        edges_nuc = self.dist_basis(dists_nuc)
+        edges_elec = self.dist_basis(dists_elec)
         x = self.X(self.spin_idxs.expand(*batch_dims, -1))
         Y = self.Y(self.nuclei_idxs.expand(*batch_dims, -1))
         for (layer, norm) in zip(self.layers, self.layer_norms):

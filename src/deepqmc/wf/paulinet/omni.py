@@ -5,7 +5,6 @@ from torch import nn
 
 from deepqmc.torchext import SSP, get_log_dnn
 
-from .distbasis import DistanceBasis
 from .schnet import ElectronicSchNet, SubnetFactory
 
 __version__ = '0.3.0'
@@ -141,10 +140,10 @@ class MeanFieldElectronicSchNet(ElectronicSchNet):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, version='mean-field', **kwargs)
 
-    def forward(self, edges_nuc):
-        *batch_dims, n_elec = edges_nuc.shape[:-2]
-        edges_elec_dummy = edges_nuc.new_empty(*batch_dims, n_elec, n_elec, 0)
-        return super().forward(edges_elec_dummy, edges_nuc)
+    def forward(self, dists_nuc):
+        *batch_dims, n_elec = dists_nuc.shape[:-1]
+        dists_elec_dummy = dists_nuc.new_empty(*batch_dims, n_elec, n_elec)
+        return super().forward(dists_elec_dummy, dists_nuc)
 
 
 class OmniSchNet(nn.Module):
@@ -181,9 +180,6 @@ class OmniSchNet(nn.Module):
         n_down (int): :math:`N^\downarrow`, number of spin-down electrons
         n_orbitals (int): :math:`N_\text{orb}`, number of molecular orbitals
         n_backflows (int): :math:`N_\text{bf}`, number of backflow channnels
-        dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of distance features
-        dist_feat_cutoff (float, a.u.): distance at which distance features
-            go to zero
         mb_embedding_dim (int): dimension of many-body SchNet embeddings
         mf_embedding_dim (int): dimension of mean-field SchNet embeddings
         jastrow (str): type of Jastrow -- :data:`None`, ``'mean-field'``, or
@@ -219,8 +215,6 @@ class OmniSchNet(nn.Module):
         n_orbitals,
         n_backflows,
         *,
-        dist_feat_dim=32,
-        dist_feat_cutoff=10.0,
         mb_embedding_dim=128,
         mf_embedding_dim=128,
         jastrow='many-body',
@@ -235,15 +229,11 @@ class OmniSchNet(nn.Module):
         assert not jastrow or jastrow in ['mean-field', 'many-body']
         assert not backflow or backflow in ['mean-field', 'many-body']
         super().__init__()
-        self.dist_basis = DistanceBasis(
-            dist_feat_dim, cutoff=dist_feat_cutoff, envelope='nocusp'
-        )
         self.schnet = (
             ElectronicSchNet(
                 n_up,
                 n_down,
                 n_atoms,
-                dist_feat_dim=dist_feat_dim,
                 embedding_dim=mb_embedding_dim,
                 subnet_metafactory=partial(SubnetFactory, **(subnet_kwargs or {})),
                 **(schnet_kwargs or {}),
@@ -256,7 +246,6 @@ class OmniSchNet(nn.Module):
                 n_up,
                 n_down,
                 n_atoms,
-                dist_feat_dim=dist_feat_dim,
                 embedding_dim=mf_embedding_dim,
                 subnet_metafactory=partial(SubnetFactory, **(mf_subnet_kwargs or {})),
                 **(mf_schnet_kwargs or {}),
@@ -278,13 +267,11 @@ class OmniSchNet(nn.Module):
             )
 
     def forward(self, dists_nuc, dists_elec):
-        edges_nuc = self.dist_basis(dists_nuc)
         embeddings = {}
         if self.mf_schnet:
-            embeddings['mean-field'] = self.mf_schnet(edges_nuc)
+            embeddings['mean-field'] = self.mf_schnet(dists_nuc)
         if self.schnet:
-            edges_elec = self.dist_basis(dists_elec)
-            embeddings['many-body'] = self.schnet(edges_elec, edges_nuc)
+            embeddings['many-body'] = self.schnet(dists_elec, dists_nuc)
         jastrow = (
             self.jastrow(embeddings[self.jastrow_type]) if self.jastrow_type else None
         )
