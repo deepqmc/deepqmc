@@ -50,6 +50,6 @@ def fit_wf_supervised(
         loss.backward()
         if (step + 1) % acc_grad == 0:
             opt.step()
-            opt.zero_grad()
+            fit_net.zero_grad()
         if scheduler and (step + 1) % epoch_size == 0:
             scheduler.step()

@@ -136,7 +136,7 @@ def fit_wf(  # noqa: C901
         log.info(f'estimated optimal subbatch size: {subbatch_size}')
     for step, (rs, log_psi0s, sign_psi0s) in zip(steps, sampler):
         rs_batch = rs
-        opt.zero_grad()
+        wf.zero_grad()
         subbatch_size = subbatch_size or len(rs)
         subbatches = []
         for rs, log_psi0s, _ in DataLoader(
