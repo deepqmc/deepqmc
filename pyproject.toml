@@ -65,6 +65,7 @@ black = ">=20-beta.0"
 pep8-naming = ">=0.7"
 isort = "^4.3"
 pydocstyle = "^5.0.1"
+torch-kfac = {path = "extern/pytorch-kfac"}
 
 [tool.poetry.scripts]
 deepqmc = "deepqmc.cli:cli"
@@ -76,3 +77,4 @@ pattern = '^(?P<base>\d+\.\d+\.\d+)$'
 [tool.black]
 target-version = ["py37"]
 skip-string-normalization = true
+exclude = "extern/"

@@ -1,0 +1,3 @@
+[submodule "extern/pytorch-kfac"]
+	path = extern/pytorch-kfac
+	url = https://github.com/n-gao/pytorch-kfac.git

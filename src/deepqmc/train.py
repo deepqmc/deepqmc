@@ -68,6 +68,7 @@ def train(  # noqa: C901
     lr_scheduler_kwargs=SCHEDULER_KWARGS,
     equilibrate=True,
     fit_kwargs=None,
+    kfac=None,
     sampler_kwargs=None,
 ):
     r"""Train a wave function model.
@@ -192,6 +193,26 @@ def train(  # noqa: C901
                 sample_wf(wf, sampler.iter_with_info(), steps, equilibrate=equilibrate)
             )
         log.info('Equilibrated')
+    if kfac:
+        log.info('Prewarming KFAC...')
+        _lr = kfac.learning_rate
+        kfac.learning_rate = 0.0
+        for _, (rs, _, _) in zip(
+            trange(100, desc='prewarming'),
+            sampler.iter_batches(
+                batch_size=batch_size,
+                epoch_size=100,
+                range=partial(trange, desc='sampling', leave=False, disable=None),
+            ),
+        ):
+            wf.zero_grad()
+            with kfac.track_forward():
+                log_psis, _ = wf(rs)
+            log_psis = log_psis.mean()
+            with kfac.track_backward():
+                log_psis.backward()
+            kfac.update_cov()
+        kfac.learning_rate = _lr
     log.info('Initializing training')
     steps = trange(
         init_step,
@@ -222,6 +243,7 @@ def train(  # noqa: C901
             steps,
             log_dict=table.row if workdir else log_dict,
             writer=writer,
+            kfac=kfac,
             **(fit_kwargs or {}),
         ):
             # at this point, the wf model and optimizer are already at state step+1
@@ -251,6 +273,8 @@ def train(  # noqa: C901
             if scheduler:
                 scheduler.step()
                 state['scheduler'] = scheduler.state_dict()
+                if kfac:
+                    kfac.learning_rate = opt.state_dict()['param_groups'][0]['lr']
             chkpts.append((step + 1, state))
             chkpts = chkpts[-100:]
             if workdir:

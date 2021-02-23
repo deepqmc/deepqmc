@@ -83,6 +83,7 @@ def fit_wf(  # noqa: C901
     clip_outliers=True,
     q=5,
     max_grad_norm=None,
+    kfac=None,
 ):
     r"""Fit a wave function using the variational principle and gradient descent.
 
@@ -135,6 +136,15 @@ def fit_wf(  # noqa: C901
     for step, (rs, log_psi0s, sign_psi0s) in zip(steps, sampler):
         rs_batch = rs
         wf.zero_grad()
+        if kfac:
+            with kfac.track_forward():
+                log_psis, _ = wf(rs)
+            log_ws = 2 * log_psis.detach() - 2 * log_psi0s
+            log_psis = (log_psis * torch.exp(log_ws)).mean()
+            with kfac.track_backward():
+                log_psis.backward()
+            kfac.update_cov()
+            wf.zero_grad()
         subbatch_size = subbatch_size or len(rs)
         subbatches = []
         for rs, log_psi0s, _ in DataLoader(
@@ -175,8 +185,12 @@ def fit_wf(  # noqa: C901
             clip_grad_norm_(wf.parameters(), max_grad_norm)
         E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, log_ws.exp())
         E_loc_err = torch.sqrt(E_loc_var / len(Es_loc))
-        lr = opt.state_dict()['param_groups'][0]['lr']
         if writer:
+            if kfac:
+                lr = kfac.learning_rate
+                writer.add_scalar('KFAC/damping', kfac.damping, step)
+            else:
+                lr = opt.state_dict()['param_groups'][0]['lr']
             writer.add_scalar('E_loc/mean', E_loc_mean, step)
             writer.add_scalar('E_loc/var', E_loc_var, step)
             writer.add_scalar('E_loc/min', Es_loc.min(), step)
@@ -204,7 +218,10 @@ def fit_wf(  # noqa: C901
             log_dict['sign_psis'] = sign_psis.cpu().numpy()
             log_dict['log_ws'] = log_ws.cpu().numpy()
             log_dict['learning_rate'] = lr
-        opt.step()
+        if kfac:
+            kfac.step()
+        else:
+            opt.step()
         yield step, ufloat(E_loc_mean.item(), E_loc_err.item())
 
 
