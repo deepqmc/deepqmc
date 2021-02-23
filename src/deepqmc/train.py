@@ -110,7 +110,7 @@ def train(  # noqa: C901
     else:
         optimizer_kwargs = {
             **OPTIMIZER_KWARGS.get(optimizer, {}),
-            **optimizer_kwargs[optimizer],
+            **optimizer_kwargs.get(optimizer, {}),
         }
         log.info(
             f'Using {optimizer} optimizer, '
@@ -125,7 +125,7 @@ def train(  # noqa: C901
     elif lr_scheduler:
         scheduler_kwargs = {
             **SCHEDULER_KWARGS.get(lr_scheduler, {}),
-            **lr_scheduler_kwargs[lr_scheduler],
+            **lr_scheduler_kwargs.get(lr_scheduler, {}),
         }
         log.info(f'Using {lr_scheduler} scheduler, params = {scheduler_kwargs!r}')
         if lr_scheduler[0].islower():
