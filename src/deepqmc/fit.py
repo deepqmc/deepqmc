@@ -1,5 +1,4 @@
 import logging
-from contextlib import nullcontext
 from functools import partial
 
 import torch
@@ -84,7 +83,6 @@ def fit_wf(  # noqa: C901
     clip_outliers=True,
     q=5,
     max_grad_norm=None,
-    kfac=None,
 ):
     r"""Fit a wave function using the variational principle and gradient descent.
 
@@ -142,20 +140,16 @@ def fit_wf(  # noqa: C901
         for rs, log_psi0s, _ in DataLoader(
             TensorDataset(rs, log_psi0s, sign_psi0s), batch_size=subbatch_size
         ):
-            with kfac.track_forward() if kfac else nullcontext():
-                Es_loc, log_psis, sign_psis = local_energy(
-                    rs,
-                    wf.sample(False),
-                    create_graph=require_energy_gradient,
-                    keep_graph=require_psi_gradient,
-                )
+            Es_loc, log_psis, sign_psis = local_energy(
+                rs,
+                wf.sample(False),
+                create_graph=require_energy_gradient,
+                keep_graph=require_psi_gradient,
+            )
             log_ws = 2 * log_psis.detach() - 2 * log_psi0s
             Es_loc_loss = log_clipped_outliers(Es_loc, q) if clip_outliers else Es_loc
             loss = loss_func(Es_loc_loss, log_psis, normalize_mean(log_ws.exp()))
-            with kfac.track_backward() if kfac else nullcontext():
-                loss.backward()
-            if kfac:
-                kfac.step_update(loss_func.weights)
+            loss.backward()
             wf.sample(True)
             subbatches.append(
                 (
@@ -210,11 +204,6 @@ def fit_wf(  # noqa: C901
             log_dict['sign_psis'] = sign_psis.cpu().numpy()
             log_dict['log_ws'] = log_ws.cpu().numpy()
             log_dict['learning_rate'] = lr
-        if kfac:
-            kfac.step_precondition()
-            fnorm, gnorm = kfac.step_rescale()
-            writer.add_scalar('kfac/KL', fnorm, step)
-            writer.add_scalar('kfac/dE', -gnorm, step)
         opt.step()
         yield step, ufloat(E_loc_mean.item(), E_loc_err.item())
 
