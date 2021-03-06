@@ -1,0 +1,20 @@
+name: Documentation
+on: [push, pull_request]
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+      - name: Install Poetry
+        run: |
+          curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
+          echo $HOME/.poetry/bin >>$GITHUB_PATH
+      - name: Install dependencies
+        run: pip install "sphinx<3" sphinxcontrib-katex toml
+      - uses: actions/checkout@v2
+      - name: Build
+        run: sphinx-build -W -E doc doc/build
+      - run: touch doc/build/.nojekyll

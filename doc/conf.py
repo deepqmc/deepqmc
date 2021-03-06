@@ -51,7 +51,6 @@ html_theme_options = {
     'github_repo': 'deepqmc',
     'badge_branch': 'master',
     'codecov_button': True,
-    'travis_button': True,
     'fixed_sidebar': True,
     'page_width': '60em',
 }

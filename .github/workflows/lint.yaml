@@ -1,0 +1,46 @@
+name: Lint
+on: [push, pull_request]
+jobs:
+  flake8:
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+      - name: Install dependencies
+        run: pip install flake8 flake8-bugbear flake8-comprehensions flake8-quotes pep8-naming
+      - uses: actions/checkout@v2
+      - run: flake8
+  black:
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+      - name: Install dependencies
+        run: pip install black
+      - uses: actions/checkout@v2
+      - run: black . --check
+  isort:
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+      - name: Install dependencies
+        run: pip install isort
+      - uses: actions/checkout@v2
+      - run: isort . --check
+  pydocstyle:
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+      - name: Install dependencies
+        run: pip install pydocstyle
+      - uses: actions/checkout@v2
+      - run: pydocstyle src

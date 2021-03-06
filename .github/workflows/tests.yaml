@@ -1,0 +1,45 @@
+name: Tests
+on: [push, pull_request]
+jobs:
+  all:
+    name: All
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.7, 3.8, 3.9]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install Poetry
+        run: |
+          curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
+          echo $HOME/.poetry/bin >>$GITHUB_PATH
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Create Python virtual environment
+        run: |
+          python -m venv venv
+          echo VIRTUAL_ENV=$PWD/venv >>$GITHUB_ENV
+          echo $PWD/venv/bin >>$GITHUB_PATH
+          echo venv >>.git/info/exclude
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ${{ env.VIRTUAL_ENV }}/bin
+            ${{ env.VIRTUAL_ENV }}/lib/python${{ matrix.python-version }}/site-packages
+          key: ${{ runner.os }}-${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -U poetry-dynamic-versioning
+      - name: Build
+        run: poetry build
+      - name: Install
+        run: pip install -U deepqmc[wf,train,cli,test] --pre -f ./dist
+      - name: Test
+        run: coverage run -m pytest
+      - name: Upload to Codecov
+        run: bash <(curl -s https://codecov.io/bash)
+      - name: Uninstall Pymbd
+        run: pip uninstall -y deepqmc
