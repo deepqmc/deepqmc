@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 @click.option('--cuda/--no-cuda', default=True)
 @click.option('--max-restarts', default=3, show_default=True)
 @click.option('--hook', is_flag=True)
-def train_multi_at(
+def train_multi_at(  # noqa: C901
     workdir,
     respawn,
     multi_part,
