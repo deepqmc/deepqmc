@@ -45,7 +45,7 @@ def test_torch_gto_aos(gtowf, grids):
     ovlps = (
         gtowf.mo.basis(pairwise_diffs(coords, gtowf.mol.coords)) ** 2 * weights[:, None]
     ).sum(dim=0)
-    assert_allclose(ovlps, 1)
+    assert_allclose(ovlps, torch.ones_like(ovlps))
 
 
 def test_torch_gto_density(gtowf, grids):
