@@ -323,7 +323,7 @@ class PauliNet(WaveFunction):
         wf.mf = mf
         return wf
 
-    def pop_chargse(self):
+    def pop_charges(self):
         try:
             mf = self.mf
         except AttributeError:
