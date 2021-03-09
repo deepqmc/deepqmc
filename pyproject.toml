@@ -79,6 +79,7 @@ deepqmc = "deepqmc.cli:cli"
 
 [tool.poetry-dynamic-versioning]
 enable = true
+dirty = true
 pattern = '^(?P<base>\d+\.\d+\.\d+)$'
 
 [tool.black]
