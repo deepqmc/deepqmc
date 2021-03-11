@@ -365,6 +365,38 @@ class MetropolisSampler(Sampler):
         self.restart()
 
 
+def sort_nucleus_indices(idxs, coords):
+    # this heuristic takes a batch of nuclear indices for placing electrons
+    # and sorts them such that the local electronic spin is minimized
+    bs, n_electrons = idxs.shape
+    idx_new = []
+    idx_map = torch.arange(n_electrons).repeat(bs, 1)
+    idx_i = torch.randint(0, n_electrons, (bs,))
+    # starting from a randomly chosen electron, the nuclear indices of
+    # subsequent electrons are picked to correspond to the closest nucleus
+    while True:
+        mask = idx_map == idx_i.view(-1, 1)
+        # masks out electrons and nuclear indices that are already fixed
+        idx, idxs = idxs[mask], idxs[~mask].view(bs, -1)
+        idx_map = idx_map[~mask].view(bs, -1)
+        idx_new.append(idx)
+        if idxs.shape[1]:
+            # index of closest nucleus is determined
+            idx_sort = (
+                (coords[idx][:, None, :] - coords[idxs])
+                .norm(dim=-1)
+                .sort(dim=-1)[1][:, 0]
+            )
+            idx_i = idx_map[torch.arange(idxs.shape[1]) == idx_sort.view(bs, 1)]
+        else:
+            break
+    idx_new = torch.cat(
+        (torch.stack(idx_new)[::2], torch.stack(idx_new)[1::2])
+    ).permute(1, 0)
+    # indices are reorded such that spin-up and spin-down electrons alternate
+    return idx_new
+
+
 def rand_from_mol(mol, bs, pop_charges=None, elec_std=1.0):
     n_atoms = len(mol)
     charges = mol.charges
@@ -384,26 +416,7 @@ def rand_from_mol(mol, bs, pop_charges=None, elec_std=1.0):
     idxs = torch.repeat_interleave(
         torch.arange(n_atoms, device=cs.device).expand(bs, -1), repeats.flatten()
     ).view(bs, n_electrons)
-    idx_new = []
-    idx_map = torch.arange(n_electrons).repeat(bs, 1)
-    idx_i = torch.randint(0, n_electrons, (bs,))
-    while True:
-        mask = idx_map == idx_i.view(-1, 1)
-        idx, idxs = idxs[mask], idxs[~mask].view(bs, -1)
-        idx_map = idx_map[~mask].view(bs, -1)
-        idx_new.append(idx)
-        if idxs.shape[1]:
-            idx_close = (
-                (mol.coords[idx][:, None, :] - mol.coords[idxs])
-                .norm(dim=-1)
-                .sort(dim=-1)[1][:, 0]
-            )
-            idx_i = idx_map[torch.arange(idxs.shape[1]) == idx_close.view(bs, 1)]
-        else:
-            break
-    idxs = torch.cat((torch.stack(idx_new)[::2], torch.stack(idx_new)[1::2])).permute(
-        1, 0
-    )
+    idxs = sort_nucleus_indices(idxs, mol.coords)
     centers = mol.coords[idxs]
     rs = centers + elec_std * torch.randn_like(centers)
     return rs
