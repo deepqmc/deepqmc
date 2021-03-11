@@ -384,7 +384,26 @@ def rand_from_mol(mol, bs, pop_charges=None, elec_std=1.0):
     idxs = torch.repeat_interleave(
         torch.arange(n_atoms, device=cs.device).expand(bs, -1), repeats.flatten()
     ).view(bs, n_electrons)
-    idxs = torch.stack([idxs[i, torch.randperm(idxs.shape[-1])] for i in range(bs)])
+    idx_new = []
+    idx_map = torch.arange(n_electrons).repeat(bs, 1)
+    idx_i = torch.randint(0, n_electrons, (bs,))
+    while True:
+        mask = idx_map == idx_i.view(-1, 1)
+        idx, idxs = idxs[mask], idxs[~mask].view(bs, -1)
+        idx_map = idx_map[~mask].view(bs, -1)
+        idx_new.append(idx)
+        if idxs.shape[1]:
+            idx_close = (
+                (mol.coords[idx][:, None, :] - mol.coords[idxs])
+                .norm(dim=-1)
+                .sort(dim=-1)[1][:, 0]
+            )
+            idx_i = idx_map[torch.arange(idxs.shape[1]) == idx_close.view(bs, 1)]
+        else:
+            break
+    idxs = torch.cat((torch.stack(idx_new)[::2], torch.stack(idx_new)[1::2])).permute(
+        1, 0
+    )
     centers = mol.coords[idxs]
     rs = centers + elec_std * torch.randn_like(centers)
     return rs
