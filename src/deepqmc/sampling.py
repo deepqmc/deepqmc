@@ -365,7 +365,7 @@ class MetropolisSampler(Sampler):
         self.restart()
 
 
-def sort_nucleus_indices(idxs, coords):
+def sort_nucleus_indices(idxs, mol):
     # this heuristic takes a batch of nuclear indices for placing electrons
     # and sorts them such that the local electronic spin is minimized
     bs, n_electrons = idxs.shape
@@ -383,14 +383,18 @@ def sort_nucleus_indices(idxs, coords):
         if idxs.shape[1]:
             # index of closest nucleus is determined
             idx_sort = (
-                (coords[idx][:, None, :] - coords[idxs])
+                (mol.coords[idx][:, None, :] - mol.coords[idxs])
                 .norm(dim=-1)
                 .sort(dim=-1)[1][:, 0]
             )
             idx_i = idx_map[torch.arange(idxs.shape[1]) == idx_sort.view(bs, 1)]
-    idx_new = torch.cat(
-        (torch.stack(idx_new)[::2], torch.stack(idx_new)[1::2])
-    ).permute(1, 0)
+    idx_new = torch.stack(idx_new).permute(1, 0)
+    n_updown = (n_electrons + mol.spin) // 2, (n_electrons - mol.spin) // 2
+    perms = [
+        torch.cat([i + torch.randperm(n) * 2 for i, n in enumerate(n_updown)])
+        for _ in range(bs)
+    ]
+    idx_new = torch.stack([idx_new[i, perm] for i, perm in enumerate(perms)])
     # indices are reorded such that spin-up and spin-down electrons alternate
     return idx_new
 
@@ -414,7 +418,7 @@ def rand_from_mol(mol, bs, pop_charges=None, elec_std=1.0):
     idxs = torch.repeat_interleave(
         torch.arange(n_atoms, device=cs.device).expand(bs, -1), repeats.flatten()
     ).view(bs, n_electrons)
-    idxs = sort_nucleus_indices(idxs, mol.coords)
+    idxs = sort_nucleus_indices(idxs, mol)
     centers = mol.coords[idxs]
     rs = centers + elec_std * torch.randn_like(centers)
     return rs
