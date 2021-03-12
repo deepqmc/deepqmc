@@ -374,7 +374,7 @@ def sort_nucleus_indices(idxs, coords):
     idx_i = torch.randint(0, n_electrons, (bs,))
     # starting from a randomly chosen electron, the nuclear indices of
     # subsequent electrons are picked to correspond to the closest nucleus
-    while True:
+    for _ in range(n_electrons):
         mask = idx_map == idx_i.view(-1, 1)
         # masks out electrons and nuclear indices that are already fixed
         idx, idxs = idxs[mask], idxs[~mask].view(bs, -1)
@@ -388,8 +388,6 @@ def sort_nucleus_indices(idxs, coords):
                 .sort(dim=-1)[1][:, 0]
             )
             idx_i = idx_map[torch.arange(idxs.shape[1]) == idx_sort.view(bs, 1)]
-        else:
-            break
     idx_new = torch.cat(
         (torch.stack(idx_new)[::2], torch.stack(idx_new)[1::2])
     ).permute(1, 0)
