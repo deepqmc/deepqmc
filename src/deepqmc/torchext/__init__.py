@@ -3,6 +3,7 @@ from .cuda import estimate_optimal_batch_size_cuda
 from .sloglindet import sloglindet
 from .utils import (
     SSP,
+    argmax_random_choice,
     assign_where,
     batch_eval,
     batch_eval_tuple,
@@ -26,6 +27,7 @@ from .utils import (
 __all__ = [
     'SSP',
     'assign_where',
+    'argmax_random_choice',
     'batch_eval',
     'batch_eval_tuple',
     'bdet',

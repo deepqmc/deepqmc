@@ -8,9 +8,15 @@ from torch.utils.data import DataLoader, TensorDataset
 from uncertainties import ufloat, unumpy as unp
 
 from .errors import LUFactError
-from .physics import clean_force, local_energy, pairwise_self_distance, quantum_force
+from .physics import (
+    clean_force,
+    local_energy,
+    pairwise_distance,
+    pairwise_self_distance,
+    quantum_force,
+)
 from .plugins import PLUGINS
-from .torchext import assign_where
+from .torchext import argmax_random_choice, assign_where, shuffle_tensor
 from .utils import energy_offset
 
 __version__ = '0.3.0'
@@ -365,38 +371,35 @@ class MetropolisSampler(Sampler):
         self.restart()
 
 
-def sort_nucleus_indices(idxs, mol):
-    # this heuristic takes a batch of nuclear indices for placing electrons
-    # and sorts them such that the local electronic spin is minimized
-    bs, n_electrons = idxs.shape
-    idx_new = []
-    idx_map = torch.arange(n_electrons).repeat(bs, 1)
-    idx_i = torch.randint(0, n_electrons, (bs,))
-    # starting from a randomly chosen electron, the nuclear indices of
-    # subsequent electrons are picked to correspond to the closest nucleus
-    for _ in range(n_electrons):
-        mask = idx_map == idx_i.view(-1, 1)
-        # masks out electrons and nuclear indices that are already fixed
-        idx, idxs = idxs[mask], idxs[~mask].view(bs, -1)
-        idx_map = idx_map[~mask].view(bs, -1)
-        idx_new.append(idx)
-        if idxs.shape[1]:
-            # index of closest nucleus is determined
-            idx_sort = (
-                (mol.coords[idx][:, None, :] - mol.coords[idxs])
-                .norm(dim=-1)
-                .sort(dim=-1)[1][:, 0]
-            )
-            idx_i = idx_map[torch.arange(idxs.shape[1]) == idx_sort.view(bs, 1)]
-    idx_new = torch.stack(idx_new).permute(1, 0)
-    n_updown = (n_electrons + mol.spin) // 2, (n_electrons - mol.spin) // 2
-    perms = [
-        torch.cat([i + torch.randperm(n) * 2 for i, n in enumerate(n_updown)])
-        for _ in range(bs)
-    ]
-    idx_new = torch.stack([idx_new[i, perm] for i, perm in enumerate(perms)])
-    # indices are reorded such that spin-up and spin-down electrons alternate
-    return idx_new
+def sort_nucleus_indices(idx, mol):
+    # this heuristic takes nuclear indices for placing electrons and sorts them
+    # such that the local spin of the electrons is minimized
+    dev = idx.device
+    available = idx.bincount()
+    n_down = (len(idx) - mol.spin) // 2
+    n_nuclei = len(available)
+    assigned = torch.tensor([], dtype=torch.long, device=dev)
+    # assign core electron pairs to all nuclei with more than one electron
+    for j in range(int(available.max()) // 2):
+        mask = idx.bincount() >= 2 * (j + 1)
+        if sum(mask).item() <= n_down - len(assigned):
+            assigned = torch.cat((assigned, torch.arange(n_nuclei, device=dev)[mask]))
+            available -= torch.ones(n_nuclei, device=dev, dtype=torch.long) * 2 * mask
+    # order remaining nuclear indices by subsequent closest distances
+    dist = pairwise_distance(mol.coords, mol.coords).sort()[1]
+    path = (
+        torch.tensor([argmax_random_choice(available)], dtype=torch.long, device=dev)
+        if sum(available)
+        else torch.tensor([], dtype=torch.long, device=dev)
+    )
+    for _ in range(int(available.sum()) - 1):
+        available[path[-1]] -= 1
+        path = torch.cat((path, dist[path[-1]][available[dist[path[-1]]] > 0][:1]))
+    # assign remaining electrons alternatingly along the path of closest distance
+    even, odd = shuffle_tensor(path[0::2]), shuffle_tensor(path[1::2])
+    up = shuffle_tensor(torch.cat((assigned, even, odd[n_down - len(assigned) :])))
+    down = shuffle_tensor(torch.cat((assigned, odd[: n_down - len(assigned)])))
+    return torch.cat((up, down))
 
 
 def rand_from_mol(mol, bs, pop_charges=None, elec_std=1.0):
@@ -418,7 +421,7 @@ def rand_from_mol(mol, bs, pop_charges=None, elec_std=1.0):
     idxs = torch.repeat_interleave(
         torch.arange(n_atoms, device=cs.device).expand(bs, -1), repeats.flatten()
     ).view(bs, n_electrons)
-    idxs = sort_nucleus_indices(idxs, mol)
+    idxs = torch.stack([sort_nucleus_indices(idx, mol) for idx in idxs])
     centers = mol.coords[idxs]
     rs = centers + elec_std * torch.randn_like(centers)
     return rs

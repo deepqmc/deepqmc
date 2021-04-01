@@ -126,3 +126,9 @@ def get_custom_dnn(dims, activation_factory, last_bias=False):
         return nn.Sequential(OrderedDict(modules))
     else:
         return nn.Sequential(*modules)
+
+
+def argmax_random_choice(x):
+    mask = x == x.max()
+    index = torch.randint(sum(mask), (1,))
+    return torch.arange(len(x))[mask][index].item()
