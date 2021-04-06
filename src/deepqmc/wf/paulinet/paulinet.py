@@ -328,7 +328,7 @@ class PauliNet(WaveFunction):
             mf = self.mf
         except AttributeError:
             return super().pop_charges()
-        return mf.pop(verbose=0)[1]
+        return self.mol.charges.new(mf.pop(verbose=0)[1])
 
     def _backflow_op(self, xs, fs):
         if self.backflow_transform == 'mult':
