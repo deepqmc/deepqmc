@@ -21,11 +21,11 @@ To get all available molecules use::
 
 Molecule can be also crated from scratch, by specifying the nuclear coordinates and charges, and the total charge and spin multiplicity::
 
-    mol = Molecule(  # H2+
-        coords=[[0, 0, 0], [1.058, 0, 0]],
-        charges=[1, 1],
-        charge=1,
-        spin=1,
+    mol = Molecule(  # LiH
+        coords=[[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]],
+        charges=[3, 1],
+        charge=0,
+        spin=0,
     )
 
 Create a wave function ansatz
@@ -34,10 +34,10 @@ Create a wave function ansatz
 All wave function ansatzes are available in the :mod:`deepqmc.wf` subpackage. At the moment, the only available ansatz is :class:`~deepqmc.wf.PauliNet`. The PauliNet class has three different constructors, differing in how low-level they are. The high-level :meth:`PauliNet.from_hf` constructor has default parameters for everything except for the molecule, and it runs the underlying multireference Hartree--Fock calculation which provides the orbitals on which the ansatz is built::
 
     >>> from deepqmc.wf import PauliNet
-    >>> net = PauliNet.from_hf(mol, cas=(2, 4)).cuda()
+    >>> net = PauliNet.from_hf(mol, cas=(4, 2)).cuda()
     converged SCF energy = -7.9846409186467
-    CASSCF energy = -8.00439006914284
-    CASCI E = -8.00439006914284  E(CI) = -1.10200121173341  S^2 = 0.0000000
+    CASSCF energy = -8.00207829274895
+    CASCI E = -8.00207829274895  E(CI) = -1.09953139208267  S^2 = 0.0000000
 
 All the parameters and their physical meaning are described in the :ref:`api` reference.
 
