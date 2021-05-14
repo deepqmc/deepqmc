@@ -39,7 +39,7 @@ extensions = [
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'torch': ('https://pytorch.org/docs/stable', None),
-    'pyscf': ('http://pyscf.org/pyscf', None),
+    'pyscf': ('http://pyscf.org', None),
 }
 exclude_patterns = ['build', '.DS_Store']
 
