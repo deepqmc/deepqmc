@@ -50,7 +50,11 @@ The high-level :func:`~deepqmc.train` function is used to train the deep neural 
     >>> train(net)
     training:   0%|▍       | 49/10000 [01:41<5:43:40,  2.07s/it, E=-8.0378(27)]
 
-The terminal output shows only how far has the training progressed and the current estimate of the energy. More detailed monitoring of the training goes is available via `Tensorboard <https://www.tensorflow.org/tensorboard>`_. The training run creates a Tensorboard event file in the `runs/` directory, which can be observed from Tensorboard::
+The terminal output shows only how far has the training progressed and the current estimate of the energy. More detailed monitoring of the training goes is available via `Tensorboard <https://www.tensorflow.org/tensorboard>`_. When :func:`~deepqmc.train` is called with an optional ``workdir`` argument, the training run creates a Tensorboard event file::
+
+    >>> train(net, workdir='runs/01')
+
+.. code:: none
 
     $ tensorboard --logdir runs/
     TensorFlow installation not found - running with reduced feature set.
