@@ -6,7 +6,7 @@ from scipy.special import factorial2
 from torch import nn
 
 from deepqmc.errors import DeepQMCError
-from deepqmc.torchext import fp_tensor, pow_int
+from deepqmc.torchext import fp_tensor
 
 __version__ = '0.1.0'
 __all__ = ['GTOBasis', 'GTOShell']
@@ -47,7 +47,8 @@ class GTOShell(nn.Module):
 
     def __init__(self, l, coeffs, zetas):
         super().__init__()
-        self.ls = torch.tensor(get_cartesian_angulars(l))
+        ls = torch.tensor(get_cartesian_angulars(l))
+        self.register_buffer('ls', ls)
         anorms = 1.0 / np.sqrt(factorial2(2 * self.ls - 1).prod(-1))
         self.register_buffer('anorms', fp_tensor(anorms))
         rnorms = (2 * zetas / np.pi) ** (3 / 4) * (4 * zetas) ** (l / 2)
@@ -76,7 +77,7 @@ class GTOShell(nn.Module):
 
     def forward(self, rs):
         rs, rs_2 = rs[..., :3], rs[..., 3]
-        angulars = pow_int(rs[:, None, :], self.ls).prod(dim=-1)
+        angulars = (rs[:, None, :] ** self.ls).prod(dim=-1)
         exps = torch.exp(-self.zetas * rs_2[:, None])
         radials = (self.coeffs * exps).sum(dim=-1)
         phis = self.anorms * angulars * radials[:, None]

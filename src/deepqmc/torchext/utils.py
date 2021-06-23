@@ -71,16 +71,6 @@ def bdiag(A):
     return A.diagonal(dim1=-1, dim2=-2)
 
 
-def pow_int(xs, exps):
-    batch_dims = xs.shape[: -len(exps.shape)]
-    zs = xs.new_zeros(*batch_dims, *exps.shape)
-    xs_expanded = xs.expand_as(zs)
-    for exp in exps.unique():
-        mask = exps == exp
-        zs[..., mask] = xs_expanded[..., mask] ** exp.item()
-    return zs
-
-
 def batch_eval(func, batches, *args, **kwargs):
     return torch.cat([func(batch, *args, **kwargs) for batch in batches])
 
