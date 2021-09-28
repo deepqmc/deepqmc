@@ -461,6 +461,9 @@ class LangevinSampler(MetropolisSampler):
         except LUFactError as e:
             e.info['rs'] = rs[e.info['idxs']]
             raise
+        forces = forces.where(
+            ~torch.isinf(log_psis)[:, None, None], forces.new_tensor(0)
+        )
         forces = clean_force(forces, rs, self.wf.mol, tau=self.tau)
         return forces, (log_psis, sign_psis)
 
