@@ -464,6 +464,7 @@ class LangevinSampler(MetropolisSampler):
         forces = forces.where(
             ~torch.isinf(log_psis)[:, None, None], forces.new_tensor(0)
         )
+        # mask out nan forces to increase code stability
         forces = clean_force(forces, rs, self.wf.mol, tau=self.tau)
         return forces, (log_psis, sign_psis)
 

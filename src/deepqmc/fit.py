@@ -148,6 +148,7 @@ def fit_wf(  # noqa: C901
             )
             log_ws = 2 * log_psis.detach() - 2 * log_psi0s
             Es_loc = Es_loc.where(~torch.isinf(log_ws), Es_loc.new_tensor(0))
+            # mask out samples with zero weight to increase code stability
             Es_loc_loss = log_clipped_outliers(Es_loc, q) if clip_outliers else Es_loc
             loss = loss_func(Es_loc_loss, log_psis, normalize_mean(log_ws.exp()))
             loss.backward()
