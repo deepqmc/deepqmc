@@ -147,8 +147,11 @@ def fit_wf(  # noqa: C901
                 keep_graph=require_psi_gradient,
             )
             log_ws = 2 * log_psis.detach() - 2 * log_psi0s
-            Es_loc = Es_loc.where(~torch.isinf(log_ws), Es_loc.new_tensor(0))
             # mask out samples with zero weight to increase code stability
+            mask = ~log_ws.isneginf()
+            if mask.any():
+                log.warn('Masking local energies where psi = 0')
+                Es_loc = Es_loc.where(mask, Es_loc.new_tensor(0))
             Es_loc_loss = log_clipped_outliers(Es_loc, q) if clip_outliers else Es_loc
             loss = loss_func(Es_loc_loss, log_psis, normalize_mean(log_ws.exp()))
             loss.backward()
