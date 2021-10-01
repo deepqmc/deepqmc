@@ -393,6 +393,10 @@ class PauliNet(WaveFunction):
                 xs = det_up + det_down
                 xs_shift = xs.flatten(start_dim=1).max(dim=-1).values
                 # the exp-normalize trick, to avoid over/underflow of the exponential
+                xs_shift = xs_shift.where(
+                    ~torch.isinf(xs_shift), xs_shift.new_tensor(0)
+                )
+                # replace -inf shifts, to avoid running into nans (see sloglindet)
                 xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None, None])
             else:
                 det_up = eval_slater(det_up)
