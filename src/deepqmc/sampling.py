@@ -463,7 +463,7 @@ class LangevinSampler(MetropolisSampler):
             raise
         # mask out nan forces to increase code stability
         mask = ~log_psis.isneginf()[:, None, None]
-        if mask.any():
+        if not mask.all():
             log.warn('Masking forces where psi = 0')
             forces = forces.where(mask, forces.new_tensor(0))
         forces = clean_force(forces, rs, self.wf.mol, tau=self.tau)
