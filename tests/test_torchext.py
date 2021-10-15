@@ -29,6 +29,38 @@ class TestDet:
         assert torch.autograd.gradcheck(func, xs)
 
 
+class TestSloglindet:
+    @pytest.fixture
+    def xs(self):
+        return (
+            torch.randn(10).double().requires_grad_(),
+            torch.randn(10, 4, 4).double().requires_grad_(),
+            torch.randn(10, 3, 3).double().requires_grad_(),
+        )
+
+    def test_1st_deriv(self, xs):
+        assert torch.autograd.gradcheck(torchext.sloglindet, xs)
+
+    def test_2nd_deriv(self, xs):
+        assert torch.autograd.gradgradcheck(torchext.sloglindet, xs)
+
+
+class TestSloglindet1:
+    @pytest.fixture
+    def xs(self):
+        return (
+            torch.randn(10).double().requires_grad_(),
+            torch.randn(10, 4, 4).double().requires_grad_(),
+            torch.randn(10, 1, 1).double().requires_grad_(),
+        )
+
+    def test_1st_deriv(self, xs):
+        assert torch.autograd.gradcheck(torchext.sloglindet, xs)
+
+    def test_2nd_deriv(self, xs):
+        assert torch.autograd.gradgradcheck(torchext.sloglindet, xs)
+
+
 def test_pow_int():
     xs = torch.randn(4, 3)
     exps = torch.tensor([(1, 2, 3), (0, 1, 2)])
