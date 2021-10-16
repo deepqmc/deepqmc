@@ -176,8 +176,7 @@ class PauliNet(WaveFunction):
         if freeze_embed:
             self.requires_grad_embeddings_(False)
         self.n_determinants = len(self.confs) * backflow_channels
-        else:
-            self.use_sloglindet = use_sloglindet
+        self.use_sloglindet = use_sloglindet
 
     def requires_grad_classes_(self, classes, requires_grad):
         for m in self.modules():
