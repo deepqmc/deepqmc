@@ -176,12 +176,6 @@ class PauliNet(WaveFunction):
         if freeze_embed:
             self.requires_grad_embeddings_(False)
         self.n_determinants = len(self.confs) * backflow_channels
-        if n_up <  1 or n_down <  1:
-            self.use_sloglindet = 'never'
-            log.warning(
-                'Setting use_sloglindet to "never" as not implemented for n=0.'
-            )
-        # TODO implement sloglindet for special cases n=0 and n=1
         else:
             self.use_sloglindet = use_sloglindet
 

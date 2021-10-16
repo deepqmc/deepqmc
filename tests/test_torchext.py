@@ -34,8 +34,8 @@ class TestSloglindet:
     def xs(self):
         return (
             torch.randn(10).double().requires_grad_(),
-            torch.randn(10, 4, 4).double().requires_grad_(),
             torch.randn(10, 3, 3).double().requires_grad_(),
+            torch.randn(10, 2, 2).double().requires_grad_(),
         )
 
     def test_1st_deriv(self, xs):
@@ -50,8 +50,24 @@ class TestSloglindet1:
     def xs(self):
         return (
             torch.randn(10).double().requires_grad_(),
-            torch.randn(10, 4, 4).double().requires_grad_(),
+            torch.randn(10, 2, 2).double().requires_grad_(),
             torch.randn(10, 1, 1).double().requires_grad_(),
+        )
+
+    def test_1st_deriv(self, xs):
+        assert torch.autograd.gradcheck(torchext.sloglindet, xs)
+
+    def test_2nd_deriv(self, xs):
+        assert torch.autograd.gradgradcheck(torchext.sloglindet, xs)
+
+
+class TestSloglindet0:
+    @pytest.fixture
+    def xs(self):
+        return (
+            torch.randn(10).double().requires_grad_(),
+            torch.randn(10, 2, 2).double().requires_grad_(),
+            torch.randn(10, 0, 0).double().requires_grad_(),
         )
 
     def test_1st_deriv(self, xs):

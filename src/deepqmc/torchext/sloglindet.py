@@ -54,7 +54,7 @@ def _slogcof(A):
     # so we do everything on a CPU
     U, s, V = (x.to(A.device) for x in A.cpu().svd())
     sgn_UV = U.det().sign() * V.det().sign()
-    if A.shape[-1] == 1:
+    if A.shape[-1] <= 1:
         sl_C = torch.ones_like(A), torch.zeros_like(A)
     else:
         log_g = log_gamma(s)
@@ -83,8 +83,6 @@ class SLogLinearDet(torch.autograd.Function):
         assert A1.shape[:-3] == A2.shape[:-3]
         assert A1.shape[-1] == A1.shape[-2]
         assert A2.shape[-1] == A2.shape[-2]
-        # TODO deal with special cases of n = 0
-        assert A1.shape[-1] > 0 and A2.shape[-1] > 0
         sl_D1 = A1.slogdet()
         sl_D2 = A2.slogdet()
         sl_D = sl_D1[0] * sl_D2[0], sl_D1[1] + sl_D2[1]
@@ -153,6 +151,8 @@ class SLogLinearDetBackward(torch.autograd.Function):
 
 
 def _double_backward_det(Abt, U, V, sgn_UV, s, sl_C, sl_Db):
+    if Abt.shape[-1] == 0:
+        return (torch.zeros_like(sgn_UV), torch.zeros_like(sgn_UV)), torch.zeros_like(U)
     if Abt.shape[-1] == 1:
         return slog(Abt[..., 0, 0]), torch.zeros_like(U)
     sl_Abt = slog(Abt)
