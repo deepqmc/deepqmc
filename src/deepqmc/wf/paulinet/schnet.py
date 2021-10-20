@@ -162,7 +162,7 @@ class ElectronicSchNet(nn.Module):
     :math:`\mathbf h^{(n)}_{\boldsymbol\theta}`, and
     :math:`\mathbf g_{\boldsymbol\theta}^{(n)}` are trainable functions
     represented by vanilla fully-connected (deep) neural networks,
-    :math:`\mathbf Y_{\boldsymbol\theta},I}` are nuclear embeddings, and
+    :math:`\mathbf Y_{\boldsymbol\theta,I}` are nuclear embeddings, and
     :math:`\mathbf e` are distance features.
 
     Args:
