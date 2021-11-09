@@ -35,28 +35,27 @@ toml = "^0.10.0"
 uncertainties = "^3.1.2"
 numpy = "^1.16"
 torch = "^1.2"
-scipy = { version = "^1.2", optional = true }
-pyscf = { version = "^1.6", optional = true, allow-prereleases = true }
+scipy = { version = "^1", optional = true }
+pyscf = { version = "^2", optional = true }
 pytest = { version = ">=5 <7", optional = true }
 coverage = { version = ">=4.5 <6", optional = true }
-tensorboard = { version = "^2.0", optional = true }
-tqdm = { version = "^4.31", optional = true }
-h5py = { version = ">=2.10.0 <3.3", optional = true }
+tensorboard = { version = "^2", optional = true }
+tqdm = { version = "^4", optional = true }
 sphinx = { version = "^2.2", optional = true }
 Pillow = { version = ">=7 <9", optional = true }
 sphinxcontrib-katex = { version = "^0.8", optional = true }
-click = { version = "^7.0", optional = true }
-tomlkit = { version = "^0.7.0", optional = true }
+click = { version = "^8", optional = true }
+tomlkit = { version = "^0.7", optional = true }
 docutils = { version = "<0.18", optional = true }
 # 0.18 seems to be crashing sphinx 2.4.4
 
 [tool.poetry.extras]
 wf = ["scipy", "pyscf"]
 test = ["pytest", "coverage"]
-train = ["tensorboard", "tqdm", "h5py", "Pillow"]
+train = ["tensorboard", "tqdm", "Pillow"]
 cli = ["click", "tomlkit"]
 doc = ["sphinx", "sphinxcontrib-katex", "docutils"]
-all = ["scipy", "pyscf", "pytest", "coverage", "tensorboard", "tqdm", "h5py", "Pillow", "click", "tomlkit"]
+all = ["scipy", "pyscf", "pytest", "coverage", "tensorboard", "tqdm", "Pillow", "click", "tomlkit"]
 
 [tool.poetry.dev-dependencies]
 flake8 = "^3.5"
