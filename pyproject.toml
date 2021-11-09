@@ -47,13 +47,15 @@ Pillow = { version = ">=7 <9", optional = true }
 sphinxcontrib-katex = { version = "^0.5.1", optional = true }
 click = { version = "^7.0", optional = true }
 tomlkit = { version = "^0.7.0", optional = true }
+docutils = { version = "<0.18", optional = true }
+# 0.18 seems to be crashing sphinx 2.4.4
 
 [tool.poetry.extras]
 wf = ["scipy", "pyscf"]
 test = ["pytest", "coverage"]
 train = ["tensorboard", "tqdm", "h5py", "Pillow"]
 cli = ["click", "tomlkit"]
-doc = ["sphinx", "sphinxcontrib-katex"]
+doc = ["sphinx", "sphinxcontrib-katex", "docutils"]
 all = ["scipy", "pyscf", "pytest", "coverage", "tensorboard", "tqdm", "h5py", "Pillow", "click", "tomlkit"]
 
 [tool.poetry.dev-dependencies]
