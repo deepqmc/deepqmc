@@ -1,0 +1,137 @@
+\documentclass{article}
+\usepackage{mathtools}
+\usepackage{amssymb}
+\usepackage{tensor}
+\usepackage{tikz-cd}
+
+\begin{document}
+
+\section*{Double backward of a function composition}
+
+In a reverse autodiff, given a forward function $g\circ f:\mathbf x\rightarrow \mathbf y\rightarrow \mathbf z$, one needs to implement a backward function $B[g\circ f]:(\bar{\mathbf z},\mathbf x)\rightarrow\bar{\mathbf x}$, where $\bar\square\equiv{\partial L_0(\mathbf z)}/{\partial \square}$ and $L_0$ is some arbitrary unknown function.
+A double backward is simply the backward of $B[g\circ f]$, that is, $B^2[g\circ f]:(\tilde{\bar{\mathbf x}},\bar{\mathbf z},\mathbf x)\rightarrow(\tilde{\bar{\mathbf z}},\tilde{\mathbf x})$, where $\tilde{\bar \square}\equiv{\partial L_1(\bar{\mathbf x})}/{\partial\bar\square}$, $\tilde\square\equiv{\partial L_1(\bar{\mathbf x})}/{\partial\square}$.
+
+Einstein notation is used:
+$$
+\frac{\partial f^i(\mathbf x)}{\partial x^j}\equiv f\indices{^\prime^i_j}(\mathbf x),\qquad
+\frac{\partial^2f^i(\mathbf x)}{\partial x^j\partial x^k}\equiv f\indices{^{\prime\prime}^i_{jk}}(\mathbf x),\qquad
+\sum_j A_{ij}x^j\equiv A_{ij}x^j
+$$
+
+\paragraph{Forward \& backward}
+
+\begin{tikzcd}
+x^i \ar[r,"f"]\ar[d]
+& f^\mu(\mathbf x)=y^\mu \ar[r,"g"]\ar[d]
+& g^a(\mathbf y)=z^a 
+\\
+\bar x_i=\bar y_\mu f\indices{^\prime^\mu_i}(\mathbf x) & \bar y_\mu=\bar z_ag\indices{^\prime^a_\mu}(\mathbf y) \ar[l,"B\lbrack f\rbrack"'] & \bar z_a \ar[l,"B\lbrack g\rbrack"']
+\end{tikzcd}
+
+\paragraph{Double backward}
+
+\begin{tikzcd}
+\tilde{\bar x}^i \ar[r,"B^2_{(1)}\lbrack f\rbrack"] \ar[rd,"B^2_{(2)}\lbrack f\rbrack"']
+& f\indices{^\prime^\mu_i}(\mathbf x)\tilde{\bar x}^i=\tilde{\bar y}^\mu \ar[r,"B^2_{(1)}\lbrack g\rbrack"] \ar[rd,"B^2_{(2)}\lbrack g\rbrack"]
+& g\indices{^\prime^a_\mu}(\mathbf y)\tilde{\bar y}^\mu=\tilde{\bar z}^a
+\\
+& \bar y_\mu f\indices{^{\prime\prime}^\mu_{ij}}(\mathbf x)\tilde{\bar x}^j=\tilde x_i \ar[rd]
+& \bar z_a g\indices{^{\prime\prime}^a_{\mu\nu}}(\mathbf y)\tilde{\bar y}^\nu=\tilde y_\mu \ar[d]
+\\
+& & \tilde x_i:=\tilde x_i+\underbrace{\tilde y_\mu f\indices{^\prime^\mu_i}(\mathbf x)}_{=B[f]_i(\tilde{\mathbf y})}
+\end{tikzcd}
+
+\section*{\texttt{SLogLinearDet}}
+
+\paragraph{Forward}
+$$
+f(\mathbf A):=\det\mathbf A\equiv D,\qquad
+%
+\frac{\partial D}{\partial A^{ij}}
+\equiv f'_{ij}
+=(\operatorname{Cof}\mathbf A)_{ij}
+\equiv C_{ij}
+$$
+%
+$$
+g(\mathbf c,\mathbf D):=\ln c_pD^p,\qquad
+\frac{\partial g}{\partial c_p}\equiv g'^p=\Psi^{-1}D^p,\quad
+\frac{\partial g}{\partial D^p}\equiv g'_{p}=\Psi^{-1}c_p
+$$
+%
+$$
+F(\mathbf c,\mathbf A^q)
+:=g(\mathbf c,f(\mathbf A^q))
+=\ln c_p\det\mathbf A^p\equiv\ln\Psi\equiv P
+$$
+\paragraph{Backward}
+$$
+\begin{aligned}
+B[g]^p(\bar P)\equiv\bar Pg'^p\equiv\bar c^p&=\bar P\Psi^{-1}D^p \\
+B[g]_p(\bar P)\equiv\bar Pg'_p\equiv\bar D_p&=\bar P\Psi^{-1}c_p \\
+B[f]_{ij}(\bar D)\equiv\bar Df'_{ij}\equiv\bar A_{ij}&=\bar DC_{ij} \\
+B[F]^p(\bar P)\equiv\bar c^p&=B[g]^p(\bar P) \\
+B[F]_{pij}(\bar P)
+=\bar A_{pij}
+&=B[f]_{ij}(\bar D_p)
+\leftarrow\bar D_p=B[g]_p(\bar P)
+\end{aligned}
+$$
+\paragraph{Double backward}
+$$
+f''_{ij,kl}=A^{-1}_{ji}C_{kl}-A^{-1}_{li}C_{kj}
+$$
+%
+$$
+g''^{pq}=-\Psi^{-2}D^pD^q,\quad
+g''_{pq}=-\Psi^{-2}c_pc_q,\quad
+g''^p_q=-\Psi^{-2}D^pc_q+\Psi^{-1}\delta^p_q
+$$
+%
+$$
+\begin{aligned}
+B_{(1)}^2[f](\tilde{\bar{\mathbf A}})
+\equiv f'_{ij}\tilde{\bar A}^{ij}
+\equiv\tilde{\bar D}
+&=C_{ij}\tilde{\bar A}^{ij}
+=\operatorname{Tr}[\mathbf C\tilde{\bar{\mathbf A}}^\mathrm T]
+\\
+B_{(2)}^2[f]_{ij}(\tilde{\bar{\mathbf A}})
+\equiv\bar Df''_{ij,kl}\tilde{\bar A}^{kl}
+\equiv\tilde A_{ij}&=
+\bar D(A^{-\mathrm T}_{ij}C_{kl}\tilde{\bar A}^{kl}-A^{-\mathrm T}_{il}\tilde{\bar A}^{kl}C_{kj}) \\
+&=\bar D\{\mathbf A^{-\mathrm T}(\operatorname{Tr}[\mathbf C\tilde{\bar{\mathbf A}}^\mathrm T]\mathbf I-\tilde{\bar{\mathbf A}}^\mathrm T\mathbf C)\}_{ij}\ (\equiv\bar DY_{ij})
+\\
+B_{(1)}^2[g](\tilde{\bar{\mathbf c}},\tilde{\bar{\mathbf D}})
+\equiv g'^p\tilde{\bar c}_p+g'_p\tilde{\bar D}^p
+\equiv\tilde{\bar P}
+&=\Psi^{-1}D^p\tilde{\bar c}_p+\Psi^{-1}c_p\tilde{\bar D}^p=\Psi^{-1}(\mathbf D\cdot\tilde{\bar{\mathbf c}}+\mathbf c\cdot\tilde{\bar{\mathbf D}})
+\\
+B_{(2)}^2[g]^p(\tilde{\bar{\mathbf c}},\tilde{\bar{\mathbf D}})
+\equiv\bar P(g''^{pq}\tilde{\bar c}_q+g''^p_q\tilde{\bar D}^q)
+\equiv\tilde c^p
+&=\bar P(-\Psi^{-2}D^pD^q\tilde{\bar c}_q+(-\Psi^{-2}D^pc_q+\Psi^{-1}\delta^p_q)\tilde{\bar D}^q) \\
+&=\bar P(-\Psi^{-2}(\mathbf D\cdot\tilde{\bar{\mathbf c}}+\mathbf c\cdot\tilde{\bar{\mathbf D}})\mathbf D+\Psi^{-1}\tilde{\bar{\mathbf D}})^p
+\\
+B_{(2)}^2[g]_p(\tilde{\bar{\mathbf c}},\tilde{\bar{\mathbf D}})
+\equiv\bar P(g''^q_p\tilde{\bar c}_q+g''_{pq}\tilde{\bar D}^q)
+\equiv\tilde D_p
+&=\bar P((-\Psi^{-2}D^qc_p+\Psi^{-1}\delta^q_p)\tilde{\bar c}_q-\Psi^{-2}c_pc_q\tilde{\bar D}^q) \\
+&=\bar P(-\Psi^{-2}(\mathbf D\cdot\tilde{\bar{\mathbf c}}+\mathbf c\cdot\tilde{\bar{\mathbf D}})\mathbf c+\Psi^{-1}\tilde{\bar{\mathbf c}})_p
+\\
+B_{(1)}^2[F](\tilde{\bar{\mathbf c}},\tilde{\bar{\mathbf A}}^q)
+\equiv\tilde{\bar P}
+&=B_{(1)}^2[g](\tilde{\bar{\mathbf c}},\tilde{\bar{\mathbf D}})
+\leftarrow\tilde{\bar D}^p=B^2_{(1)}[f](\tilde{\bar{\mathbf A}}^p)
+\\
+B_{(2)}^2[F]^p(\tilde{\bar{\mathbf c}},\tilde{\bar{\mathbf A}}^q)
+\equiv\tilde c^p
+&=B^2_{(2)}[g]^p(\tilde{\bar{\mathbf c}},\tilde{\bar{\mathbf D}})
+\\
+B_{(2)}^2[F]_{pij}(\tilde{\bar{\mathbf c}},\tilde{\bar{\mathbf A}}^q)
+\equiv\tilde A_{pij}
+&=B^2_{(2)}[f]_{ij}(\tilde{\bar{\mathbf A}}^p)+B^2_{(2)}[g]_p(\tilde{\bar{\mathbf c}},\tilde{\bar{\mathbf D}})C_{pij}
+\end{aligned}
+$$
+
+\end{document}
