@@ -1,4 +1,5 @@
 import copy
+
 import torch
 
 from deepqmc import Molecule, evaluate, train

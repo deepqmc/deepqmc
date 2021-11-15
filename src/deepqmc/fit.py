@@ -155,11 +155,9 @@ def fit_wf(  # noqa: C901
                 Es_loc = Es_loc.where(mask, Es_loc.new_tensor(0))
             Es_loc_loss = log_clipped_outliers(Es_loc, q) if clip_outliers else Es_loc
             loss = loss_func(Es_loc_loss, log_psis, normalize_mean(log_ws.exp()))
-
             # The convention is that `loss_func` returns an *average* loss over
             # all the inputs. We scale it so that it works with subbatching.
             loss *= len(rs) / batch_size
-
             loss.backward()
             wf.sample(True)
             subbatches.append(
