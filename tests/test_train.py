@@ -1,3 +1,6 @@
+import copy
+import torch
+
 from deepqmc import Molecule, evaluate, train
 from deepqmc.wf import PauliNet
 
@@ -54,3 +57,45 @@ def test_simple_example(tmp_path):
         sample_kwargs={'equilibrate': False, 'block_size': 1},
         sampler_kwargs={'n_decorrelate': 0, 'n_first_certain': 0},
     )
+
+
+def test_invariance_to_subbatch_size(tmp_path):
+    batch_size = 1000
+
+    # For determinism we work on CPU and compute the Hartree-Fock solution once.
+    mol = Molecule.from_name('LiH')
+    net = PauliNet.from_hf(mol, cas=(4, 2), conf_limit=2).cpu()
+
+    state = copy.deepcopy(net.state_dict())
+    params_orig = copy.deepcopy(list(net.parameters()))
+
+    def get_total_gradient_norm(subbatch_size: int):
+        torch.manual_seed(0)
+        net.load_state_dict(state)
+
+        train(
+            net,
+            n_steps=1,
+            batch_size=batch_size,
+            epoch_size=1,
+            optimizer='SGD',  # Loss scale variance would be hidden with Adam.
+            equilibrate=False,
+            workdir=tmp_path,
+            fit_kwargs={'subbatch_size': subbatch_size},
+            sampler_kwargs={
+                'sample_size': batch_size,
+                'n_discard': 0,
+                'n_decorrelate': 0,
+                'n_first_certain': 0,
+            },
+        )
+
+        params = list(net.parameters())
+        return sum((p1 - p2).norm() for p1, p2 in zip(params, params_orig))
+
+    grad_norm_1 = get_total_gradient_norm(subbatch_size=50)
+    grad_norm_2 = get_total_gradient_norm(subbatch_size=1000)
+
+    # We accept relative variation up to a factor of 5. If the loss/gradients
+    # scaled with subbatch size instead, then the expected ratio would be 20.
+    assert torch.isclose(grad_norm_1, grad_norm_2, rtol=5.0)
