@@ -27,12 +27,14 @@ jobs:
           echo VIRTUAL_ENV=$PWD/venv >>$GITHUB_ENV
           echo $PWD/venv/bin >>$GITHUB_PATH
           echo venv >>.git/info/exclude
+      - name: Set year/month
+        run: echo YEAR_MONTH=$(date +"%Y-%m") >>$GITHUB_ENV
       - uses: actions/cache@v2
         with:
           path: |
             ${{ env.VIRTUAL_ENV }}/bin
             ${{ env.VIRTUAL_ENV }}/lib/python${{ matrix.python-version }}/site-packages
-          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}-211001
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}-${{ env.YEAR_MONTH }}
       - name: Build
         run: poetry build
       - name: Install
