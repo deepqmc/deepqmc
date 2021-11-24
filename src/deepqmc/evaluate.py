@@ -36,14 +36,13 @@ def evaluate(
         store_steps (bool): whether to store individual sampled electron configuraitons
         workdir (str): path where to store Tensorboard event file and HDF5 file with
             sampling block energies
+        log_dict (dict-like): dictionary to store the step data
         n_steps (int): number of sampling steps
         sample_size (int): number of Markov-chain walkers
-        n_decorrelate (int): number of extra steps between samples included
-            in the expectation value averaging
-        sampler_kwargs (dict): extra arguments passed to
-            :class:`~deepqmc.sampling.LangevinSampler`
         sample_kwargs (dict): extra arguments passed to
             :func:`~deepqmc.sampling.sample_wf`
+        sampler_kwargs (dict): extra arguments passed to
+            :class:`~deepqmc.sampling.LangevinSampler`
 
     Returns:
         dict: Expectation values with standard errors.
