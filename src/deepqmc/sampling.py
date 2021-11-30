@@ -375,13 +375,14 @@ def sort_nucleus_indices(idx, mol):
     # this heuristic takes nuclear indices for placing electrons and sorts them
     # such that the local spin of the electrons is minimized
     dev = idx.device
-    available = idx.bincount()
+    selection = idx.bincount(minlength=len(mol.charges))
+    available = selection
     n_down = (len(idx) - mol.spin) // 2
     n_nuclei = len(available)
     assigned = torch.tensor([], dtype=torch.long, device=dev)
     # assign core electron pairs to all nuclei with more than one electron
     for j in range(int(available.max()) // 2):
-        mask = idx.bincount() >= 2 * (j + 1)
+        mask = selection  >= 2 * (j + 1)
         if sum(mask).item() <= n_down - len(assigned):
             assigned = torch.cat((assigned, torch.arange(n_nuclei, device=dev)[mask]))
             available -= torch.ones(n_nuclei, device=dev, dtype=torch.long) * 2 * mask
