@@ -25,6 +25,11 @@ def normalize_mean(x):
     return x / x.mean()
 
 
+def exp_normalize_mean(x):
+    x_shifted = x - x.max()
+    return x_shifted.exp() / x_shifted.exp().mean()
+
+
 def weighted_mean_var(xs, ws):
     ws = normalize_mean(ws)
     mean = (ws * xs).mean()

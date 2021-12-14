@@ -11,8 +11,8 @@ from .errors import DeepQMCError, NanError
 from .physics import local_energy
 from .torchext import (
     estimate_optimal_batch_size_cuda,
+    exp_normalize_mean,
     is_cuda,
-    normalize_mean,
     weighted_mean_var,
 )
 
@@ -154,7 +154,7 @@ def fit_wf(  # noqa: C901
                 log.warn('Masking local energies where psi = 0')
                 Es_loc = Es_loc.where(mask, Es_loc.new_tensor(0))
             Es_loc_loss = log_clipped_outliers(Es_loc, q) if clip_outliers else Es_loc
-            loss = loss_func(Es_loc_loss, log_psis, normalize_mean(log_ws.exp()))
+            loss = loss_func(Es_loc_loss, log_psis, exp_normalize_mean(log_ws))
             # The convention is that `loss_func` returns an *average* loss over
             # all the inputs. We scale it so that it works with subbatching.
             loss *= len(rs) / batch_size
