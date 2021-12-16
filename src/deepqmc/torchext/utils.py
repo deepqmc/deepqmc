@@ -30,8 +30,8 @@ def exp_normalize_mean(x):
     return x_shifted.exp() / x_shifted.exp().mean()
 
 
-def weighted_mean_var(xs, ws):
-    ws = normalize_mean(ws)
+def weighted_mean_var(xs, log_ws):
+    ws = exp_normalize_mean(log_ws)
     mean = (ws * xs).mean()
     return mean, (ws * (xs - mean) ** 2).mean()
 

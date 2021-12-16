@@ -182,7 +182,7 @@ def fit_wf(  # noqa: C901
         loss = loss.sum()
         if max_grad_norm is not None:
             clip_grad_norm_(wf.parameters(), max_grad_norm)
-        E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, log_ws.exp())
+        E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, log_ws)
         E_loc_err = torch.sqrt(E_loc_var / len(Es_loc))
         lr = opt.state_dict()['param_groups'][0]['lr']
         if writer:
@@ -191,9 +191,7 @@ def fit_wf(  # noqa: C901
             writer.add_scalar('E_loc/min', Es_loc.min(), step)
             writer.add_scalar('E_loc/max', Es_loc.max(), step)
             writer.add_scalar('E_loc/err', E_loc_err, step)
-            E_loc_loss_mean, E_loc_loss_var = weighted_mean_var(
-                Es_loc_loss, log_ws.exp()
-            )
+            E_loc_loss_mean, E_loc_loss_var = weighted_mean_var(Es_loc_loss, log_ws)
             writer.add_scalar('E_loc_loss/mean', E_loc_loss_mean, step)
             writer.add_scalar('E_loc_loss/var', E_loc_loss_var, step)
             writer.add_scalar('loss', loss, step)
