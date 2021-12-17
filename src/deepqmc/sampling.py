@@ -410,6 +410,8 @@ def rand_from_mol(mol, bs, pop_charges=None, elec_std=1.0):
     cs = charges
     if pop_charges is not None:
         cs = cs - pop_charges
+    else:
+        cs = cs - mol.charge / len(charges)
     base = cs.floor()
     repeats = base.to(torch.long)[None, :].repeat(bs, 1)
     rem = cs - base
