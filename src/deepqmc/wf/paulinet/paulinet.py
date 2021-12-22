@@ -266,7 +266,7 @@ class PauliNet(WaveFunction):
             confs = [
                 [
                     torch.arange(n_dbl, dtype=torch.long).expand(len(conf_coeff), -1),
-                    torch.tensor(cfs, dtype=torch.long) + n_dbl,
+                    torch.tensor(np.array(cfs), dtype=torch.long) + n_dbl,
                 ]
                 for n_dbl, cfs in zip(ns_dbl, confs)
             ]
@@ -362,7 +362,7 @@ class PauliNet(WaveFunction):
         det_down = xs[:, :, self.n_up :, conf_down].transpose(-3, -2)
         if fs is not None and self.backflow_type == 'det':
             n_conf = len(self.confs)
-            fs = fs.unflatten(1, ((None, fs.shape[1] // n_conf), (None, n_conf)))
+            fs = fs.unflatten(1, (fs.shape[1] // n_conf, n_conf))
             det_up = self._backflow_op(det_up, fs[..., : self.n_up, : self.n_up])
             det_down = self._backflow_op(det_down, fs[..., self.n_up :, : self.n_down])
             # with open-shell systems, part of the backflow output is not used
