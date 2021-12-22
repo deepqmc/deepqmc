@@ -41,6 +41,7 @@ torch = "^1.10"
 scipy = { version = "^1", optional = true }
 pyscf = { version = "^2", optional = true }
 pytest = { version = ">=5 <7", optional = true }
+pytest-regressions = { version = "^2.2", optional = true, extras = ["num"] }
 coverage = { version = ">=4.5 <6", optional = true }
 tensorboard = { version = "^2", optional = true }
 tqdm = { version = "^4", optional = true }
@@ -54,11 +55,11 @@ docutils = { version = "<0.18", optional = true }
 
 [tool.poetry.extras]
 wf = ["scipy", "pyscf"]
-test = ["pytest", "coverage"]
+test = ["pytest", "pytest-regressions", "coverage"]
 train = ["tensorboard", "tqdm", "Pillow"]
 cli = ["click", "tomlkit"]
 doc = ["sphinx", "sphinxcontrib-katex", "docutils"]
-all = ["scipy", "pyscf", "pytest", "coverage", "tensorboard", "tqdm", "Pillow", "click", "tomlkit"]
+all = ["scipy", "pyscf", "pytest", "pytest-regressions", "coverage", "tensorboard", "tqdm", "Pillow", "click", "tomlkit"]
 
 [tool.poetry.dev-dependencies]
 flake8 = "^3.5"
