@@ -201,7 +201,7 @@ class ElectronicSchNet(nn.Module):
             :math:`\mathbf h^{(\cdot)}` subnetworks
     """
 
-    layer_factories = {
+    LAYER_FACTORIES = {
         1: SchNetLayer,
         2: SchNetSpinLayer,
     }
@@ -221,7 +221,7 @@ class ElectronicSchNet(nn.Module):
         version=2,
         layer_norm=False,
     ):
-        assert version in self.layer_factories
+        assert version in self.LAYER_FACTORIES
         subnet_metafactory = subnet_metafactory or SubnetFactory
         subnet_factory = subnet_metafactory(dist_feat_dim, kernel_dim, embedding_dim)
         super().__init__()
@@ -231,7 +231,7 @@ class ElectronicSchNet(nn.Module):
         self.Y = nn.Embedding(n_nuclei, kernel_dim)
         self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
         self.layers = nn.ModuleList(
-            self.layer_factories[version](subnet_factory, n_up)
+            self.LAYER_FACTORIES[version](subnet_factory, n_up)
             for _ in range(n_interactions)
         )
         self.layer_norms = (
