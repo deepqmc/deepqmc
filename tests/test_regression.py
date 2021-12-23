@@ -4,9 +4,8 @@ import pytest
 import torch
 
 from deepqmc import Molecule
-from deepqmc.extra.debug import NestedDict
+from deepqmc.app import ansatz_from_name
 from deepqmc.sampling import rand_from_mol
-from deepqmc.wf import ANSATZES
 
 
 @pytest.fixture
@@ -58,10 +57,14 @@ def rs(mol):
     else x,
 )
 def test(ansatz, kwargs, mol, rs, num_regression, request):
-    ansatz = ANSATZES[ansatz]
-    _kwargs = NestedDict()
-    for k, v in kwargs.items():
-        _kwargs[k] = v
+    kwargs = {
+        k.replace('omni_kwargs.omni_schnet', 'omni_factory')
+        .replace('schnet_kwargs', 'schnet_factory')
+        .replace('jastrow_kwargs', 'jastrow_factory')
+        .replace('backflow_kwargs', 'backflow_factory')
+        .replace('subnet_kwargs', 'schnet_factory.subnet_metafactory'): v
+        for k, v in kwargs.items()
+    }
     workdir = (
         Path(request.fspath.dirname)
         / 'workdirs'
@@ -73,7 +76,7 @@ def test(ansatz, kwargs, mol, rs, num_regression, request):
             else 'default'
         )
     )
-    wf = ansatz.entry(mol, workdir=workdir, **_kwargs)
+    wf = ansatz_from_name(ansatz, mol, workdir=str(workdir), **kwargs)
     torch.manual_seed(0)
     for _, p in sorted(wf.named_parameters()):
         if p.requires_grad:
