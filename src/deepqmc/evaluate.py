@@ -1,3 +1,4 @@
+from functools import partial
 from itertools import count
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from uncertainties import unumpy as unp
 from .sampling import LangevinSampler, sample_wf
 from .utils import H5LogTable
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __all__ = ['evaluate']
 
 
@@ -19,6 +20,7 @@ def evaluate(
     store_steps=False,
     workdir=None,
     log_dict=None,
+    sampler_factory=None,
     *,
     n_steps=500,
     sample_size=1_000,
@@ -56,13 +58,14 @@ def evaluate(
         table_steps = H5LogTable(h5file.require_group('steps'))
     else:
         writer = None
-    sampler = LangevinSampler.from_wf(
-        wf,
-        sample_size=sample_size,
-        writer=writer,
-        n_discard=0,
-        **{'n_decorrelate': 4, **(sampler_kwargs or {})},
-    )
+    if not sampler_factory:
+        sampler_factory = partial(
+            LangevinSampler.from_wf,
+            sample_size=sample_size,
+            n_discard=0,
+            **{'n_decorrelate': 4, **(sampler_kwargs or {})},
+        )
+    sampler = sampler_factory(wf, writer=writer)
     steps = tqdm(count(), desc='equilibrating', disable=None)
     blocks = []
     try:

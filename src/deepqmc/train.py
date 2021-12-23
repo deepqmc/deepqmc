@@ -19,7 +19,7 @@ from .sampling import LangevinSampler, sample_wf
 from .torchext import is_cuda
 from .utils import H5LogTable
 
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 __all__ = ['train']
 
 log = logging.getLogger(__name__)
@@ -68,6 +68,9 @@ def train(  # noqa: C901
     return_every=None,
     chkpts=None,
     fit=None,
+    optimizer_factory=None,
+    scheduler_factory=None,
+    sampler_factory=None,
     *,
     n_steps=10_000,
     batch_size=10_000,
@@ -115,7 +118,9 @@ def train(  # noqa: C901
         sampler_kwargs (dict): arguments passed to
             :class:`~deepqmc.sampling.LangevinSampler`
     """
-    if 'optimizer_factory' in PLUGINS:
+    if optimizer_factory:
+        opt = optimizer_factory(wf.parameters())
+    elif 'optimizer_factory' in PLUGINS:
         log.info('Using a plugin for optimizer_factory')
         opt = PLUGINS['optimizer_factory'](wf.parameters())
     else:
@@ -130,7 +135,9 @@ def train(  # noqa: C901
         opt = getattr(torch.optim, optimizer)(
             wf.parameters(), lr=learning_rate, **optimizer_kwargs
         )
-    if 'scheduler_factory' in PLUGINS:
+    if scheduler_factory:
+        scheduler = scheduler_factory(opt)
+    elif 'scheduler_factory' in PLUGINS:
         log.info('Using a plugin for scheduler_factory')
         scheduler = PLUGINS['scheduler_factory'](opt)
     elif lr_scheduler:
@@ -177,7 +184,9 @@ def train(  # noqa: C901
     else:
         writer = None
         log_dict = {}
-    if 'sampler_factory' in PLUGINS:
+    if sampler_factory:
+        sampler = sampler_factory(wf, writer=writer)
+    elif 'sampler_factory' in PLUGINS:
         log.info('Using a plugin for sampler_factory')
         sampler = PLUGINS['sampler_factory'](wf, writer=writer)
     else:

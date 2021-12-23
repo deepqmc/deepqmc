@@ -7,7 +7,7 @@ from deepqmc.torchext import SSP, get_log_dnn
 
 from .schnet import ElectronicSchNet, SubnetFactory
 
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 __all__ = ['OmniSchNet']
 
 
@@ -214,6 +214,9 @@ class OmniSchNet(nn.Module):
         n_down,
         n_orbitals,
         n_backflows,
+        schnet_factory=None,
+        jastrow_factory=None,
+        backflow_factory=None,
         *,
         embedding_dim=128,
         jastrow='many-body',
@@ -229,15 +232,14 @@ class OmniSchNet(nn.Module):
         assert not jastrow or jastrow in ['mean-field', 'many-body']
         assert not backflow or backflow in ['mean-field', 'many-body']
         super().__init__()
-        self.schnet = (
-            ElectronicSchNet(
-                n_up,
-                n_down,
-                n_atoms,
-                embedding_dim,
+        if not schnet_factory:
+            schnet_factory = partial(
+                ElectronicSchNet,
                 subnet_metafactory=partial(SubnetFactory, **(subnet_kwargs or {})),
                 **(schnet_kwargs or {}),
             )
+        self.schnet = (
+            schnet_factory(n_up, n_down, n_atoms, embedding_dim)
             if 'many-body' in [jastrow, backflow]
             else None
         )
@@ -256,14 +258,15 @@ class OmniSchNet(nn.Module):
         embedding_dim = {'mean-field': mf_embedding_dim, 'many-body': embedding_dim}
         self.jastrow_type = jastrow
         if jastrow:
-            self.jastrow = Jastrow(embedding_dim[jastrow], **(jastrow_kwargs or {}))
+            if not jastrow_factory:
+                jastrow_factory = partial(Jastrow, **(jastrow_kwargs or {}))
+            self.jastrow = jastrow_factory(embedding_dim[jastrow])
         self.backflow_type = backflow
         if backflow:
-            self.backflow = Backflow(
-                embedding_dim[backflow],
-                n_orbitals,
-                n_backflows,
-                **(backflow_kwargs or {}),
+            if not backflow_factory:
+                backflow_factory = partial(Backflow, **(backflow_kwargs or {}))
+            self.backflow = backflow_factory(
+                embedding_dim[backflow], n_orbitals, n_backflows
             )
 
     def forward(self, dists_nuc, dists_elec):
