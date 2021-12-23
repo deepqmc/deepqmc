@@ -151,7 +151,7 @@ def fit_wf(  # noqa: C901
             # mask out samples with zero weight to increase code stability
             mask = ~log_ws.isneginf()
             if not mask.all():
-                log.warn('Masking local energies where psi = 0')
+                log.warning('Masking local energies where psi = 0')
                 Es_loc = Es_loc.where(mask, Es_loc.new_tensor(0))
             Es_loc_loss = log_clipped_outliers(Es_loc, q) if clip_outliers else Es_loc
             loss = loss_func(Es_loc_loss, log_psis, exp_normalize_mean(log_ws))
