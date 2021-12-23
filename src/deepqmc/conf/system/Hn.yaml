@@ -1,0 +1,4 @@
+_target_: deepqmc.Molecule.from_name
+name: Hn
+n: ???
+dist: ???

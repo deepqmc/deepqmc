@@ -52,12 +52,14 @@ click = { version = "^8", optional = true }
 tomlkit = { version = "^0.7", optional = true }
 docutils = { version = "<0.18", optional = true }
 # 0.18 seems to be crashing sphinx 2.4.4
+hydra-core = { git = "https://github.com/facebookresearch/hydra.git", rev = "22b8bcbcfa14193eeaa5a09f0a370c0578b96184", optional = true }
 
 [tool.poetry.extras]
 wf = ["scipy", "pyscf"]
 test = ["pytest", "pytest-regressions", "coverage"]
 train = ["tensorboard", "tqdm", "Pillow"]
 cli = ["click", "tomlkit"]
+app = ["hydra-core"]
 doc = ["sphinx", "sphinxcontrib-katex", "docutils"]
 all = ["scipy", "pyscf", "pytest", "pytest-regressions", "coverage", "tensorboard", "tqdm", "Pillow", "click", "tomlkit"]
 
@@ -73,6 +75,7 @@ pydocstyle = "^5.0.1"
 
 [tool.poetry.scripts]
 deepqmc = "deepqmc.cli:cli"
+"deepqmc.app" = "deepqmc.app:cli"
 
 [tool.poetry-dynamic-versioning]
 enable = true

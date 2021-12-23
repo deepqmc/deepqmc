@@ -1,0 +1,4 @@
+_target_: deepqmc.train.ScanLR
+eq_steps: 100
+rate: 1.05
+start: 0.1

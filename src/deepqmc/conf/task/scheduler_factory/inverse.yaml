@@ -1,0 +1,2 @@
+_target_: deepqmc.train.InverseLR
+decay_rate: 200

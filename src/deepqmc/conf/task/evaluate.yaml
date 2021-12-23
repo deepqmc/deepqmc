@@ -1,0 +1,20 @@
+# @package _global_
+defaults:
+  - sampler_factory@task.sampler_factory: langevin
+  - override /ansatz: null
+  - override /system: null
+task:
+  _target_: deepqmc.evaluate.evaluate
+  wf: ${ansatz}
+  workdir: ${workdir}
+  n_steps: 500
+  store_steps: false
+  sample_kwargs:
+    block_size: 10
+    equilibrate: true
+  sampler_factory:
+    _partial_: true
+    sample_size: 1000
+    n_decorrelate: 4
+fromdir: ???
+state: LAST

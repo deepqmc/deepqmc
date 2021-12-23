@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+  - override /ansatz: null
+  - override /system: null
+fromdir: ???
+state: ???

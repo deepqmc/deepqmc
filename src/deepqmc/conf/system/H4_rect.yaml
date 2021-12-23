@@ -1,0 +1,3 @@
+_target_: deepqmc.Molecule.from_name
+name: H4_rect
+dist: ???

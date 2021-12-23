@@ -1,0 +1,23 @@
+defaults:
+  - scheduler_factory: cyclic
+  - optimizer_factory: adamw
+  - sampler_factory: langevin
+_target_: deepqmc.train.train
+wf: ${ansatz}
+workdir: ${workdir}
+state: null
+save_every: 100
+n_steps: 10000
+batch_size: 10000
+epoch_size: 100
+learning_rate: 0.01
+equilibrate: true
+fit:
+  _target_: deepqmc.fit.fit_wf
+  _partial_: true
+  clip_outliers: true
+  max_grad_norm: null
+  q: 5
+optimizer_factory: {"_partial_": true}
+scheduler_factory: {"_partial_": true}
+sampler_factory: {"_partial_": true}

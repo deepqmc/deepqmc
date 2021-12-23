@@ -1,0 +1,9 @@
+_target_: deepqmc.sampling.LangevinSampler.from_wf
+sample_size: 2000
+tau: 0.1
+n_first_certain: 3
+target_acceptance: 0.57
+n_discard: 50
+n_decorrelate: 1
+max_age: null
+log_psi_threshold: null
