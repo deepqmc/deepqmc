@@ -7,7 +7,7 @@ from deepqmc.torchext import SSP, get_log_dnn
 
 from .schnet import ElectronicSchNet, SubnetFactory
 
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 __all__ = ['OmniSchNet']
 
 
@@ -180,8 +180,7 @@ class OmniSchNet(nn.Module):
         n_down (int): :math:`N^\downarrow`, number of spin-down electrons
         n_orbitals (int): :math:`N_\text{orb}`, number of molecular orbitals
         n_backflows (int): :math:`N_\text{bf}`, number of backflow channnels
-        mb_embedding_dim (int): dimension of many-body SchNet embeddings
-        mf_embedding_dim (int): dimension of mean-field SchNet embeddings
+        embedding_dim (int): dimension of many-body SchNet embeddings
         jastrow (str): type of Jastrow -- :data:`None`, ``'mean-field'``, or
             ``'many-body'``
         jastrow_kwargs (dict): extra arguments passed to :class:`Jastrow`
@@ -190,6 +189,7 @@ class OmniSchNet(nn.Module):
         backflow_kwargs (dict): extra arguments passed to :class:`Backflow`
         schnet_kwargs (dict): extra arguments passed to :class:`ElectronicSchNet`
         subnet_kwargs (dict): extra arguments passed to :class:`SubnetFactory`
+        mf_embedding_dim (int): dimension of mean-field SchNet embeddings
         mf_schnet_kwargs (dict): extra arguments passed to the mean-field variant
             of :class:`ElectronicSchNet`
         mf_subnet_kwargs (dict): extra arguments passed to :class:`SubnetFactory`
@@ -215,14 +215,14 @@ class OmniSchNet(nn.Module):
         n_orbitals,
         n_backflows,
         *,
-        mb_embedding_dim=128,
-        mf_embedding_dim=128,
+        embedding_dim=128,
         jastrow='many-body',
         jastrow_kwargs=None,
         backflow='many-body',
         backflow_kwargs=None,
         schnet_kwargs=None,
         subnet_kwargs=None,
+        mf_embedding_dim=128,
         mf_schnet_kwargs=None,
         mf_subnet_kwargs=None,
     ):
@@ -234,7 +234,7 @@ class OmniSchNet(nn.Module):
                 n_up,
                 n_down,
                 n_atoms,
-                embedding_dim=mb_embedding_dim,
+                embedding_dim,
                 subnet_metafactory=partial(SubnetFactory, **(subnet_kwargs or {})),
                 **(schnet_kwargs or {}),
             )
@@ -246,14 +246,14 @@ class OmniSchNet(nn.Module):
                 n_up,
                 n_down,
                 n_atoms,
-                embedding_dim=mf_embedding_dim,
+                mf_embedding_dim,
                 subnet_metafactory=partial(SubnetFactory, **(mf_subnet_kwargs or {})),
                 **(mf_schnet_kwargs or {}),
             )
             if 'mean-field' in [jastrow, backflow]
             else None
         )
-        embedding_dim = {'mean-field': mf_embedding_dim, 'many-body': mb_embedding_dim}
+        embedding_dim = {'mean-field': mf_embedding_dim, 'many-body': embedding_dim}
         self.jastrow_type = jastrow
         if jastrow:
             self.jastrow = Jastrow(embedding_dim[jastrow], **(jastrow_kwargs or {}))
