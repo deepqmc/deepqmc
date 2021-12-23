@@ -16,10 +16,6 @@ charges = [1, 1]
 charge = 0
 spin = 0
 
-[Hn]
-
-[H4_rect]
-
 [He]
 coords = [[0.0, 0.0, 0.0]]
 charges = [2]

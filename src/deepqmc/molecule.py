@@ -96,9 +96,10 @@ class Molecule(nn.Module):
 
         The available names are in :attr:`Molecule.all_names`.
         """
-        system = deepcopy(_SYSTEMS[name])
-        system.update(
-            _SYSTEM_FACTORIES[name](**kwargs) if name in _SYSTEM_FACTORIES else kwargs
-        )
+        if name in _SYSTEMS:
+            system = deepcopy(_SYSTEMS[name])
+            system.update(kwargs)
+        elif name in _SYSTEM_FACTORIES:
+            system = _SYSTEM_FACTORIES[name](**kwargs)
         coords = np.array(system.pop('coords'), dtype=np.float32) * angstrom
         return cls(coords, **system)
