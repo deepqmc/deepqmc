@@ -47,6 +47,16 @@ SCHEDULER_KWARGS = {
 }
 
 
+def InverseLR(opt, decay_rate):
+    return torch.optim.lr_scheduler.LambdaLR(opt, lambda n: 1 / (1 + n / decay_rate))
+
+
+def ScanLR(opt, eq_steps, start, rate):
+    return torch.optim.lr_scheduler.LambdaLR(
+        opt, lambda n: 1.0 if n < eq_steps else start * rate ** (n - eq_steps)
+    )
+
+
 def train(  # noqa: C901
     wf,
     workdir=None,
@@ -129,23 +139,10 @@ def train(  # noqa: C901
         }
         log.info(f'Using {lr_scheduler} scheduler, params = {scheduler_kwargs!r}')
         if lr_scheduler[0].islower():
-            if lr_scheduler == 'inverse':
-
-                def lr_lambda(n, decay_rate):
-                    return 1 / (1 + n / decay_rate)
-
-            elif lr_scheduler == 'scan':
-
-                def lr_lambda(n, eq_steps, start, rate):
-                    return 1.0 if n < eq_steps else start * rate ** (n - eq_steps)
-
-            scheduler = torch.optim.lr_scheduler.LambdaLR(
-                opt, partial(lr_lambda, **scheduler_kwargs)
-            )
+            scheduler_factory = {'inverse': InverseLR, 'scan': ScanLR}[lr_scheduler]
         else:
-            scheduler = getattr(torch.optim.lr_scheduler, lr_scheduler)(
-                opt, **scheduler_kwargs
-            )
+            scheduler_factory = getattr(torch.optim.lr_scheduler, lr_scheduler)
+        scheduler = scheduler_factory(opt, **scheduler_kwargs)
     else:
         scheduler = None
     # The convention here is that states/steps are numbered as slices/elements
