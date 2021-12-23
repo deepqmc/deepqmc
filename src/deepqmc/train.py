@@ -19,7 +19,7 @@ from .sampling import LangevinSampler, sample_wf
 from .torchext import is_cuda
 from .utils import H5LogTable
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __all__ = ['train']
 
 log = logging.getLogger(__name__)
@@ -67,6 +67,7 @@ def train(  # noqa: C901
     raise_blowup=True,
     return_every=None,
     chkpts=None,
+    fit=None,
     *,
     n_steps=10_000,
     batch_size=10_000,
@@ -206,8 +207,10 @@ def train(  # noqa: C901
         h5file.flush()
     chkpts = chkpts if chkpts is not None else []
     last_log = 0
+    if not fit:
+        fit = partial(fit_wf, **(fit_kwargs or {}))
     try:
-        for step, _ in fit_wf(
+        for step, _ in fit(
             wf,
             LossEnergy(),
             opt,
@@ -219,7 +222,6 @@ def train(  # noqa: C901
             steps,
             log_dict=table.row if workdir else log_dict,
             writer=writer,
-            **(fit_kwargs or {}),
         ):
             # at this point, the wf model and optimizer are already at state step+1
             monitor.update(table['E_loc'][-1] if workdir else log_dict['E_loc'])
