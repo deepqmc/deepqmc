@@ -6,7 +6,7 @@ import toml
 import torch
 from torch import nn
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __all__ = ['Molecule']
 
 angstrom = 1 / 0.52917721092
@@ -58,10 +58,13 @@ class Molecule(nn.Module):
 
     all_names = set(_SYSTEMS.keys())
 
-    def __init__(self, coords, charges, charge, spin):
+    def __init__(self, coords, charges, charge, spin, unit='bohr'):
         assert len(coords) == len(charges)
         super().__init__()
-        self.register_buffer('coords', _ensure_fp(torch.as_tensor(coords)))
+        unit_multiplier = {'bohr': 1.0, 'angstrom': angstrom}[unit]
+        self.register_buffer(
+            'coords', _ensure_fp(torch.as_tensor(coords) * unit_multiplier)
+        )
         self.register_buffer('charges', _ensure_fp(torch.as_tensor(charges)))
         self.charge = charge
         self.spin = spin
