@@ -24,6 +24,7 @@ jobs:
       - name: Create Python virtual environment
         run: |
           python -m venv venv
+          venv/bin/pip install -U pip wheel
           echo VIRTUAL_ENV=$PWD/venv >>$GITHUB_ENV
           echo $PWD/venv/bin >>$GITHUB_PATH
           echo venv >>.git/info/exclude
@@ -35,10 +36,8 @@ jobs:
             ${{ env.VIRTUAL_ENV }}/bin
             ${{ env.VIRTUAL_ENV }}/lib/python${{ matrix.python-version }}/site-packages
           key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}-${{ env.YEAR_MONTH }}
-      - name: Build
-        run: poetry build
       - name: Install
-        run: pip install -U deepqmc[wf,train,cli,test] --pre -f ./dist
+        run: pip install -e .[wf,train,cli,test]
       - name: Test
         run: coverage run -m pytest
       - name: Upload to Codecov
