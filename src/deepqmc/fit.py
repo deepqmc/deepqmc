@@ -132,6 +132,7 @@ def fit_wf(  # noqa: C901
             max_memory=max_memory,
         )
         log.info(f'estimated optimal subbatch size: {subbatch_size}')
+    log.debug('Entering training loop')
     for step, (rs, log_psi0s, sign_psi0s) in zip(steps, sampler):
         rs_batch = rs
         wf.zero_grad()

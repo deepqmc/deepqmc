@@ -1,3 +1,4 @@
+import logging
 from functools import partial
 from itertools import count
 from pathlib import Path
@@ -13,6 +14,8 @@ from .utils import H5LogTable
 
 __version__ = '0.1.1'
 __all__ = ['evaluate']
+
+log = logging.getLogger(__name__)
 
 
 def evaluate(
@@ -69,6 +72,7 @@ def evaluate(
     steps = tqdm(count(), desc='equilibrating', disable=None)
     blocks = []
     try:
+        log.info('Equilibrating...')
         for step, energy in sample_wf(
             wf,
             sampler.iter_with_info(),
@@ -85,6 +89,7 @@ def evaluate(
             if energy == 'eq':
                 steps.total = step + n_steps
                 steps.set_description('evaluating')
+                log.info('Equilibrated...')
                 continue
             if energy is not None:
                 steps.set_postfix(E=f'{energy:S}')
@@ -102,4 +107,6 @@ def evaluate(
         if workdir:
             writer.close()
             h5file.close()
+    if energy:
+        log.info(f'Final energy: {energy:S}')
     return {'energy': energy}

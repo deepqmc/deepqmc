@@ -199,7 +199,6 @@ def train(  # noqa: C901
                 sample_wf(wf, sampler.iter_with_info(), steps, equilibrate=equilibrate)
             )
         log.info('Equilibrated')
-    log.info('Initializing training')
     steps = trange(
         init_step,
         n_steps,
@@ -209,11 +208,14 @@ def train(  # noqa: C901
         disable=None,
     )
     if workdir:
+        log.debug('Setting up HDF5 file...')
         h5file = h5py.File(workdir / 'fit.h5', 'a', libver='v110')
         h5file.swmr_mode = True
         table = H5LogTable(h5file)
         table.resize(init_step)
         h5file.flush()
+        log.debug('Done')
+    log.info('Initializing training')
     chkpts = chkpts if chkpts is not None else []
     last_log = 0
     if not fit:
