@@ -47,6 +47,7 @@ def pyscf_from_mol(mol, basis, cas=None, workdir=None):
         charge=mol.charge,
         spin=mol.spin,
         cart=True,
+        parse_arg=False,
     )
     log.info('Running HF...')
     mf = RHF(mol)
