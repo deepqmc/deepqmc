@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 from deepqmc import Molecule
-from deepqmc.physics import pairwise_diffs, pairwise_self_distance
+from deepqmc.physics import pairwise_diffs, pairwise_distance, pairwise_self_distance
 from deepqmc.plugins import PLUGINS
 from deepqmc.torchext import sloglindet, triu_flat
 from deepqmc.wf import WaveFunction
@@ -132,6 +132,7 @@ class PauliNet(WaveFunction):
         return_log=True,
         use_sloglindet='training',
         backflow_op=None,
+        dummy_coords=None,
         *,
         cusp_correction=True,
         cusp_electrons=True,
@@ -180,6 +181,10 @@ class PauliNet(WaveFunction):
         self.backflow_type = backflow_type
         self.backflow_transform = backflow_transform
         self.backflow_op = backflow_op or BackflowOp()
+        coords = mol.coords
+        if dummy_coords is not None:
+            coords = torch.cat([coords, dummy_coords], dim=0)
+        self.register_buffer('coords', coords)
         if 'paulinet.omni_factory' in PLUGINS:
             log.info('Using a plugin for paulinet.omni_factory')
             omni_factory = PLUGINS['paulinet.omni_factory']
@@ -189,7 +194,7 @@ class PauliNet(WaveFunction):
             omni_factory = self.OMNI_FACTORIES[omni_factory]
         self.omni = (
             omni_factory(
-                len(mol.coords), n_up, n_down, *backflow_spec, **(omni_kwargs or {})
+                len(self.coords), n_up, n_down, *backflow_spec, **(omni_kwargs or {})
             )
             if omni_factory
             else None
@@ -358,14 +363,11 @@ class PauliNet(WaveFunction):
     def forward(self, rs):  # noqa: C901
         batch_dim, n_elec = rs.shape[:2]
         assert n_elec == self.confs.shape[1]
-        n_atoms = len(self.mol)
         coords = self.mol.coords
         diffs_nuc = pairwise_diffs(torch.cat([coords, rs.flatten(end_dim=1)]), coords)
         dists_elec = pairwise_self_distance(rs, full=True)
         if self.omni:
-            dists_nuc = (
-                diffs_nuc[n_atoms:, :, 3].sqrt().view(batch_dim, n_elec, n_atoms)
-            )
+            dists_nuc = pairwise_distance(rs, self.coords)
         xs = self.mo(diffs_nuc)
         # get orbitals as [bs, 1, i, mu]
         xs = xs.view(batch_dim, 1, n_elec, -1)
