@@ -50,9 +50,7 @@ def log_rho(s):
 
 
 def _slogcof(A):
-    # SVD seems to be hugely suboptimal on GPU, especially for small matrices,
-    # so we do everything on a CPU
-    U, s, V = (x.to(A.device) for x in A.cpu().svd())
+    U, s, V = A.svd()
     sgn_UV = U.det().sign() * V.det().sign()
     if A.shape[-1] <= 1:
         sl_C = torch.ones_like(A), torch.zeros_like(A)
