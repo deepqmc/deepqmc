@@ -16,7 +16,7 @@ from .molorb import MolecularOrbital
 from .omni import OmniSchNet
 from .pyscfext import pyscf_from_mol
 
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 __all__ = ['PauliNet']
 
 log = logging.getLogger(__name__)
@@ -32,6 +32,26 @@ def eval_log_slater(xs):
     if xs.shape[-1] == 0:
         return xs.new_ones(xs.shape[:-2]), xs.new_zeros(xs.shape[:-2])
     return xs.contiguous().slogdet()
+
+
+class BackflowOp(nn.Module):
+    def __init__(self, mult_act=None, add_act=None, with_envelope=True):
+        super().__init__()
+        self.mult_act = mult_act or (lambda x: 1 + 2 * torch.tanh(x / 4))
+        self.add_act = add_act or (lambda x: 0.1 * torch.tanh(x / 4))
+        self.with_envelope = with_envelope
+
+    def forward(self, xs, fs_mult, fs_add):
+        if fs_add is not None:
+            if self.with_envelope:
+                envel = (xs ** 2).mean(dim=-1, keepdim=True).sqrt()
+            else:
+                envel = 1
+        if fs_mult is not None:
+            xs = xs * self.mult_act(fs_mult)
+        if fs_add is not None:
+            xs = xs + envel * self.add_act(fs_add)
+        return xs
 
 
 class PauliNet(WaveFunction):
@@ -111,6 +131,7 @@ class PauliNet(WaveFunction):
         n_orbitals=None,
         return_log=True,
         use_sloglindet='training',
+        backflow_op=None,
         *,
         cusp_correction=True,
         cusp_electrons=True,
@@ -158,6 +179,7 @@ class PauliNet(WaveFunction):
             backflow_spec[1] *= 2
         self.backflow_type = backflow_type
         self.backflow_transform = backflow_transform
+        self.backflow_op = backflow_op or BackflowOp()
         if 'paulinet.omni_factory' in PLUGINS:
             log.info('Using a plugin for paulinet.omni_factory')
             omni_factory = PLUGINS['paulinet.omni_factory']
@@ -330,13 +352,7 @@ class PauliNet(WaveFunction):
             fs_mult, fs_add = None, fs
         elif self.backflow_transform == 'both':
             fs_mult, fs_add = fs[:, : fs.shape[1] // 2], fs[:, fs.shape[1] // 2 :]
-        if fs_add is not None:
-            envel = (xs ** 2).mean(dim=-1, keepdim=True).sqrt()
-        if fs_mult is not None:
-            xs = xs * (1 + 2 * torch.tanh(fs_mult / 4))
-        if fs_add is not None:
-            xs = xs + 0.1 * envel * torch.tanh(fs_add / 4)
-        return xs
+        return self.backflow_op(xs, fs_mult, fs_add)
 
     def forward(self, rs):  # noqa: C901
         batch_dim, n_elec = rs.shape[:2]

@@ -3,7 +3,7 @@ from .distbasis import DistanceBasis
 from .gto import GTOBasis, GTOShell
 from .molorb import MolecularOrbital
 from .omni import Backflow, Jastrow, OmniSchNet
-from .paulinet import PauliNet
+from .paulinet import BackflowOp, PauliNet
 from .schnet import ElectronicSchNet, SubnetFactory
 
 __all__ = [
@@ -11,6 +11,7 @@ __all__ = [
     'OmniSchNet',
     'Jastrow',
     'Backflow',
+    'BackflowOp',
     'ElectronicSchNet',
     'SubnetFactory',
     'DistanceBasis',
