@@ -20,6 +20,7 @@ _SYSTEM_FACTORIES = {
         'charges': np.ones(n),
         'charge': 0,
         'spin': n % 2,
+        'unit': 'angstrom',
     },
     'H4_rect': lambda dist: {
         'coords': np.array(
@@ -33,6 +34,7 @@ _SYSTEM_FACTORIES = {
         'charges': np.ones(4),
         'charge': 0,
         'spin': 0,
+        'unit': 'angstrom',
     },
 }
 
@@ -101,5 +103,5 @@ class Molecule(nn.Module):
             system.update(kwargs)
         elif name in _SYSTEM_FACTORIES:
             system = _SYSTEM_FACTORIES[name](**kwargs)
-        coords = np.array(system.pop('coords'), dtype=np.float32) * angstrom
+        coords = np.array(system.pop('coords'), dtype=np.float32)
         return cls(coords, **system)

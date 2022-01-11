@@ -3,84 +3,98 @@ coords = [[1.0, 0.0, 0.0]]
 charges = [1]
 charge = 0
 spin = 1
+unit = 'angstrom'
 
 ["H2+"]
 coords = [[-0.52918, 0.0, 0.0], [0.52918, 0.0, 0.0]]
 charges = [1, 1]
 charge = 1
 spin = 1
+unit = 'angstrom'
 
 [H2]
 coords = [[0.0, 0.0, 0.0], [0.742, 0.0, 0.0]]
 charges = [1, 1]
 charge = 0
 spin = 0
+unit = 'angstrom'
 
 [He]
 coords = [[0.0, 0.0, 0.0]]
 charges = [2]
 charge = 0
 spin = 0
+unit = 'angstrom'
 
 [Be]
 coords = [[0.0, 0.0, 0.0]]
 charges = [4]
 charge = 0
 spin = 0
+unit = 'angstrom'
 
 [B]
 coords = [[0.0, 0.0, 0.0]]
 charges = [5]
 charge = 0
 spin = 1
+unit = 'angstrom'
 
 [C]
 coords = [[0.0, 0.0, 0.0]]
 charges = [6]
 charge = 0
 spin = 2
+unit = 'angstrom'
 
 [LiH]
 coords = [[0.0, 0.0, 0.0], [1.595, 0.0, 0.0]]
 charges = [3, 1]
 charge = 0
 spin = 0
+unit = 'angstrom'
 
 [CO2]
 coords = [[-1.161, 0.0, 0.0], [0.0, 0.0, 0.0], [1.161, 0.0, 0.0]]
 charges = [8, 6, 8]
 charge = 0
 spin = 0
+unit = 'angstrom'
 
 [Li2]
 coords = [[-1.3364, 0.0, 0.0], [1.3364, 0.0, 0.0]]
 charges = [3, 3]
 charge = 0
 spin = 0
+unit = 'angstrom'
 
 [Be2]
 coords = [[-1.230, 0.0, 0.0], [1.230, 0.0, 0.0]]
 charges = [4, 4]
 charge = 0
 spin = 0
+unit = 'angstrom'
 
 [B2]
 coords = [[-0.7951, 0.0, 0.0], [0.7951, 0.0, 0.0]]
 charges = [5, 5]
 charge = 0
 spin = 2
+unit = 'angstrom'
 
 [C2]
 coords = [[-0.621265, 0.0, 0.0], [0.621265, 0.0, 0.0]]
 charges = [6, 6]
 charge = 0
 spin = 0
+unit = 'angstrom'
 
 [N2]
 coords = [[-2.13534, 0.0, 0.0], [2.13534, 0.0, 0.0]]
 charges = [7, 7]
 charge = 0
 spin = 0
+unit = 'angstrom'
 
 [H2O]
 coords = [
@@ -91,6 +105,7 @@ coords = [
 charges = [8, 1, 1]
 charge = 0
 spin = 0
+unit = 'angstrom'
 
 [bicyclobutane]
 coords = [
