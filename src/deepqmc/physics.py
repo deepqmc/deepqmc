@@ -11,10 +11,15 @@ def pairwise_distance(coords1, coords2):
     return (coords1[..., :, None, :] - coords2[..., None, :, :]).norm(dim=-1)
 
 
-def pairwise_self_distance(coords):
+def pairwise_self_distance(coords, full=False):
     i, j = np.triu_indices(coords.shape[-2], k=1)
     diffs = coords[..., :, None, :] - coords[..., None, :, :]
-    return diffs[..., i, j, :].norm(dim=-1)
+    dists = diffs[..., i, j, :].norm(dim=-1)
+    if full:
+        dists_full = diffs.new_zeros(diffs.shape[:-1])
+        dists_full[..., i, j] = dists_full[..., j, i] = dists
+        dists = dists_full
+    return dists
 
 
 def pairwise_diffs(coords1, coords2, axes_offset=True):

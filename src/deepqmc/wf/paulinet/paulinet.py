@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 from deepqmc import Molecule
-from deepqmc.physics import pairwise_diffs, pairwise_distance
+from deepqmc.physics import pairwise_diffs, pairwise_self_distance
 from deepqmc.plugins import PLUGINS
 from deepqmc.torchext import sloglindet, triu_flat
 from deepqmc.wf import WaveFunction
@@ -360,7 +360,7 @@ class PauliNet(WaveFunction):
         n_atoms = len(self.mol)
         coords = self.mol.coords
         diffs_nuc = pairwise_diffs(torch.cat([coords, rs.flatten(end_dim=1)]), coords)
-        dists_elec = pairwise_distance(rs, rs)
+        dists_elec = pairwise_self_distance(rs, full=True)
         if self.omni:
             dists_nuc = (
                 diffs_nuc[n_atoms:, :, 3].sqrt().view(batch_dim, n_elec, n_atoms)
