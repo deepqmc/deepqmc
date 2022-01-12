@@ -286,4 +286,4 @@ class OmniSchNet(nn.Module):
             if self.backflow_type
             else None
         )
-        return jastrow, backflow
+        return jastrow, backflow, None

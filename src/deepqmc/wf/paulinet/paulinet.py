@@ -16,7 +16,7 @@ from .molorb import MolecularOrbital
 from .omni import OmniSchNet
 from .pyscfext import pyscf_from_mol
 
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 __all__ = ['PauliNet']
 
 log = logging.getLogger(__name__)
@@ -372,6 +372,12 @@ class PauliNet(WaveFunction):
     def forward(self, rs):  # noqa: C901
         batch_dim, n_elec = rs.shape[:2]
         assert n_elec == self.confs.shape[1]
+        dists_elec = pairwise_self_distance(rs, full=True)
+        # get jastrow J, backflow fs (as [bs, q, i, mu/nu]), and real-space
+        # backflow ps (as [bs, i, 3])
+        J, fs, ps = self.omni(rs, self.coords) if self.omni else (None, None, None)
+        if ps is not None:
+            rs = rs + ps
         coords = self.mol.coords
         diffs_nuc = pairwise_diffs(torch.cat([coords, rs.flatten(end_dim=1)]), coords)
         if self.omni:
@@ -381,8 +387,6 @@ class PauliNet(WaveFunction):
         xs = self.mo(diffs_nuc)
         # get orbitals as [bs, 1, i, mu]
         xs = xs.view(batch_dim, 1, n_elec, -1)
-        # get jastrow J and backflow fs (as [bs, q, i, mu/nu])
-        J, fs = self.omni(rs, self.coords) if self.omni else (None, None)
         if fs is not None and self.backflow_type == 'orbital':
             xs = self._backflow_op(xs, fs, dists_nuc)
         # form dets as [bs, q, p, i, nu]
@@ -439,7 +443,6 @@ class PauliNet(WaveFunction):
             if self.return_log:
                 psi, sign = psi.abs().log() + xs_shift, psi.sign().detach()
         if self.cusp_same:
-            dists_elec = pairwise_self_distance(rs, full=True)
             cusp_same = self.cusp_same(
                 torch.cat(
                     [triu_flat(dists_elec[:, idxs, idxs]) for idxs in self.spin_slices],
