@@ -294,6 +294,7 @@ class PauliNet(WaveFunction):
             ]
             confs = [torch.cat(cfs, dim=-1) for cfs in confs]
             confs = torch.cat(confs, dim=-1)
+            log.info(f'Will use {len(confs)} electron configurations')
             kwargs['n_configurations'] = len(confs)
             kwargs['n_orbitals'] = confs.max().item() + 1
         else:
