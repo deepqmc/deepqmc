@@ -3,11 +3,12 @@ from functools import partial
 import torch
 from torch import nn
 
+from deepqmc.physics import pairwise_distance, pairwise_self_distance
 from deepqmc.torchext import SSP, get_log_dnn
 
 from .schnet import ElectronicSchNet, SubnetFactory
 
-__version__ = '0.4.1'
+__version__ = '0.5.0'
 __all__ = ['OmniSchNet']
 
 
@@ -269,7 +270,9 @@ class OmniSchNet(nn.Module):
                 embedding_dim[backflow], n_orbitals, n_backflows
             )
 
-    def forward(self, dists_nuc, dists_elec):
+    def forward(self, rs, coords):
+        dists_elec = pairwise_self_distance(rs, full=True)
+        dists_nuc = pairwise_distance(rs, coords)
         embeddings = {}
         if self.mf_schnet:
             embeddings['mean-field'] = self.mf_schnet(dists_nuc)

@@ -4,7 +4,7 @@ from torch import nn
 
 from deepqmc import Molecule
 from deepqmc.fit import LossEnergy, fit_wf
-from deepqmc.physics import local_energy
+from deepqmc.physics import local_energy, pairwise_distance
 from deepqmc.sampling import LangevinSampler
 from deepqmc.wf import ANSATZES
 from deepqmc.wf.paulinet.distbasis import DistanceBasis
@@ -45,7 +45,9 @@ class OmniNet(nn.Module):
         )
         self.orbital = nn.Linear(16, 1, bias=False)
 
-    def forward(self, dists_nuc, dists_elec):
+    def forward(self, rs, coords):
+        dists_elec = pairwise_distance(rs, rs)
+        dists_nuc = pairwise_distance(rs, coords)
         xs = self.schnet(dists_elec, dists_nuc)
         return self.orbital(xs).squeeze(dim=-1).sum(dim=-1), None
 

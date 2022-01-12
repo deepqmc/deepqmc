@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 from deepqmc import Molecule
-from deepqmc.physics import pairwise_diffs, pairwise_distance, pairwise_self_distance
+from deepqmc.physics import pairwise_diffs, pairwise_self_distance
 from deepqmc.plugins import PLUGINS
 from deepqmc.torchext import sloglindet, triu_flat
 from deepqmc.wf import WaveFunction
@@ -16,7 +16,7 @@ from .molorb import MolecularOrbital
 from .omni import OmniSchNet
 from .pyscfext import pyscf_from_mol
 
-__version__ = '0.2.1'
+__version__ = '0.3.0'
 __all__ = ['PauliNet']
 
 log = logging.getLogger(__name__)
@@ -374,14 +374,15 @@ class PauliNet(WaveFunction):
         assert n_elec == self.confs.shape[1]
         coords = self.mol.coords
         diffs_nuc = pairwise_diffs(torch.cat([coords, rs.flatten(end_dim=1)]), coords)
-        dists_elec = pairwise_self_distance(rs, full=True)
         if self.omni:
-            dists_nuc = pairwise_distance(rs, self.coords)
+            dists_nuc = (
+                diffs_nuc[len(coords) :, :, -1].sqrt().view(batch_dim, n_elec, -1)
+            )
         xs = self.mo(diffs_nuc)
         # get orbitals as [bs, 1, i, mu]
         xs = xs.view(batch_dim, 1, n_elec, -1)
         # get jastrow J and backflow fs (as [bs, q, i, mu/nu])
-        J, fs = self.omni(dists_nuc, dists_elec) if self.omni else (None, None)
+        J, fs = self.omni(rs, self.coords) if self.omni else (None, None)
         if fs is not None and self.backflow_type == 'orbital':
             xs = self._backflow_op(xs, fs, dists_nuc)
         # form dets as [bs, q, p, i, nu]
@@ -438,6 +439,7 @@ class PauliNet(WaveFunction):
             if self.return_log:
                 psi, sign = psi.abs().log() + xs_shift, psi.sign().detach()
         if self.cusp_same:
+            dists_elec = pairwise_self_distance(rs, full=True)
             cusp_same = self.cusp_same(
                 torch.cat(
                     [triu_flat(dists_elec[:, idxs, idxs]) for idxs in self.spin_slices],
