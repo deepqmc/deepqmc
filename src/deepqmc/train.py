@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime
 from functools import partial
 from itertools import count
+from math import log10
 from pathlib import Path
 
 import h5py
@@ -215,6 +216,7 @@ def train(  # noqa: C901
         table.resize(init_step)
         h5file.flush()
         log.debug('Done')
+    ref_ene = wf.mol.data.get('ref_energies')
     log.info('Initializing training')
     chkpts = chkpts if chkpts is not None else []
     last_log = 0
@@ -264,6 +266,12 @@ def train(  # noqa: C901
             chkpts.append((step + 1, state))
             chkpts = chkpts[-100:]
             if workdir:
+                if ref_ene:
+                    corr_ene = (energy.n - ref_ene[0]) / (ref_ene[1] - ref_ene[0])
+                    writer.add_scalar('corr_energy/error', 1 - corr_ene, step)
+                    writer.add_scalar(
+                        'corr_energy/logstep', 1 - corr_ene, 100 * log10(step + 1)
+                    )
                 table.row['E_ewm'] = energy.n
                 h5file.flush()
                 if save_every and (step + 1) % save_every == 0:

@@ -342,6 +342,7 @@ class PauliNet(WaveFunction):
         assert bool(cas) == bool(mc)
         wf = PauliNet.from_pyscf(mc or mf, **kwargs)
         wf.mf = mf
+        wf.mol.data = mol.data
         return wf
 
     def pop_charges(self):
