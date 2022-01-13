@@ -134,6 +134,7 @@ class PauliNet(WaveFunction):
         backflow_op=None,
         dummy_coords=None,
         *,
+        full_determinant=False,
         cusp_correction=True,
         cusp_electrons=True,
         backflow_type='orbital',
@@ -147,6 +148,7 @@ class PauliNet(WaveFunction):
     ):
         assert use_sloglindet in {'never', 'training', 'always'}
         assert return_log or use_sloglindet == 'never'
+        assert not full_determinant or backflow_type == 'det'
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
         n_orbitals = n_orbitals or max(n_up, n_down)
@@ -174,7 +176,7 @@ class PauliNet(WaveFunction):
         )
         backflow_spec = {
             'orbital': [n_orbitals, backflow_channels],
-            'det': [max(n_up, n_down), len(self.confs) * backflow_channels],
+            'det': [n_up + n_down, len(self.confs) * backflow_channels],
         }[backflow_type]
         if backflow_transform == 'both':
             backflow_spec[1] *= 2
@@ -204,6 +206,7 @@ class PauliNet(WaveFunction):
             self.requires_grad_embeddings_(False)
         self.n_determinants = len(self.confs) * backflow_channels
         self.use_sloglindet = use_sloglindet
+        self.full_determinant = full_determinant
 
     def requires_grad_classes_(self, classes, requires_grad):
         for m in self.modules():
@@ -383,9 +386,17 @@ class PauliNet(WaveFunction):
         if fs is not None and self.backflow_type == 'det':
             n_conf = len(self.confs)
             fs = fs.unflatten(1, (fs.shape[1] // n_conf, n_conf))
-            det_up = self._backflow_op(det_up, fs[..., : self.n_up, : self.n_up])
-            det_down = self._backflow_op(det_down, fs[..., self.n_up :, : self.n_down])
-            # with open-shell systems, part of the backflow output is not used
+            if self.full_determinant:
+                det_full = fs.new_zeros((*det_up.shape[:3], n_elec, n_elec))
+                det_full[..., : self.n_up, : self.n_up] = det_up
+                det_full[..., self.n_up :, self.n_up :] = det_down
+                det_up = det_full = self._backflow_op(det_full, fs)
+                det_down = fs.new_empty((*det_down.shape[:3], 0, 0))
+            else:  # part of the backflow output is not used here
+                det_up = self._backflow_op(det_up, fs[..., : self.n_up, : self.n_up])
+                det_down = self._backflow_op(
+                    det_down, fs[..., self.n_up :, self.n_up :]
+                )
         if self.use_sloglindet == 'always' or (
             self.use_sloglindet == 'training' and not self.sampling
         ):
