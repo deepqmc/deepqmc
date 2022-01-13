@@ -60,7 +60,7 @@ class Molecule(nn.Module):
 
     all_names = set(_SYSTEMS.keys())
 
-    def __init__(self, coords, charges, charge, spin, unit='bohr'):
+    def __init__(self, coords, charges, charge, spin, unit='bohr', data=None):
         assert len(coords) == len(charges)
         super().__init__()
         unit_multiplier = {'bohr': 1.0, 'angstrom': angstrom}[unit]
@@ -70,6 +70,7 @@ class Molecule(nn.Module):
         self.register_buffer('charges', _ensure_fp(torch.as_tensor(charges)))
         self.charge = charge
         self.spin = spin
+        self.data = data or {}
 
     def __len__(self):
         return len(self.charges)
