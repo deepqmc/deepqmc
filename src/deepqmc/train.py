@@ -230,7 +230,9 @@ def train(  # noqa: C901
             sampler.iter_batches(
                 batch_size=batch_size,
                 epoch_size=epoch_size,
-                range=partial(trange, desc='sampling', leave=False, disable=None),
+                range=partial(trange, desc='sampling', leave=False, disable=None)
+                if epoch_size > 1
+                else range,
             ),
             steps,
             log_dict=table.row if workdir else log_dict,
