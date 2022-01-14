@@ -44,13 +44,18 @@ class BackflowOp(nn.Module):
     def forward(self, xs, fs_mult, fs_add, dists_nuc):
         if fs_add is not None:
             if self.with_envelope:
-                envel = (xs**2).mean(dim=-1, keepdim=True).sqrt()
+                envel = (xs**2).sum(dim=-1, keepdim=True).sqrt()
             else:
                 envel = 1
         if fs_mult is not None:
             xs = xs * self.mult_act(fs_mult)
         if fs_add is not None:
-            xs = xs + envel * self.add_act(fs_add)
+            R = dists_nuc.min(dim=-1).values / 0.5
+            cutoff = torch.where(
+                R < 1, R**2 * (6 - 8 * R + 3 * R**2), R.new_tensor(1)
+            )
+            idx = (slice(None), *([None] * (len(xs.shape) - 3)), slice(None), None)
+            xs = xs + cutoff[idx] * envel * self.add_act(fs_add)
         return xs
 
 
