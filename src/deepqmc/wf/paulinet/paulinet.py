@@ -41,7 +41,7 @@ class BackflowOp(nn.Module):
         self.add_act = add_act or (lambda x: 0.1 * torch.tanh(x / 4))
         self.with_envelope = with_envelope
 
-    def forward(self, xs, fs_mult, fs_add):
+    def forward(self, xs, fs_mult, fs_add, dists_nuc):
         if fs_add is not None:
             if self.with_envelope:
                 envel = (xs**2).mean(dim=-1, keepdim=True).sqrt()
@@ -355,14 +355,14 @@ class PauliNet(WaveFunction):
             return super().pop_charges()
         return self.mol.charges.new(mf.pop(verbose=0)[1])
 
-    def _backflow_op(self, xs, fs):
+    def _backflow_op(self, xs, fs, dists_nuc):
         if self.backflow_transform == 'mult':
             fs_mult, fs_add = fs, None
         elif self.backflow_transform == 'add':
             fs_mult, fs_add = None, fs
         elif self.backflow_transform == 'both':
             fs_mult, fs_add = fs[:, : fs.shape[1] // 2], fs[:, fs.shape[1] // 2 :]
-        return self.backflow_op(xs, fs_mult, fs_add)
+        return self.backflow_op(xs, fs_mult, fs_add, dists_nuc)
 
     def forward(self, rs):  # noqa: C901
         batch_dim, n_elec = rs.shape[:2]
@@ -378,24 +378,27 @@ class PauliNet(WaveFunction):
         # get jastrow J and backflow fs (as [bs, q, i, mu/nu])
         J, fs = self.omni(dists_nuc, dists_elec) if self.omni else (None, None)
         if fs is not None and self.backflow_type == 'orbital':
-            xs = self._backflow_op(xs, fs)
+            xs = self._backflow_op(xs, fs, dists_nuc)
         # form dets as [bs, q, p, i, nu]
-        conf_up, conf_down = self.confs[:, : self.n_up], self.confs[:, self.n_up :]
-        det_up = xs[:, :, : self.n_up, conf_up].transpose(-3, -2)
-        det_down = xs[:, :, self.n_up :, conf_down].transpose(-3, -2)
+        n_up = self.n_up
+        conf_up, conf_down = self.confs[:, :n_up], self.confs[:, n_up:]
+        det_up = xs[:, :, :n_up, conf_up].transpose(-3, -2)
+        det_down = xs[:, :, n_up:, conf_down].transpose(-3, -2)
         if fs is not None and self.backflow_type == 'det':
             n_conf = len(self.confs)
             fs = fs.unflatten(1, (fs.shape[1] // n_conf, n_conf))
             if self.full_determinant:
                 det_full = fs.new_zeros((*det_up.shape[:3], n_elec, n_elec))
-                det_full[..., : self.n_up, : self.n_up] = det_up
-                det_full[..., self.n_up :, self.n_up :] = det_down
-                det_up = det_full = self._backflow_op(det_full, fs)
+                det_full[..., :n_up, :n_up] = det_up
+                det_full[..., n_up:, n_up:] = det_down
+                det_up = det_full = self._backflow_op(det_full, fs, dists_nuc)
                 det_down = fs.new_empty((*det_down.shape[:3], 0, 0))
             else:  # part of the backflow output is not used here
-                det_up = self._backflow_op(det_up, fs[..., : self.n_up, : self.n_up])
+                det_up = self._backflow_op(
+                    det_up, fs[..., :n_up, :n_up], dists_nuc[:, :n_up]
+                )
                 det_down = self._backflow_op(
-                    det_down, fs[..., self.n_up :, self.n_up :]
+                    det_down, fs[..., n_up:, n_up:], dists_nuc[:, n_up:]
                 )
         if self.use_sloglindet == 'always' or (
             self.use_sloglindet == 'training' and not self.sampling
@@ -436,9 +439,7 @@ class PauliNet(WaveFunction):
                     dim=1,
                 )
             )
-            cusp_anti = self.cusp_anti(
-                dists_elec[:, : self.n_up, self.n_up :].flatten(start_dim=1)
-            )
+            cusp_anti = self.cusp_anti(dists_elec[:, :n_up, n_up:].flatten(start_dim=1))
             psi = (
                 psi + cusp_same + cusp_anti
                 if self.return_log
