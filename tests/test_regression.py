@@ -24,7 +24,7 @@ def rs(mol):
     [
         ('paulinet', {}),
         ('paulinet', {'cas': (2, 2)}),
-        ('paulinet', {'cas': (2, 2), 'conf_cutoff': 1}),
+        ('paulinet', {'cas': (2, 2), 'conf_cutoff': 0.7}),
         ('paulinet', {'cas': (2, 2), 'conf_limit': 2}),
         ('paulinet', {'cas': (2, 2), 'backflow_type': 'det'}),
         ('paulinet', {'basis': '6-31g'}),
