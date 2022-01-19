@@ -1,0 +1,6 @@
+# @package _global_
+task:
+  _target_: deepqmc.app.print_conf
+  wf: ${ansatz}
+  brackets: null
+device: cpu

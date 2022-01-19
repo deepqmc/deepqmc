@@ -73,6 +73,21 @@ def instantiate_wf(cfg, fromdir, state):
     return cfg
 
 
+def print_conf(wf, brackets=None):
+    if not wf.conf_strs:
+        return
+    for i, (s, c) in enumerate(zip(wf.conf_strs, wf.conf_coeff.weight[0])):
+        if brackets:
+            x = ''
+            for b in brackets:
+                if not s:
+                    break
+                x, s = x + ('|' if x else '') + s[:b], s[b:]
+            x += s
+            s = x
+        print(f'{i + 1:4d}  {c:14.10f}  {s}')
+
+
 @hydra.main(config_path='conf', config_name='config')
 def cli(cfg):
     log.info('Entering application')

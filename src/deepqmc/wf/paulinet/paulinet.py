@@ -256,6 +256,7 @@ class PauliNet(WaveFunction):
         freeze_confs=False,
         conf_cutoff=1e-2,
         conf_limit=None,
+        conf_strs=None,
         **kwargs,
     ):
         r"""Construct a :class:`PauliNet` instance from a finished PySCF_ calculation.
@@ -279,6 +280,7 @@ class PauliNet(WaveFunction):
         .. _PySCF: http://pyscf.org
         """
         assert not (set(kwargs) & {'n_configurations', 'n_orbitals'})
+        assert not conf_strs or not conf_limit
         n_up, n_down = mf.mol.nelec
         if hasattr(mf, 'fcisolver'):
             confs = confs_from_mc(mf)
@@ -286,10 +288,13 @@ class PauliNet(WaveFunction):
                 if abs(confs[conf_limit - 1][1] - confs[conf_limit][1]) < 1e-10:
                     conf_limit -= 1
                 confs = confs[:conf_limit]
-            else:
+            if conf_strs:
+                confs = {c[0]: c for c in confs}
+                confs = [confs[s] for s in conf_strs]
+            if not conf_limit and not conf_strs:
                 confs = [c for c in confs if abs(c[1]) >= conf_cutoff]
                 assert confs
-            _, conf_coeff, confs = zip(*confs)
+            conf_strs, conf_coeff, confs = zip(*confs)
             conf_coeff = torch.tensor(conf_coeff)
             confs = torch.tensor(confs)
             log.info(f'Will use {len(confs)} electron configurations')
@@ -297,6 +302,7 @@ class PauliNet(WaveFunction):
             kwargs['n_orbitals'] = confs.max().item() + 1
         else:
             confs = None
+            conf_strs = None
         mol = Molecule(
             mf.mol.atom_coords().astype('float32'),
             mf.mol.atom_charges(),
@@ -305,6 +311,7 @@ class PauliNet(WaveFunction):
         )
         basis = GTOBasis.from_pyscf(mf.mol)
         wf = cls(mol, basis, **kwargs)
+        wf.conf_strs = conf_strs
         if init_weights:
             wf.mo.init_from_pyscf(mf, freeze_mos=freeze_mos)
             if confs is not None:
