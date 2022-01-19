@@ -14,7 +14,7 @@ from .cusp import CuspCorrection, ElectronicAsymptotic
 from .gto import GTOBasis
 from .molorb import MolecularOrbital
 from .omni import OmniSchNet
-from .pyscfext import pyscf_from_mol
+from .pyscfext import confs_from_mc, pyscf_from_mol
 
 __version__ = '0.4.0'
 __all__ = ['PauliNet']
@@ -281,32 +281,17 @@ class PauliNet(WaveFunction):
         assert not (set(kwargs) & {'n_configurations', 'n_orbitals'})
         n_up, n_down = mf.mol.nelec
         if hasattr(mf, 'fcisolver'):
+            confs = confs_from_mc(mf)
             if conf_limit:
-                conf_cutoff = max(
-                    np.sort(abs(mf.ci.flatten()))[-conf_limit:][0] - 1e-10, conf_cutoff
-                )
-            for tol in [conf_cutoff, conf_cutoff + 2e-10]:
-                conf_coeff, *confs = zip(
-                    *mf.fcisolver.large_ci(
-                        mf.ci, mf.ncas, mf.nelecas, tol=tol, return_strs=False
-                    )
-                )
-                if not conf_limit or len(conf_coeff) <= conf_limit:
-                    break
+                if abs(confs[conf_limit - 1][1] - confs[conf_limit][1]) < 1e-10:
+                    conf_limit -= 1
+                confs = confs[:conf_limit]
             else:
-                raise AssertionError()
-            # discard the last ci wave function if degenerate
-            ns_dbl = n_up - mf.nelecas[0], n_down - mf.nelecas[1]
+                confs = [c for c in confs if abs(c[1]) >= conf_cutoff]
+                assert confs
+            _, conf_coeff, confs = zip(*confs)
             conf_coeff = torch.tensor(conf_coeff)
-            confs = [
-                [
-                    torch.arange(n_dbl, dtype=torch.long).expand(len(conf_coeff), -1),
-                    torch.tensor(np.array(cfs), dtype=torch.long) + n_dbl,
-                ]
-                for n_dbl, cfs in zip(ns_dbl, confs)
-            ]
-            confs = [torch.cat(cfs, dim=-1) for cfs in confs]
-            confs = torch.cat(confs, dim=-1)
+            confs = torch.tensor(confs)
             log.info(f'Will use {len(confs)} electron configurations')
             kwargs['n_configurations'] = len(confs)
             kwargs['n_orbitals'] = confs.max().item() + 1
