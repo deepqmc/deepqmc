@@ -19,5 +19,4 @@ fit:
   max_grad_norm: null
   q: 5
 optimizer_factory: {"_partial_": true}
-scheduler_factory: {"_partial_": true}
 sampler_factory: {"_partial_": true}

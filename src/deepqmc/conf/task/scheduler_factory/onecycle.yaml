@@ -1,4 +1,5 @@
 _target_: torch.optim.lr_scheduler.OneCycleLR
+_partial_: true
 anneal_strategy: linear
 max_lr: 0.005
 pct_start: 0.075
