@@ -96,5 +96,5 @@ class Molecule(nn.Module):
             system.update(kwargs)
         elif name in _SYSTEM_FACTORIES:
             system = _SYSTEM_FACTORIES[name](**kwargs)
-        coords = np.array(system.pop('coords'), dtype=np.float32)
+        coords = system.pop('coords')
         return cls(coords, **system)
