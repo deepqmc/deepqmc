@@ -53,6 +53,8 @@ def _get_subkwargs(func, name, mapping):
 def collect_kwarg_defaults(func, mapping):
     kwargs = tomlkit.table()
     for p in inspect.signature(func).parameters.values():
+        if p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD:
+            continue
         if p.name == 'kwargs':
             assert p.default is p.empty
             assert p.kind is inspect.Parameter.VAR_KEYWORD
@@ -67,8 +69,6 @@ def collect_kwarg_defaults(func, mapping):
                 assert p.kind is inspect.Parameter.KEYWORD_ONLY
                 sub_kwargs = _get_subkwargs(func, p.name, mapping)
                 kwargs[p.name] = sub_kwargs
-        elif p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD:
-            assert p.default in (p.empty, p.default)
         else:
             assert p.kind is inspect.Parameter.KEYWORD_ONLY
             if p.default is None:
