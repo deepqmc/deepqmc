@@ -6,7 +6,7 @@ from scipy.special import factorial2
 from torch import nn
 
 from deepqmc.errors import DeepQMCError
-from deepqmc.torchext import pow_int
+from deepqmc.torchext import fp_tensor, pow_int
 
 __version__ = '0.1.0'
 __all__ = ['GTOBasis', 'GTOShell']
@@ -48,8 +48,8 @@ class GTOShell(nn.Module):
     def __init__(self, l, coeffs, zetas):
         super().__init__()
         self.ls = torch.tensor(get_cartesian_angulars(l))
-        anorms = 1 / np.sqrt(factorial2(2 * self.ls - 1).prod(-1))
-        self.register_buffer('anorms', torch.tensor(anorms).float())
+        anorms = 1.0 / np.sqrt(factorial2(2 * self.ls - 1).prod(-1))
+        self.register_buffer('anorms', fp_tensor(anorms))
         rnorms = (2 * zetas / np.pi) ** (3 / 4) * (4 * zetas) ** (l / 2)
         self.register_buffer('coeffs', rnorms * coeffs)
         self.register_buffer('zetas', zetas)
@@ -138,13 +138,13 @@ class GTOBasis(nn.Module):
         """
         if not mol.cart:
             raise DeepQMCError('GTOBasis supports only Cartesian basis sets')
-        centers = torch.tensor(mol.atom_coords()).float()
+        centers = fp_tensor(mol.atom_coords())
         shells = []
         for i in range(mol.nbas):
             l = mol.bas_angular(i)
             i_atom = mol.bas_atom(i)
-            zetas = torch.tensor(mol.bas_exp(i)).float()
-            coeff_sets = torch.tensor(mol.bas_ctr_coeff(i).T).float()
+            zetas = fp_tensor(mol.bas_exp(i))
+            coeff_sets = fp_tensor(mol.bas_ctr_coeff(i).T)
             for coeffs in coeff_sets:
                 shells.append((i_atom, GTOShell(l, coeffs, zetas)))
         return cls(centers, shells)

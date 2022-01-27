@@ -69,7 +69,7 @@ class MolecularOrbital(nn.Module):
         self.basis = basis
         self.mo_coeff = nn.Linear(len(basis), n_orbitals, bias=False)
         if cusp_correction:
-            rc = rc_scaling / mol.charges.float()
+            rc = rc_scaling / mol.charges
             dists = pairwise_distance(mol.coords, mol.coords)
             eye = torch.eye(len(mol), out=torch.empty_like(dists))
             factors = (eye + dists / (rc + rc[:, None])).min(dim=-1).values
