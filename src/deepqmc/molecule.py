@@ -39,12 +39,6 @@ _SYSTEM_FACTORIES = {
 }
 
 
-def _ensure_fp(tensor):
-    if tensor.dtype in {torch.half, torch.float, torch.double}:
-        return tensor
-    return tensor.float()
-
-
 class Molecule(nn.Module):
     """Represents a molecule.
 
@@ -64,10 +58,8 @@ class Molecule(nn.Module):
         assert len(coords) == len(charges)
         super().__init__()
         unit_multiplier = {'bohr': 1.0, 'angstrom': angstrom}[unit]
-        self.register_buffer(
-            'coords', _ensure_fp(torch.as_tensor(coords) * unit_multiplier)
-        )
-        self.register_buffer('charges', _ensure_fp(torch.as_tensor(charges)))
+        self.register_buffer('coords', unit_multiplier * torch.as_tensor(coords))
+        self.register_buffer('charges', 1.0 * torch.as_tensor(charges))
         self.charge = charge
         self.spin = spin
         self.data = data or {}
