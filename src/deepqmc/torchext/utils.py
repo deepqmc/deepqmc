@@ -49,6 +49,10 @@ def merge_tensors(mask, source_true, source_false):
     return x
 
 
+def fp_tensor(x):
+    return torch.tensor(x, dtype=torch.get_default_dtype())
+
+
 def number_of_parameters(net):
     return sum(p.numel() for p in net.parameters())
 
