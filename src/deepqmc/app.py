@@ -27,9 +27,11 @@ OmegaConf.register_new_resolver('fn', hydra.utils.get_method)
 OmegaConf.register_new_resolver('eval', eval_resolver)
 
 
-def ansatz_from_name(name, mol, **kwargs):
+def ansatz_from_name(name, mol, force=False, **kwargs):
     with initialize('conf/ansatz'):
         ansatz = compose(config_name=name)
+    if force:
+        OmegaConf.set_struct(ansatz, False)
     for k, v in kwargs.items():
         OmegaConf.update(ansatz, k, v)
     ansatz.mol = None
