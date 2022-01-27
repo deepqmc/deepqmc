@@ -4,6 +4,7 @@ from pathlib import Path
 
 import hydra
 import hydra.errors
+import numpy as np  # noqa: F401 # for eval_resolver()
 import torch
 from hydra import compose, initialize
 from hydra.utils import call, instantiate, to_absolute_path
@@ -16,9 +17,6 @@ log = logging.getLogger(__name__)
 
 
 def eval_resolver(x):
-    import numpy as np  # noqa: F401
-    import torch  # noqa: F401
-
     return eval(x)
 
 
