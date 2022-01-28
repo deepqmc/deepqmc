@@ -233,6 +233,7 @@ class OmniSchNet(nn.Module):
         assert not jastrow or jastrow in ['mean-field', 'many-body']
         assert not backflow or backflow in ['mean-field', 'many-body']
         super().__init__()
+        self.n_up = n_up
         if not schnet_factory:
             schnet_factory = partial(
                 ElectronicSchNet,
@@ -266,8 +267,15 @@ class OmniSchNet(nn.Module):
         if backflow:
             if not backflow_factory:
                 backflow_factory = partial(Backflow, **(backflow_kwargs or {}))
-            self.backflow = backflow_factory(
-                embedding_dim[backflow], n_orbitals, n_backflows
+            self.backflow = (
+                backflow_factory(embedding_dim[backflow], n_orbitals, n_backflows)
+                if isinstance(n_orbitals, int)
+                else nn.ModuleDict(
+                    {
+                        l: backflow_factory(embedding_dim[backflow], n, n_backflows)
+                        for l, n in zip(['up', 'down'], n_orbitals)
+                    }
+                )
             )
 
     def forward(self, rs, coords):
@@ -282,8 +290,17 @@ class OmniSchNet(nn.Module):
             self.jastrow(embeddings[self.jastrow_type]) if self.jastrow_type else None
         )
         backflow = (
-            self.backflow(embeddings[self.backflow_type])
-            if self.backflow_type
-            else None
+            None
+            if not self.backflow_type
+            else (
+                self.backflow['up'](
+                    embeddings[self.backflow_type][..., : self.n_up, :]
+                ),
+                self.backflow['down'](
+                    embeddings[self.backflow_type][..., self.n_up :, :]
+                ),
+            )
+            if isinstance(self.backflow, nn.ModuleDict)
+            else self.backflow(embeddings[self.backflow_type])
         )
         return jastrow, backflow, None
