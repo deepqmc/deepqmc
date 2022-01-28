@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 from deepqmc.physics import pairwise_distance, pairwise_self_distance
-from deepqmc.torchext import SSP, get_log_dnn
+from deepqmc.torchext import SSP, get_mlp
 
 from .schnet import ElectronicSchNet, SubnetFactory
 
@@ -45,11 +45,11 @@ class Jastrow(nn.Module):
         net: :class:`torch.nn.Sequential` representing vanilla neural network
     """
 
-    def __init__(
-        self, embedding_dim, activation_factory=SSP, *, n_layers=3, sum_first=True
-    ):
+    def __init__(self, embedding_dim, *, n_layers=3, sum_first=True, **kwargs):
+        kwargs.setdefault('activation', SSP)
+        kwargs.setdefault('hidden_layers', ('log', n_layers))
         super().__init__()
-        self.net = get_log_dnn(embedding_dim, 1, activation_factory, n_layers=n_layers)
+        self.net = get_mlp(embedding_dim, 1, **kwargs)
         self.sum_first = sum_first
 
     def forward(self, xs):
@@ -94,20 +94,16 @@ class Backflow(nn.Module):
         embedding_dim,
         n_orbitals,
         n_backflows,
-        activation_factory=SSP,
         *,
         n_layers=3,
+        **kwargs,
     ):
+        kwargs.setdefault('activation', SSP)
+        kwargs.setdefault('hidden_layers', ('log', n_layers))
+        kwargs.setdefault('last_bias', True)
         super().__init__()
         nets = [
-            get_log_dnn(
-                embedding_dim,
-                n_orbitals,
-                activation_factory,
-                n_layers=n_layers,
-                last_bias=True,
-            )
-            for _ in range(n_backflows)
+            get_mlp(embedding_dim, n_orbitals, **kwargs) for _ in range(n_backflows)
         ]
         self.nets = nn.ModuleList(nets)
 

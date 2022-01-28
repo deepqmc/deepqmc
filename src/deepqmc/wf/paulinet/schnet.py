@@ -3,7 +3,7 @@ from functools import lru_cache, partial
 import torch
 from torch import nn
 
-from deepqmc.torchext import SSP, get_log_dnn, idx_perm
+from deepqmc.torchext import SSP, get_mlp, idx_perm
 
 from .distbasis import DistanceBasis
 
@@ -31,35 +31,43 @@ class SubnetFactory:
         dist_feat_dim,
         kernel_dim,
         embedding_dim,
+        w_subnet=None,
+        h_subnet=None,
+        g_subnet=None,
         *,
         n_layers_w=2,
         n_layers_h=1,
         n_layers_g=1,
+        **kwargs,
     ):
+        kwargs.setdefault('activation', SSP)
         self.dist_feat_dim = dist_feat_dim
         self.kernel_dim = kernel_dim
         self.embedding_dim = embedding_dim
-        self.n_layers_w = n_layers_w
-        self.n_layers_h = n_layers_h
-        self.n_layers_g = n_layers_g
+        self.kwargs_w = {
+            **kwargs,
+            **(w_subnet or {'hidden_layers': ('log', n_layers_w)}),
+        }
+        self.kwargs_h = {
+            **kwargs,
+            **(h_subnet or {'hidden_layers': ('log', n_layers_h)}),
+        }
+        self.kwargs_g = {
+            **kwargs,
+            **(g_subnet or {'hidden_layers': ('log', n_layers_g)}),
+        }
 
     def w_subnet(self):
         r"""Create the :math:`\mathbf w` network."""
-        return get_log_dnn(
-            self.dist_feat_dim, self.kernel_dim, SSP, n_layers=self.n_layers_w
-        )
+        return get_mlp(self.dist_feat_dim, self.kernel_dim, **self.kwargs_w)
 
     def h_subnet(self):
         r"""Create the :math:`\mathbf h` network."""
-        return get_log_dnn(
-            self.embedding_dim, self.kernel_dim, SSP, n_layers=self.n_layers_h
-        )
+        return get_mlp(self.embedding_dim, self.kernel_dim, **self.kwargs_h)
 
     def g_subnet(self):
         r"""Create the :math:`\mathbf g` network."""
-        return get_log_dnn(
-            self.kernel_dim, self.embedding_dim, SSP, n_layers=self.n_layers_g
-        )
+        return get_mlp(self.kernel_dim, self.embedding_dim, **self.kwargs_g)
 
 
 class SchNetLayer(nn.Module):

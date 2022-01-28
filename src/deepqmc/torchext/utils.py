@@ -131,6 +131,26 @@ def get_custom_dnn(dims, activation_factory, last_bias=False):
         return nn.Sequential(*modules)
 
 
+def get_mlp(
+    in_dim, out_dim, hidden_layers, activation, last_bias=False, last_linear=True
+):
+    if len(hidden_layers) == 2 and hidden_layers[0] == 'log':
+        n_hidden = hidden_layers[1]
+        qs = [k / n_hidden for k in range(n_hidden + 1)]
+        dims = [int(np.round(in_dim ** (1 - q) * out_dim**q)) for q in qs]
+    else:
+        dims = [in_dim, *hidden_layers, out_dim]
+    modules = []
+    for k in range(len(dims) - 1):
+        last = k + 2 == len(dims)
+        bias = not last or last_bias or not last_linear
+        lin = nn.Linear(dims[k], dims[k + 1], bias=bias)
+        modules.append((f'linear{k+1}', lin))
+        if not last or not last_linear:
+            modules.append((f'activ{k+1}', activation()))
+    return nn.Sequential(OrderedDict(modules))
+
+
 def argmax_random_choice(x):
     mask = x == x.max()
     index = torch.randint(sum(mask), (1,))

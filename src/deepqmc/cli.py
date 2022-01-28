@@ -36,6 +36,8 @@ DEEPQMC_DEFAULTS = {
 
 def _get_subkwargs(func, name, mapping):
     target = mapping[func, name]
+    if not target:
+        return tomlkit.table()
     target, override = target if isinstance(target, tuple) else (target, [])
     if isinstance(target, dict):
         sub_kwargs = {k: collect_kwarg_defaults(v, mapping) for k, v in target.items()}
