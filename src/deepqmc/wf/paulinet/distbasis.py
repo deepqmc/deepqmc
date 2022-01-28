@@ -30,8 +30,16 @@ class DistanceBasis(nn.Module):
         envelope='physnet',
         smooth=None,
         offset=True,
+        powers=None,
+        eps=1e-2,
     ):
         super().__init__()
+        if powers:
+            self.register_buffer('powers', torch.tensor(powers))
+            self.eps = eps
+            dist_feat_dim -= len(powers)
+        else:
+            self.powers = None
         delta = 1 / (2 * dist_feat_dim) if offset else 0
         qs = torch.linspace(delta, 1 - delta, dist_feat_dim)
         self.cutoff = cutoff
@@ -56,9 +64,17 @@ class DistanceBasis(nn.Module):
             envelope = dists**2 * torch.exp(-dists)
         else:
             raise AssertionError()
-        return envelope[..., None] * torch.exp(
+        x = envelope[..., None] * torch.exp(
             -((dists[..., None] - self.mus) ** 2) / self.sigmas**2
         )
+        if self.powers is not None:
+            powers = torch.where(
+                self.powers > 0,
+                dists[..., None] ** self.powers,
+                1 / (dists[..., None] ** (-self.powers) + self.eps),
+            )
+            x = torch.cat([powers, x], dim=-1)
+        return x
 
     def extra_repr(self):
         return ', '.join(
