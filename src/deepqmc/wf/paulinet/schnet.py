@@ -214,6 +214,7 @@ class ElectronicSchNet(nn.Module):
         embedding_dim,
         subnet_metafactory=None,
         dist_basis=None,
+        layer_kwargs=None,
         *,
         dist_feat_dim=32,
         dist_feat_cutoff=10.0,
@@ -232,7 +233,7 @@ class ElectronicSchNet(nn.Module):
         self.Y = nn.Embedding(n_nuclei, kernel_dim)
         self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
         self.layers = nn.ModuleList(
-            self.LAYER_FACTORIES[version](subnet_factory, n_up)
+            self.LAYER_FACTORIES[version](subnet_factory, n_up, **(layer_kwargs or {}))
             for _ in range(n_interactions)
         )
         self.layer_norms = (
