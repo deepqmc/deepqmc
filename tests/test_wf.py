@@ -48,7 +48,7 @@ class OmniNet(nn.Module):
     def forward(self, rs, coords):
         dists_elec = pairwise_distance(rs, rs)
         dists_nuc = pairwise_distance(rs, coords)
-        xs = self.schnet(dists_elec, dists_nuc)
+        xs, _ = self.schnet(dists_elec, dists_nuc)
         return self.orbital(xs).squeeze(dim=-1).sum(dim=-1), None, None
 
 

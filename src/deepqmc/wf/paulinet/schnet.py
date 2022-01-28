@@ -83,7 +83,7 @@ class SchNetLayer(nn.Module):
         i, j = idx_perm(n_elec, 2, x.device)
         z_elec = (self.w(edges_elec[..., i, j, :]) * h[..., j, :]).sum(dim=-2)
         z_nuc = (self.w(edges_nuc) * Y[..., None, :, :]).sum(dim=-2)
-        return self.g(z_elec + z_nuc)
+        return self.g(z_elec + z_nuc), None
 
 
 @lru_cache()
@@ -112,18 +112,30 @@ class SchNetSpinLayer(nn.Module):
         *batch_dims, n_elec = edges_nuc.shape[:-2]
         n_up, n_down = self.n_up, n_elec - self.n_up
         h = self.h(x)
-        z_elec_uu, z_elec_ud, z_elec_du, z_elec_dd = (
-            (self.w[l](edges_elec[..., i, j, :]) * h[..., j, :]).sum(dim=-2)
+        messages_el = [
+            self.w[l](edges_elec[..., i, j, :]) * h[..., j, :]
             for l, (i, j) in idx_pair_spin(n_up, n_down, x.device)
+        ]
+        z_elec_uu, z_elec_ud, z_elec_du, z_elec_dd = (
+            m.sum(dim=-2) for m in messages_el
+        )
+        messages_el = torch.cat(
+            [
+                torch.cat(messages_el[idx], dim=-2)
+                for idx in (slice(None, 2), slice(2, None))
+            ],
+            dim=-3,
         )
         z_elec_same = torch.cat([z_elec_uu, z_elec_dd], dim=-2)
         z_elec_anti = torch.cat([z_elec_ud, z_elec_du], dim=-2)
-        z_nuc = (self.w['n'](edges_nuc) * Y[..., None, :, :]).sum(dim=-2)
-        return (
+        messages_nuc = self.w['n'](edges_nuc) * Y[..., None, :, :]
+        z_nuc = messages_nuc.sum(dim=-2)
+        update = (
             self.g['same'](z_elec_same)
             + self.g['anti'](z_elec_anti)
             + self.g['n'](z_nuc)
         )
+        return update, (messages_el, messages_nuc)
 
 
 class ElectronicSchNet(nn.Module):
@@ -264,8 +276,8 @@ class ElectronicSchNet(nn.Module):
         x = self.X(self.spin_idxs.expand(*batch_dims, -1))
         Y = self.Y(self.nuclei_idxs.expand(*batch_dims, -1))
         for (layer, norm) in zip(self.layers, self.layer_norms):
-            z = layer(x, Y, edges_elec, edges_nuc)
+            z, messages = layer(x, Y, edges_elec, edges_nuc)
             if norm:
                 z = 0.1 * norm(z)
             x = x + z
-        return x
+        return x, messages

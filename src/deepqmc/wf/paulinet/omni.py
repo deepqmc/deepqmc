@@ -119,7 +119,7 @@ class SchNetMeanFieldLayer(nn.Module):
 
     def forward(self, x, Y, edges_elec, edges_nuc):
         z_nuc = (self.w(edges_nuc) * Y[..., None, :, :]).sum(dim=-2)
-        return self.g(z_nuc)
+        return self.g(z_nuc), None
 
 
 class MeanFieldElectronicSchNet(ElectronicSchNet):
@@ -279,9 +279,9 @@ class OmniSchNet(nn.Module):
         dists_nuc = pairwise_distance(rs, coords)
         embeddings = {}
         if self.mf_schnet:
-            embeddings['mean-field'] = self.mf_schnet(dists_nuc)
+            embeddings['mean-field'], _ = self.mf_schnet(dists_nuc)
         if self.schnet:
-            embeddings['many-body'] = self.schnet(dists_elec, dists_nuc)
+            embeddings['many-body'], messages = self.schnet(dists_elec, dists_nuc)
         jastrow = (
             self.jastrow(embeddings[self.jastrow_type]) if self.jastrow_type else None
         )
