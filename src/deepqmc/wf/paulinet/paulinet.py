@@ -181,7 +181,10 @@ class PauliNet(WaveFunction):
         )
         backflow_spec = {
             'orbital': [n_orbitals, backflow_channels],
-            'det': [n_up + n_down, len(self.confs) * backflow_channels],
+            'det': [
+                n_up + n_down if full_determinant else (n_up, n_down),
+                len(self.confs) * backflow_channels,
+            ],
         }[backflow_type]
         if backflow_transform == 'both':
             backflow_spec[1] *= 2
@@ -388,20 +391,20 @@ class PauliNet(WaveFunction):
         det_down = xs[:, :, n_up:, conf_down].transpose(-3, -2)
         if fs is not None and self.backflow_type == 'det':
             n_conf = len(self.confs)
-            fs = fs.unflatten(1, (fs.shape[1] // n_conf, n_conf))
             if self.full_determinant:
+                fs = fs.unflatten(1, (fs.shape[1] // n_conf, n_conf))
                 det_full = fs.new_zeros((*det_up.shape[:3], n_elec, n_elec))
                 det_full[..., :n_up, :n_up] = det_up
                 det_full[..., n_up:, n_up:] = det_down
                 det_up = det_full = self._backflow_op(det_full, fs, dists_nuc)
                 det_down = fs.new_empty((*det_down.shape[:3], 0, 0))
-            else:  # part of the backflow output is not used here
-                det_up = self._backflow_op(
-                    det_up, fs[..., :n_up, :n_up], dists_nuc[:, :n_up]
+            else:
+                fs = (
+                    fs[0].unflatten(1, (fs[0].shape[1] // n_conf, n_conf)),
+                    fs[1].unflatten(1, (fs[1].shape[1] // n_conf, n_conf)),
                 )
-                det_down = self._backflow_op(
-                    det_down, fs[..., n_up:, n_up:], dists_nuc[:, n_up:]
-                )
+                det_up = self._backflow_op(det_up, fs[0], dists_nuc[:, :n_up])
+                det_down = self._backflow_op(det_down, fs[1], dists_nuc[:, n_up:])
         if self.use_sloglindet == 'always' or (
             self.use_sloglindet == 'training' and not self.sampling
         ):
