@@ -261,6 +261,7 @@ class ElectronicSchNet(nn.Module):
         dist_basis=None,
         layer_kwargs=None,
         nuc_embedding=nn.Embedding,
+        init_embed_one=False,
         resnet=True,
         *,
         dist_feat_dim=32,
@@ -280,6 +281,8 @@ class ElectronicSchNet(nn.Module):
         self.dist_basis = dist_basis(dist_feat_dim, dist_feat_cutoff)
         self.Y = nuc_embedding(n_nuclei, kernel_dim)
         self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
+        if init_embed_one:
+            self.X.weight.detach().fill_(1.0)
         self.layers = nn.ModuleList(
             self.LAYER_FACTORIES[version](subnet_factory, n_up, **(layer_kwargs or {}))
             for _ in range(n_interactions)
