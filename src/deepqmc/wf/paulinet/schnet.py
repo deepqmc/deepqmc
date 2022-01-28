@@ -1,4 +1,4 @@
-from functools import lru_cache
+from functools import lru_cache, partial
 
 import torch
 from torch import nn
@@ -213,6 +213,7 @@ class ElectronicSchNet(nn.Module):
         n_nuclei,
         embedding_dim,
         subnet_metafactory=None,
+        dist_basis=None,
         *,
         dist_feat_dim=32,
         dist_feat_cutoff=10.0,
@@ -224,10 +225,10 @@ class ElectronicSchNet(nn.Module):
         assert version in self.LAYER_FACTORIES
         subnet_metafactory = subnet_metafactory or SubnetFactory
         subnet_factory = subnet_metafactory(dist_feat_dim, kernel_dim, embedding_dim)
+        if not dist_basis:
+            dist_basis = partial(DistanceBasis, envelope='nocusp')
         super().__init__()
-        self.dist_basis = DistanceBasis(
-            dist_feat_dim, cutoff=dist_feat_cutoff, envelope='nocusp'
-        )
+        self.dist_basis = dist_basis(dist_feat_dim, dist_feat_cutoff)
         self.Y = nn.Embedding(n_nuclei, kernel_dim)
         self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
         self.layers = nn.ModuleList(
