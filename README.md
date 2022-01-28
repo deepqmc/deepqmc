@@ -14,6 +14,7 @@
 DeepQMC implements variational quantum Monte Carlo for electrons in molecules, using deep neural networks written in [PyTorch](https://pytorch.org) as trial wave functions. Besides the core functionality, it contains implementations of the following ansatzes:
 
 - PauliNet: https://doi.org/ghcm5p
+- DeepErwin: http://arxiv.org/abs/2105.08351
 
 ## Installing
 

@@ -1,0 +1,61 @@
+defaults:
+  - paulinet
+  - _self_
+backflow_type: det
+backflow_op:
+  mult_act: '${eval:"lambda x: 1 + np.exp(-2) * x"}'
+cusp_alpha: 1.0
+freeze_embed: true
+omni_factory:
+  embedding_dim: 64
+  spin_jastrow: true
+  jastrow_factory:
+    sum_first: false
+    hidden_layers: [40, 40]
+    last_bias: true
+    activation: ${cls:torch.nn.Tanh}
+  backflow_factory:
+    hidden_layers: [40, 20, 20]
+    last_bias: true
+    activation: ${cls:torch.nn.Tanh}
+    multi_head: false
+  rs_backflow: many-body
+  rs_backflow_factory:
+    _target_: deepqmc.wf.paulinet.omni.RealSpaceBackflow
+    _partial_: true
+    hidden_layers: [40, 40]
+    last_bias: True
+    activation: ${cls:torch.nn.Tanh}
+    decay_type: deeperwin
+    nuc_charges: ${...mol.charges}
+  schnet_factory:
+    dist_basis:
+      offset: false
+      powers: [-1]
+    dist_feat_dim: 33
+    dist_feat_cutoff: 5.0
+    n_interactions: 2
+    kernel_dim: ${..embedding_dim}
+    init_embed_one: true
+    resnet: false
+    layer_kwargs:
+      shared_h: false
+      shared_g: true
+    nuc_embedding:
+      _target_: deepqmc.wf.paulinet.schnet.NuclearEmbedding
+      _partial_: true
+      activation: ${cls:torch.nn.Tanh}
+      hidden_layers: [40, 40]
+      last_linear: false
+      charges: ${....mol.charges}
+    subnet_metafactory:
+      last_bias: true
+      activation: ${cls:torch.nn.Tanh}
+      w_subnet:
+        hidden_layers: [40, 40]
+      h_subnet:
+        hidden_layers: [40, 40]
+        last_linear: false
+      g_subnet:
+        hidden_layers: [40]
+        last_linear: false
