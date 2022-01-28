@@ -3,7 +3,7 @@ from functools import lru_cache, partial
 import torch
 from torch import nn
 
-from deepqmc.torchext import SSP, get_mlp, idx_perm
+from deepqmc.torchext import SSP, fp_tensor, get_mlp, idx_perm
 
 from .distbasis import DistanceBasis
 
@@ -152,6 +152,17 @@ class SchNetSpinLayer(nn.Module):
         return update, (messages_el, messages_nuc)
 
 
+class NuclearEmbedding(nn.Module):
+    def __init__(self, n_nuclei, kernel_dim, charges, **kwargs):
+        assert len(charges) == n_nuclei
+        super().__init__()
+        self.mlp = get_mlp(1, kernel_dim, **kwargs)
+        self.register_buffer('charges', fp_tensor(charges))
+
+    def forward(self, idxs):
+        return self.mlp(self.charges[idxs].unsqueeze(dim=-1))
+
+
 class ElectronicSchNet(nn.Module):
     r"""Graph neural network SchNet adapted to handle electrons.
 
@@ -249,6 +260,7 @@ class ElectronicSchNet(nn.Module):
         subnet_metafactory=None,
         dist_basis=None,
         layer_kwargs=None,
+        nuc_embedding=nn.Embedding,
         resnet=True,
         *,
         dist_feat_dim=32,
@@ -266,7 +278,7 @@ class ElectronicSchNet(nn.Module):
         super().__init__()
         self.resnet = resnet
         self.dist_basis = dist_basis(dist_feat_dim, dist_feat_cutoff)
-        self.Y = nn.Embedding(n_nuclei, kernel_dim)
+        self.Y = nuc_embedding(n_nuclei, kernel_dim)
         self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
         self.layers = nn.ModuleList(
             self.LAYER_FACTORIES[version](subnet_factory, n_up, **(layer_kwargs or {}))
