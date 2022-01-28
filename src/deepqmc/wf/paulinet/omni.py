@@ -94,6 +94,7 @@ class Backflow(nn.Module):
         embedding_dim,
         n_orbitals,
         n_backflows,
+        multi_head=True,
         *,
         n_layers=3,
         **kwargs,
@@ -102,13 +103,28 @@ class Backflow(nn.Module):
         kwargs.setdefault('hidden_layers', ('log', n_layers))
         kwargs.setdefault('last_bias', True)
         super().__init__()
-        nets = [
-            get_mlp(embedding_dim, n_orbitals, **kwargs) for _ in range(n_backflows)
-        ]
-        self.nets = nn.ModuleList(nets)
+        self.multi_head = multi_head
+        if multi_head:
+            mlps = [
+                get_mlp(embedding_dim, n_orbitals, **kwargs) for _ in range(n_backflows)
+            ]
+            self.mlps = nn.ModuleList(mlps)
+        else:
+            self.n_orbitals = n_orbitals
+            hidden_layers = kwargs.pop('hidden_layers')
+            self.mlp = nn.Sequential(
+                get_mlp(embedding_dim, hidden_layers[-1], hidden_layers[:-1], **kwargs),
+                nn.Linear(hidden_layers[-1], n_backflows * n_orbitals),
+            )
 
     def forward(self, xs):
-        return torch.stack([net(xs) for net in self.nets], dim=1)
+        if self.multi_head:
+            return torch.stack([net(xs) for net in self.mlps], dim=1)
+        else:
+            xs = self.mlp(xs)
+            xs = xs.unflatten(-1, (-1, self.n_orbitals))
+            xs = xs.transpose(-2, -3)
+            return xs
 
 
 class SchNetMeanFieldLayer(nn.Module):
