@@ -23,9 +23,16 @@ class DistanceBasis(nn.Module):
         - Output, :math:`\mathbf e(d)`: :math:`(*,\dim(\mathbf e))`
     """
 
-    def __init__(self, dist_feat_dim, cutoff=10.0, envelope='physnet', smooth=None):
+    def __init__(
+        self,
+        dist_feat_dim,
+        cutoff=10.0,
+        envelope='physnet',
+        smooth=None,
+        offset=True,
+    ):
         super().__init__()
-        delta = 1 / (2 * dist_feat_dim)
+        delta = 1 / (2 * dist_feat_dim) if offset else 0
         qs = torch.linspace(delta, 1 - delta, dist_feat_dim)
         self.cutoff = cutoff
         self.envelope = envelope
