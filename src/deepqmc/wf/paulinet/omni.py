@@ -1,10 +1,11 @@
 from functools import partial
 
+import numpy as np
 import torch
 from torch import nn
 
-from deepqmc.physics import pairwise_distance, pairwise_self_distance
-from deepqmc.torchext import SSP, get_mlp
+from deepqmc.physics import pairwise_diffs, pairwise_distance, pairwise_self_distance
+from deepqmc.torchext import SSP, get_mlp, idx_perm
 
 from .schnet import ElectronicSchNet, SubnetFactory
 
@@ -127,6 +128,43 @@ class Backflow(nn.Module):
             return xs
 
 
+class RealSpaceBackflow(nn.Module):
+    def __init__(self, embedding_dim, nuc_charges, decay_type, **kwargs):
+        super().__init__()
+        self.decay_type = decay_type
+        if nuc_charges is not None:
+            self.register_buffer('nuc_charges', torch.tensor(nuc_charges))
+        self.mlp = nn.ModuleDict(
+            {l: get_mlp(embedding_dim, 1, **kwargs) for l in ['el', 'nuc']}
+        )
+
+    def forward(self, rs, coords, messages, embeddings):
+        n_elec, n_nuc = rs.shape[-2], len(coords)
+        messages_el, messages_nuc = messages
+        embeddings = embeddings['many-body'][:, :, None]
+        f_el = torch.cat(
+            [embeddings.expand(-1, -1, n_elec - 1, -1), messages_el], dim=-1
+        )
+        f_nuc = torch.cat([embeddings.expand(-1, -1, n_nuc, -1), messages_nuc], dim=-1)
+        i, j = idx_perm(n_elec, 2, rs.device)
+        diffs_nuc = pairwise_diffs(rs, coords)
+        diffs = torch.cat([pairwise_diffs(-rs, -rs)[:, i, j], diffs_nuc], dim=-2)
+        f = torch.cat([self.mlp['el'](f_el), self.mlp['nuc'](f_nuc)], dim=-2)
+        ps = f * diffs[..., :3] / (1 + diffs[..., 3:] ** (3 / 2))
+        ps = ps.sum(dim=-2)
+        if self.decay_type == 'rios':
+            R = diffs_nuc[..., -1].sqrt().min(dim=-1).values / 0.5
+            decay = torch.where(
+                R < 1, R**2 * (6 - 8 * R + 3 * R**2), R.new_tensor(1)
+            )
+        elif self.decay_type == 'deeperwin':
+            decay = (
+                (diffs_nuc[..., -1] / (0.5 / self.nuc_charges) ** 2).tanh().prod(dim=-1)
+            )
+        ps = np.exp(-3.5) * decay[..., None] * ps
+        return ps
+
+
 class SchNetMeanFieldLayer(nn.Module):
     def __init__(self, factory, n_up):
         super().__init__()
@@ -230,12 +268,15 @@ class OmniSchNet(nn.Module):
         schnet_factory=None,
         jastrow_factory=None,
         backflow_factory=None,
+        rs_backflow_factory=None,
         *,
         embedding_dim=128,
         jastrow='many-body',
         jastrow_kwargs=None,
         backflow='many-body',
         backflow_kwargs=None,
+        rs_backflow=None,
+        rs_backflow_kwargs=None,
         schnet_kwargs=None,
         subnet_kwargs=None,
         mf_embedding_dim=128,
@@ -245,6 +286,7 @@ class OmniSchNet(nn.Module):
     ):
         assert not jastrow or jastrow in ['mean-field', 'many-body']
         assert not backflow or backflow in ['mean-field', 'many-body']
+        assert not rs_backflow or rs_backflow in ['many-body']
         super().__init__()
         self.n_up = n_up
         if not schnet_factory:
@@ -296,6 +338,15 @@ class OmniSchNet(nn.Module):
                     }
                 )
             )
+        self.rs_backflow_type = rs_backflow
+        if rs_backflow:
+            if not rs_backflow_factory:
+                rs_backflow_factory = partial(
+                    RealSpaceBackflow, **(rs_backflow_kwargs or {})
+                )
+            self.rs_backflow = rs_backflow_factory(
+                embedding_dim[rs_backflow] + self.schnet.kernel_dim
+            )
 
     def forward(self, rs, coords):
         dists_elec = pairwise_self_distance(rs, full=True)
@@ -332,4 +383,9 @@ class OmniSchNet(nn.Module):
             if isinstance(self.backflow, nn.ModuleDict)
             else self.backflow(embeddings[self.backflow_type])
         )
-        return jastrow, backflow, None
+        ps = (
+            self.rs_backflow(rs, coords, messages, embeddings)
+            if self.rs_backflow_type
+            else None
+        )
+        return jastrow, backflow, ps

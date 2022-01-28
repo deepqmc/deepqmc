@@ -245,6 +245,7 @@ class PauliNet(WaveFunction):
             (OmniSchNet, 'mf_subnet_kwargs'): SubnetFactory,
             (OmniSchNet, 'jastrow_kwargs'): Jastrow,
             (OmniSchNet, 'backflow_kwargs'): Backflow,
+            (OmniSchNet, 'rs_backflow_kwargs'): None,
             (Jastrow, 'kwargs'): None,
             (Backflow, 'kwargs'): None,
             (SubnetFactory, 'kwargs'): None,

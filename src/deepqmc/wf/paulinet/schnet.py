@@ -278,6 +278,7 @@ class ElectronicSchNet(nn.Module):
             dist_basis = partial(DistanceBasis, envelope='nocusp')
         super().__init__()
         self.resnet = resnet
+        self.kernel_dim = kernel_dim
         self.dist_basis = dist_basis(dist_feat_dim, dist_feat_cutoff)
         self.Y = nuc_embedding(n_nuclei, kernel_dim)
         self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
