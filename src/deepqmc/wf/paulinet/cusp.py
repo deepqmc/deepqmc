@@ -104,6 +104,13 @@ class CuspCorrection(nn.Module):
         self.shifts = nn.Parameter(torch.zeros(len(charges), n_orbitals))
         self.register_buffer('rc', rc)
         self.eps = eps
+        self.cusp_params = None
+
+    def set_cusp_params(self, *, C, sgn, alphas):
+        self.cusp_params = cp = nn.Module()
+        cp.register_buffer('C', self.rc.new_tensor(C))
+        cp.register_buffer('sgn', self.rc.new_tensor(sgn))
+        cp.register_buffer('alphas', self.rc.new_tensor(alphas))
 
     def _fit_cusp_poly(self, phi_gto_boundary, mos0):
         has_s_part = phi_gto_boundary[0].abs() > self.eps
@@ -133,7 +140,13 @@ class CuspCorrection(nn.Module):
     def forward(self, rs_2, phi_gto_boundary, mos0):
         # TODO the indexing here is far from desirable, but I don't have time to
         # clean it up now
-        C, sgn, alphas, has_s_part = self._fit_cusp_poly(phi_gto_boundary, mos0)
+        if self.cusp_params:
+            C = self.cusp_params.C
+            sgn = self.cusp_params.sgn
+            alphas = self.cusp_params.alphas
+            has_s_part = phi_gto_boundary[0].abs() > self.eps
+        else:
+            C, sgn, alphas, has_s_part = self._fit_cusp_poly(phi_gto_boundary, mos0)
         rs_2_nearest, center_idx = rs_2.min(dim=-1)
         maybe_corrected = rs_2_nearest < self.rc[center_idx] ** 2
         rs_1 = rs_2_nearest[maybe_corrected].sqrt()
