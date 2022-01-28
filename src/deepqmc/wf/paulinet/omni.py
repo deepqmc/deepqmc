@@ -241,6 +241,7 @@ class OmniSchNet(nn.Module):
         mf_embedding_dim=128,
         mf_schnet_kwargs=None,
         mf_subnet_kwargs=None,
+        spin_jastrow=False,
     ):
         assert not jastrow or jastrow in ['mean-field', 'many-body']
         assert not backflow or backflow in ['mean-field', 'many-body']
@@ -274,7 +275,13 @@ class OmniSchNet(nn.Module):
         if jastrow:
             if not jastrow_factory:
                 jastrow_factory = partial(Jastrow, **(jastrow_kwargs or {}))
-            self.jastrow = jastrow_factory(embedding_dim[jastrow])
+            self.jastrow = (
+                nn.ModuleDict(
+                    {l: jastrow_factory(embedding_dim[jastrow]) for l in ['up', 'down']}
+                )
+                if spin_jastrow
+                else jastrow_factory(embedding_dim[jastrow])
+            )
         self.backflow_type = backflow
         if backflow:
             if not backflow_factory:
@@ -298,9 +305,19 @@ class OmniSchNet(nn.Module):
             embeddings['mean-field'], _ = self.mf_schnet(dists_nuc)
         if self.schnet:
             embeddings['many-body'], messages = self.schnet(dists_elec, dists_nuc)
-        jastrow = (
-            self.jastrow(embeddings[self.jastrow_type]) if self.jastrow_type else None
-        )
+        if self.jastrow_type:
+            if isinstance(self.jastrow, nn.ModuleDict):
+                j_up = self.jastrow['up'](
+                    embeddings[self.jastrow_type][..., : self.n_up, :]
+                )
+                j_down = self.jastrow['down'](
+                    embeddings[self.jastrow_type][..., self.n_up :, :]
+                )
+                jastrow = (j_up + j_down) / 2
+            else:
+                jastrow = self.jastrow(embeddings[self.jastrow_type])
+        else:
+            jastrow = None
         backflow = (
             None
             if not self.backflow_type
