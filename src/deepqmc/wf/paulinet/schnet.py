@@ -100,20 +100,32 @@ def idx_pair_spin(n_up, n_down, device=torch.device('cpu')):  # noqa: B008
 
 
 class SchNetSpinLayer(nn.Module):
-    def __init__(self, factory, n_up):
+    def __init__(self, factory, n_up, shared_g=False, shared_h=True):
         super().__init__()
+        self.shared_g = shared_g
+        self.shared_h = shared_h
         labels = ['same', 'anti', 'n']
         self.w = nn.ModuleDict((lbl, factory.w_subnet()) for lbl in labels)
-        self.g = nn.ModuleDict((lbl, factory.g_subnet()) for lbl in labels)
-        self.h = factory.h_subnet()
+        self.g = (
+            factory.g_subnet()
+            if shared_g
+            else nn.ModuleDict((lbl, factory.g_subnet()) for lbl in labels)
+        )
+        self.h = (
+            factory.h_subnet()
+            if shared_h
+            else nn.ModuleDict((lbl, factory.h_subnet()) for lbl in labels[:2])
+        )
         self.n_up = n_up
 
     def forward(self, x, Y, edges_elec, edges_nuc):
         *batch_dims, n_elec = edges_nuc.shape[:-2]
         n_up, n_down = self.n_up, n_elec - self.n_up
-        h = self.h(x)
         messages_el = [
-            self.w[l](edges_elec[..., i, j, :]) * h[..., j, :]
+            (
+                self.w[l](edges_elec[..., i, j, :])
+                * (self.h if self.shared_h else self.h[l])(x)[..., j, :]
+            )
             for l, (i, j) in idx_pair_spin(n_up, n_down, x.device)
         ]
         z_elec_uu, z_elec_ud, z_elec_du, z_elec_dd = (
@@ -131,7 +143,9 @@ class SchNetSpinLayer(nn.Module):
         messages_nuc = self.w['n'](edges_nuc) * Y[..., None, :, :]
         z_nuc = messages_nuc.sum(dim=-2)
         update = (
-            self.g['same'](z_elec_same)
+            self.g(z_elec_same + z_elec_anti + z_nuc)
+            if self.shared_g
+            else self.g['same'](z_elec_same)
             + self.g['anti'](z_elec_anti)
             + self.g['n'](z_nuc)
         )
