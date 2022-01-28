@@ -15,6 +15,10 @@ backflow_factory:
 schnet_factory:
   _target_: deepqmc.wf.paulinet.schnet.ElectronicSchNet
   _partial_: true
+  dist_basis:
+    _target_: deepqmc.wf.paulinet.distbasis.DistanceBasis
+    _partial_: true
+    envelope: nocusp
   dist_feat_dim: 32
   dist_feat_cutoff: 10.0
   n_interactions: 3
