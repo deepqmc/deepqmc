@@ -249,6 +249,7 @@ class ElectronicSchNet(nn.Module):
         subnet_metafactory=None,
         dist_basis=None,
         layer_kwargs=None,
+        resnet=True,
         *,
         dist_feat_dim=32,
         dist_feat_cutoff=10.0,
@@ -263,6 +264,7 @@ class ElectronicSchNet(nn.Module):
         if not dist_basis:
             dist_basis = partial(DistanceBasis, envelope='nocusp')
         super().__init__()
+        self.resnet = resnet
         self.dist_basis = dist_basis(dist_feat_dim, dist_feat_cutoff)
         self.Y = nn.Embedding(n_nuclei, kernel_dim)
         self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
@@ -293,5 +295,5 @@ class ElectronicSchNet(nn.Module):
             z, messages = layer(x, Y, edges_elec, edges_nuc)
             if norm:
                 z = 0.1 * norm(z)
-            x = x + z
+            x = x + z if self.resnet else z
         return x, messages
