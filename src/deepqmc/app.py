@@ -32,7 +32,7 @@ def ansatz_from_name(name, mol, force=False, **kwargs):
         OmegaConf.set_struct(ansatz, False)
     for k, v in kwargs.items():
         OmegaConf.update(ansatz, k, v)
-    ansatz.mol = None
+    ansatz.mol = {'charges': mol.charges.tolist()}
     ansatz = OmegaConf.to_object(ansatz)
     ansatz['mol'] = mol
     return instantiate(ansatz)
