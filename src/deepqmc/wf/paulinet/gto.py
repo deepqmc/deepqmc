@@ -66,12 +66,12 @@ class GTOShell(nn.Module):
 
     def get_cusp_info(self, rc):
         assert self.l == 0
-        exps = torch.exp(-self.zetas * rc ** 2)
+        exps = torch.exp(-self.zetas * rc**2)
         phi_0 = self.coeffs.sum()
         phi_rc = (self.coeffs * exps).sum()
         czes = self.coeffs * self.zetas * exps
         dphi_rc_dr = -2 * rc * czes.sum()
-        d2phi_rc_dr2 = 2 * (czes * (2 * self.zetas * rc ** 2 - 1)).sum()
+        d2phi_rc_dr2 = 2 * (czes * (2 * self.zetas * rc**2 - 1)).sum()
         return torch.stack([phi_0, phi_rc, dphi_rc_dr, d2phi_rc_dr2])
 
     def forward(self, rs):

@@ -8,7 +8,7 @@ __all__ = ()
 
 def backflow_cutoff(r, L=0.5):
     r = r / L
-    return torch.where(r < L, r ** 2 * (6 - 8 * r + 3 * r ** 2), r.new_ones(1))
+    return torch.where(r < L, r**2 * (6 - 8 * r + 3 * r**2), r.new_ones(1))
 
 
 class Backflow(nn.Module):

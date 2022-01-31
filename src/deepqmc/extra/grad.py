@@ -63,7 +63,7 @@ def laplacian_fd(
     other = [o.view(n, -1)[:, -1] for o in other]
     lap_ys = (
         (lap_ys[:, :dim] + lap_ys[:, dim:]).sum(dim=-1) - dim * 2 * ys_g.detach()
-    ) / eps ** 2
+    ) / eps**2
     if not (create_graph if keep_graph is None else keep_graph):
         ys = (ys_g.detach(), *other) if isinstance(ys, tuple) else ys.detach()
     result = lap_ys, ys

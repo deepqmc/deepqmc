@@ -53,7 +53,7 @@ class EWMAverage:
         else:
             var = (1 - a) * (x - self._mean) ** 2 + a * self._var
             mean = (1 - a) * x + a * self._mean
-            sqerr = (1 - a) ** 2 * self._var + a ** 2 * self._sqerr
+            sqerr = (1 - a) ** 2 * self._var + a**2 * self._sqerr
             self._var = np.where(no_update, self._var, var)
             self._mean = np.where(no_update, self._mean, mean)
             self._sqerr = np.where(no_update, self._sqerr, sqerr)

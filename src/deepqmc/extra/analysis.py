@@ -18,7 +18,7 @@ class GaussianKDEstimator:
         self._weights = weights if weights is not None else None
         self._normed = normed
         self._width = np.sqrt(2) * bw
-        self._bs = int(2 ** 30 * max_memory) // (xs.nelement() * xs.element_size() or 1)
+        self._bs = int(2**30 * max_memory) // (xs.nelement() * xs.element_size() or 1)
 
     def __call__(self, xs, normed=None, dens_only=False, iter=iter):
         assert len(xs.shape) == 2
@@ -26,7 +26,7 @@ class GaussianKDEstimator:
             return batch_eval(
                 self, iter(xs.split(self._bs)), normed=normed, dens_only=dens_only
             )
-        kernel = ((xs[:, None] - self._xs) ** 2).sum(dim=-1) / self._width ** 2
+        kernel = ((xs[:, None] - self._xs) ** 2).sum(dim=-1) / self._width**2
         norm = 1 / ((np.sqrt(np.pi) * self._width) ** xs.shape[1])
         basis = norm * torch.exp(-kernel)
         if self._weights is not None:
@@ -46,7 +46,7 @@ def blocking(xs, max_B=None):
     max_B = max_B or int(np.log2(N))
     sigmas_B = []
     for log_B in range(0, max_B):
-        B = 2 ** log_B
+        B = 2**log_B
         sigmas_B.append(
             xs[:, -(N // B * B) :]
             .view(xs.shape[0], -1, B)
@@ -95,7 +95,7 @@ def ewm(x, X, Y, alpha, thre=1e-10, with_err=False):
     mean = (ws * Y).sum(axis=-1)
     if not with_err:
         return mean
-    err = np.sqrt((ws ** 2 * (mean[:, None] - Y) ** 2).sum(axis=-1))
+    err = np.sqrt((ws**2 * (mean[:, None] - Y) ** 2).sum(axis=-1))
     return unp.uarray(mean, err)
 
 

@@ -44,7 +44,7 @@ class BackflowOp(nn.Module):
     def forward(self, xs, fs_mult, fs_add):
         if fs_add is not None:
             if self.with_envelope:
-                envel = (xs ** 2).mean(dim=-1, keepdim=True).sqrt()
+                envel = (xs**2).mean(dim=-1, keepdim=True).sqrt()
             else:
                 envel = 1
         if fs_mult is not None:

@@ -29,7 +29,7 @@ class DistanceBasis(nn.Module):
         qs = torch.linspace(delta, 1 - delta, dist_feat_dim)
         self.cutoff = cutoff
         self.envelope = envelope
-        self.register_buffer('mus', cutoff * qs ** 2)
+        self.register_buffer('mus', cutoff * qs**2)
         self.register_buffer('sigmas', (1 + cutoff * qs) / 7)
         self.smooth = smooth
 
@@ -43,14 +43,14 @@ class DistanceBasis(nn.Module):
             envelope = torch.where(
                 dists_rel > 1,
                 dists.new_zeros(1),
-                1 - 6 * dists_rel ** 5 + 15 * dists_rel ** 4 - 10 * dists_rel ** 3,
+                1 - 6 * dists_rel**5 + 15 * dists_rel**4 - 10 * dists_rel**3,
             )
         elif self.envelope == 'nocusp':
-            envelope = dists ** 2 * torch.exp(-dists)
+            envelope = dists**2 * torch.exp(-dists)
         else:
             raise AssertionError()
         return envelope[..., None] * torch.exp(
-            -((dists[..., None] - self.mus) ** 2) / self.sigmas ** 2
+            -((dists[..., None] - self.mus) ** 2) / self.sigmas**2
         )
 
     def extra_repr(self):

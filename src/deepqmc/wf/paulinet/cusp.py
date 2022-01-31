@@ -154,8 +154,8 @@ class CuspCorrection(nn.Module):
 
 def fit_cusp_poly(rc, X1, X2, X3, X4, X5):
     X1_m_X5 = X1 - X5
-    X2_2_m_X3 = X2 ** 2 - X3
-    rc_2, rc_3, rc_4 = rc ** 2, rc ** 3, rc ** 4
+    X2_2_m_X3 = X2**2 - X3
+    rc_2, rc_3, rc_4 = rc**2, rc**3, rc**4
     a0 = X5
     a1 = X4
     a2 = -X2_2_m_X3 / 2 - 3 * (X2 + X4) / rc + 6 * X1_m_X5 / rc_2
@@ -165,4 +165,4 @@ def fit_cusp_poly(rc, X1, X2, X3, X4, X5):
 
 
 def eval_cusp_poly(rs, a0, a1, a2, a3, a4):
-    return torch.exp(a0 + a1 * rs + a2 * rs ** 2 + a3 * rs ** 3 + a4 * rs ** 4)
+    return torch.exp(a0 + a1 * rs + a2 * rs**2 + a3 * rs**3 + a4 * rs**4)

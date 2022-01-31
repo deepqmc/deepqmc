@@ -24,7 +24,7 @@ class TestDet:
             (ddys,) = torch.autograd.grad(
                 dys, xs, torch.ones_like(xs), create_graph=True
             )
-            return (ddys ** 2).sum()
+            return (ddys**2).sum()
 
         assert torch.autograd.gradcheck(func, xs)
 

@@ -112,7 +112,7 @@ class SSP(nn.Softplus):
 
 def get_log_dnn(start_dim, end_dim, activation_factory, last_bias=False, *, n_layers):
     qs = [k / n_layers for k in range(n_layers + 1)]
-    dims = [int(np.round(start_dim ** (1 - q) * end_dim ** q)) for q in qs]
+    dims = [int(np.round(start_dim ** (1 - q) * end_dim**q)) for q in qs]
     return get_custom_dnn(dims, activation_factory, last_bias=last_bias)
 
 
