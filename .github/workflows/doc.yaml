@@ -6,6 +6,7 @@ on:
     - cron: '0 6 * * 1'
 jobs:
   build:
+    if: github.event_name != 'schedule' || github.repository == 'deepqmc/deepqmc'
     name: Build
     runs-on: ubuntu-latest
     steps:

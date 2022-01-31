@@ -6,6 +6,7 @@ on:
     - cron: '0 6 * * 1'
 jobs:
   flake8:
+    if: github.event_name != 'schedule' || github.repository == 'deepqmc/deepqmc'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-python@v2
@@ -16,6 +17,7 @@ jobs:
       - uses: actions/checkout@v2
       - run: flake8
   black:
+    if: github.event_name != 'schedule' || github.repository == 'deepqmc/deepqmc'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -27,6 +29,7 @@ jobs:
       - uses: actions/checkout@v2
       - run: black . --check
   isort:
+    if: github.event_name != 'schedule' || github.repository == 'deepqmc/deepqmc'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -38,6 +41,7 @@ jobs:
       - uses: actions/checkout@v2
       - run: isort . --check
   pydocstyle:
+    if: github.event_name != 'schedule' || github.repository == 'deepqmc/deepqmc'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

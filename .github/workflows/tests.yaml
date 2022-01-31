@@ -6,6 +6,7 @@ on:
     - cron: '0 6 * * 1'
 jobs:
   all:
+    if: github.event_name != 'schedule' || github.repository == 'deepqmc/deepqmc'
     name: All
     strategy:
       fail-fast: false
