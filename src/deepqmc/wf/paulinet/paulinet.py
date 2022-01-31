@@ -191,10 +191,9 @@ class PauliNet(WaveFunction):
         self.backflow_type = backflow_type
         self.backflow_transform = backflow_transform
         self.backflow_op = backflow_op or BackflowOp()
-        coords = mol.coords
-        if dummy_coords is not None:
-            coords = torch.cat([coords, dummy_coords], dim=0)
-        self.register_buffer('coords', coords)
+        self.register_buffer(
+            'dummy_coords', torch.tensor([] if dummy_coords is None else dummy_coords)
+        )
         if 'paulinet.omni_factory' in PLUGINS:
             log.info('Using a plugin for paulinet.omni_factory')
             omni_factory = PLUGINS['paulinet.omni_factory']
@@ -204,7 +203,11 @@ class PauliNet(WaveFunction):
             omni_factory = self.OMNI_FACTORIES[omni_factory]
         self.omni = (
             omni_factory(
-                len(self.coords), n_up, n_down, *backflow_spec, **(omni_kwargs or {})
+                len(mol.coords) + len(self.dummy_coords),
+                n_up,
+                n_down,
+                *backflow_spec,
+                **(omni_kwargs or {}),
             )
             if omni_factory
             else None
@@ -370,10 +373,14 @@ class PauliNet(WaveFunction):
         dists_elec = pairwise_self_distance(rs, full=True)
         # get jastrow J, backflow fs (as [bs, q, i, mu/nu]), and real-space
         # backflow ps (as [bs, i, 3])
-        J, fs, ps = self.omni(rs, self.coords) if self.omni else (None, None, None)
+        coords = self.mol.coords
+        J, fs, ps = (
+            self.omni(rs, torch.cat([self.mol.coords, self.dummy_coords], dim=0))
+            if self.omni
+            else (None, None, None)
+        )
         if ps is not None:
             rs = rs + ps
-        coords = self.mol.coords
         diffs_nuc = pairwise_diffs(torch.cat([coords, rs.flatten(end_dim=1)]), coords)
         if self.omni:
             dists_nuc = (
