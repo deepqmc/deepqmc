@@ -1,5 +1,6 @@
 import logging
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -301,7 +302,7 @@ class PauliNet(WaveFunction):
                 assert confs
             conf_strs, conf_coeff, confs = zip(*confs)
             conf_coeff = torch.tensor(conf_coeff)
-            confs = torch.tensor(confs)
+            confs = torch.tensor(np.array(confs))
             log.info(f'Will use {len(confs)} electron configurations')
             kwargs['n_configurations'] = len(confs)
             kwargs['n_orbitals'] = confs.max().item() + 1
