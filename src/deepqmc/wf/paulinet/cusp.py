@@ -137,7 +137,7 @@ class CuspCorrection(nn.Module):
         X5 = torch.log(torch.abs(phi0 - C))
         return C, sgn, fit_cusp_poly(rc, X1, X2, X3, X4, X5), has_s_part
 
-    def forward(self, rs_2, phi_gto_boundary, mos0):
+    def forward(self, rs_2, center_idx, phi_gto_boundary, mos0):
         # TODO the indexing here is far from desirable, but I don't have time to
         # clean it up now
         if self.cusp_params:
@@ -147,9 +147,8 @@ class CuspCorrection(nn.Module):
             has_s_part = phi_gto_boundary[0].abs() > self.eps
         else:
             C, sgn, alphas, has_s_part = self._fit_cusp_poly(phi_gto_boundary, mos0)
-        rs_2_nearest, center_idx = rs_2.min(dim=-1)
-        maybe_corrected = rs_2_nearest < self.rc[center_idx] ** 2
-        rs_1 = rs_2_nearest[maybe_corrected].sqrt()
+        maybe_corrected = rs_2 < self.rc[center_idx] ** 2
+        rs_1 = rs_2[maybe_corrected].sqrt()
         corrected = maybe_corrected[:, None] & has_s_part[center_idx]
         params_idx = torch.empty_like(has_s_part, dtype=torch.long)
         params_idx[has_s_part] = torch.arange(
@@ -162,7 +161,7 @@ class CuspCorrection(nn.Module):
             :, params_idx[center_idx][corrected]
         ]
         phi_cusped = C + sgn * eval_cusp_poly(rs_1[rs_1_idx], *alphas)
-        return corrected, center_idx, phi_cusped
+        return corrected, phi_cusped
 
 
 def fit_cusp_poly(rc, X1, X2, X3, X4, X5):

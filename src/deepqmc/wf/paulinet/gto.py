@@ -108,14 +108,22 @@ class GTOBasis(nn.Module):
         self.register_buffer('centers', centers)
         self.center_idxs, shells = zip(*shells)
         self.shells = nn.ModuleList(shells)
-        self.s_center_idxs = torch.tensor(
-            [idx for idx, sh in self.items() if sh.l == 0]
+        self.register_buffer(
+            's_center_idxs',
+            torch.tensor(
+                [idx for idx, sh in self.items() if sh.l == 0], dtype=torch.int64
+            ),
         )
-        self.is_s_type = torch.cat(
-            [
-                (torch.ones if sh.l == 0 else torch.zeros)(len(sh), dtype=torch.bool)
-                for sh in self.shells
-            ]
+        self.register_buffer(
+            'is_s_type',
+            torch.cat(
+                [
+                    (torch.ones if sh.l == 0 else torch.zeros)(
+                        len(sh), dtype=torch.bool
+                    )
+                    for sh in self.shells
+                ]
+            ),
         )
 
     def __len__(self):

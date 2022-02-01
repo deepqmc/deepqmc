@@ -43,6 +43,13 @@ def merge_tensors(mask, source_true, source_false):
     return x
 
 
+def scatter_add(x, idx, dim=-1):
+    shape = list(x.shape)
+    shape[dim] = idx.max() + 1
+    tmp = x.new_zeros(shape)
+    return tmp.index_add(dim, idx, x)
+
+
 def fp_tensor(x):
     return torch.tensor(x, dtype=torch.get_default_dtype())
 
