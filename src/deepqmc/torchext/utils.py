@@ -56,8 +56,7 @@ def shuffle_tensor(x):
 
 
 def triu_flat(x):
-    # TODO use idx_comb()
-    i, j = np.triu_indices(x.shape[1], k=1)
+    i, j = torch.triu_indices(x.shape[1], x.shape[1], 1, device=x.device)
     return x[:, i, j, ...]
 
 
