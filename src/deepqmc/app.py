@@ -38,6 +38,14 @@ def ansatz_from_name(name, mol, force=False, **kwargs):
     return instantiate(ansatz)
 
 
+def mol_from_name(name, **kwargs):
+    with initialize('conf/system'):
+        system = compose(config_name=name)
+    for k, v in kwargs.items():
+        OmegaConf.update(system, k, v)
+    return instantiate(system)
+
+
 def ansatz_from_workdir(workdir, state='LAST'):
     workdir = Path(workdir)
     cfg, state = from_workdir(workdir, state)
