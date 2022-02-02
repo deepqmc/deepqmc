@@ -144,7 +144,7 @@ def fit_wf(  # noqa: C901
         ):
             Es_loc, log_psis, sign_psis = local_energy(
                 rs,
-                wf.sample(False),
+                wf,
                 create_graph=require_energy_gradient,
                 keep_graph=require_psi_gradient,
             )
@@ -160,7 +160,6 @@ def fit_wf(  # noqa: C901
             # all the inputs. We scale it so that it works with subbatching.
             loss *= len(rs) / batch_size
             loss.backward()
-            wf.sample(True)
             subbatches.append(
                 (
                     loss.detach().view(1),

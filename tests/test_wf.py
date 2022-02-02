@@ -53,7 +53,12 @@ class OmniNet(nn.Module):
 
 
 @pytest.fixture(
-    params=[('paulinet', {'omni_factory': OmniNet, 'freeze_mos': False})],
+    params=[
+        (
+            'paulinet',
+            {'omni_factory': OmniNet, 'freeze_mos': False, 'use_sloglindet': False},
+        )
+    ],
     ids=['PauliNet(small)'],
 )
 def wf(request, mol):

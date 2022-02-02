@@ -1,6 +1,5 @@
 import logging
 
-import numpy as np
 import torch
 from torch import nn
 
@@ -134,8 +133,7 @@ class PauliNet(WaveFunction):
         basis,
         n_configurations=1,
         n_orbitals=None,
-        return_log=True,
-        use_sloglindet='training',
+        use_sloglindet=True,
         backflow_op=None,
         dummy_coords=None,
         *,
@@ -151,8 +149,6 @@ class PauliNet(WaveFunction):
         omni_factory='omni_schnet',
         omni_kwargs=None,
     ):
-        assert use_sloglindet in {'never', 'training', 'always'}
-        assert return_log or use_sloglindet == 'never'
         assert not full_determinant or backflow_type == 'det'
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
@@ -212,7 +208,6 @@ class PauliNet(WaveFunction):
             if omni_factory
             else None
         )
-        self.return_log = return_log
         if freeze_embed:
             self.requires_grad_embeddings_(False)
         self.n_determinants = len(self.confs) * backflow_channels
@@ -412,38 +407,28 @@ class PauliNet(WaveFunction):
                 )
                 det_up = self._backflow_op(det_up, fs[0], dists_nuc[:, :n_up])
                 det_down = self._backflow_op(det_down, fs[1], dists_nuc[:, n_up:])
-        if self.use_sloglindet == 'always' or (
-            self.use_sloglindet == 'training' and not self.sampling
-        ):
+        if self.use_sloglindet:
             bf_dim = det_up.shape[-4]
             if isinstance(self.conf_coeff, nn.Linear):
                 conf_coeff = self.conf_coeff.weight[0]
-                conf_coeff = conf_coeff.expand(bf_dim, -1).flatten() / np.sqrt(bf_dim)
             else:
                 conf_coeff = det_up.new_ones(1)
+            conf_coeff = conf_coeff.expand(bf_dim, -1).flatten() / bf_dim
             det_up = det_up.flatten(start_dim=-4, end_dim=-3).contiguous()
             det_down = det_down.flatten(start_dim=-4, end_dim=-3).contiguous()
             sign, psi = sloglindet(conf_coeff, det_up, det_down)
             sign = sign.detach()
         else:
-            if self.return_log:
-                sign_up, det_up = eval_log_slater(det_up)
-                sign_down, det_down = eval_log_slater(det_down)
-                xs = det_up + det_down
-                xs_shift = xs.flatten(start_dim=1).max(dim=-1).values
-                # the exp-normalize trick, to avoid over/underflow of the exponential
-                xs_shift = xs_shift.where(
-                    ~torch.isinf(xs_shift), xs_shift.new_tensor(0)
-                )
-                # replace -inf shifts, to avoid running into nans (see sloglindet)
-                xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None, None])
-            else:
-                det_up = eval_slater(det_up)
-                det_down = eval_slater(det_down)
-                xs = det_up * det_down
+            sign_up, det_up = eval_log_slater(det_up)
+            sign_down, det_down = eval_log_slater(det_down)
+            xs = det_up + det_down
+            xs_shift = xs.flatten(start_dim=1).max(dim=-1).values
+            # the exp-normalize trick, to avoid over/underflow of the exponential
+            xs_shift = xs_shift.where(~torch.isinf(xs_shift), xs_shift.new_tensor(0))
+            # replace -inf shifts, to avoid running into nans (see sloglindet)
+            xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None, None])
             psi = self.conf_coeff(xs).squeeze(dim=-1).mean(dim=-1)
-            if self.return_log:
-                psi, sign = psi.abs().log() + xs_shift, psi.sign().detach()
+            psi, sign = psi.abs().log() + xs_shift, psi.sign().detach()
         if self.cusp_same:
             cusp_same = self.cusp_same(
                 torch.cat(
@@ -452,11 +437,7 @@ class PauliNet(WaveFunction):
                 )
             )
             cusp_anti = self.cusp_anti(dists_elec[:, :n_up, n_up:].flatten(start_dim=1))
-            psi = (
-                psi + cusp_same + cusp_anti
-                if self.return_log
-                else psi * torch.exp(cusp_same + cusp_anti)
-            )
+            psi = psi + cusp_same + cusp_anti
         if J is not None:
-            psi = psi + J if self.return_log else psi * torch.exp(J)
-        return (psi, sign) if self.return_log else psi
+            psi = psi + J
+        return psi, sign
