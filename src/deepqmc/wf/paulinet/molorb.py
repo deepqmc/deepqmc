@@ -113,7 +113,7 @@ class MolecularOrbital(nn.Module):
             phi_gto_boundary = scatter_add(
                 self.basis_cusp_info[..., None]
                 * self.mo_coeff.weight.t()[self.basis.is_s_type],
-                self.basis.s_center_idxs,
+                self.basis.center_idx_s,
                 1,
             )
             rs_2_nearest, center_idx = dists_2_nuc.min(dim=-1)
@@ -123,7 +123,7 @@ class MolecularOrbital(nn.Module):
             phi_gto = scatter_add(
                 aos[:, self.basis.is_s_type, None]
                 * self.mo_coeff.weight.t()[self.basis.is_s_type],
-                self.basis.s_center_idxs,
+                self.basis.center_idx_s,
                 1,
             )[torch.arange(len(center_idx), device=aos.device), center_idx]
             mos = merge_tensors(
@@ -135,5 +135,5 @@ class MolecularOrbital(nn.Module):
 
     def _mo_coeff_s_type_at(self, idx, xs):
         mo_coeff = self.mo_coeff.weight.t()
-        mo_coeff_at = mo_coeff[self.basis.is_s_type][self.basis.s_center_idxs == idx]
+        mo_coeff_at = mo_coeff[self.basis.is_s_type][self.basis.center_idx_s == idx]
         return xs @ mo_coeff_at
