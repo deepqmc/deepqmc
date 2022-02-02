@@ -112,31 +112,6 @@ class CuspCorrection(nn.Module):
         cp.register_buffer('sgn', self.rc.new_tensor(sgn))
         cp.register_buffer('alphas', self.rc.new_tensor(alphas))
 
-    def _fit_cusp_poly(self, phi_gto_boundary, mos0):
-        has_s_part = phi_gto_boundary[0].abs() > self.eps
-        charges, rc = (
-            x[:, None].expand_as(has_s_part) for x in (self.charges, self.rc)
-        )
-        phi_gto_boundary, mos0, shifts, charges, rc = (
-            x[..., has_s_part]
-            for x in (phi_gto_boundary, mos0, self.shifts, charges, rc)
-        )
-        phi0, phi, dphi, d2phi = phi_gto_boundary
-        phi0 = phi0 * (1 + shifts)
-        sgn = phi0.sign()
-        C = torch.where(
-            (sgn == phi.sign()) & (phi0.abs() < phi.abs()),
-            2 * phi0 - phi,
-            2 * phi - phi0,
-        )
-        phi_m_C = phi - C
-        X1 = torch.log(torch.abs(phi_m_C))
-        X2 = dphi / phi_m_C
-        X3 = d2phi / phi_m_C
-        X4 = -charges * (mos0 + phi0 * shifts) / (phi0 - C)
-        X5 = torch.log(torch.abs(phi0 - C))
-        return C, sgn, fit_cusp_poly(rc, X1, X2, X3, X4, X5), has_s_part
-
     def forward(self, rs_2, center_idx, phi_gto_boundary, mos0):
         # TODO the indexing here is far from desirable, but I don't have time to
         # clean it up now
@@ -146,7 +121,9 @@ class CuspCorrection(nn.Module):
             alphas = self.cusp_params.alphas
             has_s_part = phi_gto_boundary[0].abs() > self.eps
         else:
-            C, sgn, alphas, has_s_part = self._fit_cusp_poly(phi_gto_boundary, mos0)
+            C, sgn, alphas, has_s_part = _fit_cusp_poly(
+                self.charges, self.shifts, self.rc, self.eps, phi_gto_boundary, mos0
+            )
         maybe_corrected = rs_2 < self.rc[center_idx] ** 2
         rs_1 = rs_2[maybe_corrected].sqrt()
         corrected = maybe_corrected[:, None] & has_s_part[center_idx]
@@ -174,6 +151,35 @@ def fit_cusp_poly(rc, X1, X2, X3, X4, X5):
     a3 = X2_2_m_X3 / rc + (5 * X2 + 3 * X4) / rc_2 - 8 * X1_m_X5 / rc_3
     a4 = -X2_2_m_X3 / (2 * rc_2) - (2 * X2 + X4) / rc_3 + 3 * X1_m_X5 / rc_4
     return a0, a1, a2, a3, a4
+
+
+@torch.jit.script
+def _fit_cusp_poly(charges, shifts, rc, eps: float, phi_gto_boundary, mos0):
+    has_s_part = phi_gto_boundary[0].abs() > eps
+    charges, rc = [x[:, None].expand_as(has_s_part) for x in (charges, rc)]
+    phi_gto_boundary = phi_gto_boundary[:, has_s_part]
+    mos0, shifts, charges, rc = [x[has_s_part] for x in (mos0, shifts, charges, rc)]
+    phi0, phi, dphi, d2phi = (
+        phi_gto_boundary[0],
+        phi_gto_boundary[1],
+        phi_gto_boundary[2],
+        phi_gto_boundary[3],
+    )
+    phi0 = phi0 * (1 + shifts)
+    sgn = phi0.sign()
+    C = torch.where(
+        (sgn == phi.sign()) & (phi0.abs() < phi.abs()),
+        2 * phi0 - phi,
+        2 * phi - phi0,
+    )
+    phi_m_C = phi - C
+    X1 = torch.log(torch.abs(phi_m_C))
+    X2 = dphi / phi_m_C
+    X3 = d2phi / phi_m_C
+    X4 = -charges * (mos0 + phi0 * shifts) / (phi0 - C)
+    X5 = torch.log(torch.abs(phi0 - C))
+    poly = fit_cusp_poly(rc, X1, X2, X3, X4, X5)
+    return C, sgn, poly, has_s_part
 
 
 def eval_cusp_poly(rs, a0, a1, a2, a3, a4):
