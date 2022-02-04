@@ -329,7 +329,7 @@ class PauliNet(WaveFunction):
         return wf
 
     @classmethod
-    def from_hf(cls, mol, *, basis='6-311g', cas=None, workdir=None, **kwargs):
+    def from_hf(cls, mol, workdir=None, *, basis='6-311g', cas=None, **kwargs):
         r"""Construct a :class:`PauliNet` instance by running a HF calculation.
 
         This is the top-level interface.
