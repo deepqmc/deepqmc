@@ -1,5 +1,6 @@
 import logging
 import sys
+import warnings
 from pathlib import Path
 
 import hydra
@@ -10,6 +11,13 @@ from hydra import compose, initialize
 from hydra.utils import call, instantiate, to_absolute_path
 from omegaconf import OmegaConf
 from tqdm.auto import tqdm
+
+warnings.filterwarnings(
+    'ignore',
+    'provider=hydra.searchpath in main, path=conf is not available.',
+    UserWarning,
+)
+
 
 __all__ = ()
 
