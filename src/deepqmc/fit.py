@@ -133,14 +133,14 @@ def fit_wf(  # noqa: C901
         )
         log.info(f'estimated optimal subbatch size: {subbatch_size}')
     log.debug('Entering training loop')
-    for step, (rs, log_psi0s, sign_psi0s) in zip(steps, sampler):
+    for step, (rs, log_psi0s, _, log_ws) in zip(steps, sampler):
         rs_batch = rs
         wf.zero_grad()
         batch_size = len(rs)
         subbatch_size = subbatch_size or batch_size
         subbatches = []
-        for rs, log_psi0s, _ in DataLoader(
-            TensorDataset(rs, log_psi0s, sign_psi0s), batch_size=subbatch_size
+        for rs, log_psi0s, log_ws in DataLoader(
+            TensorDataset(rs, log_psi0s, log_ws), batch_size=subbatch_size
         ):
             Es_loc, log_psis, sign_psis = local_energy(
                 rs,
@@ -148,7 +148,10 @@ def fit_wf(  # noqa: C901
                 create_graph=require_energy_gradient,
                 keep_graph=require_psi_gradient,
             )
-            log_ws = 2 * log_psis.detach() - 2 * log_psi0s
+            # weights maintained by the sampler take into account all
+            # wavefunction density ratios apart from the last one;
+            # we add that final ratio here
+            log_ws += 2 * log_psis.detach() - 2 * log_psi0s
             # mask out samples with zero weight to increase code stability
             mask = ~log_ws.isneginf()
             if not mask.all():

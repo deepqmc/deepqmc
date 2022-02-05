@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 __all__ = ()
 
@@ -61,3 +62,11 @@ class _EnergyOffset:
 
 
 energy_offset = _EnergyOffset()
+
+
+def apply_resampling(weights: torch.Tensor, strategy: str):
+    num_samples = len(weights)
+    if strategy == 'multinomial':
+        return torch.multinomial(weights, num_samples, replacement=True)
+    else:
+        raise ValueError(f'Unknown resampling strategy {strategy}.')

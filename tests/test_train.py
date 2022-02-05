@@ -1,18 +1,27 @@
 import copy
 
+import pytest
 import torch
 
 from deepqmc import Molecule, evaluate, train
 from deepqmc.wf import PauliNet
 
 
-def test_simple_example(tmp_path):
+@pytest.mark.parametrize('with_resampling', [False, True])
+def test_simple_example(tmp_path, with_resampling):
     mol = Molecule.from_name('LiH')
     net = PauliNet.from_hf(mol, cas=(4, 2), conf_limit=2)
+    if with_resampling:
+        resampling_kwargs = {
+            'keep_walker_weights': True,
+            'resampling_frequency': 1,
+        }
+    else:
+        resampling_kwargs = {}
     chkpts = []
     train(
         net,
-        n_steps=3,
+        n_steps=4,
         batch_size=5,
         save_every=2,
         epoch_size=3,
@@ -25,6 +34,7 @@ def test_simple_example(tmp_path):
             'n_discard': 0,
             'n_decorrelate': 0,
             'n_first_certain': 0,
+            **resampling_kwargs,
         },
     )
     train(

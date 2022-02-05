@@ -17,7 +17,7 @@ from .physics import (
 )
 from .plugins import PLUGINS
 from .torchext import argmax_random_choice, assign_where, shuffle_tensor
-from .utils import energy_offset
+from .utils import apply_resampling, energy_offset
 
 __version__ = '0.3.0'
 __all__ = ['sample_wf', 'MetropolisSampler', 'LangevinSampler']
@@ -65,7 +65,7 @@ def sample_wf(  # noqa: C901
     calculating_energy = not equilibrate
     buffer = []
     energy = None
-    for step, (rs, log_psis, _, info) in zip(steps, sampler):
+    for step, (rs, log_psis, _, _, info) in zip(steps, sampler):
         if step == 0:
             dist_means = rs.new_zeros(5 * block_size)
             if not equilibrate:
@@ -180,6 +180,11 @@ class MetropolisSampler(Sampler):
         n_discard (int): number of steps in the beginning of the sampling that are
             discarded
         n_decorrelate (int): number of extra steps between yielded samples
+        keep_walker_weights (bool): whether we should use correction weights on the
+            walkers, to account for `n_discard` steps not being enough for full
+            equilibration; if set to `False`, walker weights are kept uniform
+        resampling_frequency (int): frequency of resampling (in epochs), or `None` if it
+            should be turned off
         max_age (int): maximum age of a walker without a move after which it is
             moved with 100% acceptance
         log_psi_threshold (float): steps into proposals with log wave function values
@@ -197,9 +202,18 @@ class MetropolisSampler(Sampler):
         target_acceptance=0.57,
         n_discard=50,
         n_decorrelate=1,
+        keep_walker_weights=False,
+        resampling_frequency=None,
         max_age=None,
         log_psi_threshold=None,
     ):
+        if n_first_certain > 0 and n_discard <= n_first_certain:
+            raise ValueError(
+                'Setting n_first_certain > 0 and n_discard <= n_first_certain would'
+                ' make some of the returned samples very noisy.'
+            )
+        if not keep_walker_weights and resampling_frequency is not None:
+            raise ValueError('Cannot use resampling if walker weights are turned off.')
         super().__init__()
         self.wf = wf
         self.max_age = max_age
@@ -208,9 +222,14 @@ class MetropolisSampler(Sampler):
         self.target_acceptance = target_acceptance
         self.n_discard = n_discard
         self.n_decorrelate = n_decorrelate
+        self.keep_walker_weights = keep_walker_weights
+        self.resampling_frequency = resampling_frequency
         self.state['rs'] = rs.clone()
+        self.state['log_weights'] = rs.new_zeros(rs.shape[0])
         self.state['tau'] = tau
-        self.restart()
+        self.state['step'] = 0
+        self.recompute_psi()
+        self.state['ages'] = torch.zeros_like(self.log_psis, dtype=torch.long)
         self.writer = writer
         self._step_writer = 0
 
@@ -227,12 +246,20 @@ class MetropolisSampler(Sampler):
         return self.state['sign_psis']
 
     @property
+    def log_weights(self):
+        return self.state['log_weights']
+
+    @property
     def _ages(self):
         return self.state['ages']
 
     @property
     def tau(self):
         return self.state['tau']
+
+    @property
+    def _walker_state_keys(self):
+        return ['rs', 'log_psis', 'sign_psis', 'ages']
 
     def proposal(self):
         return self.rs + torch.randn_like(self.rs) * self.tau
@@ -325,7 +352,13 @@ class MetropolisSampler(Sampler):
                 self._step_writer,
             )
             self.extra_writer()
-        return self.rs.clone(), self.log_psis.clone(), self.sign_psis.clone(), info
+        return (
+            self.rs.clone(),
+            self.log_psis.clone(),
+            self.sign_psis.clone(),
+            self.log_weights.clone(),
+            info,
+        )
 
     def iter_with_info(self):
         for i in count(-self.n_discard):
@@ -351,20 +384,38 @@ class MetropolisSampler(Sampler):
         """
         n_total = epoch_size * batch_size
         n_steps = math.ceil(n_total / len(self))
-        while True:
+        for epoch_id in count(1):
             xs = samples_from(self, range(n_steps))
             samples_ds = TensorDataset(*(x.flatten(end_dim=1)[:n_total] for x in xs))
             rs_dl = DataLoader(samples_ds, batch_size=batch_size, shuffle=True)
             yield from rs_dl
             self.restart()
+            if (
+                self.resampling_frequency is not None
+                and epoch_id % self.resampling_frequency == 0
+            ):
+                self.resample_walkers()
 
     def recompute_psi(self):
         self.state['log_psis'], self.state['sign_psis'] = self.wf(self.rs)
 
+    def resample_walkers(self):
+        weights = self.state['log_weights'].exp()
+        ids = apply_resampling(weights=weights, strategy='multinomial')
+        for key in self._walker_state_keys:
+            self.state[key] = self.state[key][ids]
+        self.state['log_weights'] = torch.zeros_like(weights)
+
     def restart(self):
         self.state['step'] = 0
+        if self.keep_walker_weights:
+            # record the denominator of the ratio of wavefunctions
+            self.state['log_weights'] -= 2 * self.log_psis.detach()
         self.recompute_psi()
-        self.state['ages'] = torch.zeros_like(self.log_psis, dtype=torch.long)
+        if self.keep_walker_weights:
+            # record the numerator
+            self.state['log_weights'] += 2 * self.log_psis.detach()
+        self.state['ages'] = torch.zeros_like(self._ages)
 
     def propagate_all(self):
         self.state['rs'] = self.proposal()
@@ -439,6 +490,10 @@ class LangevinSampler(MetropolisSampler):
     @property
     def forces(self):
         return self.state['forces']
+
+    @property
+    def _walker_state_keys(self):
+        return super()._walker_state_keys + ['forces']
 
     def proposal(self):
         return (

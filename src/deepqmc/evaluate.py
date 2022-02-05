@@ -66,7 +66,7 @@ def evaluate(
             LangevinSampler.from_wf,
             sample_size=sample_size,
             n_discard=0,
-            **{'n_decorrelate': 4, **(sampler_kwargs or {})},
+            **{'n_decorrelate': 4, 'n_first_certain': 0, **(sampler_kwargs or {})},
         )
     sampler = sampler_factory(wf, writer=writer)
     steps = tqdm(count(), desc='equilibrating', disable=None)
