@@ -85,3 +85,4 @@ pattern = '^(?P<base>\d+\.\d+\.\d+)$'
 [tool.black]
 target-version = ["py37"]
 skip-string-normalization = true
+preview = true

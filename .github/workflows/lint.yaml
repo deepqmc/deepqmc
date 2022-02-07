@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: pip install black
       - uses: actions/checkout@v2
-      - run: black . --check
+      - run: black . --check --preview
   isort:
     if: github.event_name != 'schedule' || github.repository == 'deepqmc/deepqmc'
     runs-on: ubuntu-latest
