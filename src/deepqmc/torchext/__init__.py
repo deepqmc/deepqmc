@@ -4,7 +4,6 @@ from .sloglindet import sloglindet
 from .utils import (
     SSP,
     argmax_random_choice,
-    assign_where,
     batch_eval,
     batch_eval_tuple,
     bdiag,
@@ -28,7 +27,6 @@ from .utils import (
 
 __all__ = [
     'SSP',
-    'assign_where',
     'argmax_random_choice',
     'batch_eval',
     'batch_eval_tuple',

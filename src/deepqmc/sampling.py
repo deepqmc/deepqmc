@@ -16,7 +16,7 @@ from .physics import (
     quantum_force,
 )
 from .plugins import PLUGINS
-from .torchext import argmax_random_choice, assign_where, shuffle_tensor
+from .torchext import argmax_random_choice, shuffle_tensor
 from .utils import apply_resampling, energy_offset
 
 __version__ = '0.3.0'
@@ -270,10 +270,7 @@ class MetropolisSampler(Sampler):
         Ps_acc = torch.exp(2 * (log_psis - self.log_psis))
         # Ps_acc might become 0 or inf, however this does not affect
         # the stability of the remaining code
-        return Ps_acc, log_psis, sign_psis
-
-    def extra_vars(self):
-        return ()
+        return Ps_acc, log_psis, sign_psis, {}
 
     def extra_writer(self):
         return ()
@@ -305,7 +302,7 @@ class MetropolisSampler(Sampler):
 
     def step(self):
         rs = self.proposal()
-        Ps_acc, log_psis, sign_psis, *extra_vars = self.acceptance_prob(rs)
+        Ps_acc, log_psis, sign_psis, extra_vars = self.acceptance_prob(rs)
         accepted = Ps_acc > torch.rand_like(Ps_acc)
         if self.log_psi_threshold is not None:
             accepted = accepted & (log_psis > self.log_psi_threshold) | (
@@ -315,7 +312,6 @@ class MetropolisSampler(Sampler):
             accepted = accepted | (self._ages >= self.max_age)
         if self.state['step'] < self.n_first_certain:
             accepted = torch.ones_like(accepted)
-        self._ages[accepted] = 0
         self._ages[~accepted] += 1
         acceptance = accepted.type(torch.int).sum().item() / self.rs.shape[0]
         info = {
@@ -323,11 +319,15 @@ class MetropolisSampler(Sampler):
             'age': self._ages.cpu().numpy(),
             'tau': self.tau,
         }
-        assign_where(
-            (self.rs, self.log_psis, self.sign_psis, *self.extra_vars()),
-            (rs, log_psis, sign_psis, *extra_vars),
-            accepted,
-        )
+        state = {
+            'rs': rs,
+            'log_psis': log_psis,
+            'sign_psis': sign_psis,
+            'ages': torch.zeros_like(self._ages),
+            **extra_vars,
+        }
+        for k in self._walker_state_keys:
+            self.state[k][accepted] = state[k][accepted]
         if self.target_acceptance:
             self.state['tau'] /= self.target_acceptance / max(acceptance, 0.05)
         self.state['step'] += 1
@@ -511,7 +511,7 @@ class LangevinSampler(MetropolisSampler):
         Ps_acc = torch.exp(log_G_ratios + 2 * (log_psis - self.log_psis))
         # Ps_acc might become 0 or inf, however this does not affect
         # the stability of the remaining code
-        return Ps_acc, log_psis, sign_psis, forces
+        return Ps_acc, log_psis, sign_psis, {'forces': forces}
 
     def qforce(self, rs):
         try:
@@ -526,9 +526,6 @@ class LangevinSampler(MetropolisSampler):
             forces = forces.where(mask, forces.new_tensor(0))
         forces = clean_force(forces, rs, self.wf.mol, tau=self.tau)
         return forces, (log_psis, sign_psis)
-
-    def extra_vars(self):
-        return (self.forces,)
 
     def extra_writer(self):
         self.writer.add_scalar(

@@ -36,12 +36,6 @@ def weighted_mean_var(xs, log_ws):
     return mean, (ws * (xs - mean) ** 2).mean()
 
 
-def assign_where(xs, ys, where):
-    assert len(xs) == len(ys)
-    for x, y in zip(xs, ys):
-        x[where] = y[where]
-
-
 def merge_tensors(mask, source_true, source_false):
     x = torch.empty_like(mask, dtype=source_false.dtype)
     x[mask] = source_true
