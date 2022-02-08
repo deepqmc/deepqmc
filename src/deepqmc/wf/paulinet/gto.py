@@ -6,6 +6,7 @@ from scipy.special import factorial2
 from torch import nn
 
 from deepqmc.errors import DeepQMCError
+from deepqmc.physics import offset_from_axes
 from deepqmc.torchext import fp_tensor, scatter_add
 
 __version__ = '0.2.0'
@@ -104,6 +105,7 @@ class GTOBasis(nn.Module):
 
     def forward(self, diffs):
         ix = self.center_idx[self.idx_ang]
+        diffs = offset_from_axes(diffs)
         angulars = (diffs[:, ix, :3] ** self.ls_cart).prod(dim=-1)
         ix = self.center_idx[self.idx_gto]
         exps = torch.exp(-self.zetas * diffs[:, ix, -1])

@@ -22,10 +22,8 @@ def pairwise_self_distance(coords, full=False):
     return dists
 
 
-def pairwise_diffs(coords1, coords2, axes_offset=True):
+def pairwise_diffs(coords1, coords2):
     diffs = coords1[..., :, None, :] - coords2[..., None, :, :]
-    if axes_offset:
-        diffs = offset_from_axes(diffs)
     return torch.cat([diffs, (diffs**2).sum(dim=-1, keepdim=True)], dim=-1)
 
 
