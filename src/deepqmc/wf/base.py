@@ -26,7 +26,7 @@ class WaveFunction(nn.Module):
         return slice(None, self.n_up), slice(self.n_up, None)
 
     def pop_charges(self):
-        return torch.zeros_like(self.mol.charges)
+        return torch.zeros_like(self.mol.charges) + self.mol.charge / len(self.mol)
 
     def forward(self, rs):
         return NotImplemented
