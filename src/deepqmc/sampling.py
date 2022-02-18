@@ -72,7 +72,7 @@ def sample_wf(  # noqa: C901
             if not equilibrate:
                 yield 0, 'eq'
         dist_means[:-1] = dist_means[1:].clone()
-        dist_means[-1] = pairwise_self_distance(rs).mean()
+        dist_means[-1] = batch_mean(pairwise_self_distance(rs))
         if not calculating_energy:
             if type(equilibrate) is int:
                 if step >= equilibrate:
