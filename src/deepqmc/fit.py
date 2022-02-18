@@ -7,7 +7,7 @@ from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 from uncertainties import ufloat
 
-from .batch_operations import batch_exp_normalize_mean, batch_mean
+from .batch_operations import batch_exp_normalize_mean, batch_mean, batch_median
 from .errors import DeepQMCError, NanError
 from .physics import local_energy
 from .torchext import estimate_optimal_batch_size_cuda, is_cuda, weighted_mean_var
@@ -53,9 +53,9 @@ class LossEnergy(WaveFunctionLoss):
 
 def log_clipped_outliers(x, q):
     x = x.detach()
-    median = x.median()
+    median = batch_median(x)
     x = x - median
-    a = q * x.abs().mean()
+    a = q * batch_mean(x.abs())
     x = torch.where(
         x.abs() <= a, x, x.sign() * a * (1 + torch.log((1 + (x.abs() / a) ** 2) / 2))
     )
