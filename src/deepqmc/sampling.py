@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from uncertainties import ufloat, unumpy as unp
 
+from .batch_operations import batch_gather_and_concat, batch_mean
 from .errors import LUFactError
 from .physics import (
     clean_force,
@@ -313,7 +314,7 @@ class MetropolisSampler(Sampler):
         if self.state['step'] < self.n_first_certain:
             accepted = torch.ones_like(accepted)
         self._ages[~accepted] += 1
-        acceptance = accepted.type(torch.int).sum().item() / self.rs.shape[0]
+        acceptance = batch_mean(accepted.type(torch.int)).item()
         info = {
             'acceptance': acceptance,
             'age': self._ages.cpu().numpy(),
@@ -400,11 +401,14 @@ class MetropolisSampler(Sampler):
         self.state['log_psis'], self.state['sign_psis'] = self.wf(self.rs)
 
     def resample_walkers(self):
-        weights = self.state['log_weights'].exp()
-        ids = apply_resampling(weights=weights, strategy='multinomial')
+        weights = batch_gather_and_concat(self.state['log_weights'].exp())
+        ids = apply_resampling(
+            weights=weights, strategy='multinomial', num_samples=len(self.rs)
+        )
         for key in self._walker_state_keys:
-            self.state[key] = self.state[key][ids]
-        self.state['log_weights'] = torch.zeros_like(weights)
+            state = batch_gather_and_concat(self.state[key])
+            self.state[key] = state[ids]
+        self.state['log_weights'] = torch.zeros_like(self.state['log_weights'])
 
     def restart(self):
         self.state['step'] = 0
