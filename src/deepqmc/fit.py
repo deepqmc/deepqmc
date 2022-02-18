@@ -7,14 +7,10 @@ from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 from uncertainties import ufloat
 
+from .batch_operations import batch_exp_normalize_mean, batch_mean
 from .errors import DeepQMCError, NanError
 from .physics import local_energy
-from .torchext import (
-    estimate_optimal_batch_size_cuda,
-    exp_normalize_mean,
-    is_cuda,
-    weighted_mean_var,
-)
+from .torchext import estimate_optimal_batch_size_cuda, is_cuda, weighted_mean_var
 
 __version__ = '0.1.0'
 __all__ = ['fit_wf', 'WaveFunctionLoss', 'LossEnergy']
@@ -52,8 +48,7 @@ class LossEnergy(WaveFunctionLoss):
 
     def forward(self, Es_loc, log_psis, ws):
         assert Es_loc.grad_fn is None
-        self.weights = 2 * (Es_loc - (ws * Es_loc).mean()) / len(Es_loc)
-        return (self.weights * ws * log_psis).sum()
+        return batch_mean(2 * (Es_loc - batch_mean(ws * Es_loc)) * ws * log_psis)
 
 
 def log_clipped_outliers(x, q):
@@ -158,10 +153,10 @@ def fit_wf(  # noqa: C901
                 log.warning('Masking local energies where psi = 0')
                 Es_loc = Es_loc.where(mask, Es_loc.new_tensor(0))
             Es_loc_loss = log_clipped_outliers(Es_loc, q) if clip_outliers else Es_loc
-            loss = loss_func(Es_loc_loss, log_psis, exp_normalize_mean(log_ws))
+            loss = loss_func(Es_loc_loss, log_psis, batch_exp_normalize_mean(log_ws))
             # The convention is that `loss_func` returns an *average* loss over
             # all the inputs. We scale it so that it works with subbatching.
-            loss *= len(rs) / batch_size
+            loss *= len(rs) / batch_sum(loss.new_tensor([batch_size]))
             loss.backward()
             subbatches.append(
                 (
