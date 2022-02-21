@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+from torch.nn.parallel import DistributedDataParallel
 
 __all__ = ()
 
@@ -135,3 +136,13 @@ def argmax_random_choice(x):
     mask = x == x.max()
     index = torch.randint(sum(mask), (1,))
     return torch.arange(len(x))[mask][index].item()
+
+
+class DDPModel(DistributedDataParallel):
+    r"""DDP subclass providing acces to wavefunction attributes."""
+
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.module, name)

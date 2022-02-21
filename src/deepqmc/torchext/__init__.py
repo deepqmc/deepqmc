@@ -3,6 +3,7 @@ from .cuda import estimate_optimal_batch_size_cuda
 from .sloglindet import sloglindet
 from .utils import (
     SSP,
+    DDPModel,
     argmax_random_choice,
     batch_eval,
     batch_eval_tuple,
@@ -50,4 +51,5 @@ __all__ = [
     'state_dict_copy',
     'triu_flat',
     'weighted_mean_var',
+    'DDPModel',
 ]
