@@ -7,10 +7,19 @@ from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 from uncertainties import ufloat
 
-from .batch_operations import batch_exp_normalize_mean, batch_mean, batch_median
+from .batch_operations import (
+    batch_exp_normalize_mean,
+    batch_len,
+    batch_max,
+    batch_mean,
+    batch_median,
+    batch_min,
+    batch_sum,
+    batch_weighted_mean_var,
+)
 from .errors import DeepQMCError, NanError
 from .physics import local_energy
-from .torchext import estimate_optimal_batch_size_cuda, is_cuda, weighted_mean_var
+from .torchext import estimate_optimal_batch_size_cuda, is_cuda
 
 __version__ = '0.1.0'
 __all__ = ['fit_wf', 'WaveFunctionLoss', 'LossEnergy']
@@ -177,23 +186,26 @@ def fit_wf(  # noqa: C901
             torch.isnan(p.grad).any() for p in wf.parameters() if p.grad is not None
         ):
             raise NanError(rs_batch)
-        loss = loss.sum()
+        loss = batch_sum(loss)
         if max_grad_norm is not None:
             clip_grad_norm_(wf.parameters(), max_grad_norm)
-        E_loc_mean, E_loc_var = weighted_mean_var(Es_loc, log_ws)
-        E_loc_err = torch.sqrt(E_loc_var / len(Es_loc))
+        E_loc_mean, E_loc_var = batch_weighted_mean_var(Es_loc, log_ws)
+        E_loc_err = torch.sqrt(E_loc_var / batch_len(Es_loc))
         lr = opt.state_dict()['param_groups'][0]['lr']
         if writer:
             writer.add_scalar('E_loc/mean', E_loc_mean, step)
             writer.add_scalar('E_loc/var', E_loc_var, step)
-            writer.add_scalar('E_loc/min', Es_loc.min(), step)
-            writer.add_scalar('E_loc/max', Es_loc.max(), step)
+            writer.add_scalar('E_loc/min', batch_min(Es_loc), step)
+            writer.add_scalar('E_loc/max', batch_max(Es_loc), step)
             writer.add_scalar('E_loc/err', E_loc_err, step)
-            E_loc_loss_mean, E_loc_loss_var = weighted_mean_var(Es_loc_loss, log_ws)
+            E_loc_loss_mean, E_loc_loss_var = batch_weighted_mean_var(
+                Es_loc_loss, log_ws
+            )
             writer.add_scalar('E_loc_loss/mean', E_loc_loss_mean, step)
             writer.add_scalar('E_loc_loss/var', E_loc_loss_var, step)
             writer.add_scalar('loss', loss, step)
-            writer.add_scalar('log_weights/KLvar', log_ws.var() / 2, step)
+            _, log_ws_var = batch_weighted_mean_var(log_ws)
+            writer.add_scalar('log_weights/KLvar', log_ws_var / 2, step)
             grads = torch.cat(
                 [p.grad.flatten() for p in wf.parameters() if p.grad is not None]
             )
@@ -201,7 +213,7 @@ def fit_wf(  # noqa: C901
             for label, value in wf.tracked_parameters():
                 writer.add_scalar(f'param/{label}', value, step)
             writer.add_scalar('misc/learning_rate', lr, step)
-            writer.add_scalar('misc/batch_size', len(Es_loc), step)
+            writer.add_scalar('misc/batch_size', batch_len(Es_loc), step)
         if log_dict is not None:
             log_dict['E_loc'] = Es_loc.cpu().numpy()
             log_dict['E_loc_loss'] = Es_loc_loss.cpu().numpy()

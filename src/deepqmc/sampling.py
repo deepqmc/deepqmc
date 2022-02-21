@@ -7,7 +7,14 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from uncertainties import ufloat, unumpy as unp
 
-from .batch_operations import batch_gather_and_concat, batch_mean
+from .batch_operations import (
+    batch_gather_and_concat,
+    batch_len,
+    batch_max,
+    batch_mean,
+    batch_min,
+    batch_weighted_mean_var,
+)
 from .errors import LUFactError
 from .physics import (
     clean_force,
@@ -101,14 +108,18 @@ def sample_wf(  # noqa: C901
                 buffer = []
             if not buffer:
                 blocks_arr = unp.nominal_values(np.stack(blocks, -1))
-                err = blocks_arr.mean(-1).std() / np.sqrt(len(blocks_arr))
-                energy = ufloat(blocks_arr.mean(), err)
+                blocks_mean, blocks_var = batch_weighted_mean_var(
+                    Es_loc.new(blocks_arr.mean(-1))
+                )
+                err = blocks_var.sqrt() / np.sqrt(batch_len(blocks_arr))
+                energy = ufloat(blocks_mean, err)
         if writer:
             if calculating_energy:
-                writer.add_scalar('E_loc/mean', Es_loc.mean() - energy_offset, step)
-                writer.add_scalar('E_loc/var', Es_loc.var(), step)
-                writer.add_scalar('E_loc/min', Es_loc.min(), step)
-                writer.add_scalar('E_loc/max', Es_loc.max(), step)
+                E_loc_mean, E_loc_var = batch_weighted_mean_var(Es_loc)
+                writer.add_scalar('E_loc/mean', E_loc_mean - energy_offset, step)
+                writer.add_scalar('E_loc/var', E_loc_var, step)
+                writer.add_scalar('E_loc/min', batch_min(Es_loc), step)
+                writer.add_scalar('E_loc/max', batch_max(Es_loc), step)
                 if not buffer:
                     writer.add_scalar(
                         'E/value', energy.nominal_value - energy_offset, step
@@ -317,7 +328,7 @@ class MetropolisSampler(Sampler):
         acceptance = batch_mean(accepted.type(torch.int)).item()
         info = {
             'acceptance': acceptance,
-            'age': self._ages.cpu().numpy(),
+            'age': self._ages,
             'tau': self.tau,
         }
         state = {
@@ -335,21 +346,21 @@ class MetropolisSampler(Sampler):
         self._step_writer += 1
         if self.writer:
             self.writer.add_scalar(
-                'sampling/log_psis/mean', self.log_psis.mean(), self._step_writer
+                'sampling/log_psis/mean', batch_mean(log_psis), self._step_writer
             )
             self.writer.add_scalar(
                 'sampling/dists/mean',
-                pairwise_self_distance(self.rs).mean(),
+                batch_mean(pairwise_self_distance(self.rs)),
                 self._step_writer,
             )
             self.writer.add_scalar('sampling/acceptance', acceptance, self._step_writer)
             self.writer.add_scalar('sampling/tau', self.tau, self._step_writer)
             self.writer.add_scalar(
-                'sampling/age/max', info['age'].max(), self._step_writer
+                'sampling/age/max', batch_max(info['age']).item(), self._step_writer
             )
             self.writer.add_scalar(
                 'sampling/age/rms',
-                np.sqrt((info['age'] ** 2).mean()),
+                torch.sqrt(batch_mean(info['age'] ** 2)).item(),
                 self._step_writer,
             )
             self.extra_writer()
@@ -533,7 +544,7 @@ class LangevinSampler(MetropolisSampler):
 
     def extra_writer(self):
         self.writer.add_scalar(
-            'sampling/forces', self.forces.norm(dim=-1).mean(), self._step_writer
+            'sampling/forces', batch_mean(self.forces.norm(dim=-1)), self._step_writer
         )
 
     def recompute_psi(self):
