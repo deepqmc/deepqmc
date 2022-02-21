@@ -1,10 +1,14 @@
 import inspect
 import logging
+import os
 import sys
 from pathlib import Path
 
 import click
 import tomlkit
+import torch
+import torch.distributed as dist
+import torch.multiprocessing as mp
 from tomlkit.items import Comment, Trivia
 from tqdm import tqdm
 
@@ -13,6 +17,7 @@ from .evaluate import evaluate
 from .fit import fit_wf
 from .io import wf_from_file
 from .sampling import LangevinSampler, sample_wf
+from .torchext import DDPModel
 from .train import train
 from .wf import ANSATZES
 
@@ -245,4 +250,80 @@ def evaluate_at(workdir, cuda, store_steps, hook):
         store_steps=store_steps,
         workdir=workdir,
         **params.get('evaluate_kwargs', {}),
+    )
+
+
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12345'
+    dist.init_process_group('nccl', rank=rank, world_size=world_size)
+
+
+def cleanup():
+    dist.destroy_process_group()
+
+
+def _train_at_parallel(rank, workdir, save_every, n_gpus, state, sync_processes):
+    if sync_processes:
+        sys.modules['deepqmc.batch_operations'].PARALLEL = True
+    setup(rank, n_gpus)
+    log.info('Initializing a new wave function')
+    wf, params, state_from_file = wf_from_file(workdir)
+    state = state or state_from_file
+    wf.mol.charges = wf.mol.charges.to(rank)
+    wf.mol.coords = wf.mol.coords.to(rank)
+    wf = DDPModel(wf.to(rank), device_ids=[rank])
+    train(
+        wf,
+        workdir=workdir / Path(f'gpu_{rank}'),
+        state=state,
+        save_every=save_every,
+        **params.get('train_kwargs', {}),
+    )
+    cleanup()
+
+
+@cli.command('train_parallel')
+@click.argument('workdir', type=click.Path(exists=True))
+@click.option(
+    '--save-every',
+    default=100,
+    show_default=True,
+    help='Frequency in steps of saving the curent state of the optimization.',
+)
+@click.option(
+    '--max-restarts',
+    default=3,
+    show_default=True,
+    help='Maximum number of attempted restarts before aborting.',
+)
+@click.option(
+    '--n-gpus',
+    default=None,
+    help='Set number of gpus. If non all visible gpus are used',
+)
+@click.option(
+    '--sync-processes',
+    default=True,
+    help='If True synchronize prosses across gpus',
+)
+@click.option('--hook', is_flag=True, help='Import a deepqmc hook from WORKDIR.')
+def train_at_parallel(workdir, save_every, max_restarts, n_gpus, sync_processes, hook):
+    """Train an ansatz with variational quantum Monte Carlo.
+
+    The calculation details must be specified in a "param.toml" file in WORKDIR,
+    which must contain at least the keywords "system" and "ansatz", and
+    optionally any keywords printed by the "defaults" command.
+    """
+    n_gpus = torch.cuda.device_count() if n_gpus is None else int(n_gpus)
+    workdir = Path(workdir).resolve()
+    if hook:
+        log.info('Importing a dlqmc hook')
+        sys.path.append(str(workdir))
+        import dlqmc_hook  # noqa: F401
+    state = None
+    mp.spawn(
+        _train_at_parallel,
+        args=(workdir, save_every, n_gpus, state, sync_processes),
+        nprocs=n_gpus,
     )
