@@ -1,5 +1,4 @@
 from .bdet import bdet
-from .cuda import estimate_optimal_batch_size_cuda
 from .sloglindet import sloglindet
 from .utils import (
     SSP,
@@ -33,7 +32,6 @@ __all__ = [
     'batch_eval_tuple',
     'bdet',
     'bdiag',
-    'estimate_optimal_batch_size_cuda',
     'exp_normalize_mean',
     'fp_tensor',
     'get_custom_dnn',

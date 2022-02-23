@@ -1,5 +1,4 @@
 import logging
-from functools import partial
 
 import torch
 from torch import nn
@@ -7,14 +6,9 @@ from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 from uncertainties import ufloat
 
-from .errors import DeepQMCError, NanError
+from .errors import NanError
 from .physics import local_energy
-from .torchext import (
-    estimate_optimal_batch_size_cuda,
-    exp_normalize_mean,
-    is_cuda,
-    weighted_mean_var,
-)
+from .torchext import exp_normalize_mean, weighted_mean_var
 
 __version__ = '0.1.0'
 __all__ = ['fit_wf', 'WaveFunctionLoss', 'LossEnergy']
@@ -78,7 +72,6 @@ def fit_wf(  # noqa: C901
     require_energy_gradient=False,
     require_psi_gradient=True,
     subbatch_size=None,
-    max_memory=None,
     *,
     clip_outliers=True,
     q=5,
@@ -120,18 +113,6 @@ def fit_wf(  # noqa: C901
         max_grad_norm (float): maximum gradient norm passed to
             :func:`torch.nn.utils.clip_grad_norm_`
     """
-    if not is_cuda(wf) and max_memory:
-        raise DeepQMCError(
-            'Automatic subbatch_size estimation only implemented for GPU. '
-            'When training on CPU, do not use max_memory.'
-        )
-    elif is_cuda(wf) and not subbatch_size:
-        subbatch_size = estimate_optimal_batch_size_cuda(
-            partial(fit_wf_mem_test_func, wf, loss_func, require_psi_gradient),
-            torch.linspace(200, 500, 4) / (wf.n_up + wf.n_down),
-            max_memory=max_memory,
-        )
-        log.info(f'estimated optimal subbatch size: {subbatch_size}')
     log.debug('Entering training loop')
     for step, (rs, log_psi0s, _, log_ws) in zip(steps, sampler):
         rs_batch = rs
@@ -216,15 +197,3 @@ def fit_wf(  # noqa: C901
             log_dict['learning_rate'] = lr
         opt.step()
         yield step, ufloat(E_loc_mean.item(), E_loc_err.item())
-
-
-def fit_wf_mem_test_func(wf, loss_func, require_psi_gradient, size):
-    # require_energy_gradient isn't needed here because it adds only little
-    # extra memory to the probe calculation
-    assert is_cuda(wf)
-    rs = torch.randn((size, wf.n_down + wf.n_up, 3), device='cuda', requires_grad=True)
-    E_loc, log_psi, _ = local_energy(rs, wf, keep_graph=require_psi_gradient)
-    loss = loss_func(
-        E_loc.detach() if require_psi_gradient else E_loc, log_psi, rs.new_ones(len(rs))
-    )
-    loss.backward()
