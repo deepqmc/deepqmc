@@ -7,7 +7,9 @@ from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, TensorDataset
 from uncertainties import ufloat
 
-from .batch_operations import (
+from .errors import DeepQMCError, NanError
+from .physics import local_energy
+from .torchext import (
     batch_exp_normalize_mean,
     batch_len,
     batch_max,
@@ -16,10 +18,9 @@ from .batch_operations import (
     batch_min,
     batch_sum,
     batch_weighted_mean_var,
+    estimate_optimal_batch_size_cuda,
+    is_cuda,
 )
-from .errors import DeepQMCError, NanError
-from .physics import local_energy
-from .torchext import estimate_optimal_batch_size_cuda, is_cuda
 
 __version__ = '0.1.0'
 __all__ = ['fit_wf', 'WaveFunctionLoss', 'LossEnergy']

@@ -7,14 +7,6 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from uncertainties import ufloat, unumpy as unp
 
-from .batch_operations import (
-    batch_gather_and_concat,
-    batch_len,
-    batch_max,
-    batch_mean,
-    batch_min,
-    batch_weighted_mean_var,
-)
 from .errors import LUFactError
 from .physics import (
     clean_force,
@@ -24,7 +16,16 @@ from .physics import (
     quantum_force,
 )
 from .plugins import PLUGINS
-from .torchext import argmax_random_choice, shuffle_tensor
+from .torchext import (
+    argmax_random_choice,
+    batch_gather_and_concat,
+    batch_len,
+    batch_max,
+    batch_mean,
+    batch_min,
+    batch_weighted_mean_var,
+    shuffle_tensor,
+)
 from .utils import apply_resampling, energy_offset
 
 __version__ = '0.3.0'

@@ -265,7 +265,7 @@ def cleanup():
 
 def _train_at_parallel(rank, workdir, save_every, n_gpus, state, sync_processes):
     if sync_processes:
-        sys.modules['deepqmc.batch_operations'].PARALLEL = True
+        sys.modules['deepqmc.torchext.batch_operations'].PARALLEL = True
     setup(rank, n_gpus)
     log.info('Initializing a new wave function')
     wf, params, state_from_file = wf_from_file(workdir)
