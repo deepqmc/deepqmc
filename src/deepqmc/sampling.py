@@ -30,7 +30,6 @@ def sample_wf(  # noqa: C901
     sampler,
     steps,
     writer=None,
-    write_figures=False,
     log_dict=None,
     blocks=None,
     *,
@@ -65,7 +64,7 @@ def sample_wf(  # noqa: C901
     calculating_energy = not equilibrate
     buffer = []
     energy = None
-    for step, (rs, log_psis, _, _, info) in zip(steps, sampler):
+    for step, (rs, log_psis, _, _, _) in zip(steps, sampler):
         if step == 0:
             dist_means = rs.new_zeros(5 * block_size)
             if not equilibrate:
@@ -113,27 +112,6 @@ def sample_wf(  # noqa: C901
                         'E/value', energy.nominal_value - energy_offset, step
                     )
                     writer.add_scalar('E/error', energy.std_dev, step)
-            if write_figures:
-                from matplotlib.figure import Figure
-
-                fig = Figure(dpi=300)
-                ax = fig.subplots()
-                ax.hist(log_psis.cpu(), bins=100)
-                writer.add_figure('log_psi', fig, step)
-                fig = Figure(dpi=300)
-                ax = fig.subplots()
-                ax.hist(info['age'], bins=100)
-                writer.add_figure('age', fig, step)
-                if calculating_energy:
-                    fig = Figure(dpi=300)
-                    ax = fig.subplots()
-                    ax.hist(Es_loc.cpu(), bins=100)
-                    writer.add_figure('E_loc', fig, step)
-                    if not buffer:
-                        fig = Figure(dpi=300)
-                        ax = fig.subplots()
-                        ax.hist(blocks_arr.flatten(), bins=100)
-                        writer.add_figure('E_block', fig, step)
         if calculating_energy:
             yield step, energy
 
