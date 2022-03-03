@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from deepqmc import Molecule, evaluate, train
+from deepqmc.sampling import rand_from_mol
 from deepqmc.wf import PauliNet
 
 
@@ -110,3 +111,36 @@ def test_invariance_to_subbatch_size(tmp_path):
     # We accept relative variation up to a factor of 5. If the loss/gradients
     # scaled with subbatch size instead, then the expected ratio would be 20.
     assert torch.isclose(grad_norm_1, grad_norm_2, rtol=5.0)
+
+
+def test_reproducibility():
+
+    mol = Molecule.from_name('LiH')
+    net = PauliNet.from_hf(mol, cas=(4, 2), conf_limit=2)
+    state = copy.deepcopy(net.state_dict())
+    rs = rand_from_mol(mol, 100)
+
+    def get_output_after_training():
+        net.load_state_dict(state)
+        torch.manual_seed(0)
+        train(
+            net,
+            n_steps=1,
+            batch_size=100,
+            epoch_size=1,
+            optimizer='AdamW',
+            equilibrate=False,
+            workdir=None,
+            sampler_kwargs={
+                'sample_size': 100,
+                'n_discard': 0,
+                'n_decorrelate': 0,
+                'n_first_certain': 0,
+            },
+        )
+        return net(rs)
+
+    output1 = get_output_after_training()
+    output2 = get_output_after_training()
+
+    assert torch.all(torch.isclose(output1[0], output2[0], rtol=0))
