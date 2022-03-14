@@ -51,8 +51,7 @@ def batch_exp_normalize_mean(t):
 
 
 def batch_weighted_mean_var(t, log_ws=None):
-    log_ws = torch.zeros_like(t) if log_ws is None else log_ws
-    ws = batch_exp_normalize_mean(log_ws)
+    ws = torch.ones_like(t) if log_ws is None else batch_exp_normalize_mean(log_ws)
     mean = batch_mean(ws * t)
     return mean, batch_mean((ws * (t - mean) ** 2))
 
