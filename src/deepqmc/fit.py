@@ -120,7 +120,7 @@ def fit_wf(  # noqa: C901
         batch_size = len(rs)
         subbatch_size = subbatch_size or batch_size
         subbatches = []
-        for rs, log_psi0s, log_ws in DataLoader(
+        for rs, log_psi0s, log_ws in DataLoader(  # noqa: B020
             TensorDataset(rs, log_psi0s, log_ws), batch_size=subbatch_size
         ):
             Es_loc, log_psis, sign_psis = local_energy(
