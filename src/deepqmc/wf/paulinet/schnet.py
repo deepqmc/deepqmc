@@ -307,7 +307,7 @@ class ElectronicSchNet(nn.Module):
         edges_elec = self.dist_basis(dists_elec)
         x = self.X(self.spin_idxs.expand(*batch_dims, -1))
         Y = self.Y(self.nuclei_idxs.expand(*batch_dims, -1))
-        for (layer, norm) in zip(self.layers, self.layer_norms):
+        for layer, norm in zip(self.layers, self.layer_norms):
             z, messages = layer(x, Y, edges_elec, edges_nuc)
             if norm:
                 z = 0.1 * norm(z)
