@@ -87,7 +87,7 @@ def rs_mesh(n_electrons, dims, bounds, steps, cut=None):
 def extract_nodes(wf, mesh, dim):
     assert dim in [2, 3]
     steps = mesh.shape[:-2]
-    psis, signs = map(lambda x: x.view(1, 1, *steps), wf(mesh.flatten(end_dim=-3)))
+    psis, signs = (x.view(1, 1, *steps) for x in wf(mesh.flatten(end_dim=-3)))
     if dim == 2:
         surf = torch.nn.functional.conv2d(signs, torch.ones(1, 1, 2, 2))
     elif dim == 3:
