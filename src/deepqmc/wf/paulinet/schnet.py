@@ -163,6 +163,17 @@ class NuclearEmbedding(nn.Module):
         return self.mlp(self.charges[idxs].unsqueeze(dim=-1))
 
 
+class ElectronEmbedding(nn.Module):
+    def __init__(self, n_nuclei, embedding_dim, n_layers=2, activation=SSP, **kwargs):
+        super().__init__()
+        self.mlp = get_mlp(
+            4 * n_nuclei, embedding_dim, ('log', n_layers), activation, **kwargs
+        )
+
+    def forward(self, dists, diffs):
+        return self.mlp(torch.cat([dists, diffs.flatten(start_dim=-2)], dim=-1))
+
+
 class ElectronicSchNet(nn.Module):
     r"""Graph neural network SchNet adapted to handle electrons.
 
@@ -271,8 +282,11 @@ class ElectronicSchNet(nn.Module):
         version=2,
         layer_norm=False,
         use_diffs=False,
+        initial_embedding='embedding',
     ):
         assert version in self.LAYER_FACTORIES
+        assert initial_embedding in ['embedding', 'distance']
+        self.initial_embedding = initial_embedding
         subnet_metafactory = subnet_metafactory or SubnetFactory
         if not dist_basis:
             dist_basis = partial(DistanceBasis, envelope='nocusp')
@@ -291,8 +305,11 @@ class ElectronicSchNet(nn.Module):
         self.kernel_dim = kernel_dim
         self.dist_basis = dist_basis(dist_feat_dim, dist_feat_cutoff)
         self.Y = nuc_embedding(n_nuclei, kernel_dim)
-        self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
-        if init_embed_one:
+        if initial_embedding == 'embedding':
+            self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
+        elif initial_embedding == 'distance':
+            self.X = ElectronEmbedding(n_nuclei, embedding_dim)
+        if init_embed_one and initial_embedding == 'embedding':
             self.X.weight.detach().fill_(1.0)
         self.layers = nn.ModuleList(
             self.LAYER_FACTORIES[version](subnet_factory, n_up, **(layer_kwargs or {}))
@@ -318,7 +335,10 @@ class ElectronicSchNet(nn.Module):
         if self.use_diffs:
             edges_nuc = torch.cat([edges_nuc, self.diff_basis(diffs_nuc)], dim=-1)
             edges_elec = torch.cat([edges_elec, self.diff_basis(diffs_elec)], dim=-1)
-        x = self.X(self.spin_idxs.expand(*batch_dims, -1))
+        if self.initial_embedding == 'embedding':
+            x = self.X(self.spin_idxs.expand(*batch_dims, -1))
+        elif self.initial_embedding == 'distance':
+            x = self.X(dists_nuc, diffs_nuc)
         Y = self.Y(self.nuclei_idxs.expand(*batch_dims, -1))
         for layer, norm in zip(self.layers, self.layer_norms):
             z, messages = layer(x, Y, edges_elec, edges_nuc)
