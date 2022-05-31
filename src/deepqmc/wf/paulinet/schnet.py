@@ -5,7 +5,7 @@ from torch import nn
 
 from deepqmc.torchext import SSP, fp_tensor, get_mlp, idx_perm
 
-from .distbasis import DistanceBasis
+from .distbasis import DistanceBasis, DifferenceBasis
 
 __version__ = '0.2.0'
 __all__ = ['ElectronicSchNet']
@@ -270,13 +270,23 @@ class ElectronicSchNet(nn.Module):
         kernel_dim=64,
         version=2,
         layer_norm=False,
+        use_diffs=False,
     ):
         assert version in self.LAYER_FACTORIES
         subnet_metafactory = subnet_metafactory or SubnetFactory
-        subnet_factory = subnet_metafactory(dist_feat_dim, kernel_dim, embedding_dim)
         if not dist_basis:
             dist_basis = partial(DistanceBasis, envelope='nocusp')
+            diff_basis = partial(DifferenceBasis, envelope='nocusp')
+        self.use_diffs = use_diffs
         super().__init__()
+        if self.use_diffs:
+            total_dist_feat_dim = 7 * dist_feat_dim  # distance + difference
+            self.diff_basis = diff_basis(dist_feat_dim, dist_feat_cutoff)
+        else:
+            total_dist_feat_dim = dist_feat_dim
+        subnet_factory = subnet_metafactory(
+            total_dist_feat_dim, kernel_dim, embedding_dim
+        )
         self.resnet = resnet
         self.kernel_dim = kernel_dim
         self.dist_basis = dist_basis(dist_feat_dim, dist_feat_cutoff)
@@ -299,12 +309,15 @@ class ElectronicSchNet(nn.Module):
         self.register_buffer('spin_idxs', spin_idxs)
         self.register_buffer('nuclei_idxs', torch.arange(n_nuclei))
 
-    def forward(self, dists_elec, dists_nuc):
+    def forward(self, dists_elec, dists_nuc, diffs_elec=None, diffs_nuc=None):
         *batch_dims, n_elec, n_nuclei = dists_nuc.shape
         assert dists_elec.shape == (*batch_dims, n_elec, n_elec)
         assert n_elec == len(self.spin_idxs)
         edges_nuc = self.dist_basis(dists_nuc)
         edges_elec = self.dist_basis(dists_elec)
+        if self.use_diffs:
+            edges_nuc = torch.cat([edges_nuc, self.diff_basis(diffs_nuc)], dim=-1)
+            edges_elec = torch.cat([edges_elec, self.diff_basis(diffs_elec)], dim=-1)
         x = self.X(self.spin_idxs.expand(*batch_dims, -1))
         Y = self.Y(self.nuclei_idxs.expand(*batch_dims, -1))
         for layer, norm in zip(self.layers, self.layer_norms):

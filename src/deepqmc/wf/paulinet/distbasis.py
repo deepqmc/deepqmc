@@ -44,7 +44,7 @@ class DistanceBasis(nn.Module):
         qs = torch.linspace(delta, 1 - delta, dist_feat_dim)
         self.cutoff = cutoff
         self.envelope = envelope
-        self.register_buffer('mus', cutoff * qs**2)
+        self.register_buffer('mus', cutoff * qs ** 2)
         self.register_buffer('sigmas', (1 + cutoff * qs) / 7)
         self.smooth = smooth
 
@@ -58,14 +58,14 @@ class DistanceBasis(nn.Module):
             envelope = torch.where(
                 dists_rel > 1,
                 dists.new_zeros(1),
-                1 - 6 * dists_rel**5 + 15 * dists_rel**4 - 10 * dists_rel**3,
+                1 - 6 * dists_rel ** 5 + 15 * dists_rel ** 4 - 10 * dists_rel ** 3,
             )
         elif self.envelope == 'nocusp':
-            envelope = dists**2 * torch.exp(-dists)
+            envelope = dists ** 2 * torch.exp(-dists)
         else:
             raise AssertionError()
         x = envelope[..., None] * torch.exp(
-            -((dists[..., None] - self.mus) ** 2) / self.sigmas**2
+            -((dists[..., None] - self.mus) ** 2) / self.sigmas ** 2
         )
         if self.powers is not None:
             powers = torch.where(
@@ -85,3 +85,16 @@ class DistanceBasis(nn.Module):
                 ('envelope', self.envelope),
             ]
         )
+
+
+class DifferenceBasis(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.distbasis = DistanceBasis(*args, **kwargs)
+
+    def forward(self, diffs):
+        x = []
+        for i in range(3):
+            x.append(self.distbasis(diffs[..., i]))
+            x.append(self.distbasis(-diffs[..., i]))
+        return torch.cat(x, dim=-1)

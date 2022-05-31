@@ -22,11 +22,19 @@ def pairwise_self_distance(coords, full=False):
     return dists
 
 
+def pairwise_self_difference(coords, full=False):
+    i, j = np.triu_indices(coords.shape[-2], k=1)
+    diffs = coords[..., :, None, :] - coords[..., None, :, :]
+    if not full:
+        diffs = diffs[..., i, j, :]
+    return diffs
+
+
 def pairwise_diffs(coords1, coords2, axes_offset=True):
     diffs = coords1[..., :, None, :] - coords2[..., None, :, :]
     if axes_offset:
         diffs = offset_from_axes(diffs)
-    return torch.cat([diffs, (diffs**2).sum(dim=-1, keepdim=True)], dim=-1)
+    return torch.cat([diffs, (diffs ** 2).sum(dim=-1, keepdim=True)], dim=-1)
 
 
 def diffs_to_nearest_nuc(rs, coords):
@@ -79,7 +87,7 @@ def crossover_parameter(zs, fs, charges):
     eps = fs.new_tensor(torch.finfo(fs.dtype).tiny)
     zs_unit = zs / zs.norm(dim=-1)[..., None]
     fs_unit = fs / fs.norm(dim=-1).clamp(eps, None)[..., None]
-    Z2z2 = charges**2 * zs_2
+    Z2z2 = charges ** 2 * zs_2
     return (1 + (fs_unit * zs_unit).sum(dim=-1)) / 2 + Z2z2 / (10 * (4 + Z2z2))
 
 
@@ -89,7 +97,7 @@ def clean_force(forces, rs, mol, *, tau, return_a=False):
     a = crossover_parameter(
         zs.flatten(end_dim=1), forces.flatten(end_dim=1), mol.charges[idxs]
     ).view(len(rs), -1)
-    av2tau = a * (forces**2).sum(dim=-1) * tau
+    av2tau = a * (forces ** 2).sum(dim=-1) * tau
     # av2tau can be small or zero, so the following expression must handle that
     factors = 2 / (torch.sqrt(1 + 2 * av2tau) + 1)
     forces = factors[..., None] * forces
@@ -117,7 +125,7 @@ def local_energy(
     if torch.isnan(log_psis).any():
         raise NanError(rs)
     Es_loc = (
-        -0.5 * (lap_log_psis + (quantum_force**2).sum(dim=(-2, -1)))
+        -0.5 * (lap_log_psis + (quantum_force ** 2).sum(dim=(-2, -1)))
         + Vs_nuc
         + Vs_el
         + Es_nuc
