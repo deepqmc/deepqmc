@@ -4,7 +4,12 @@ import numpy as np
 import torch
 from torch import nn
 
-from deepqmc.physics import pairwise_diffs, pairwise_distance, pairwise_self_distance
+from deepqmc.physics import (
+    pairwise_diffs,
+    pairwise_distance,
+    pairwise_self_distance,
+    pairwise_self_difference,
+)
 from deepqmc.torchext import SSP, get_mlp, idx_perm
 
 from .schnet import ElectronicSchNet, SubnetFactory
@@ -155,7 +160,7 @@ class RealSpaceBackflow(nn.Module):
         if self.decay_type == 'rios':
             R = diffs_nuc[..., -1].sqrt().min(dim=-1).values / 0.5
             decay = torch.where(
-                R < 1, R**2 * (6 - 8 * R + 3 * R**2), R.new_tensor(1)
+                R < 1, R ** 2 * (6 - 8 * R + 3 * R ** 2), R.new_tensor(1)
             )
         elif self.decay_type == 'deeperwin':
             decay = (
@@ -351,11 +356,15 @@ class OmniSchNet(nn.Module):
     def forward(self, rs, coords):
         dists_elec = pairwise_self_distance(rs, full=True)
         dists_nuc = pairwise_distance(rs, coords)
+        diffs_elec = pairwise_self_difference(rs, full=True)
+        diffs_nuc = pairwise_diffs(rs, coords)[..., :3]
         embeddings = {}
         if self.mf_schnet:
             embeddings['mean-field'], _ = self.mf_schnet(dists_nuc)
         if self.schnet:
-            embeddings['many-body'], messages = self.schnet(dists_elec, dists_nuc)
+            embeddings['many-body'], messages = self.schnet(
+                dists_elec, dists_nuc, diffs_elec, diffs_nuc
+            )
         if self.jastrow_type:
             if isinstance(self.jastrow, nn.ModuleDict):
                 j_up = self.jastrow['up'](
