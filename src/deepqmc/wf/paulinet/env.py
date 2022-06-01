@@ -5,10 +5,9 @@ from deepqmc.torchext import fp_tensor
 
 
 class EEShell(nn.Module):
-    def __init__(self, coeffs, zetas):
+    def __init__(self, zetas):
         super().__init__()
         self.register_parameter('zetas', torch.nn.Parameter(zetas))
-        self.register_parameter('coeffs', torch.nn.Parameter(coeffs))
 
     def __len__(self):
         return 1
@@ -23,8 +22,7 @@ class EEShell(nn.Module):
     def forward(self, rs):
         rs = rs[..., 3].sqrt()
         exps = torch.exp(-self.zetas.abs() * rs[:, None])
-        radials = (self.coeffs * exps).sum(dim=-1)[:, None]
-        return radials
+        return exps[:, None]
 
 
 class EEBasis(nn.Module):
@@ -46,9 +44,21 @@ class EEBasis(nn.Module):
         centers = fp_tensor(mol.coords)
         shells = []
         for i, z in enumerate(mol.charges):
-            n_shells = int(torch.div(z + 1, 2, rounding_mode='trunc'))
+            # find number of occupied shells for atom
+            max_elec = 0
+            n_shells = 0
+            for n in range(10):
+                if z <= max_elec:
+                    break
+                else:
+                    n_shells += 1
+                    for m in range(n + 1):
+                        max_elec += 2 * (2 * m + 1)
+            # adding the lowest unoccupied shell might be beneficial,
+            # especially for transition metals
+            #  n_shells += 1
             for k in range(n_shells):
-                shells.append((i, EEShell(fp_tensor([[1]]), fp_tensor([z / (k + 1)]))))
+                shells.append((i, EEShell(fp_tensor([z / (k + 1)]))))
         return cls(centers, shells)
 
     def forward(self, diffs):
