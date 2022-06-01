@@ -47,8 +47,8 @@ class EEBasis(nn.Module):
         shells = []
         for i, z in enumerate(mol.charges):
             n_shells = int(torch.div(z + 1, 2, rounding_mode='trunc'))
-            for i in range(n_shells):
-                shells.append((i, EEShell(fp_tensor([[1]]), fp_tensor([z / (i + 1)]))))
+            for k in range(n_shells):
+                shells.append((i, EEShell(fp_tensor([[1]]), fp_tensor([z / (k + 1)]))))
         return cls(centers, shells)
 
     def forward(self, diffs):
