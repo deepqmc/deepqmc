@@ -44,6 +44,7 @@ pytest = { version = ">=5 <7", optional = true }
 pytest-regressions = { version = "^2.2", optional = true, extras = ["num"] }
 coverage = { version = ">=4.5 <6", optional = true }
 tensorboard = { version = "^2", optional = true }
+protobuf = { version = "<4", optional = true }
 tqdm = { version = "^4", optional = true }
 sphinx = { version = "^2.2", optional = true }
 Pillow = { version = ">=7 <9", optional = true }
