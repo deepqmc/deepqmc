@@ -4,6 +4,7 @@ from functools import partial
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import kfac_jax
 import optax
 from jax import lax
 
@@ -98,25 +99,52 @@ def fit_wf(rng, hamil, ansatz, opt, sampler, sample_size, steps):
     def loss_fn(params, r):
         wf = partial(ansatz.apply, params)
         E_loc = jax.vmap(hamil.local_energy(wf))(r)
-        loss = (lax.stop_gradient(E_loc - E_loc.mean()) * wf(r).log).mean()
+        psi = wf(r)
+        kfac_jax.register_normal_predictive_distribution(psi.log[:, None])
+        loss = (lax.stop_gradient(E_loc - E_loc.mean()) * psi.log).mean()
         return loss, E_loc
 
-    @jax.jit
-    def train_step(rng, params, opt_state, smpl_state):
-        r, smpl_state = sampler.sample(smpl_state, rng, partial(ansatz.apply, params))
+    def energy_and_grad_fn(params, r):
         grads, E_loc = jax.grad(loss_fn, has_aux=True)(params, r)
-        updates, opt_state = opt.update(grads, opt_state)
-        params = optax.apply_updates(params, updates)
-        ene = jnp.mean(E_loc)
-        return params, opt_state, smpl_state, ene
+        return jnp.mean(E_loc), grads
 
     params = ansatz.init(rng, jnp.zeros(3))
-    opt_state = opt.init(params)
+
+    if isinstance(opt, optax.GradientTransformation):
+
+        @jax.jit
+        def train_step(rng, params, opt_state, smpl_state):
+            r, smpl_state = sampler.sample(
+                smpl_state, rng, partial(ansatz.apply, params)
+            )
+            ene, grads = energy_and_grad_fn(params, r)
+            updates, opt_state = opt.update(grads, opt_state)
+            params = optax.apply_updates(params, updates)
+            return params, opt_state, smpl_state, ene
+
+        opt_state = opt.init(params)
+    else:
+
+        @jax.jit
+        def sample(params, state, rng):
+            return sampler.sample(state, rng, partial(ansatz.apply, params))
+
+        def train_step(rng, params, opt_state, smpl_state):
+            rng_smpl, rng_opt = jax.random.split(rng)
+            r, smpl_state = sample(params, smpl_state, rng_smpl)
+            params, opt_state, stats = opt.step(
+                params, opt_state, rng_opt, batch=r, momentum=0, damping=1e-3
+            )
+            return params, opt_state, smpl_state, stats['loss']
+
+        opt = opt(value_and_grad_func=energy_and_grad_fn)
+        opt_state = opt.init(params, rng, jnp.zeros((sample_size, 3)))
+
     smpl_state = sampler.init(rng, partial(ansatz.apply, params), sample_size)
     train_state = params, opt_state, smpl_state
     for _, rng in zip(steps, hk.PRNGSequence(rng)):
         *train_state, ene = train_step(rng, *train_state)
-        yield params, ene
+        yield params, float(ene)
 
 
 if __name__ == '__main__':
@@ -124,11 +152,21 @@ if __name__ == '__main__':
 
     hamil = QHOHamiltonian(1.0, 1.0)
     ansatz = hk.without_apply_rng(hk.transform(lambda r: Ansatz(hamil)(r)))
-    opt = optax.adam(1e-2)
+    # opt = optax.adam(1e-2)
+    opt = partial(
+        kfac_jax.Optimizer,
+        l2_reg=0,
+        learning_rate_schedule=lambda k: 1e-2,
+        norm_constraint=1e-3,
+        inverse_update_period=1,
+        min_damping=1e-4,
+        num_burnin_steps=0,
+        estimation_mode='fisher_exact',
+    )
     sampler = MetropolisSampler(hamil, 1.0)
     sampler = DecorrSampler(sampler, 20)
     steps = tqdm(range(1000))
     for _, ene in fit_wf(
         jax.random.PRNGKey(0), hamil, ansatz, opt, sampler, 1000, steps
     ):
-        steps.set_postfix(E=ene)
+        steps.set_postfix(E=str(ene))
