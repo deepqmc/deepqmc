@@ -99,8 +99,11 @@ class DecorrSampler:
         return self.sampler.init(*args)
 
     def sample(self, state, rng, wf):
-        for _, rng in zip(range(self.decorr), hk.PRNGSequence(rng)):
-            _, state = self.sampler.sample(state, rng, wf)
+        state, _ = lax.scan(
+            (lambda state, rng: (self.sampler.sample(state, rng, wf)[1], None)),
+            state,
+            jax.random.split(rng, self.decorr),
+        )
         return state['r'], state
 
 
