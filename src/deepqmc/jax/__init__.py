@@ -100,7 +100,7 @@ class DecorrSampler:
 
     def sample(self, state, rng, wf):
         state, _ = lax.scan(
-            (lambda state, rng: (self.sampler.sample(state, rng, wf)[1], None)),
+            lambda state, rng: (self.sampler.sample(state, rng, wf)[1], None),
             state,
             jax.random.split(rng, self.decorr),
         )
@@ -177,10 +177,9 @@ def fit_wf(
             return sampler.sample(state, rng, partial(ansatz.apply, params))
 
         def train_step(rng, params, opt_state, smpl_state):
-            rng_smpl, rng_opt = jax.random.split(rng)
-            r, smpl_state = sample(params, smpl_state, rng_smpl)
+            r, smpl_state = sample(params, smpl_state, rng)
             params, opt_state, stats = opt.step(
-                params, opt_state, rng_opt, batch=r, momentum=0, damping=1e-3
+                params, opt_state, None, batch=r, momentum=0, damping=1e-3
             )
             return params, opt_state, smpl_state, stats['aux']
 
