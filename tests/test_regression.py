@@ -51,6 +51,7 @@ def rs(mol):
         ('paulinet', {'omni_kwargs.omni_schnet.subnet_kwargs.n_layers_w': 3}),
         ('paulinet', {'omni_kwargs.omni_schnet.subnet_kwargs.n_layers_h': 2}),
         ('paulinet', {'omni_kwargs.omni_schnet.subnet_kwargs.n_layers_g': 2}),
+        ('paulinet_ee', {}),
     ],
     ids=lambda x: ','.join(f'{k}={v}' for k, v in x.items())
     if isinstance(x, dict)
