@@ -11,6 +11,7 @@ from deepqmc.torchext import sloglindet, triu_flat
 from deepqmc.wf import WaveFunction
 
 from .cusp import CuspCorrection, ElectronicAsymptotic
+from .env import EEBasis
 from .gto import GTOBasis
 from .molorb import MolecularOrbital
 from .omni import OmniSchNet
@@ -349,6 +350,13 @@ class PauliNet(WaveFunction):
         wf = PauliNet.from_pyscf(mc or mf, **kwargs)
         wf.mf = mf
         wf.mol.data = mol.data
+        return wf
+
+    @classmethod
+    def with_ee(cls, mol, workdir=None, **kwargs):
+        basis = EEBasis.from_charges(mol)
+        kwargs['cusp_correction'] = False
+        wf = cls(mol, basis, **kwargs)
         return wf
 
     def pop_charges(self):
