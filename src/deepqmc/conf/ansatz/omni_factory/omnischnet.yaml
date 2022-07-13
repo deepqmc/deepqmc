@@ -15,16 +15,16 @@ backflow_factory:
 schnet_factory:
   _target_: deepqmc.wf.paulinet.schnet.ElectronicSchNet
   _partial_: true
-  dist_basis:
-    _target_: deepqmc.wf.paulinet.distbasis.DistanceBasis
-    _partial_: true
-    envelope: nocusp
+  dist_basis: null
   dist_feat_dim: 32
   dist_feat_cutoff: 10.0
+  dist_basis_envelope: nocusp
   n_interactions: 3
   kernel_dim: 64
   version: 2
   layer_norm: false
+  use_diffs: false
+  initial_embedding: embedding
   subnet_metafactory:
     _target_: deepqmc.wf.paulinet.schnet.SubnetFactory
     _partial_: true

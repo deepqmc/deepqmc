@@ -52,6 +52,15 @@ def rs(mol):
         ('paulinet', {'omni_kwargs.omni_schnet.subnet_kwargs.n_layers_h': 2}),
         ('paulinet', {'omni_kwargs.omni_schnet.subnet_kwargs.n_layers_g': 2}),
         ('paulinet_ee', {}),
+        ('paulinet_ee', {'omni_kwargs.omni_schnet.schnet_kwargs.use_diffs': True}),
+        (
+            'paulinet_ee',
+            {'omni_kwargs.omni_schnet.schnet_kwargs.dist_basis_envelope': 'physnet'},
+        ),
+        (
+            'paulinet_ee',
+            {'omni_kwargs.omni_schnet.schnet_kwargs.initial_embedding': 'distance'},
+        ),
     ],
     ids=lambda x: ','.join(f'{k}={v}' for k, v in x.items())
     if isinstance(x, dict)
