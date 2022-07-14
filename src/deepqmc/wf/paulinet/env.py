@@ -3,6 +3,8 @@ from torch import nn
 
 from deepqmc.torchext import fp_tensor
 
+__all__ = ()
+
 
 class EEShell(nn.Module):
     def __init__(self, zetas):

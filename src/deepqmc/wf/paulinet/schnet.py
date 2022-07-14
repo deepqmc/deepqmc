@@ -5,7 +5,7 @@ from torch import nn
 
 from deepqmc.torchext import SSP, fp_tensor, get_mlp, idx_perm
 
-from .distbasis import DistanceBasis, DifferenceBasis
+from .distbasis import DifferenceBasis, DistanceBasis
 
 __version__ = '0.2.0'
 __all__ = ['ElectronicSchNet']
