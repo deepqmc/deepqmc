@@ -277,6 +277,7 @@ class ElectronicSchNet(nn.Module):
         *,
         dist_feat_dim=32,
         dist_feat_cutoff=10.0,
+        dist_basis_envelope='nocusp',
         n_interactions=3,
         kernel_dim=64,
         version=2,
@@ -289,8 +290,8 @@ class ElectronicSchNet(nn.Module):
         self.initial_embedding = initial_embedding
         subnet_metafactory = subnet_metafactory or SubnetFactory
         if not dist_basis:
-            dist_basis = partial(DistanceBasis, envelope='nocusp')
-            diff_basis = partial(DifferenceBasis, envelope='nocusp')
+            dist_basis = partial(DistanceBasis, envelope=dist_basis_envelope)
+            diff_basis = partial(DifferenceBasis, envelope=dist_basis_envelope)
         self.use_diffs = use_diffs
         super().__init__()
         if self.use_diffs:
