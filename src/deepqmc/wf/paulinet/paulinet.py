@@ -353,10 +353,15 @@ class PauliNet(WaveFunction):
         return wf
 
     @classmethod
-    def with_ee(cls, mol, workdir=None, **kwargs):
+    def with_ee(cls, mol, confs=None, workdir=None, **kwargs):
         basis = EEBasis.from_charges(mol)
         kwargs['cusp_correction'] = False
+        if confs is not None:
+            confs = torch.tensor(confs)
+            kwargs['n_configurations'] = len(confs)
+            kwargs['n_orbitals'] = confs.max().item() + 1
         wf = cls(mol, basis, **kwargs)
+        wf.confs = confs if confs is not None else wf.confs
         return wf
 
     def pop_charges(self):
