@@ -7,8 +7,8 @@ from torch import nn
 from deepqmc.physics import (
     pairwise_diffs,
     pairwise_distance,
-    pairwise_self_distance,
     pairwise_self_difference,
+    pairwise_self_distance,
 )
 from deepqmc.torchext import SSP, get_mlp, idx_perm
 
@@ -160,7 +160,7 @@ class RealSpaceBackflow(nn.Module):
         if self.decay_type == 'rios':
             R = diffs_nuc[..., -1].sqrt().min(dim=-1).values / 0.5
             decay = torch.where(
-                R < 1, R ** 2 * (6 - 8 * R + 3 * R ** 2), R.new_tensor(1)
+                R < 1, R**2 * (6 - 8 * R + 3 * R**2), R.new_tensor(1)
             )
         elif self.decay_type == 'deeperwin':
             decay = (
