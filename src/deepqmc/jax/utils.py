@@ -24,7 +24,7 @@ def pairwise_distance(coords1, coords2):
     return jnp.linalg.norm(coords1[..., :, None, :] - coords2[..., None, :, :], axis=-1)
 
 
-def pairwise_diffs(coords1, coords2, axes_offset=True):
+def pairwise_diffs(coords1, coords2):
     diffs = coords1[..., :, None, :] - coords2[..., None, :, :]
     return jnp.concatenate([diffs, (diffs ** 2).sum(axis=-1, keepdims=True)], axis=-1)
 
