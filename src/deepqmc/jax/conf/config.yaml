@@ -1,0 +1,43 @@
+defaults:
+  - _self_
+  - optional .@_here_: deepqmc
+  - override hydra/job_logging: custom
+hydra:
+  job:
+    name: deepqmc
+    chdir: true
+  searchpath:
+    - file://conf
+task:
+  _target_: deepqmc.jax.app.train_from_factories
+  hamil:
+    _target_: deepqmc.jax.hamil.qho.QHOHamiltonian
+    dim: 3
+    mass: 1.0
+    nu: 1.0
+  ansatz:
+    _target_: deepqmc.jax.wf.qho.QHOAnsatz
+    _partial_: true
+  opt:
+    _target_: kfac_jax.Optimizer
+    _partial_: true
+    l2_reg: 0
+    learning_rate_schedule:
+      _target_: deepqmc.jax.train.InverseLR
+      lr: 0.1
+      decay_rate: 100
+    norm_constraint: 1e-3
+    inverse_update_period: 1
+    min_damping: 1e-4
+    num_burnin_steps: 0
+    estimation_mode: 'fisher_exact'
+  sampler:
+    _target_: deepqmc.jax.sampling.MetropolisSampler
+    _partial_: true
+    tau: 1.0
+  workdir: ???
+  steps: 10000
+  sample_size: 10000
+  decorr: 10
+  clip_width: 2.0
+  seed: 0

@@ -1,0 +1,10 @@
+defaults:
+  - default
+formatters:
+  simple:
+    format: '[{asctime}.{msecs:03.0f}] {levelname}:{name}: {message}'
+    datefmt: '%H:%M:%S'
+    style: '{'
+handlers:
+  console:
+    stream: ext://deepqmc.jax.app.tqdmout

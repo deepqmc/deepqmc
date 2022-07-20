@@ -15,10 +15,7 @@ class MetropolisSampler:
         return state
 
     def init(self, rng, wf, n):
-        state = {
-            'r': jax.random.normal(rng, (n, self.hamil.dim)),
-            'age': jnp.zeros(n, jnp.int32),
-        }
+        state = {'r': self.hamil.init_sample(rng, n), 'age': jnp.zeros(n, jnp.int32)}
         state = self._update(state, wf)
         return state
 

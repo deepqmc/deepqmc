@@ -1,3 +1,5 @@
+import logging
+import operator
 from collections import namedtuple
 from functools import partial
 
@@ -12,6 +14,7 @@ from .utils import masked_mean
 
 __all__ = ()
 
+log = logging.getLogger(__name__)
 TrainState = namedtuple('TrainState', 'params opt sampler')
 
 
@@ -59,6 +62,10 @@ def fit_wf(
         return (jnp.mean(E_loc), E_loc), grads
 
     params = ansatz.init(rng, jnp.zeros(hamil.dim))
+    num_params = jax.tree_util.tree_reduce(
+        operator.add, jax.tree_map(lambda x: x.size, params)
+    )
+    log.info(f'Number of model parameters: {num_params}')
 
     if isinstance(opt, optax.GradientTransformation):
 
@@ -91,6 +98,6 @@ def fit_wf(
 
     smpl_state = sampler.init(rng, partial(ansatz.apply, params), sample_size)
     train_state = params, opt_state, smpl_state
-    for _, rng in zip(steps, hk.PRNGSequence(rng)):
+    for step, rng in zip(steps, hk.PRNGSequence(rng)):
         *train_state, E_loc = train_step(rng, *train_state)
-        yield TrainState(*train_state), E_loc
+        yield step, TrainState(*train_state), E_loc

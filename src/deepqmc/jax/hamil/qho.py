@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 
 from ..utils import laplacian
@@ -19,3 +20,18 @@ class QHOHamiltonian:
             return kin + pot
 
         return loc_ene
+
+    def init_sample(self, rng, n):
+        return jax.random.normal(rng, (n, self.dim))
+
+    def stats(self, r):
+        mean = jnp.mean(r, axis=0, keepdims=True)
+        sd = jnp.sqrt(
+            jnp.mean(
+                jnp.sum((r - mean) ** 2, axis=-1, keepdims=True), axis=0, keepdims=True
+            )
+        )
+        return {
+            'r/mean': jnp.linalg.norm(mean).item(),
+            'r/std': sd.item(),
+        }
