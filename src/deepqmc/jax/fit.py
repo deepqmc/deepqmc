@@ -65,7 +65,7 @@ def fit_wf(
         @jax.jit
         def train_step(rng, params, opt_state, smpl_state):
             r, smpl_state = sampler.sample(
-                smpl_state, rng, partial(ansatz.apply, params)
+                smpl_state, rng, jax.vmap(partial(ansatz.apply, params))
             )
             (_, E_loc), grads = energy_and_grad_fn(params, r)
             updates, opt_state = opt.update(grads, opt_state)
@@ -77,7 +77,7 @@ def fit_wf(
 
         @jax.jit
         def sample(params, state, rng):
-            return sampler.sample(state, rng, partial(ansatz.apply, params))
+            return sampler.sample(state, rng, jax.vmap(partial(ansatz.apply, params)))
 
         def train_step(rng, params, opt_state, smpl_state):
             r, smpl_state = sample(params, smpl_state, rng)
