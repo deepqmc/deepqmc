@@ -15,6 +15,18 @@ def laplacian(f):
     return lap
 
 
+def batch_laplacian(f, return_grad=False):
+    def lap(rs):
+        df = jax.grad(lambda x: jnp.sum(f(x)))
+        d2f = jax.grad(lambda x: jnp.sum(df(x)))
+        result = (jnp.sum(d2f(rs), axis=(-1, -2)),)
+        if return_grad:
+            result += (df(rs),)
+        return result
+
+    return lap
+
+
 def masked_mean(x, mask):
     x = jnp.where(mask, x, 0)
     return x.sum() / jnp.sum(mask)
