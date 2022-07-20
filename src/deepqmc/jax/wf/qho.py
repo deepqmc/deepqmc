@@ -17,6 +17,6 @@ class QHOAnsatz(hk.Module):
         r = r / self.width
         x = self.kernel(r)
         x = jnp.squeeze(x, axis=-1)
-        env = -jnp.sqrt(1 + jnp.sum(r**2, axis=-1))
+        env = -jnp.sqrt(1 + jnp.sum(r**2))
         psi = Psi(jnp.sign(x), env + jnp.log(jnp.abs(x)))
         return psi
