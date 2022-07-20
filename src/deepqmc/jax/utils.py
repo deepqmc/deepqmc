@@ -38,7 +38,7 @@ def pairwise_distance(coords1, coords2):
 
 def pairwise_diffs(coords1, coords2):
     diffs = coords1[..., :, None, :] - coords2[..., None, :, :]
-    return jnp.concatenate([diffs, (diffs ** 2).sum(axis=-1, keepdims=True)], axis=-1)
+    return jnp.concatenate([diffs, (diffs**2).sum(axis=-1, keepdims=True)], axis=-1)
 
 
 def nuclear_energy(mol):
