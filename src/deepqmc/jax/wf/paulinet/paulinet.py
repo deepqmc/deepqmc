@@ -5,6 +5,8 @@ import jax.numpy as jnp
 from deepqmc.jax.utils import pairwise_diffs
 from deepqmc.jax.wf.base import WaveFunction
 
+from ...types import Psi
+
 
 def eval_log_slater(xs):
     if xs.shape[-1] == 0:
@@ -65,4 +67,5 @@ class PauliNet(WaveFunction):
         psi = self.conf_coeff(xs).squeeze(axis=-1).mean(axis=-1)
         log_psi = jnp.log(jnp.abs(psi)) + xs_shift
         sign_psi = jax.lax.stop_gradient(jnp.sign(psi))
-        return log_psi, sign_psi
+        psi = Psi(sign_psi, log_psi)
+        return psi
