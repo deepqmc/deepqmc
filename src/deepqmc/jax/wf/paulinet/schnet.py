@@ -1,22 +1,20 @@
-from functools import partial
-
 import haiku as hk
 import jax.numpy as jnp
 from jax import ops, random
 
+from deepqmc.jax.jaxext import SSP
 from deepqmc.jax.wf.paulinet.distbasis import DistanceBasis
 from deepqmc.jax.wf.paulinet.graph import GraphBuilder, GraphNetwork
 
 
-def subnet(rng, inp_dim, out_dim):
+def subnet(rng, layer_dims):
     def _subnet_forward(x):
-        subnet = hk.nets.MLP([10, out_dim])
+        subnet = hk.nets.MLP(layer_dims[1:], activation=SSP)
         return subnet(x)
 
     _subnet = hk.without_apply_rng(hk.transform(_subnet_forward))
-    params = _subnet.init(rng, jnp.zeros((1, inp_dim)))
-    net = partial(_subnet.apply, params)
-    return net, params
+    params = _subnet.init(rng, jnp.zeros((1, layer_dims[0])))
+    return _subnet.apply, params
 
 
 class SchNetLayer:
@@ -31,23 +29,35 @@ class SchNetLayer:
             rng_g_same,
             rng_g_anti,
         ) = random.split(rng, 7)
-        self.w_nuc, self.w_nuc_params = subnet(rng_w_nuc, dist_feat_dim, kernel_dim)
-        self.w_same, self.w_same_params = subnet(rng_w_same, dist_feat_dim, kernel_dim)
-        self.w_anti, self.w_anti_params = subnet(rng_w_anti, dist_feat_dim, kernel_dim)
-        self.h, self.h_params = subnet(rng_h, embedding_dim, kernel_dim)
-        self.g_nuc, self.g_nuc_params = subnet(rng_g_nuc, kernel_dim, embedding_dim)
-        self.g_same, self.g_same_params = subnet(rng_g_same, kernel_dim, embedding_dim)
-        self.g_anti, self.g_anti_params = subnet(rng_g_anti, kernel_dim, embedding_dim)
+        self.w_nuc, self.w_nuc_params = subnet(
+            rng_w_nuc, [dist_feat_dim, dist_feat_dim, kernel_dim]
+        )
+        self.w_same, self.w_same_params = subnet(
+            rng_w_same, [dist_feat_dim, dist_feat_dim, kernel_dim]
+        )
+        self.w_anti, self.w_anti_params = subnet(
+            rng_w_anti, [dist_feat_dim, dist_feat_dim, kernel_dim]
+        )
+        self.h, self.h_params = subnet(rng_h, [embedding_dim, kernel_dim])
+        self.g_nuc, self.g_nuc_params = subnet(rng_g_nuc, [kernel_dim, embedding_dim])
+        self.g_same, self.g_same_params = subnet(
+            rng_g_same, [kernel_dim, embedding_dim]
+        )
+        self.g_anti, self.g_anti_params = subnet(
+            rng_g_anti, [kernel_dim, embedding_dim]
+        )
 
     def aggregate_edges_for_nodes_fn(self, nodes, edges, senders, receivers, n_nodes):
         dist, e_typ = edges['dist'], edges['type'][:, None]
         zeros = jnp.zeros_like(dist, shape=(*dist.shape[:-1], self.kernel_dim))
-        nuc_or_zero = jnp.where(e_typ == 1, self.w_nuc(dist), zeros)
-        anti_or_nuc = jnp.where(e_typ == 4, self.w_anti(dist), nuc_or_zero)
-        we = jnp.where(e_typ == 3, self.w_same(dist), anti_or_nuc)
-        hx = jnp.concatenate([nodes['nuc'], self.h(nodes['elec'])], axis=-2).reshape(
-            -1, self.kernel_dim
+        nuc_or_zero = jnp.where(e_typ == 1, self.w_nuc(self.w_nuc_params, dist), zeros)
+        anti_or_nuc = jnp.where(
+            e_typ == 4, self.w_anti(self.w_anti_params, dist), nuc_or_zero
         )
+        we = jnp.where(e_typ == 3, self.w_same(self.w_same_params, dist), anti_or_nuc)
+        hx = jnp.concatenate(
+            [nodes['nuc'], self.h(self.h_params, nodes['elec'])], axis=-2
+        ).reshape(-1, self.kernel_dim)
         weh = we * hx[senders]
         weh_same = jnp.where(e_typ == 3, weh, zeros)
         weh_anti = jnp.where(e_typ == 4, weh, zeros)
@@ -68,15 +78,17 @@ class SchNetLayer:
         }
 
     def update_node_fn(self, nodes, z):
-        def eval_g(g, message):
+        def eval_g(g, params, message):
             n_nuclei = nodes['nuc'].shape[-2]
             n_particles = nodes['elec'].shape[-2] + n_nuclei
-            return g(message.reshape(-1, n_particles, self.kernel_dim)[:, n_nuclei:])
+            return g(
+                params, message.reshape(-1, n_particles, self.kernel_dim)[:, n_nuclei:]
+            )
 
         nodes['elec'] += (
-            eval_g(self.g_nuc, z['nuc'])
-            + eval_g(self.g_same, z['same'])
-            + eval_g(self.g_anti, z['anti'])
+            eval_g(self.g_nuc, self.g_nuc_params, z['nuc'])
+            + eval_g(self.g_same, self.g_same_params, z['same'])
+            + eval_g(self.g_anti, self.g_anti_params, z['anti'])
         )
         return nodes
 
@@ -107,12 +119,9 @@ class SchNet:
             n_down,
             cutoff,
             positions,
-            DistanceBasis(dist_feat_dim),
-            #  n_nuclei + jnp.zeros(n_electrons)[:, None],
-            jnp.tile(n_nuclei + jnp.arange(n_electrons)[:, None], (1, embedding_dim)),
+            DistanceBasis(dist_feat_dim, envelope='nocusp'),
+            n_nuclei + jnp.zeros((1, embedding_dim)),
             jnp.tile(jnp.arange(n_nuclei)[:, None], (1, kernel_dim)),
-            #  jnp.tile(jnp.array(range(n_nuclei-1,-1,-1))[:, None], (1, kernel_dim)),
-            #  jnp.tile(jnp.zeros(n_nuclei)[:, None], (1, kernel_dim)),
         )
         rng, *rng_layers = random.split(rng, n_interactions + 1)
         self.layers = [

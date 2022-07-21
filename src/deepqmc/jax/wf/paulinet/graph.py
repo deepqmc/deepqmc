@@ -3,8 +3,9 @@ from functools import partial
 import jax.numpy as jnp
 import jax.tree_util as tree
 from jax import jit, vmap
-from jax_md import partition, space
 from jraph import GraphsTuple
+
+from neighbors import get_neighbors
 
 
 # Node types: 0: nucleus, 1: spin-up elec., 2: spin-down elec, 3: padding node
@@ -51,13 +52,9 @@ class GraphBuilder:
         elec_embeddings,
         nuc_embeddings,
     ):
-        displacement, shift = space.free()
-        self.metric = space.metric(displacement)
-
-        self.neighbor_fn = partition.neighbor_list(
-            displacement, None, cutoff, format=partition.NeighborListFormat.Sparse
-        )
-        self.neighbors = self.neighbor_fn.allocate(ref_position)
+        self.neighbor_fn = get_neighbors
+        *_, self.max_occupancy = self.neighbor_fn(ref_position, cutoff)
+        self.cutoff = cutoff
         self.elec_embeddings = elec_embeddings
         self.nuc_embeddings = nuc_embeddings
         self.db = distance_basis
@@ -67,34 +64,33 @@ class GraphBuilder:
         self.n_particles = n_nuclei + n_up + n_down
 
     def _update_neighbors(self, positions):
-        new_neighbors = vmap(self.neighbors.update)(positions)
-        while new_neighbors.did_buffer_overflow.any():
-            candidate_neighbors = self.neighbor_fn.allocate(
-                positions[new_neighbors.did_buffer_overflow][0]
+        new_neighbors = vmap(self.neighbor_fn, (0, None, None))(
+            positions, self.cutoff, self.max_occupancy.item()
+        )
+        if jnp.any(new_neighbors.did_buffer_overflow):
+            new_neighbors = vmap(self.neighbor_fn, (0, None, None))(
+                positions, self.cutoff, new_neighbors.max_occupancy.item()
             )
-            new_neighbors = vmap(candidate_neighbors.update)(positions)
-        self.neighbors = new_neighbors
+            assert not jnp.any(new_neighbors.did_buffer_overflow)
+            self.max_occupancy = new_neighbors.max_occupancy
+        return new_neighbors
 
     def build(self, positions):
         batch_size = len(positions)
-        self._update_neighbors(positions)
-        _graph = vmap(partition.to_jraph)(self.neighbors)
-        senders = _graph.senders.reshape(-1)
-        receivers = _graph.receivers.reshape(-1)
+        neighbor_list = self._update_neighbors(positions)
+        receivers, senders = jnp.split(neighbor_list.idx, 2, axis=1)
+        senders = senders.reshape(-1)
+        receivers = receivers.reshape(-1)
         offset = jnp.tile(
             self.n_particles * jnp.arange(batch_size)[:, None],
-            (1, len(senders) // batch_size),
+            (1, self.max_occupancy),
         ).reshape(-1)
-        dist_neighbors = vmap(self.metric)(
-            positions.reshape(-1, 3)[senders + offset],
-            positions.reshape(-1, 3)[receivers + offset],
-        )
         nodes = {
             'nuc': jnp.tile(self.nuc_embeddings[None], (batch_size, 1, 1)),
             'elec': jnp.tile(self.elec_embeddings[None], (batch_size, 1, 1)),
         }
         edges = {
-            'dist': self.db(dist_neighbors),
+            'dist': self.db(neighbor_list.dR.reshape(-1)),
             'type': type_of_edges(
                 senders, receivers, self.n_nuclei, self.n_up, self.n_down
             ),
@@ -111,6 +107,9 @@ class GraphBuilder:
         return graph
 
 
+# Reproduced from Jraph:
+# https://github.com/deepmind/jraph/blob/
+# 8b0536c0c8c4fbd8bd197f474add7eec8807c117/jraph/_src/models.py
 def GraphNetwork(
     aggregate_edges_for_nodes_fn,
     update_node_fn=None,
