@@ -15,18 +15,6 @@ def laplacian(f):
     return lap
 
 
-def batch_laplacian(f, return_grad=False):
-    def lap(rs):
-        df = jax.grad(lambda x: jnp.sum(f(x)))
-        d2f = jax.grad(lambda x: jnp.sum(df(x)))
-        result = (jnp.sum(d2f(rs), axis=(-1, -2)),)
-        if return_grad:
-            result += (df(rs),)
-        return result
-
-    return lap
-
-
 def masked_mean(x, mask):
     x = jnp.where(mask, x, 0)
     return x.sum() / jnp.sum(mask)
@@ -50,11 +38,13 @@ def nuclear_energy(mol):
 
 
 def nuclear_potential(rs, mol):
-    dists = jnp.linalg.norm(rs[:, :, None] - mol.coords, axis=-1)
+    dists = jnp.linalg.norm(rs[..., :, None, :] - mol.coords, axis=-1)
     return -(mol.charges / dists).sum(axis=(-1, -2))
 
 
 def electronic_potential(rs):
     i, j = jnp.triu_indices(rs.shape[-2], k=1)
-    dists = jnp.linalg.norm((rs[:, :, None] - rs[:, None, :])[:, i, j], axis=-1)
+    dists = jnp.linalg.norm(
+        (rs[..., :, None, :] - rs[..., None, :, :])[..., i, j, :], axis=-1
+    )
     return (1 / dists).sum(axis=-1)
