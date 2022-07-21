@@ -4,7 +4,6 @@ import jax.numpy as jnp
 import jax.tree_util as tree
 from jax import jit, vmap
 from jraph import GraphsTuple
-
 from neighbors import get_neighbors
 
 

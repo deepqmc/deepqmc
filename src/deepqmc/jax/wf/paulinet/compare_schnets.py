@@ -1,11 +1,12 @@
-from deepqmc.jax.wf.paulinet.schnet import SchNet as SchNet
-from deepqmc.wf.paulinet.schnet import ElectronicSchNet
+import jax.numpy as jnp
+import torch
+from jax import random
+
 from deepqmc import Molecule
 from deepqmc.jax.molecule import Molecule as jMolecule
-import torch
-import jax.numpy as jnp
-from jax import random
-from deepqmc.physics import pairwise_self_distance, pairwise_distance
+from deepqmc.jax.wf.paulinet.schnet import SchNet as SchNet
+from deepqmc.physics import pairwise_distance, pairwise_self_distance
+from deepqmc.wf.paulinet.schnet import ElectronicSchNet
 
 torch.manual_seed(0)
 rng = random.PRNGKey(0)
@@ -22,8 +23,10 @@ rs = torch.rand(1000, nelec, 3)
 jrs = jnp.array(rs)
 
 embedding_dim = 65
-dist_feat_dim = 16  # dist_feat_dim and kernel_dim has to be close to equal because log scaling layer widths are not yet implemented in jax version
-kernel_dim = 17  # dist_feat_dim and kernel_dim has to be close to equal because log scaling layer widths are not yet implemented in jax version
+# dist_feat_dim and kernel_dim has to be close to equal
+# because log scaling layer widths are not yet implemented in jax version
+dist_feat_dim = 16
+kernel_dim = 17
 n_interactions = 3
 schnet = ElectronicSchNet(
     n_up,
