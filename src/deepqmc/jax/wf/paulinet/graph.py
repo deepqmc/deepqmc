@@ -46,17 +46,12 @@ class GraphBuilder:
         n_up,
         n_down,
         cutoff,
-        ref_position,
         distance_basis,
-        elec_embeddings,
-        nuc_embeddings,
+        max_occupancy=20,
     ):
         self.neighbor_fn = get_neighbors
-        *_, max_occupancy = self.neighbor_fn(ref_position, cutoff)
-        self.max_occupancy = max_occupancy.item()
+        self.max_occupancy = max_occupancy
         self.cutoff = cutoff
-        self.elec_embeddings = elec_embeddings
-        self.nuc_embeddings = nuc_embeddings
         self.db = distance_basis
         self.n_nuclei = n_nuclei
         self.n_up = n_up
@@ -75,7 +70,7 @@ class GraphBuilder:
             self.max_occupancy = jnp.max(new_neighbors.occupancy).item()
         return new_neighbors
 
-    def build(self, positions):
+    def build(self, positions, nuc_embeddings, elec_embeddings):
         batch_size = len(positions)
         neighbor_list = self._update_neighbors(positions)
         receivers, senders = jnp.split(neighbor_list.idx, 2, axis=1)
@@ -86,8 +81,8 @@ class GraphBuilder:
             (1, self.max_occupancy),
         ).reshape(-1)
         nodes = {
-            'nuc': jnp.tile(self.nuc_embeddings[None], (batch_size, 1, 1)),
-            'elec': jnp.tile(self.elec_embeddings[None], (batch_size, 1, 1)),
+            'nuc': jnp.tile(nuc_embeddings[None], (batch_size, 1, 1)),
+            'elec': jnp.tile(elec_embeddings[None], (batch_size, 1, 1)),
         }
         edges = {
             'dist': self.db(neighbor_list.dR.reshape(-1)),
