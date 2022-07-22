@@ -133,7 +133,7 @@ class SchNetLayer:
         return update_node_fn
 
 
-class SchNet:
+class SchNet(hk.Module):
     def __init__(
         self,
         rng,
@@ -144,26 +144,24 @@ class SchNet:
         n_interactions=1,
         cutoff=10.0,
     ):
-        n_nuclei = len(mol.charges)
-        n_electrons = int(mol.charges.sum()) - mol.charge
-        n_up = (n_electrons + mol.spin) // 2
-        n_down = n_electrons - n_up
+        super().__init__()
+        n_nuc, n_up, n_down = mol.n_particles()
         self.mol = mol
 
-        rng, rng_rs = random.split(rng)
-        rs = random.normal(rng_rs, (n_electrons, 3))
-        positions = jnp.concatenate([mol.coords, rs])
+        self.X = hk.Embed(1 if n_up == n_down else 2, embedding_dim)
+        self.Y = hk.Embed(n_nuc, kernel_dim)
+        self.spin_idxs = jnp.array(
+            (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
+        )
+        self.nuclei_idxs = jnp.arange(n_nuc)
         self.graph_builder = GraphBuilder(
-            n_nuclei,
+            n_nuc,
             n_up,
             n_down,
             cutoff,
-            positions,
             DistanceBasis(dist_feat_dim, envelope='nocusp'),
-            n_nuclei + jnp.zeros((n_up + n_down, embedding_dim)),
-            jnp.tile(jnp.arange(n_nuclei)[:, None], (1, kernel_dim)),
         )
-        rng, *rng_layers = random.split(rng, n_interactions + 1)
+        *rng_layers = random.split(rng, n_interactions)
         self.layers = [
             SchNetLayer(rng_layer, embedding_dim, kernel_dim, dist_feat_dim)
             for rng_layer in rng_layers
@@ -190,7 +188,9 @@ class SchNet:
             ],
             axis=-2,
         )
-        graph = self.graph_builder.build(positions)
+        nuc_embedding = self.Y(self.nuclei_idxs)
+        elec_embedding = self.X(self.spin_idxs)
+        graph = self.graph_builder.build(positions, nuc_embedding, elec_embedding)
         for apply_layer in self.apply_layers:
             graph = apply_layer(graph)
         return graph.nodes['elec']
