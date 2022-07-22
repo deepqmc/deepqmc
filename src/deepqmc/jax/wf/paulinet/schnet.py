@@ -1,6 +1,8 @@
+from functools import partial
+
 import haiku as hk
 import jax.numpy as jnp
-from jax import ops, random
+from jax import jit, ops, random
 
 from deepqmc.jax.jaxext import SSP
 from deepqmc.jax.wf.paulinet.distbasis import DistanceBasis
@@ -18,79 +20,117 @@ def subnet(rng, layer_dims):
 
 
 class SchNetLayer:
-    def __init__(self, rng, embedding_dim, kernel_dim, dist_feat_dim):
+    def __init__(
+        self,
+        rng,
+        embedding_dim,
+        kernel_dim,
+        dist_feat_dim,
+        shared_h=True,
+        shared_g=False,
+    ):
         self.kernel_dim = kernel_dim
-        (
-            rng_w_nuc,
-            rng_w_same,
-            rng_w_anti,
-            rng_h,
-            rng_g_nuc,
-            rng_g_same,
-            rng_g_anti,
-        ) = random.split(rng, 7)
-        self.w_nuc, self.w_nuc_params = subnet(
-            rng_w_nuc, [dist_feat_dim, dist_feat_dim, kernel_dim]
-        )
-        self.w_same, self.w_same_params = subnet(
-            rng_w_same, [dist_feat_dim, dist_feat_dim, kernel_dim]
-        )
-        self.w_anti, self.w_anti_params = subnet(
-            rng_w_anti, [dist_feat_dim, dist_feat_dim, kernel_dim]
-        )
-        self.h, self.h_params = subnet(rng_h, [embedding_dim, kernel_dim])
-        self.g_nuc, self.g_nuc_params = subnet(rng_g_nuc, [kernel_dim, embedding_dim])
-        self.g_same, self.g_same_params = subnet(
-            rng_g_same, [kernel_dim, embedding_dim]
-        )
-        self.g_anti, self.g_anti_params = subnet(
-            rng_g_anti, [kernel_dim, embedding_dim]
-        )
+        labels = ['same', 'anti', 'n']
+        self.labels = labels
+        self.shared_h = shared_h
+        self.shared_g = shared_g
+        rng, *rng_ws = random.split(rng, len(labels) + 1)
+        rng, *rng_hs = random.split(rng, 2 if shared_h else len(labels) + 1)
+        rng, *rng_gs = random.split(rng, 2 if shared_g else len(labels) + 1)
+        subnet_params = {}
+        apply_subnet = {}
 
-    def aggregate_edges_for_nodes_fn(self, nodes, edges, senders, receivers, n_nodes):
-        dist, e_typ = edges['dist'], edges['type'][:, None]
-        zeros = jnp.zeros_like(dist, shape=(*dist.shape[:-1], self.kernel_dim))
-        nuc_or_zero = jnp.where(e_typ == 1, self.w_nuc(self.w_nuc_params, dist), zeros)
-        anti_or_nuc = jnp.where(
-            e_typ == 4, self.w_anti(self.w_anti_params, dist), nuc_or_zero
-        )
-        we = jnp.where(e_typ == 3, self.w_same(self.w_same_params, dist), anti_or_nuc)
-        hx = jnp.concatenate(
-            [nodes['nuc'], self.h(self.h_params, nodes['elec'])], axis=-2
-        ).reshape(-1, self.kernel_dim)
-        weh = we * hx[senders]
-        weh_same = jnp.where(e_typ == 3, weh, zeros)
-        weh_anti = jnp.where(e_typ == 4, weh, zeros)
-        weh_nuc = jnp.where(e_typ == 1, weh, zeros)
-        z_same = ops.segment_sum(
-            data=weh_same, segment_ids=receivers, num_segments=n_nodes
-        )
-        z_anti = ops.segment_sum(
-            data=weh_anti, segment_ids=receivers, num_segments=n_nodes
-        )
-        z_nuc = ops.segment_sum(
-            data=weh_nuc, segment_ids=receivers, num_segments=n_nodes
-        )
-        return {
-            'nuc': z_nuc,
-            'same': z_same,
-            'anti': z_anti,
-        }
+        def create_subnet(rngs, labels, dims):
+            if labels is None:
+                return subnet(rngs[0], dims)
+            else:
+                applies, params = {}, {}
+                for lbl, rng in zip(labels, rngs):
+                    applies[lbl], params[lbl] = subnet(rng, dims)
+                return applies, params
 
-    def update_node_fn(self, nodes, z):
-        def eval_g(g, params, message):
-            n_nuclei = nodes['nuc'].shape[-2]
-            n_particles = nodes['elec'].shape[-2] + n_nuclei
-            return g(
-                params, message.reshape(-1, n_particles, self.kernel_dim)[:, n_nuclei:]
+        apply_subnet['w'], subnet_params['w'] = create_subnet(
+            rng_ws, labels, [dist_feat_dim, dist_feat_dim, kernel_dim]
+        )
+        apply_subnet['h'], subnet_params['h'] = create_subnet(
+            rng_hs, None if shared_h else labels, [embedding_dim, kernel_dim]
+        )
+        apply_subnet['g'], subnet_params['g'] = create_subnet(
+            rng_gs, None if shared_g else labels, [kernel_dim, embedding_dim]
+        )
+        self.apply_subnet = apply_subnet
+        self.subnet_params = subnet_params
+
+    def get_aggregate_edges_for_nodes_fn(self):
+        apply_w_same, apply_w_anti, apply_w_n = [
+            self.apply_subnet['w'][lbl] for lbl in self.labels
+        ]
+        apply_h = self.apply_subnet['h'] if self.shared_h else None
+
+        @partial(jit, static_argnames='n_nodes')
+        def aggregate_edges_for_nodes_fn(
+            subnet_params, nodes, edges, senders, receivers, n_nodes
+        ):
+            dist, e_typ = edges['dist'], edges['type'][:, None]
+            zeros = jnp.zeros_like(
+                dist, shape=(*dist.shape[:-1], nodes['nuc'].shape[-1])
             )
+            nuc_or_zero = jnp.where(
+                e_typ == 1, apply_w_n(subnet_params['w']['n'], dist), zeros
+            )
+            anti_or_nuc = jnp.where(
+                e_typ == 4, apply_w_anti(subnet_params['w']['anti'], dist), nuc_or_zero
+            )
+            we = jnp.where(
+                e_typ == 3, apply_w_same(subnet_params['w']['same'], dist), anti_or_nuc
+            )
+            hx = jnp.concatenate(
+                [nodes['nuc'], apply_h(subnet_params['h'], nodes['elec'])], axis=-2
+            ).reshape(-1, nodes['nuc'].shape[-1])
+            weh = we * hx[senders]
+            weh_same = jnp.where(e_typ == 3, weh, zeros)
+            weh_anti = jnp.where(e_typ == 4, weh, zeros)
+            weh_nuc = jnp.where(e_typ == 1, weh, zeros)
+            z_same = ops.segment_sum(
+                data=weh_same, segment_ids=receivers, num_segments=n_nodes
+            )
+            z_anti = ops.segment_sum(
+                data=weh_anti, segment_ids=receivers, num_segments=n_nodes
+            )
+            z_nuc = ops.segment_sum(
+                data=weh_nuc, segment_ids=receivers, num_segments=n_nodes
+            )
+            return {
+                'nuc': z_nuc,
+                'same': z_same,
+                'anti': z_anti,
+            }
 
-        nodes['elec'] += (
-            eval_g(self.g_nuc, self.g_nuc_params, z['nuc'])
-            + eval_g(self.g_same, self.g_same_params, z['same'])
-            + eval_g(self.g_anti, self.g_anti_params, z['anti'])
-        )
-        return nodes
+        return aggregate_edges_for_nodes_fn
+
+    def get_update_node_fn(self):
+        apply_g_same, apply_g_anti, apply_g_n = [
+            self.apply_subnet['g'][lbl] for lbl in self.labels
+        ]
+
+        @jit
+        def update_node_fn(subnet_params, nodes, z):
+            def eval_g(apply_g, params, message):
+                n_nuclei = nodes['nuc'].shape[-2]
+                n_particles = nodes['elec'].shape[-2] + n_nuclei
+                return apply_g(
+                    params,
+                    message.reshape(-1, n_particles, self.kernel_dim)[:, n_nuclei:],
+                )
+
+            nodes['elec'] += (
+                eval_g(apply_g_n, subnet_params['g']['n'], z['nuc'])
+                + eval_g(apply_g_same, subnet_params['g']['same'], z['same'])
+                + eval_g(apply_g_anti, subnet_params['g']['anti'], z['anti'])
+            )
+            return nodes
+
+        return update_node_fn
 
 
 class SchNet:
@@ -120,7 +160,7 @@ class SchNet:
             cutoff,
             positions,
             DistanceBasis(dist_feat_dim, envelope='nocusp'),
-            n_nuclei + jnp.zeros((1, embedding_dim)),
+            n_nuclei + jnp.zeros((n_up + n_down, embedding_dim)),
             jnp.tile(jnp.arange(n_nuclei)[:, None], (1, kernel_dim)),
         )
         rng, *rng_layers = random.split(rng, n_interactions + 1)
@@ -130,8 +170,10 @@ class SchNet:
         ]
         self.apply_layers = [
             GraphNetwork(
-                update_node_fn=layer.update_node_fn,
-                aggregate_edges_for_nodes_fn=layer.aggregate_edges_for_nodes_fn,
+                update_node_fn=partial(layer.get_update_node_fn(), layer.subnet_params),
+                aggregate_edges_for_nodes_fn=partial(
+                    layer.get_aggregate_edges_for_nodes_fn(), layer.subnet_params
+                ),
             )
             for layer in self.layers
         ]
