@@ -7,6 +7,7 @@ from jax import jit, ops, random
 from deepqmc.jax.jaxext import SSP
 from deepqmc.jax.wf.paulinet.distbasis import DistanceBasis
 from deepqmc.jax.wf.paulinet.graph import GraphBuilder, GraphNetwork
+from deepqmc.jax.wf.paulinet.neighbors import NeighborListBuilder
 
 
 def subnet(rng, layer_dims):
@@ -143,6 +144,7 @@ class SchNet(hk.Module):
         dist_feat_dim,
         n_interactions=1,
         cutoff=10.0,
+        initial_occupancy=10,
     ):
         super().__init__()
         n_nuc, n_up, n_down = mol.n_particles()
@@ -154,6 +156,7 @@ class SchNet(hk.Module):
             (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
         )
         self.nuclei_idxs = jnp.arange(n_nuc)
+        self.neighbor_list_builder = NeighborListBuilder(cutoff, initial_occupancy)
         self.graph_builder = GraphBuilder(
             n_nuc,
             n_up,
@@ -161,7 +164,7 @@ class SchNet(hk.Module):
             cutoff,
             DistanceBasis(dist_feat_dim, envelope='nocusp'),
         )
-        *rng_layers = random.split(rng, n_interactions)
+        rng_layers = random.split(rng, n_interactions)
         self.layers = [
             SchNetLayer(rng_layer, embedding_dim, kernel_dim, dist_feat_dim)
             for rng_layer in rng_layers
@@ -176,7 +179,7 @@ class SchNet(hk.Module):
             for layer in self.layers
         ]
 
-    def __call__(self, rs):
+    def neighbor_list_from_rs(self, rs):
         batch_dims = rs.shape[:-2]
         positions = jnp.concatenate(
             [
@@ -188,9 +191,13 @@ class SchNet(hk.Module):
             ],
             axis=-2,
         )
+        return self.neighbor_list_builder(positions)
+
+    def __call__(self, rs):
         nuc_embedding = self.Y(self.nuclei_idxs)
         elec_embedding = self.X(self.spin_idxs)
-        graph = self.graph_builder.build(positions, nuc_embedding, elec_embedding)
+        neighbor_list = self.neighbor_list_from_rs(rs)
+        graph = self.graph_builder(neighbor_list, nuc_embedding, elec_embedding)
         for apply_layer in self.apply_layers:
             graph = apply_layer(graph)
         return graph.nodes['elec']

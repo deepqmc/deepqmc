@@ -2,9 +2,8 @@ from functools import partial
 
 import jax.numpy as jnp
 import jax.tree_util as tree
-from jax import jit, vmap
+from jax import jit
 from jraph import GraphsTuple
-from neighbors import get_neighbors
 
 
 # Node types: 0: nucleus, 1: spin-up elec., 2: spin-down elec, 3: padding node
@@ -47,38 +46,22 @@ class GraphBuilder:
         n_down,
         cutoff,
         distance_basis,
-        max_occupancy=20,
+        occupancy=20,
     ):
-        self.neighbor_fn = get_neighbors
-        self.max_occupancy = max_occupancy
-        self.cutoff = cutoff
         self.db = distance_basis
         self.n_nuclei = n_nuclei
         self.n_up = n_up
         self.n_down = n_down
         self.n_particles = n_nuclei + n_up + n_down
 
-    def _update_neighbors(self, positions):
-        new_neighbors = vmap(self.neighbor_fn, (0, None, None))(
-            positions, self.cutoff, self.max_occupancy
-        )
-        if jnp.any(new_neighbors.did_buffer_overflow):
-            new_neighbors = vmap(self.neighbor_fn, (0, None, None))(
-                positions, self.cutoff, jnp.max(new_neighbors.occupancy).item()
-            )
-            assert not jnp.any(new_neighbors.did_buffer_overflow)
-            self.max_occupancy = jnp.max(new_neighbors.occupancy).item()
-        return new_neighbors
-
-    def build(self, positions, nuc_embeddings, elec_embeddings):
-        batch_size = len(positions)
-        neighbor_list = self._update_neighbors(positions)
-        receivers, senders = jnp.split(neighbor_list.idx, 2, axis=1)
+    def __call__(self, neighbor_list, nuc_embeddings, elec_embeddings):
+        batch_size, occupancy = neighbor_list.idx.shape[0], neighbor_list.idx.shape[-1]
+        receivers, senders = jnp.split(neighbor_list.idx, 2, axis=-2)
         senders = senders.reshape(-1)
         receivers = receivers.reshape(-1)
         offset = jnp.tile(
             self.n_particles * jnp.arange(batch_size)[:, None],
-            (1, self.max_occupancy),
+            (1, occupancy),
         ).reshape(-1)
         nodes = {
             'nuc': jnp.tile(nuc_embeddings[None], (batch_size, 1, 1)),
