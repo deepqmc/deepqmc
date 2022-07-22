@@ -52,7 +52,8 @@ class GraphBuilder:
         nuc_embeddings,
     ):
         self.neighbor_fn = get_neighbors
-        *_, self.max_occupancy = self.neighbor_fn(ref_position, cutoff)
+        *_, max_occupancy = self.neighbor_fn(ref_position, cutoff)
+        self.max_occupancy = max_occupancy.item()
         self.cutoff = cutoff
         self.elec_embeddings = elec_embeddings
         self.nuc_embeddings = nuc_embeddings
@@ -64,14 +65,14 @@ class GraphBuilder:
 
     def _update_neighbors(self, positions):
         new_neighbors = vmap(self.neighbor_fn, (0, None, None))(
-            positions, self.cutoff, self.max_occupancy.item()
+            positions, self.cutoff, self.max_occupancy
         )
         if jnp.any(new_neighbors.did_buffer_overflow):
             new_neighbors = vmap(self.neighbor_fn, (0, None, None))(
-                positions, self.cutoff, new_neighbors.max_occupancy.item()
+                positions, self.cutoff, jnp.max(new_neighbors.occupancy).item()
             )
             assert not jnp.any(new_neighbors.did_buffer_overflow)
-            self.max_occupancy = new_neighbors.max_occupancy
+            self.max_occupancy = jnp.max(new_neighbors.occupancy).item()
         return new_neighbors
 
     def build(self, positions):

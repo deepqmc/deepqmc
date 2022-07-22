@@ -7,7 +7,7 @@ from functools import partial
 import jax.numpy as jnp
 from jax import jit, vmap
 
-NeighborList = namedtuple('NeighborList', 'idx dR did_buffer_overflow max_occupancy')
+NeighborList = namedtuple('NeighborList', 'idx dR did_buffer_overflow occupancy')
 
 
 @jit
@@ -63,4 +63,4 @@ def get_neighbors(position, cutoff, max_occupancy=8, mask_self=True):
     idx = idx[:, :max_occupancy]
     dR = dR[:max_occupancy]
 
-    return NeighborList(idx, dR, occupancy > max_occupancy, jnp.max(occupancy))
+    return NeighborList(idx, dR, occupancy > max_occupancy, occupancy)
