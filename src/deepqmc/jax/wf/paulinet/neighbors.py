@@ -69,7 +69,8 @@ def compute_neighbor_list(position, cutoff, occupancy_limit=8, mask_self=True):
 
 
 class NeighborListBuilder:
-    def __init__(self, cutoff, occupancy_limit):
+    def __init__(self, mol, cutoff, occupancy_limit):
+        self.mol = mol
         self.cutoff = cutoff
         self.occupancy_limit = occupancy_limit
 
@@ -101,3 +102,17 @@ class NeighborListBuilder:
         return tree_util.tree_map(
             lambda x: x.reshape(*batch_dims, *x.shape[1:]), neighbor_list
         )
+
+    def from_rs(self, rs):
+        batch_dims = rs.shape[:-2]
+        positions = jnp.concatenate(
+            [
+                jnp.tile(
+                    jnp.expand_dims(self.mol.coords, jnp.arange(len(batch_dims))),
+                    (*batch_dims, 1, 1),
+                ),
+                rs,
+            ],
+            axis=-2,
+        )
+        return self(positions)
