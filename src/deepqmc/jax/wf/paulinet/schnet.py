@@ -2,9 +2,9 @@ import haiku as hk
 import jax.numpy as jnp
 from jax import ops
 
-from deepqmc.jax.jaxext import SSP
-from deepqmc.jax.wf.paulinet.distbasis import DistanceBasis
-from deepqmc.jax.wf.paulinet.graph import GraphBuilder, GraphNetwork
+from deepqmc.jax.hkext import SSP
+from .distbasis import DistanceBasis
+from .graph import GraphBuilder, GraphNetwork
 
 
 class SchNetLayer(hk.Module):
@@ -113,19 +113,20 @@ class SchNet(hk.Module):
         n_up,
         n_down,
         coords,
-        embedding_dim,
-        kernel_dim,
-        dist_feat_dim,
-        elec_vocab_size,
-        spin_idxs,
         graph_builder,
+        embedding_dim,
+        dist_feat_dim,
+        kernel_dim=128,
         n_interactions=2,
         cutoff=10.0,
         initial_occupancy=10,
     ):
         super().__init__('SchNet')
         self.coords = coords
-
+        elec_vocab_size = 1 if n_up == n_down else 2
+        spin_idxs = jnp.array(
+            (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
+        )
         self.X = hk.Embed(elec_vocab_size, embedding_dim, name='ElectronicEmbedding')
         self.Y = hk.Embed(n_nuc, kernel_dim, name='NuclearEmbedding')
         self.spin_idxs = spin_idxs
@@ -161,10 +162,6 @@ class SchNet(hk.Module):
     @classmethod
     def from_mol(cls, rng, mol, nl, *args, **kwargs):
         n_nuc, n_up, n_down = mol.n_particles()
-        elec_vocab_size = 1 if n_up == n_down else 2
-        spin_idxs = jnp.array(
-            (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
-        )
         graph_builder = GraphBuilder(
             n_nuc,
             n_up,
@@ -181,12 +178,8 @@ class SchNet(hk.Module):
                 n_up,
                 n_down,
                 mol.coords,
-                64,
-                128,
-                16,
-                elec_vocab_size,
-                spin_idxs,
                 graph_builder,
+                embedding_dim=64,
                 cutoff=10.0,
             )(neighbor_list)
 
