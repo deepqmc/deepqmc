@@ -5,17 +5,6 @@ from jax import ops
 from deepqmc.jax.jaxext import SSP
 from deepqmc.jax.wf.paulinet.distbasis import DistanceBasis
 from deepqmc.jax.wf.paulinet.graph import GraphBuilder, GraphNetwork
-from deepqmc.jax.wf.paulinet.neighbors import NeighborListBuilder
-
-
-def subnet(rng, layer_dims):
-    def _subnet_forward(x):
-        subnet = hk.nets.MLP(layer_dims[1:], activation=SSP)
-        return subnet(x)
-
-    _subnet = hk.without_apply_rng(hk.transform(_subnet_forward))
-    params = _subnet.init(rng, jnp.zeros((1, layer_dims[0])))
-    return _subnet.apply, params
 
 
 class SchNetLayer(hk.Module):
@@ -67,7 +56,7 @@ class SchNetLayer(hk.Module):
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes_fn(nodes, edges, senders, receivers, n_nodes):
-            dist, e_typ = edges['dist'], edges['type'][:, None]
+            dist, e_typ = edges['dist'], edges['type'][..., None]
             zeros = jnp.zeros_like(
                 dist, shape=(*dist.shape[:-1], nodes['nuc'].shape[-1])
             )
@@ -120,34 +109,28 @@ class SchNetLayer(hk.Module):
 class SchNet(hk.Module):
     def __init__(
         self,
-        mol,
+        n_nuc,
+        n_up,
+        n_down,
+        coords,
         embedding_dim,
         kernel_dim,
         dist_feat_dim,
+        elec_vocab_size,
+        spin_idxs,
+        graph_builder,
         n_interactions=2,
         cutoff=10.0,
         initial_occupancy=10,
     ):
         super().__init__('SchNet')
-        n_nuc, n_up, n_down = mol.n_particles()
-        self.mol = mol
+        self.coords = coords
 
-        self.X = hk.Embed(
-            1 if n_up == n_down else 2, embedding_dim, name='ElectronicEmbedding'
-        )
+        self.X = hk.Embed(elec_vocab_size, embedding_dim, name='ElectronicEmbedding')
         self.Y = hk.Embed(n_nuc, kernel_dim, name='NuclearEmbedding')
-        self.spin_idxs = jnp.array(
-            (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
-        )
+        self.spin_idxs = spin_idxs
         self.nuclei_idxs = jnp.arange(n_nuc)
-        self.neighbor_list_builder = NeighborListBuilder(cutoff, initial_occupancy)
-        self.graph_builder = GraphBuilder(
-            n_nuc,
-            n_up,
-            n_down,
-            cutoff,
-            DistanceBasis(dist_feat_dim, envelope='nocusp'),
-        )
+        self.graph_builder = graph_builder
         self.layers = [
             SchNetLayer(embedding_dim, kernel_dim, dist_feat_dim)
             for _ in range(n_interactions)
@@ -158,7 +141,7 @@ class SchNet(hk.Module):
         positions = jnp.concatenate(
             [
                 jnp.tile(
-                    jnp.expand_dims(self.mol.coords, jnp.arange(len(batch_dims))),
+                    jnp.expand_dims(self.coords, jnp.arange(len(batch_dims))),
                     (*batch_dims, 1, 1),
                 ),
                 rs,
@@ -167,11 +150,45 @@ class SchNet(hk.Module):
         )
         return self.neighbor_list_builder(positions)
 
-    def __call__(self, rs):
+    def __call__(self, neighbor_list):
         nuc_embedding = self.Y(self.nuclei_idxs)
         elec_embedding = self.X(self.spin_idxs)
-        neighbor_list = self.neighbor_list_from_rs(rs)
         graph = self.graph_builder(neighbor_list, nuc_embedding, elec_embedding)
         for layer in self.layers:
             graph = layer(graph)
         return graph.nodes['elec']
+
+    @classmethod
+    def from_mol(cls, rng, mol, nl, *args, **kwargs):
+        n_nuc, n_up, n_down = mol.n_particles()
+        elec_vocab_size = 1 if n_up == n_down else 2
+        spin_idxs = jnp.array(
+            (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
+        )
+        graph_builder = GraphBuilder(
+            n_nuc,
+            n_up,
+            n_down,
+            10.0,
+            DistanceBasis(16, envelope='nocusp'),
+        )
+
+        @hk.without_apply_rng
+        @hk.transform
+        def schnet_fwd(neighbor_list):
+            return cls(
+                n_nuc,
+                n_up,
+                n_down,
+                mol.coords,
+                64,
+                128,
+                16,
+                elec_vocab_size,
+                spin_idxs,
+                graph_builder,
+                cutoff=10.0,
+            )(neighbor_list)
+
+        params = schnet_fwd.init(rng, nl)
+        return params, schnet_fwd.apply
