@@ -71,6 +71,7 @@ def compute_neighbor_list(position, cutoff, occupancy_limit=8, mask_self=True):
 class NeighborListBuilder:
     def __init__(self, mol, cutoff, occupancy_limit):
         self.mol = mol
+        self.n_particles = sum(mol.n_particles())
         self.cutoff = cutoff
         self.occupancy_limit = occupancy_limit
 
@@ -86,6 +87,7 @@ class NeighborListBuilder:
         """
         assert positions.shape[-1] == 3
         assert len(positions.shape) > 1
+        assert positions.shape[-2] == self.n_particles
 
         batch_dims = positions.shape[:-2]
         _pos = positions.reshape(-1, *positions.shape[-2:])
