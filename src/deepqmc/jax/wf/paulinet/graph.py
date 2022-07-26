@@ -1,121 +1,167 @@
+from collections import namedtuple
 from functools import partial
 
 import jax.numpy as jnp
-import jax.tree_util as tree
-from jax import jit
-from jraph import GraphsTuple
+from jax import jit, tree_util, vmap
+
+GraphEdges = namedtuple('GraphEdges', 'senders receivers data')
+GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
+Graph = namedtuple('Graph', 'nodes edges')
+
+DEFAULT_EDGE_KWARGS = {
+    'SchNet': {'cutoff': 10.0, 'occupancy_limit': 2, 'compute_directions': False}
+}
 
 
-# Node types: 0: nucleus, 1: spin-up elec., 2: spin-down elec, 3: padding node
-@partial(jit, static_argnums=(1, 2, 3))
-def type_of_nodes(nodes, n_nuc, n_up, n_down):
-    ones = jnp.ones_like(nodes)
-    return jnp.where(
-        nodes < n_nuc,
-        0 * ones,
-        jnp.where(
-            nodes < n_nuc + n_up,
-            1 * ones,
-            jnp.where(nodes < n_nuc + n_up + n_down, 2 * ones, 3 * ones),
-        ),
+def all_graph_edges(pos1, pos2):
+    idx = jnp.arange(pos2.shape[0])
+    return jnp.broadcast_to(idx[None, :], (pos1.shape[0], pos2.shape[0]))
+
+
+def mask_self_edges(idx):
+    self_mask = idx == jnp.reshape(
+        jnp.arange(idx.shape[0], dtype=jnp.int32), (idx.shape[0], 1)
     )
+    return jnp.where(self_mask, idx.shape[0], idx)
 
 
-# Edge types: 0: nuc->nuc, 1: nuc->e, 2: e->nuc, 3: e->e same, 4: e->e anti,
-#             5: padding edge
-@partial(jit, static_argnums=(2, 3, 4))
-def type_of_edges(senders, receivers, n_nuc, n_up, n_down):
-    ones = jnp.ones_like(senders)
-    senders_type = type_of_nodes(senders, n_nuc, n_up, n_down)
-    receivers_type = type_of_nodes(receivers, n_nuc, n_up, n_down)
-
-    diff_sender_elec = jnp.where(receivers_type == 0, 2 * ones, 4 * ones)
-    same = jnp.where(senders_type == 0, 0 * ones, 3 * ones)
-    diff = jnp.where(senders_type == 0, ones, diff_sender_elec)
-    real = jnp.where(senders_type == receivers_type, same, diff)
-    return jnp.where(
-        jnp.logical_or(senders_type == 3, receivers_type == 3), 5 * ones, real
-    )
-
-
-class GraphBuilder:
-    def __init__(
-        self,
-        n_nuclei,
-        n_up,
-        n_down,
-        cutoff,
-        distance_basis,
-        occupancy=20,
-    ):
-        self.db = distance_basis
-        self.n_nuclei = n_nuclei
-        self.n_up = n_up
-        self.n_down = n_down
-        self.n_particles = n_nuclei + n_up + n_down
-
-    def __call__(self, neighbor_list, nuc_embeddings, elec_embeddings):
-        batch_size, occupancy = neighbor_list.idx.shape[0], neighbor_list.idx.shape[-1]
-        receivers, senders = jnp.split(neighbor_list.idx, 2, axis=-2)
-        senders = senders.reshape(-1)
-        receivers = receivers.reshape(-1)
-        offset = jnp.tile(
-            self.n_particles * jnp.arange(batch_size)[:, None],
-            (1, occupancy),
-        ).reshape(-1)
-        nodes = {
-            'nuc': jnp.tile(nuc_embeddings[None], (batch_size, 1, 1)),
-            'elec': jnp.tile(elec_embeddings[None], (batch_size, 1, 1)),
-        }
-        edges = {
-            'dist': self.db(neighbor_list.dR.reshape(-1)),
-            'type': type_of_edges(
-                senders, receivers, self.n_nuclei, self.n_up, self.n_down
-            ),
-        }
-        graph = GraphsTuple(
-            nodes=nodes,
-            edges=edges,
-            receivers=receivers + offset,
-            senders=senders + offset,
-            n_node=self.n_particles * batch_size,
-            n_edge=len(senders),
-            globals=None,
-        )
-        return graph
-
-
-# Reproduced from Jraph:
-# https://github.com/deepmind/jraph/blob/
-# 8b0536c0c8c4fbd8bd197f474add7eec8807c117/jraph/_src/models.py
-def GraphNetwork(
-    aggregate_edges_for_nodes_fn,
-    update_node_fn=None,
-    update_edge_fn=None,
+def prune_graph_edges(
+    pos_sender, pos_receiver, cutoff, idx, occupancy_limit, compute_directions
 ):
-    def _ApplyGraphNet(graph):
-        nodes, edges, receivers, senders, globals_, n_node, n_edge = graph
+    def distance(difference):
+        return jnp.sqrt((difference**2).sum())
 
-        sent_attributes = tree.tree_map(lambda n: n[senders], nodes)
-        received_attributes = tree.tree_map(lambda n: n[receivers], nodes)
+    dist = vmap(distance)
 
-        if update_edge_fn:
-            edges = update_edge_fn(edges, sent_attributes, received_attributes)
+    N_sender, N_receiver = pos_sender.shape[0], pos_receiver.shape[0]
+    sender_idx = jnp.broadcast_to(jnp.arange(N_sender)[:, None], idx.shape)
 
-        if update_node_fn:
-            received_attributes = aggregate_edges_for_nodes_fn(
-                nodes, edges, senders, receivers, n_node
-            )
-            nodes = update_node_fn(nodes, received_attributes)
-
-        return GraphsTuple(
-            nodes=nodes,
-            edges=edges,
-            receivers=receivers,
-            senders=senders,
-            globals=globals_,
-            n_node=n_node,
-            n_edge=n_edge,
+    sender_idx = jnp.reshape(sender_idx, (-1,))
+    receiver_idx = jnp.reshape(idx, (-1,))
+    differences = pos_sender[sender_idx] - pos_receiver[receiver_idx]
+    distances = dist(differences)
+    if compute_directions:
+        directions = differences / jnp.where(
+            distances[..., None] > jnp.finfo(jnp.float32).eps,
+            distances[..., None],
+            jnp.finfo(jnp.float32).eps,
         )
 
-    return _ApplyGraphNet
+    mask = (distances < cutoff) & (receiver_idx < N_receiver)
+    cumsum = jnp.cumsum(mask)
+    occupancy = cumsum[-1]
+    index = jnp.where(mask, cumsum - 1, len(receiver_idx) - 1)
+
+    out_sender_idx = N_sender * jnp.ones(occupancy_limit, jnp.int32)
+    out_receiver_idx = N_receiver * jnp.ones(occupancy_limit, jnp.int32)
+    out_distances = jnp.zeros(occupancy_limit, jnp.float32)
+    if compute_directions:
+        out_directions = jnp.zeros((occupancy_limit, 3), jnp.float32)
+
+    receiver_idx = out_receiver_idx.at[index].set(receiver_idx)
+    sender_idx = out_sender_idx.at[index].set(sender_idx)
+    distances = out_distances.at[index].set(distances)
+    if compute_directions:
+        directions = out_directions.at[index, :].set(directions)
+        return GraphEdges(
+            sender_idx,
+            receiver_idx,
+            {'occupancy': occupancy, 'distances': distances, 'directions': directions},
+        )
+
+    return GraphEdges(
+        sender_idx, receiver_idx, {'occupancy': occupancy, 'distances': distances}
+    )
+
+
+@partial(jit, static_argnums=(3, 4, 5, 6, 7))
+def compute_graph_edges(
+    pos1,
+    pos2,
+    cutoff,
+    occupancy_limit,
+    mask_self,
+    sender_offset,
+    receiver_offset,
+    compute_directions,
+):
+    edges_idx = all_graph_edges(pos1, pos2)
+    if mask_self:
+        edges_idx = mask_self_edges(edges_idx)
+
+    edges = prune_graph_edges(
+        pos1, pos2, cutoff, edges_idx, occupancy_limit, compute_directions
+    )
+
+    return edges
+
+
+class GraphEdgesBuilder:
+    def __init__(self, cutoff, occupancy_limit, mask_self, compute_directions):
+        self.cutoff = cutoff
+        self.occupancy_limit = occupancy_limit
+        self.mask_self = mask_self
+        self.compute_directions = compute_directions
+        self.compute_edges_fn = vmap(
+            compute_graph_edges, (0, 0, None, None, None, None, None, None)
+        )
+
+    def __call__(self, pos1, pos2, sender_offset=0, receiver_offset=0):
+        """Creates sparse graph edges form particle positions.
+
+        Cannot be jitted because shape of graph edges depends on data.
+        We first try to compute the graph edges with the previously used
+        occupancy limit, where we can reuse previously compiled functions.
+        If this overflows, because the new positions result in more edges,
+        we recompile the relevant functions to accomodate more edges,
+        and redo the calculation.
+        """
+        assert pos1.shape[-1] == 3 and pos2.shape[-1] == 3
+        assert len(pos1.shape) > 1
+        assert pos1.shape[:-2] == pos2.shape[:-2]
+        assert not self.mask_self or pos1.shape[-2] == pos2.shape[-2]
+
+        batch_dims = pos1.shape[:-2]
+        _pos1 = pos1.reshape(-1, *pos1.shape[-2:])
+        _pos2 = pos2.reshape(-1, *pos2.shape[-2:])
+
+        def compute_edges_fn(occupancy_limit):
+            return self.compute_edges_fn(
+                _pos1,
+                _pos2,
+                self.cutoff,
+                occupancy_limit,
+                self.mask_self,
+                sender_offset,
+                receiver_offset,
+                self.compute_directions,
+            )
+
+        edges = compute_edges_fn(self.occupancy_limit)
+        max_occupancy = jnp.max(edges.data['occupancy']).item()
+        if max_occupancy > self.occupancy_limit:
+            self.occupancy_limit = max_occupancy
+            edges = compute_edges_fn(self.occupancy_limit)
+        del edges.data['occupancy']
+
+        return tree_util.tree_map(lambda x: x.reshape(*batch_dims, *x.shape[1:]), edges)
+
+
+def GraphUpdate(
+    aggregate_edges_for_nodes_fn,
+    update_nodes_fn=None,
+    update_edges_fn=None,
+):
+    def _update(graph):
+        nodes, edges = graph
+
+        if update_edges_fn:
+            edges = update_edges_fn(nodes, edges)
+
+        if update_nodes_fn:
+            aggregated_edges = aggregate_edges_for_nodes_fn(nodes, edges)
+            nodes = update_nodes_fn(nodes, aggregated_edges)
+
+        return Graph(nodes, edges)
+
+    return _update
