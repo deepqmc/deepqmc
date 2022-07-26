@@ -1,10 +1,18 @@
 import haiku as hk
 import jax.numpy as jnp
 from jax import ops
+from jax.tree_util import tree_map, tree_structure, tree_transpose
 
 from deepqmc.jax.hkext import SSP
+
 from .distbasis import DistanceBasis
-from .graph import GraphBuilder, GraphNetwork
+from .graph import (
+    DEFAULT_EDGE_KWARGS,
+    Graph,
+    GraphEdgesBuilder,
+    GraphNodes,
+    GraphUpdate,
+)
 
 
 class SchNetLayer(hk.Module):
@@ -13,11 +21,13 @@ class SchNetLayer(hk.Module):
         embedding_dim,
         kernel_dim,
         dist_feat_dim,
+        distance_basis,
         shared_h=True,
         shared_g=False,
     ):
         super().__init__('SchNetLayer')
 
+        self.distance_basis = distance_basis
         labels = ['same', 'anti', 'n']
         self.w = {
             lbl: hk.nets.MLP(
@@ -46,64 +56,69 @@ class SchNetLayer(hk.Module):
         self.shared_h = shared_h
         self.shared_g = shared_g
 
-        self.forward = GraphNetwork(
-            update_node_fn=self.get_update_node_fn(),
+        self.forward = GraphUpdate(
+            update_nodes_fn=self.get_update_nodes_fn(),
+            update_edges_fn=self.get_update_edges_fn(),
             aggregate_edges_for_nodes_fn=self.get_aggregate_edges_for_nodes_fn(),
         )
 
     def __call__(self, graph):
         return self.forward(graph)
 
-    def get_aggregate_edges_for_nodes_fn(self):
-        def aggregate_edges_for_nodes_fn(nodes, edges, senders, receivers, n_nodes):
-            dist, e_typ = edges['dist'], edges['type'][..., None]
-            zeros = jnp.zeros_like(
-                dist, shape=(*dist.shape[:-1], nodes['nuc'].shape[-1])
+    def get_update_edges_fn(self):
+        def update_edges_fn(nodes, edges):
+            expanded = edges._replace(
+                data=tree_map(lambda dists: self.distance_basis(dists), edges.data)
             )
-            nuc_or_zero = jnp.where(e_typ == 1, self.w['n'](dist), zeros)
-            anti_or_nuc = jnp.where(e_typ == 4, self.w['anti'](dist), nuc_or_zero)
-            we = jnp.where(e_typ == 3, self.w['same'](dist), anti_or_nuc)
-            hx = jnp.concatenate(
-                [nodes['nuc'], self.h(nodes['elec'])], axis=-2
-            ).reshape(-1, nodes['nuc'].shape[-1])
-            weh = we * hx[senders]
-            weh_same = jnp.where(e_typ == 3, weh, zeros)
-            weh_anti = jnp.where(e_typ == 4, weh, zeros)
-            weh_nuc = jnp.where(e_typ == 1, weh, zeros)
+            return expanded
+
+        return update_edges_fn if self.distance_basis else None
+
+    def get_aggregate_edges_for_nodes_fn(self):
+        def aggregate_edges_for_nodes_fn(nodes, edges):
+            n_elec = nodes.electrons.shape[-2]
+            we_same, we_anti, we_n = (
+                self.w[lbl](edges.data['distances'][lbl]) for lbl in self.labels
+            )
+            hx_same, hx_anti = (
+                (self.h if self.shared_h else self.h[lbl])(
+                    nodes.electrons[edges.senders[lbl]]
+                )
+                for lbl in self.labels[:2]
+            )
+            weh_same = we_same * hx_same
+            weh_anti = we_anti * hx_anti
+            weh_n = we_n * nodes.nuclei[edges.senders['n']]
             z_same = ops.segment_sum(
-                data=weh_same, segment_ids=receivers, num_segments=n_nodes
+                data=weh_same, segment_ids=edges.receivers['same'], num_segments=n_elec
             )
             z_anti = ops.segment_sum(
-                data=weh_anti, segment_ids=receivers, num_segments=n_nodes
+                data=weh_anti, segment_ids=edges.receivers['anti'], num_segments=n_elec
             )
-            z_nuc = ops.segment_sum(
-                data=weh_nuc, segment_ids=receivers, num_segments=n_nodes
+            z_n = ops.segment_sum(
+                data=weh_n, segment_ids=edges.receivers['n'], num_segments=n_elec
             )
             return {
-                'nuc': z_nuc,
                 'same': z_same,
                 'anti': z_anti,
+                'n': z_n,
             }
 
         return aggregate_edges_for_nodes_fn
 
-    def get_update_node_fn(self):
-        def update_node_fn(nodes, z):
-            def eval_g(g, message):
-                n_nuclei = nodes['nuc'].shape[-2]
-                n_particles = nodes['elec'].shape[-2] + n_nuclei
-                return g(
-                    message.reshape(-1, n_particles, self.kernel_dim)[:, n_nuclei:],
+    def get_update_nodes_fn(self):
+        def update_nodes_fn(nodes, z):
+            updated_nodes = nodes._replace(
+                electrons=nodes.electrons
+                + (
+                    (self.g if self.shared_g else self.g['n'])(z['n'])
+                    + (self.g if self.shared_g else self.g['same'])(z['same'])
+                    + (self.g if self.shared_g else self.g['anti'])(z['anti'])
                 )
-
-            nodes['elec'] += (
-                eval_g(self.g if self.shared_g else self.g['n'], z['nuc'])
-                + eval_g(self.g if self.shared_g else self.g['same'], z['same'])
-                + eval_g(self.g if self.shared_g else self.g['anti'], z['anti'])
             )
-            return nodes
+            return updated_nodes
 
-        return update_node_fn
+        return update_nodes_fn
 
 
 class SchNet(hk.Module):
@@ -113,11 +128,10 @@ class SchNet(hk.Module):
         n_up,
         n_down,
         coords,
-        graph_builder,
         embedding_dim,
         dist_feat_dim,
-        kernel_dim=128,
-        n_interactions=2,
+        kernel_dim=2,
+        n_interactions=3,
         cutoff=10.0,
         initial_occupancy=10,
     ):
@@ -131,57 +145,99 @@ class SchNet(hk.Module):
         self.Y = hk.Embed(n_nuc, kernel_dim, name='NuclearEmbedding')
         self.spin_idxs = spin_idxs
         self.nuclei_idxs = jnp.arange(n_nuc)
-        self.graph_builder = graph_builder
         self.layers = [
-            SchNetLayer(embedding_dim, kernel_dim, dist_feat_dim)
-            for _ in range(n_interactions)
+            SchNetLayer(
+                embedding_dim,
+                kernel_dim,
+                dist_feat_dim,
+                DistanceBasis(dist_feat_dim, cutoff, envelope='nocusp')
+                if i == 0
+                else None,
+            )
+            for i in range(n_interactions)
         ]
 
-    def neighbor_list_from_rs(self, rs):
-        batch_dims = rs.shape[:-2]
-        positions = jnp.concatenate(
-            [
-                jnp.tile(
-                    jnp.expand_dims(self.coords, jnp.arange(len(batch_dims))),
-                    (*batch_dims, 1, 1),
-                ),
-                rs,
-            ],
-            axis=-2,
-        )
-        return self.neighbor_list_builder(positions)
-
-    def __call__(self, neighbor_list):
+    def __call__(self, graph_edges):
         nuc_embedding = self.Y(self.nuclei_idxs)
         elec_embedding = self.X(self.spin_idxs)
-        graph = self.graph_builder(neighbor_list, nuc_embedding, elec_embedding)
+        graph = Graph(GraphNodes(nuc_embedding, elec_embedding), graph_edges)
         for layer in self.layers:
             graph = layer(graph)
-        return graph.nodes['elec']
+        return graph.nodes.electrons
 
     @classmethod
-    def from_mol(cls, rng, mol, nl, *args, **kwargs):
+    def from_mol(cls, rng, mol, edges, *args, **kwargs):
         n_nuc, n_up, n_down = mol.n_particles()
-        graph_builder = GraphBuilder(
-            n_nuc,
-            n_up,
-            n_down,
-            10.0,
-            DistanceBasis(16, envelope='nocusp'),
-        )
 
         @hk.without_apply_rng
         @hk.transform
-        def schnet_fwd(neighbor_list):
+        def schnet_fwd(graph_edges):
             return cls(
                 n_nuc,
                 n_up,
                 n_down,
                 mol.coords,
-                graph_builder,
-                embedding_dim=64,
+                embedding_dim=4,
+                dist_feat_dim=2,
                 cutoff=10.0,
-            )(neighbor_list)
+            )(graph_edges)
 
-        params = schnet_fwd.init(rng, nl)
+        params = schnet_fwd.init(rng, edges)
         return params, schnet_fwd.apply
+
+
+class SchNetEdgesBuilder:
+    def __init__(self, mol, n_kwargs=None, same_kwargs=None, anti_kwargs=None):
+        self.mol = mol
+        self.n_up, self.n_down = mol.n_particles()[1:]
+        get_kwargs = lambda kwargs: kwargs or DEFAULT_EDGE_KWARGS['SchNet']
+        self.builders = {
+            'n': GraphEdgesBuilder(**get_kwargs(n_kwargs), mask_self=False),
+            'same': GraphEdgesBuilder(**get_kwargs(same_kwargs), mask_self=True),
+            'anti': GraphEdgesBuilder(**get_kwargs(anti_kwargs), mask_self=False),
+        }
+
+    def __call__(self, rs):
+        def transpose_cat(list_of_edges):
+            def transpose_with_list(outer_structure, tree):
+                return tree_transpose(tree_structure([0, 0]), outer_structure, tree)
+
+            edges_of_lists = transpose_with_list(
+                tree_structure(list_of_edges[0]), list_of_edges
+            )
+            edges = tree_map(
+                lambda x: jnp.concatenate(x, axis=-1),
+                edges_of_lists,
+                is_leaf=lambda x: isinstance(x, list),
+            )
+            return edges
+
+        batch_dims = rs.shape[:-2]
+        coords = jnp.broadcast_to(
+            jnp.expand_dims(self.mol.coords, jnp.arange(len(batch_dims))),
+            (*batch_dims, *self.mol.coords.shape),
+        )
+        rs_up, rs_down = rs[..., : self.n_up, :], rs[..., self.n_up :, :]
+
+        edges_same = [
+            self.builders['same'](rs_up, rs_up),
+            self.builders['same'](
+                rs_down, rs_down, sender_offset=self.n_up, receiver_offset=self.n_up
+            ),
+        ]
+        edges_same = transpose_cat(edges_same)
+
+        edges_anti = [
+            self.builders['anti'](rs_up, rs_down, receiver_offset=self.n_up),
+            self.builders['anti'](rs_down, rs_up, sender_offset=self.n_up),
+        ]
+        edges_anti = transpose_cat(edges_anti)
+
+        edges_n = self.builders['n'](coords, rs)
+
+        edges = {'n': edges_n, 'same': edges_same, 'anti': edges_anti}
+        return tree_transpose(
+            tree_structure({'n': 0, 'same': 0, 'anti': 0}),
+            tree_structure(edges_same),
+            edges,
+        )
