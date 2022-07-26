@@ -16,5 +16,9 @@ class WaveFunction(hk.Module):
         self.n_up = (n_elec + mol.spin) // 2
         self.n_down = (n_elec - mol.spin) // 2
 
+    @property
+    def spin_slices(self):
+        return slice(None, self.n_up), slice(self.n_up, None)
+
     def forward(self, rs):
         return NotImplemented

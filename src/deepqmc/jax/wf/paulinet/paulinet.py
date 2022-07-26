@@ -1,13 +1,15 @@
+from functools import partial
+
 import haiku as hk
 import jax
 import jax.numpy as jnp
-from functools import partial
 
-from deepqmc.jax.utils import pairwise_diffs
+from deepqmc.jax.utils import pairwise_diffs, pairwise_self_distance, triu_flat
 from deepqmc.jax.wf.base import WaveFunction
 
-from ...jaxext import unflatten
+from ...jaxext import flatten, unflatten
 from ...types import Psi
+from .cusp import ElectronicAsymptotic
 from .omni import OmniNet
 
 
@@ -52,6 +54,8 @@ class PauliNet(WaveFunction):
         backflow_op=None,
         *,
         full_determinant=False,
+        cusp_electrons=True,
+        cusp_alpha=10.0,
         backflow_type='orbital',
         backflow_channels=1,
         backflow_transform='mult',
@@ -72,6 +76,11 @@ class PauliNet(WaveFunction):
         self.basis = basis
         self.mo_coeff = hk.Linear(n_orbitals, with_bias=False, name='mo_coeff')
         self.conf_coeff = hk.Linear(len(self.confs), with_bias=False, name='conf_coeff')
+        self.cusp_same, self.cusp_anti = (
+            (ElectronicAsymptotic(cusp=cusp, alpha=cusp_alpha) for cusp in (0.25, 0.5))
+            if cusp_electrons
+            else (None, None)
+        )
         self.n_determinants = len(self.confs) * backflow_channels
         self.full_determinant = full_determinant
 
@@ -109,6 +118,7 @@ class PauliNet(WaveFunction):
         n_nuc = len(self.mol.coords)
         diffs_nuc = pairwise_diffs(rs.reshape(-1, 3), self.mol.coords)
         dists_nuc = jnp.sqrt(diffs_nuc[..., -1]).reshape(-1, n_elec, n_nuc)
+        dists_elec = pairwise_self_distance(rs, full=True)
         aos = self.basis(diffs_nuc)
         xs = self.mo_coeff(aos)
         xs = xs.reshape(-1, 1, n_elec, xs.shape[-1])
@@ -141,6 +151,21 @@ class PauliNet(WaveFunction):
         psi = self.conf_coeff(xs).squeeze(axis=-1).mean(axis=-1)
         log_psi = jnp.log(jnp.abs(psi)) + xs_shift
         sign_psi = jax.lax.stop_gradient(jnp.sign(psi))
+        if self.cusp_same:
+            cusp_same = self.cusp_same(
+                jnp.concatenate(
+                    [
+                        triu_flat(dists_elec[..., idxs, idxs])
+                        for idxs in self.spin_slices
+                    ],
+                    axis=-1,
+                )
+            )
+            cusp_anti = flatten(
+                self.cusp_anti(dists_elec[..., :n_up, n_up:]), start_axis=-2
+            )
+            log_psi = log_psi + cusp_same + cusp_anti
+
         if J is not None:
             log_psi = log_psi + J
 
