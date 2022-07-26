@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from jax import ops
 from jax.tree_util import tree_map, tree_structure, tree_transpose
 
-from deepqmc.jax.hkext import SSP
+from deepqmc.jax.hkext import MLP
 
 from .distbasis import DistanceBasis
 from .graph import (
@@ -24,34 +24,70 @@ class SchNetLayer(hk.Module):
         distance_basis,
         shared_h=True,
         shared_g=False,
+        w_subnet=None,
+        h_subnet=None,
+        g_subnet=None,
+        *,
+        n_layers_w=2,
+        n_layers_h=1,
+        n_layers_g=1,
     ):
         super().__init__('SchNetLayer')
 
-        self.distance_basis = distance_basis
+        def default_subnet_kwargs(n_layers):
+            return {
+                'hidden_layers': ('log', n_layers),
+                'last_bias': False,
+                'last_linear': True,
+            }
+
         labels = ['same', 'anti', 'n']
         self.w = {
-            lbl: hk.nets.MLP(
-                [dist_feat_dim, kernel_dim], activation=SSP, name=f'w_{lbl}'
+            lbl: MLP(
+                dist_feat_dim,
+                kernel_dim,
+                name=f'w_{lbl}',
+                **(w_subnet or default_subnet_kwargs(n_layers_w)),
             )
             for lbl in labels
         }
         self.h = (
-            hk.nets.MLP([kernel_dim], activation=SSP, name='h')
+            MLP(
+                embedding_dim,
+                kernel_dim,
+                name='h',
+                **(h_subnet or default_subnet_kwargs(n_layers_h)),
+            )
             if shared_h
             else {
-                lbl: hk.nets.MLP([kernel_dim], activation=SSP, name=f'h_{lbl}')
+                lbl: MLP(
+                    embedding_dim,
+                    kernel_dim,
+                    name=f'h_{lbl}',
+                    **(h_subnet or default_subnet_kwargs(n_layers_h)),
+                )
                 for lbl in labels
             }
         )
         self.g = (
-            hk.nets.MLP([embedding_dim], activation=SSP)
+            MLP(
+                kernel_dim,
+                embedding_dim,
+                name='g',
+                **(g_subnet or default_subnet_kwargs(n_layers_g)),
+            )
             if shared_g
             else {
-                lbl: hk.nets.MLP([embedding_dim], activation=SSP, name=f'g_{lbl}')
+                lbl: MLP(
+                    kernel_dim,
+                    embedding_dim,
+                    name=f'g_{lbl}',
+                    **(g_subnet or default_subnet_kwargs(n_layers_g)),
+                )
                 for lbl in labels
             }
         )
-        self.kernel_dim = kernel_dim
+        self.distance_basis = distance_basis
         self.labels = labels
         self.shared_h = shared_h
         self.shared_g = shared_g
@@ -129,11 +165,10 @@ class SchNet(hk.Module):
         n_down,
         coords,
         embedding_dim,
-        dist_feat_dim,
-        kernel_dim=2,
+        dist_feat_dim=32,
+        kernel_dim=64,
         n_interactions=3,
         cutoff=10.0,
-        initial_occupancy=10,
     ):
         super().__init__('SchNet')
         self.coords = coords
@@ -164,26 +199,6 @@ class SchNet(hk.Module):
         for layer in self.layers:
             graph = layer(graph)
         return graph.nodes.electrons
-
-    @classmethod
-    def from_mol(cls, rng, mol, edges, *args, **kwargs):
-        n_nuc, n_up, n_down = mol.n_particles()
-
-        @hk.without_apply_rng
-        @hk.transform
-        def schnet_fwd(graph_edges):
-            return cls(
-                n_nuc,
-                n_up,
-                n_down,
-                mol.coords,
-                embedding_dim=4,
-                dist_feat_dim=2,
-                cutoff=10.0,
-            )(graph_edges)
-
-        params = schnet_fwd.init(rng, edges)
-        return params, schnet_fwd.apply
 
 
 class SchNetEdgesBuilder:
