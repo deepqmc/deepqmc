@@ -141,6 +141,7 @@ class PauliNet(WaveFunction):
         psi = self.conf_coeff(xs).squeeze(axis=-1).mean(axis=-1)
         log_psi = jnp.log(jnp.abs(psi)) + xs_shift
         sign_psi = jax.lax.stop_gradient(jnp.sign(psi))
-        log_psi = log_psi + J
+        if J is not None:
+            log_psi = log_psi + J
 
         return Psi(sign_psi.squeeze(), log_psi.squeeze())
