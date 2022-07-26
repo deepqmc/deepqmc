@@ -29,6 +29,23 @@ def pairwise_diffs(coords1, coords2):
     return jnp.concatenate([diffs, (diffs**2).sum(axis=-1, keepdims=True)], axis=-1)
 
 
+def pairwise_self_distance(coords, full=False):
+    i, j = jnp.triu_indices(coords.shape[-2], k=1)
+    diffs = coords[..., :, None, :] - coords[..., None, :, :]
+    dists = jnp.linalg.norm(diffs[..., i, j, :], axis=-1)
+    if full:
+        dists_full = jnp.zeros(diffs.shape[:-1])
+        dists_full = dists_full.at[..., i, j].set(dists)
+        dists_full = dists_full.at[..., j, i].set(dists)
+        dists = dists_full
+    return dists
+
+
+def triu_flat(x):
+    i, j = jnp.triu_indices(x.shape[1], x.shape[1], 1)
+    return x[..., i, j]
+
+
 def nuclear_energy(mol):
     coords, charges = mol.coords, mol.charges
     coulombs = (
