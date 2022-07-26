@@ -140,7 +140,7 @@ class OmniNet(hk.Module):
     def __call__(self, rs):
 
         if self.gnn:
-            nl = self.neighbor_list_builder(rs)
+            nl = self.neighbor_list_builder.from_rs(rs)
             embeddings = self.gnn(nl)
 
         jastrow = self.jastrow(embeddings) if self.jastrow else None
