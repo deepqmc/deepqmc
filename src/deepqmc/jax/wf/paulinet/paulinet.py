@@ -113,7 +113,7 @@ class PauliNet(WaveFunction):
             fs_mult, fs_add = fs[:, : fs.shape[1] // 2], fs[:, fs.shape[1] // 2 :]
         return self.backflow_op(xs, fs_mult, fs_add, dists_nuc)
 
-    def __call__(self, rs):
+    def __call__(self, rs, edges):
         n_elec = rs.shape[-2]
         n_nuc = len(self.mol.coords)
         diffs_nuc = pairwise_diffs(rs.reshape(-1, 3), self.mol.coords)
@@ -122,7 +122,7 @@ class PauliNet(WaveFunction):
         aos = self.basis(diffs_nuc)
         xs = self.mo_coeff(aos)
         xs = xs.reshape(-1, 1, n_elec, xs.shape[-1])
-        J, fs = self.omni(rs)
+        J, fs = self.omni(edges)
         if fs is not None and self.backflow_type == 'orbital':
             xs = self._backflow_op(xs, fs, dists_nuc)
 

@@ -5,9 +5,6 @@ import jax.numpy as jnp
 
 from ...hkext import MLP, SSP
 from ...jaxext import unflatten
-from .distbasis import DistanceBasis
-from .graph import GraphBuilder
-from .neighbors import NeighborListBuilder
 from .schnet import SchNet
 
 
@@ -103,22 +100,11 @@ class OmniNet(hk.Module):
                     SchNet,
                     **(gnn_kwargs or {}),
                 )
-            graph_builder = GraphBuilder(
-                n_nuc,
-                n_up,
-                n_down,
-                cutoff_distance,
-                DistanceBasis(dist_feat_dim, envelope='nocusp'),
-            )
-            self.neighbor_list_builder = NeighborListBuilder(
-                mol, cutoff_distance, occupancy
-            )
             self.gnn = gnn_factory(
                 n_nuc,
                 n_up,
                 n_down,
                 mol.coords,
-                graph_builder,
                 embedding_dim,
                 dist_feat_dim,
             )
@@ -137,11 +123,10 @@ class OmniNet(hk.Module):
             else None
         )
 
-    def __call__(self, rs):
+    def __call__(self, edges):
 
         if self.gnn:
-            nl = self.neighbor_list_builder.from_rs(rs)
-            embeddings = self.gnn(nl)
+            embeddings = self.gnn(edges)
 
         jastrow = self.jastrow(embeddings) if self.jastrow else None
         backflow = self.backflow(embeddings) if self.backflow else None
