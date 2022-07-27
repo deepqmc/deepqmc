@@ -2,7 +2,7 @@ from collections import namedtuple
 from functools import partial
 
 import jax.numpy as jnp
-from jax import jit, tree_util, vmap, lax
+from jax import jit, lax, tree_util, vmap
 
 GraphEdges = namedtuple('GraphEdges', 'senders receivers data')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
