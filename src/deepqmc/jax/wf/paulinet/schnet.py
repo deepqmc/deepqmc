@@ -1,18 +1,17 @@
 import haiku as hk
 import jax.numpy as jnp
-from jax import ops
-from jax.tree_util import tree_map, tree_structure, tree_transpose
-
-from deepqmc.jax.hkext import MLP
-
-from .distbasis import DistanceBasis
-from .graph import (
+from distbasis import DistanceBasis
+from graph import (
     DEFAULT_EDGE_KWARGS,
     Graph,
     GraphEdgesBuilder,
     GraphNodes,
     GraphUpdate,
 )
+from jax import ops
+from jax.tree_util import tree_map, tree_structure, tree_transpose
+
+from deepqmc.jax.hkext import MLP
 
 
 class SchNetLayer(hk.Module):
