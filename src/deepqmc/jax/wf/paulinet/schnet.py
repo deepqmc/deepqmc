@@ -18,6 +18,7 @@ from .graph import (
 class SchNetLayer(hk.Module):
     def __init__(
         self,
+        ilayer,
         embedding_dim,
         kernel_dim,
         dist_feat_dim,
@@ -32,7 +33,7 @@ class SchNetLayer(hk.Module):
         n_layers_h=1,
         n_layers_g=1,
     ):
-        super().__init__('SchNetLayer')
+        super().__init__(f'SchNetLayer_{ilayer}')
 
         def default_subnet_kwargs(n_layers):
             return {
@@ -169,6 +170,7 @@ class SchNet(hk.Module):
         kernel_dim=64,
         n_interactions=3,
         cutoff=10.0,
+        layer_kwargs=None,
     ):
         super().__init__('SchNet')
         self.coords = coords
@@ -182,20 +184,44 @@ class SchNet(hk.Module):
         self.nuclei_idxs = jnp.arange(n_nuc)
         self.layers = [
             SchNetLayer(
+                i,
                 embedding_dim,
                 kernel_dim,
                 dist_feat_dim,
                 DistanceBasis(dist_feat_dim, cutoff, envelope='nocusp')
                 if i == 0
                 else None,
+                **(layer_kwargs or {}),
             )
             for i in range(n_interactions)
         ]
 
-    def __call__(self, graph_edges):
+    def __call__(self, rs, graph_edges):
+        def compute_distances(labels, positions):
+            def dist(senders, receivers):
+                return jnp.sqrt(((receivers - senders) ** 2).sum(axis=-1))
+
+            data = {
+                'distances': {
+                    lbl: dist(
+                        pos[0][graph_edges.senders[lbl]],
+                        pos[1][graph_edges.receivers[lbl]],
+                    )
+                    for lbl, pos in zip(labels, positions)
+                }
+            }
+            return data
+
         nuc_embedding = self.Y(self.nuclei_idxs)
         elec_embedding = self.X(self.spin_idxs)
-        graph = Graph(GraphNodes(nuc_embedding, elec_embedding), graph_edges)
+        graph = Graph(
+            GraphNodes(nuc_embedding, elec_embedding),
+            graph_edges._replace(
+                data=compute_distances(
+                    ['n', 'same', 'anti'], [(self.coords, rs), (rs, rs), (rs, rs)]
+                )
+            ),
+        )
         for layer in self.layers:
             graph = layer(graph)
         return graph.nodes.electrons
@@ -204,12 +230,28 @@ class SchNet(hk.Module):
 class SchNetEdgesBuilder:
     def __init__(self, mol, n_kwargs=None, same_kwargs=None, anti_kwargs=None):
         self.mol = mol
-        self.n_up, self.n_down = mol.n_particles()[1:]
+        n_nuc, self.n_up, self.n_down = mol.n_particles()
+        n_elec = self.n_up + self.n_down
         get_kwargs = lambda kwargs: kwargs or DEFAULT_EDGE_KWARGS['SchNet']
         self.builders = {
-            'n': GraphEdgesBuilder(**get_kwargs(n_kwargs), mask_self=False),
-            'same': GraphEdgesBuilder(**get_kwargs(same_kwargs), mask_self=True),
-            'anti': GraphEdgesBuilder(**get_kwargs(anti_kwargs), mask_self=False),
+            'n': GraphEdgesBuilder(
+                **get_kwargs(n_kwargs),
+                mask_self=False,
+                send_mask_val=n_nuc,
+                rec_mask_val=n_elec,
+            ),
+            'same': GraphEdgesBuilder(
+                **get_kwargs(same_kwargs),
+                mask_self=True,
+                send_mask_val=n_elec,
+                rec_mask_val=n_elec,
+            ),
+            'anti': GraphEdgesBuilder(
+                **get_kwargs(anti_kwargs),
+                mask_self=False,
+                send_mask_val=n_elec,
+                rec_mask_val=n_elec,
+            ),
         }
 
     def __call__(self, rs):
@@ -237,14 +279,14 @@ class SchNetEdgesBuilder:
         edges_same = [
             self.builders['same'](rs_up, rs_up),
             self.builders['same'](
-                rs_down, rs_down, sender_offset=self.n_up, receiver_offset=self.n_up
+                rs_down, rs_down, send_offset=self.n_up, rec_offset=self.n_up
             ),
         ]
         edges_same = transpose_cat(edges_same)
 
         edges_anti = [
-            self.builders['anti'](rs_up, rs_down, receiver_offset=self.n_up),
-            self.builders['anti'](rs_down, rs_up, sender_offset=self.n_up),
+            self.builders['anti'](rs_up, rs_down, rec_offset=self.n_up),
+            self.builders['anti'](rs_down, rs_up, send_offset=self.n_up),
         ]
         edges_anti = transpose_cat(edges_anti)
 
