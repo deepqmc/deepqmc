@@ -123,11 +123,10 @@ class OmniNet(hk.Module):
             else None
         )
 
-    def __call__(self, edges):
+    def __call__(self, rs, graph_edges):
 
         if self.gnn:
-            embeddings = self.gnn(edges)
-
+            embeddings = self.gnn(rs, graph_edges)
         jastrow = self.jastrow(embeddings) if self.jastrow else None
         backflow = self.backflow(embeddings) if self.backflow else None
 
