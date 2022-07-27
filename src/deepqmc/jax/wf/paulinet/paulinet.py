@@ -59,11 +59,9 @@ class PauliNet(WaveFunction):
         backflow_type='orbital',
         backflow_channels=1,
         backflow_transform='mult',
-        embedding_dim=64,
         omni_factory=None,
         omni_kwargs=None,
     ):
-
         assert not full_determinant or backflow_type == 'det'
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down

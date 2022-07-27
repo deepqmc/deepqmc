@@ -75,7 +75,6 @@ class OmniNet(hk.Module):
         rs_backflow_factory=None,
         *,
         embedding_dim=128,
-        dist_feat_dim=16,
         cutoff_distance=10.0,
         occupancy=10,
         gnn_kwargs=None,
@@ -106,7 +105,6 @@ class OmniNet(hk.Module):
                 n_down,
                 mol.coords,
                 embedding_dim,
-                dist_feat_dim,
             )
         else:
             self.gnn = None
@@ -124,7 +122,6 @@ class OmniNet(hk.Module):
         )
 
     def __call__(self, rs, graph_edges):
-
         if self.gnn:
             embeddings = self.gnn(rs, graph_edges)
         jastrow = self.jastrow(embeddings) if self.jastrow else None

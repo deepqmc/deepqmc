@@ -167,7 +167,7 @@ class SchNet(hk.Module):
         coords,
         embedding_dim,
         dist_feat_dim=32,
-        kernel_dim=64,
+        kernel_dim=128,
         n_interactions=3,
         cutoff=10.0,
         layer_kwargs=None,
