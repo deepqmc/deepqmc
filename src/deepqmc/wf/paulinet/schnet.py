@@ -284,6 +284,7 @@ class ElectronicSchNet(nn.Module):
         layer_norm=False,
         use_diffs=False,
         initial_embedding='embedding',
+        subnet_kwargs=None,
     ):
         assert version in self.LAYER_FACTORIES
         assert initial_embedding in ['embedding', 'distance']
@@ -300,7 +301,7 @@ class ElectronicSchNet(nn.Module):
         else:
             total_dist_feat_dim = dist_feat_dim
         subnet_factory = subnet_metafactory(
-            total_dist_feat_dim, kernel_dim, embedding_dim
+            total_dist_feat_dim, kernel_dim, embedding_dim, **(subnet_kwargs or {})
         )
         self.resnet = resnet
         self.kernel_dim = kernel_dim
