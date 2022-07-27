@@ -2,15 +2,13 @@ from collections import namedtuple
 from functools import partial
 
 import jax.numpy as jnp
-from jax import jit, tree_util, vmap
+from jax import jit, tree_util, vmap, lax
 
 GraphEdges = namedtuple('GraphEdges', 'senders receivers data')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
 
-DEFAULT_EDGE_KWARGS = {
-    'SchNet': {'cutoff': 10.0, 'occupancy_limit': 2, 'compute_directions': False}
-}
+DEFAULT_EDGE_KWARGS = {'SchNet': {'cutoff': 10.0, 'occupancy_limit': 2}}
 
 
 def all_graph_edges(pos1, pos2):
@@ -26,10 +24,18 @@ def mask_self_edges(idx):
 
 
 def prune_graph_edges(
-    pos_sender, pos_receiver, cutoff, idx, occupancy_limit, compute_directions
+    pos_sender,
+    pos_receiver,
+    cutoff,
+    idx,
+    occupancy_limit,
+    send_offset,
+    rec_offset,
+    send_mask_val,
+    rec_mask_val,
 ):
-    def distance(difference):
-        return jnp.sqrt((difference**2).sum())
+    def distance(sender, receiver):
+        return jnp.sqrt(((receiver - sender) ** 2).sum())
 
     dist = vmap(distance)
 
@@ -38,75 +44,75 @@ def prune_graph_edges(
 
     sender_idx = jnp.reshape(sender_idx, (-1,))
     receiver_idx = jnp.reshape(idx, (-1,))
-    differences = pos_sender[sender_idx] - pos_receiver[receiver_idx]
-    distances = dist(differences)
-    if compute_directions:
-        directions = differences / jnp.where(
-            distances[..., None] > jnp.finfo(jnp.float32).eps,
-            distances[..., None],
-            jnp.finfo(jnp.float32).eps,
-        )
+    distances = dist(pos_sender[sender_idx], pos_receiver[receiver_idx])
 
     mask = (distances < cutoff) & (receiver_idx < N_receiver)
     cumsum = jnp.cumsum(mask)
     occupancy = cumsum[-1]
-    index = jnp.where(mask, cumsum - 1, len(receiver_idx) - 1)
 
-    out_sender_idx = N_sender * jnp.ones(occupancy_limit, jnp.int32)
-    out_receiver_idx = N_receiver * jnp.ones(occupancy_limit, jnp.int32)
-    out_distances = jnp.zeros(occupancy_limit, jnp.float32)
-    if compute_directions:
-        out_directions = jnp.zeros((occupancy_limit, 3), jnp.float32)
+    # edge buffer is one larger than occupancy_limit:
+    # masked edges assigned to last position and discarded
+    out_sender_idx = (send_mask_val - send_offset) * jnp.ones(
+        occupancy_limit + 1, jnp.int32
+    )
+    out_receiver_idx = (rec_mask_val - rec_offset) * jnp.ones(
+        occupancy_limit + 1, jnp.int32
+    )
+    index = jnp.where(mask, cumsum - 1, occupancy_limit)
 
-    receiver_idx = out_receiver_idx.at[index].set(receiver_idx)
-    sender_idx = out_sender_idx.at[index].set(sender_idx)
-    distances = out_distances.at[index].set(distances)
-    if compute_directions:
-        directions = out_directions.at[index, :].set(directions)
-        return GraphEdges(
-            sender_idx,
-            receiver_idx,
-            {'occupancy': occupancy, 'distances': distances, 'directions': directions},
-        )
-
-    return GraphEdges(
-        sender_idx, receiver_idx, {'occupancy': occupancy, 'distances': distances}
+    sender_idx = (
+        out_sender_idx.at[index].set(sender_idx)[:occupancy_limit] + send_offset
+    )
+    receiver_idx = (
+        out_receiver_idx.at[index].set(receiver_idx)[:occupancy_limit] + rec_offset
     )
 
+    return GraphEdges(sender_idx, receiver_idx, {'occupancy': occupancy})
 
-@partial(jit, static_argnums=(3, 4, 5, 6, 7))
+
+@partial(jit, static_argnums=(3, 4, 5, 6, 7, 8))
 def compute_graph_edges(
     pos1,
     pos2,
     cutoff,
     occupancy_limit,
     mask_self,
-    sender_offset,
-    receiver_offset,
-    compute_directions,
+    send_offset,
+    rec_offset,
+    send_mask_val,
+    rec_mask_val,
 ):
     edges_idx = all_graph_edges(pos1, pos2)
     if mask_self:
         edges_idx = mask_self_edges(edges_idx)
 
     edges = prune_graph_edges(
-        pos1, pos2, cutoff, edges_idx, occupancy_limit, compute_directions
+        pos1,
+        pos2,
+        cutoff,
+        edges_idx,
+        occupancy_limit,
+        send_offset,
+        rec_offset,
+        send_mask_val,
+        rec_mask_val,
     )
 
     return edges
 
 
 class GraphEdgesBuilder:
-    def __init__(self, cutoff, occupancy_limit, mask_self, compute_directions):
+    def __init__(self, cutoff, occupancy_limit, mask_self, send_mask_val, rec_mask_val):
         self.cutoff = cutoff
         self.occupancy_limit = occupancy_limit
         self.mask_self = mask_self
-        self.compute_directions = compute_directions
+        self.send_mask_val = send_mask_val
+        self.rec_mask_val = rec_mask_val
         self.compute_edges_fn = vmap(
-            compute_graph_edges, (0, 0, None, None, None, None, None, None)
+            compute_graph_edges, (0, 0, None, None, None, None, None, None, None)
         )
 
-    def __call__(self, pos1, pos2, sender_offset=0, receiver_offset=0):
+    def __call__(self, pos1, pos2, send_offset=0, rec_offset=0):
         """Creates sparse graph edges form particle positions.
 
         Cannot be jitted because shape of graph edges depends on data.
@@ -122,8 +128,8 @@ class GraphEdgesBuilder:
         assert not self.mask_self or pos1.shape[-2] == pos2.shape[-2]
 
         batch_dims = pos1.shape[:-2]
-        _pos1 = pos1.reshape(-1, *pos1.shape[-2:])
-        _pos2 = pos2.reshape(-1, *pos2.shape[-2:])
+        _pos1 = lax.stop_gradient(pos1.reshape(-1, *pos1.shape[-2:]))
+        _pos2 = lax.stop_gradient(pos2.reshape(-1, *pos2.shape[-2:]))
 
         def compute_edges_fn(occupancy_limit):
             return self.compute_edges_fn(
@@ -132,9 +138,10 @@ class GraphEdgesBuilder:
                 self.cutoff,
                 occupancy_limit,
                 self.mask_self,
-                sender_offset,
-                receiver_offset,
-                self.compute_directions,
+                send_offset,
+                rec_offset,
+                self.send_mask_val,
+                self.rec_mask_val,
             )
 
         edges = compute_edges_fn(self.occupancy_limit)
