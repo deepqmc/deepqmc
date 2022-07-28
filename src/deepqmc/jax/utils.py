@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 
@@ -5,8 +7,9 @@ __all__ = ()
 
 
 def laplacian(f):
-    def lap(x):
-        grad_f = jax.grad(f)
+    def lap(x, **kwargs):
+        _f = partial(f, **kwargs)
+        grad_f = jax.grad(_f)
         df, grad_f_jvp = jax.linearize(grad_f, x)
         eye = jnp.eye(len(x))
         d2f = jnp.diag(jax.vmap(grad_f_jvp)(eye))
