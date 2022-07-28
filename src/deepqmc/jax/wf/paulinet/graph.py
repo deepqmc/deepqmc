@@ -1,17 +1,16 @@
 from collections import namedtuple
 from functools import partial
 
+import haiku as hk
 import jax.numpy as jnp
-from jax import jit, lax, tree_util, vmap
+from jax import jit, lax, vmap
+from jax.tree_util import tree_map, tree_structure, tree_transpose
 
 GraphEdges = namedtuple('GraphEdges', 'senders receivers data')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
 
-DEFAULT_EDGE_KWARGS = {
-    'SchNet': {'cutoff': 10.0, 'occupancy_limit': 2},
-    'PaiNN': {'cutoff': 10.0, 'occupancy_limit': 2},
-}
+DEFAULT_EDGE_KWARGS = {'cutoff': 10.0, 'occupancy_limit': 2}
 
 
 def all_graph_edges(pos1, pos2):
@@ -167,7 +166,7 @@ class GraphEdgesBuilder:
             edges = compute_edges_fn(self.occupancy_limit)
         del edges.data['occupancy']
 
-        return tree_util.tree_map(lambda x: x.reshape(*batch_dims, *x.shape[1:]), edges)
+        return tree_map(lambda x: x.reshape(*batch_dims, *x.shape[1:]), edges)
 
 
 def GraphUpdate(
@@ -190,6 +189,125 @@ def GraphUpdate(
     return _update
 
 
-#  class MessagePassingLayer(hk.Module):
-#  def __init__(self, name, ilayer):
-#  super().__init__(f'{name}_{ilayer}')
+class MessagePassingLayer(hk.Module):
+    def __init__(self, name, ilayer):
+        super().__init__(f'{name}_{ilayer}')
+        self.ilayer = ilayer
+        self.update_graph = GraphUpdate(
+            update_nodes_fn=self.get_update_nodes_fn(),
+            update_edges_fn=self.get_update_edges_fn(),
+            aggregate_edges_for_nodes_fn=self.get_aggregate_edges_for_nodes_fn(),
+        )
+
+    def __call__(self, graph):
+        return self.update_graph(graph)
+
+    def get_update_edges_fn(self):
+        pass
+
+    def get_update_nodes_fn(self):
+        pass
+
+    def get_aggregate_edges_for_nodes_fn(self):
+        pass
+
+
+class EdgeFactory:
+    def __init__(self, mol, edge_types, kwargs_by_edge_type=None):
+        known_labels = {'nn', 'ne', 'en', 'same', 'anti'}
+        assert all(edge_type in known_labels for edge_type in edge_types)
+        self.edge_types = edge_types
+        self.n_nuc, self.n_up, self.n_down = mol.n_particles()
+        self.n_elec = self.n_up + self.n_down
+        self.coords = mol.coords
+        fix_kwargs_of_edge_type = {
+            'nn': {
+                'mask_self': True,
+                'send_mask_val': self.n_nuc,
+                'rec_mask_val': self.n_nuc,
+            },
+            'ne': {
+                'mask_self': False,
+                'send_mask_val': self.n_nuc,
+                'rec_mask_val': self.n_elec,
+            },
+            'en': {
+                'mask_self': False,
+                'send_mask_val': self.n_elec,
+                'rec_mask_val': self.n_nuc,
+            },
+            'same': {
+                'mask_self': True,
+                'send_mask_val': self.n_elec,
+                'rec_mask_val': self.n_elec,
+            },
+            'anti': {
+                'mask_self': False,
+                'send_mask_val': self.n_elec,
+                'rec_mask_val': self.n_elec,
+            },
+        }
+        self.builders = {
+            edge_type: GraphEdgesBuilder(
+                **(
+                    (kwargs_by_edge_type or {}).get(edge_type, None)
+                    or DEFAULT_EDGE_KWARGS
+                ),
+                **fix_kwargs_of_edge_type[edge_type],
+            )
+            for edge_type in self.edge_types
+        }
+
+    def __call__(self, rs):
+        assert rs.shape[-2] == self.n_up + self.n_down
+
+        def transpose_cat(list_of_edges):
+            def transpose_with_list(outer_structure, tree):
+                return tree_transpose(tree_structure([0, 0]), outer_structure, tree)
+
+            edges_of_lists = transpose_with_list(
+                tree_structure(list_of_edges[0]), list_of_edges
+            )
+            edges = tree_map(
+                lambda x: jnp.concatenate(x, axis=-1),
+                edges_of_lists,
+                is_leaf=lambda x: isinstance(x, list),
+            )
+            return edges
+
+        batch_dims = rs.shape[:-2]
+        coords = jnp.broadcast_to(
+            jnp.expand_dims(self.coords, jnp.arange(len(batch_dims))),
+            (*batch_dims, *self.coords.shape),
+        )
+        rs_up, rs_down = rs[..., : self.n_up, :], rs[..., self.n_up :, :]
+
+        def build_same():
+            edges_same = [
+                self.builders['same'](rs_up, rs_up),
+                self.builders['same'](
+                    rs_down, rs_down, send_offset=self.n_up, rec_offset=self.n_up
+                ),
+            ]
+            return transpose_cat(edges_same)
+
+        def build_anti():
+            edges_anti = [
+                self.builders['anti'](rs_up, rs_down, rec_offset=self.n_up),
+                self.builders['anti'](rs_down, rs_up, send_offset=self.n_up),
+            ]
+            return transpose_cat(edges_anti)
+
+        build_rules = {
+            'nn': lambda: self.builders['nn'](coords, coords),
+            'ne': lambda: self.builders['ne'](coords, rs),
+            'en': lambda: self.builders['en'](rs, coords),
+            'same': build_same,
+            'anti': build_anti,
+        }
+        edges = {edge_type: build_rules[edge_type]() for edge_type in self.edge_types}
+        return tree_transpose(
+            tree_structure({edge_type: 0 for edge_type in self.edge_types}),
+            tree_structure(edges[self.edge_types[0]]),
+            edges,
+        )
