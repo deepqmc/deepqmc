@@ -1,22 +1,17 @@
 import haiku as hk
 import jax.numpy as jnp
 from distbasis import DistanceBasis
-from graph import (
-    DEFAULT_EDGE_KWARGS,
-    Graph,
-    GraphEdgesBuilder,
-    GraphNodes,
-    GraphUpdate,
-)
+from graph import Graph, GraphNodes, MessagePassingLayer
 from jax import ops
-from jax.tree_util import tree_map, tree_structure, tree_transpose
+from jax.tree_util import tree_map
 
 from deepqmc.jax.hkext import MLP
 
 
-class SchNetLayer(hk.Module):
+class SchNetLayer(MessagePassingLayer):
     def __init__(
         self,
+        name,
         ilayer,
         embedding_dim,
         kernel_dim,
@@ -32,7 +27,7 @@ class SchNetLayer(hk.Module):
         n_layers_h=1,
         n_layers_g=1,
     ):
-        super().__init__(f'SchNetLayer_{ilayer}')
+        super().__init__(name, ilayer)
 
         def default_subnet_kwargs(n_layers):
             return {
@@ -41,7 +36,7 @@ class SchNetLayer(hk.Module):
                 'last_linear': True,
             }
 
-        labels = ['same', 'anti', 'n']
+        labels = ['same', 'anti', 'ne']
         self.w = {
             lbl: MLP(
                 dist_feat_dim,
@@ -92,15 +87,6 @@ class SchNetLayer(hk.Module):
         self.shared_h = shared_h
         self.shared_g = shared_g
 
-        self.forward = GraphUpdate(
-            update_nodes_fn=self.get_update_nodes_fn(),
-            update_edges_fn=self.get_update_edges_fn(),
-            aggregate_edges_for_nodes_fn=self.get_aggregate_edges_for_nodes_fn(),
-        )
-
-    def __call__(self, graph):
-        return self.forward(graph)
-
     def get_update_edges_fn(self):
         def update_edges_fn(nodes, edges):
             expanded = edges._replace(
@@ -108,7 +94,7 @@ class SchNetLayer(hk.Module):
             )
             return expanded
 
-        return update_edges_fn if self.distance_basis else None
+        return update_edges_fn if self.ilayer == 0 else None
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes_fn(nodes, edges):
@@ -124,7 +110,7 @@ class SchNetLayer(hk.Module):
             )
             weh_same = we_same * hx_same
             weh_anti = we_anti * hx_anti
-            weh_n = we_n * nodes.nuclei[edges.senders['n']]
+            weh_n = we_n * nodes.nuclei[edges.senders['ne']]
             z_same = ops.segment_sum(
                 data=weh_same, segment_ids=edges.receivers['same'], num_segments=n_elec
             )
@@ -132,12 +118,12 @@ class SchNetLayer(hk.Module):
                 data=weh_anti, segment_ids=edges.receivers['anti'], num_segments=n_elec
             )
             z_n = ops.segment_sum(
-                data=weh_n, segment_ids=edges.receivers['n'], num_segments=n_elec
+                data=weh_n, segment_ids=edges.receivers['ne'], num_segments=n_elec
             )
             return {
                 'same': z_same,
                 'anti': z_anti,
-                'n': z_n,
+                'ne': z_n,
             }
 
         return aggregate_edges_for_nodes_fn
@@ -147,7 +133,7 @@ class SchNetLayer(hk.Module):
             updated_nodes = nodes._replace(
                 electrons=nodes.electrons
                 + (
-                    (self.g if self.shared_g else self.g['n'])(z['n'])
+                    (self.g if self.shared_g else self.g['ne'])(z['ne'])
                     + (self.g if self.shared_g else self.g['same'])(z['same'])
                     + (self.g if self.shared_g else self.g['anti'])(z['anti'])
                 )
@@ -182,6 +168,7 @@ class SchNet(hk.Module):
         self.nuclei_idxs = jnp.arange(n_nuc)
         self.layers = [
             SchNetLayer(
+                'SchNetLayer',
                 i,
                 embedding_dim,
                 kernel_dim,
@@ -193,6 +180,10 @@ class SchNet(hk.Module):
             )
             for i in range(n_interactions)
         ]
+
+    @classmethod
+    def required_edge_types(cls):
+        return ['ne', 'same', 'anti']
 
     def __call__(self, rs, graph_edges):
         def compute_distances(labels, positions):
@@ -216,85 +207,10 @@ class SchNet(hk.Module):
             GraphNodes(nuc_embedding, elec_embedding),
             graph_edges._replace(
                 data=compute_distances(
-                    ['n', 'same', 'anti'], [(self.coords, rs), (rs, rs), (rs, rs)]
+                    ['ne', 'same', 'anti'], [(self.coords, rs), (rs, rs), (rs, rs)]
                 )
             ),
         )
         for layer in self.layers:
             graph = layer(graph)
         return graph.nodes.electrons
-
-
-class SchNetEdgesBuilder:
-    def __init__(self, mol, n_kwargs=None, same_kwargs=None, anti_kwargs=None):
-        self.mol = mol
-        n_nuc, self.n_up, self.n_down = mol.n_particles()
-        n_elec = self.n_up + self.n_down
-        get_kwargs = lambda kwargs: kwargs or DEFAULT_EDGE_KWARGS['SchNet']
-        self.builders = {
-            'n': GraphEdgesBuilder(
-                **get_kwargs(n_kwargs),
-                mask_self=False,
-                send_mask_val=n_nuc,
-                rec_mask_val=n_elec,
-            ),
-            'same': GraphEdgesBuilder(
-                **get_kwargs(same_kwargs),
-                mask_self=True,
-                send_mask_val=n_elec,
-                rec_mask_val=n_elec,
-            ),
-            'anti': GraphEdgesBuilder(
-                **get_kwargs(anti_kwargs),
-                mask_self=False,
-                send_mask_val=n_elec,
-                rec_mask_val=n_elec,
-            ),
-        }
-
-    def __call__(self, rs):
-        assert rs.shape[-2] == self.n_up + self.n_down
-
-        def transpose_cat(list_of_edges):
-            def transpose_with_list(outer_structure, tree):
-                return tree_transpose(tree_structure([0, 0]), outer_structure, tree)
-
-            edges_of_lists = transpose_with_list(
-                tree_structure(list_of_edges[0]), list_of_edges
-            )
-            edges = tree_map(
-                lambda x: jnp.concatenate(x, axis=-1),
-                edges_of_lists,
-                is_leaf=lambda x: isinstance(x, list),
-            )
-            return edges
-
-        batch_dims = rs.shape[:-2]
-        coords = jnp.broadcast_to(
-            jnp.expand_dims(self.mol.coords, jnp.arange(len(batch_dims))),
-            (*batch_dims, *self.mol.coords.shape),
-        )
-        rs_up, rs_down = rs[..., : self.n_up, :], rs[..., self.n_up :, :]
-
-        edges_same = [
-            self.builders['same'](rs_up, rs_up),
-            self.builders['same'](
-                rs_down, rs_down, send_offset=self.n_up, rec_offset=self.n_up
-            ),
-        ]
-        edges_same = transpose_cat(edges_same)
-
-        edges_anti = [
-            self.builders['anti'](rs_up, rs_down, rec_offset=self.n_up),
-            self.builders['anti'](rs_down, rs_up, send_offset=self.n_up),
-        ]
-        edges_anti = transpose_cat(edges_anti)
-
-        edges_n = self.builders['n'](coords, rs)
-
-        edges = {'n': edges_n, 'same': edges_same, 'anti': edges_anti}
-        return tree_transpose(
-            tree_structure({'n': 0, 'same': 0, 'anti': 0}),
-            tree_structure(edges_same),
-            edges,
-        )
