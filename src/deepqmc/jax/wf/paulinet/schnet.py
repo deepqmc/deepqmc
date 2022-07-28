@@ -174,12 +174,11 @@ class SchNet(hk.Module):
         super().__init__('SchNet')
         self.coords = coords
         elec_vocab_size = 1 if n_up == n_down else 2
-        spin_idxs = jnp.array(
+        self.spin_idxs = jnp.array(
             (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
         )
         self.X = hk.Embed(elec_vocab_size, embedding_dim, name='ElectronicEmbedding')
         self.Y = hk.Embed(n_nuc, kernel_dim, name='NuclearEmbedding')
-        self.spin_idxs = spin_idxs
         self.nuclei_idxs = jnp.arange(n_nuc)
         self.layers = [
             SchNetLayer(
@@ -254,6 +253,8 @@ class SchNetEdgesBuilder:
         }
 
     def __call__(self, rs):
+        assert rs.shape[-2] == self.n_up + self.n_down
+
         def transpose_cat(list_of_edges):
             def transpose_with_list(outer_structure, tree):
                 return tree_transpose(tree_structure([0, 0]), outer_structure, tree)
