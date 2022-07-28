@@ -8,7 +8,10 @@ GraphEdges = namedtuple('GraphEdges', 'senders receivers data')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
 
-DEFAULT_EDGE_KWARGS = {'SchNet': {'cutoff': 10.0, 'occupancy_limit': 2}}
+DEFAULT_EDGE_KWARGS = {
+    'SchNet': {'cutoff': 10.0, 'occupancy_limit': 2},
+    'PaiNN': {'cutoff': 10.0, 'occupancy_limit': 2},
+}
 
 
 def all_graph_edges(pos1, pos2):
@@ -103,6 +106,7 @@ def compute_graph_edges(
 
 class GraphEdgesBuilder:
     def __init__(self, cutoff, occupancy_limit, mask_self, send_mask_val, rec_mask_val):
+        assert not mask_self or send_mask_val == rec_mask_val
         self.cutoff = cutoff
         self.occupancy_limit = occupancy_limit
         self.mask_self = mask_self
@@ -126,6 +130,18 @@ class GraphEdgesBuilder:
         assert len(pos1.shape) > 1
         assert pos1.shape[:-2] == pos2.shape[:-2]
         assert not self.mask_self or pos1.shape[-2] == pos2.shape[-2]
+
+        if pos1.shape[-2] == 0 or pos2.shape[-2] == 0:
+            ones = lax.stop_gradient(
+                jnp.tile(
+                    jnp.expand_dims(
+                        jnp.ones(self.occupancy_limit, jnp.int32),
+                        jnp.arange(len(pos1.shape) - 2),
+                    ),
+                    (*pos1.shape[:-2], 1),
+                )
+            )
+            return GraphEdges(self.send_mask_val * ones, self.rec_mask_val * ones, {})
 
         batch_dims = pos1.shape[:-2]
         _pos1 = lax.stop_gradient(pos1.reshape(-1, *pos1.shape[-2:]))
@@ -172,3 +188,8 @@ def GraphUpdate(
         return Graph(nodes, edges)
 
     return _update
+
+
+#  class MessagePassingLayer(hk.Module):
+#  def __init__(self, name, ilayer):
+#  super().__init__(f'{name}_{ilayer}')
