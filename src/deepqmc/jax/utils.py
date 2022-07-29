@@ -45,7 +45,7 @@ def pairwise_self_distance(coords, full=False):
 
 
 def triu_flat(x):
-    i, j = jnp.triu_indices(x.shape[1], x.shape[1], 1)
+    i, j = jnp.triu_indices(x.shape[-1], 1)
     return x[..., i, j]
 
 

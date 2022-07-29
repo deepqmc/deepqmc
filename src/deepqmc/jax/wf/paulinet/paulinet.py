@@ -40,7 +40,7 @@ class BackflowOp(hk.Module):
 
 def eval_log_slater(xs):
     if xs.shape[-1] == 0:
-        return xs.new_ones(xs.shape[:-2]), xs.new_zeros(xs.shape[:-2])
+        return jnp.ones(xs.shape[:-2]), jnp.zeros(xs.shape[:-2])
     return jnp.linalg.slogdet(xs)
 
 
@@ -159,8 +159,8 @@ class PauliNet(WaveFunction):
                     axis=-1,
                 )
             )
-            cusp_anti = flatten(
-                self.cusp_anti(dists_elec[..., :n_up, n_up:]), start_axis=-2
+            cusp_anti = self.cusp_anti(
+                flatten(dists_elec[..., :n_up, n_up:], start_axis=-2)
             )
             log_psi = log_psi + cusp_same + cusp_anti
         if J is not None:
