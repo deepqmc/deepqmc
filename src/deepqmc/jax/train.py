@@ -28,6 +28,7 @@ def train(
     ansatz,
     opt,
     sampler,
+    edge_builder,
     workdir=None,
     *,
     steps,
@@ -37,7 +38,7 @@ def train(
     **params,
 ):
     ewm_state = ewm()
-    sampler = sampler(hamil)
+    sampler = sampler(hamil, 0.1, edge_builder)
     sampler = DecorrSampler(sampler, decorr=decorr)
     rng = jax.random.PRNGKey(seed)
     if workdir:
@@ -47,7 +48,7 @@ def train(
     pbar = tqdm(range(steps), desc='train', disable=None)
     enes, best_ene = [], None
     for step, train_state, E_loc in fit_wf(  # noqa: B007
-        rng, hamil, ansatz, opt, sampler, sample_size, pbar, **params
+        rng, hamil, ansatz, opt, sampler, edge_builder, sample_size, pbar, **params
     ):
         stats = {
             'E_loc/mean': jnp.mean(E_loc).item(),
