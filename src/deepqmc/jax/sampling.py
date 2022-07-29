@@ -6,12 +6,18 @@ __all__ = ()
 
 
 class MetropolisSampler:
-    def __init__(self, hamil, tau):
+    def __init__(self, hamil, tau, edge_builder=None):
         self.hamil = hamil
         self.tau = tau
+        self.edge_builder = edge_builder
 
     def _update(self, state, wf):
-        state = {**state, 'psi': wf(state['r'])}
+        psi = (
+            wf(state['r'])
+            if self.edge_builder is None
+            else wf(state['r'], self.edge_builder(state['r']))
+        )
+        state = {**state, 'psi': psi}
         return state
 
     def init(self, rng, wf, n):
@@ -45,9 +51,16 @@ class DecorrSampler:
         return self.sampler.init(*args)
 
     def sample(self, state, rng, wf):
-        state, _ = lax.scan(
-            lambda state, rng: (self.sampler.sample(state, rng, wf)[1], None),
-            state,
-            jax.random.split(rng, self.decorr),
-        )
+        if self.sampler.edge_builder is None:
+            state, _ = lax.scan(
+                lambda state, rng: (
+                    self.sampler.sample(state, rng, wf)[1],
+                    None,
+                ),
+                state,
+                jax.random.split(rng, self.decorr),
+            )
+        else:
+            for rng_sample in jax.random.split(rng, self.decorr):
+                _, state = self.sampler.sample(state, rng_sample, wf)
         return state['r'], state

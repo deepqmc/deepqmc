@@ -20,6 +20,8 @@ def laplacian_flat(f):
 class MolecularHamiltonian:
     def __init__(self, mol):
         self.mol = mol
+        n_elec = int(mol.charges.sum() - mol.charge)
+        self.dim = (n_elec, 3)
 
     def init_sample(self, rng, n, elec_std=1.0):
         rng_remainder, rng_normal = random.split(rng)
@@ -54,3 +56,6 @@ class MolecularHamiltonian:
             return result
 
         return loc_ene
+
+    def stats(self, r):
+        return {}

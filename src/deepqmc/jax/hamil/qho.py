@@ -8,7 +8,7 @@ __all__ = ()
 
 class QHOHamiltonian:
     def __init__(self, dim, mass, nu):
-        self.dim = dim
+        self.dim = (dim,)
         self.mass = mass
         self.nu = nu
 
