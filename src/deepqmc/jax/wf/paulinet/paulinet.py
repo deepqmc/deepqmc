@@ -10,6 +10,7 @@ from deepqmc.jax.wf.base import WaveFunction
 from ...jaxext import flatten, unflatten
 from ...types import Psi
 from .cusp import ElectronicAsymptotic
+from .env import ExponentialEnvelopes
 from .omni import OmniNet
 
 
@@ -48,7 +49,7 @@ class PauliNet(WaveFunction):
     def __init__(
         self,
         mol,
-        basis,
+        basis=None,
         confs=None,
         n_orbitals=None,
         backflow_op=None,
@@ -71,7 +72,7 @@ class PauliNet(WaveFunction):
             if confs is None
             else confs
         )
-        self.basis = basis
+        self.basis = basis or ExponentialEnvelopes.from_mol(mol)
         self.mo_coeff = hk.Linear(n_orbitals, with_bias=False, name='mo_coeff')
         self.conf_coeff = hk.Linear(len(self.confs), with_bias=False, name='conf_coeff')
         self.cusp_same, self.cusp_anti = (
