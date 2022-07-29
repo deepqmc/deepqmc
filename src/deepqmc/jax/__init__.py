@@ -1,3 +1,7 @@
+from .molecule import Molecule
+
+__all__ = ['Molecule']
+
 if __name__ == '__main__':
     from functools import partial
 

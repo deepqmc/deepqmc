@@ -1,11 +1,11 @@
 import haiku as hk
 import jax.numpy as jnp
-from distbasis import DistanceBasis
-from graph import Graph, GraphNodes, MessagePassingLayer
 from jax import nn, ops
 from jax.tree_util import tree_map
 
-from deepqmc.jax.hkext import MLP
+from ...hkext import MLP
+from .distbasis import DistanceBasis
+from .graph import Graph, GraphNodes, MessagePassingLayer
 
 
 class PaiNNLayer(MessagePassingLayer):
