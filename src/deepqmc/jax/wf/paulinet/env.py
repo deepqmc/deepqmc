@@ -11,4 +11,4 @@ class ExponentialEnvelopes(hk.Module):
         self.zetas = jnp.array(zetas)
 
     def __call__(self, diffs):
-        return jnp.exp(-self.zetas * jnp.sqrt(diffs[..., self.center_idx, -1]))
+        return jnp.exp(-jnp.abs(self.zetas) * jnp.sqrt(diffs[..., self.center_idx, -1]))
