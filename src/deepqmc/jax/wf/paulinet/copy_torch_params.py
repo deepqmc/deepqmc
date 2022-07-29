@@ -25,7 +25,7 @@ def get_mlp_params(torch_mlp, prefix):
 def get_schnet_params(torch_schnet, prefix):
     params = {}
     prefix += 'SchNet/~/'
-    labels = ['_n', '_same', '_anti']
+    labels = ['_ne', '_same', '_anti']
     params[prefix + 'NuclearEmbedding'] = get_embedding_params(torch_schnet.Y)
     params[prefix + 'ElectronicEmbedding'] = get_embedding_params(torch_schnet.X)
     prefix += 'SchNetLayer_'
