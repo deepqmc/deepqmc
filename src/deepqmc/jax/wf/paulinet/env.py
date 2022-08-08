@@ -7,7 +7,9 @@ class ExponentialEnvelopes(hk.Module):
         super().__init__()
         center_idx, zetas = zip(*shells)
         self.center_idx = jnp.array(center_idx)
-        self.zetas = jnp.array(zetas)
+        self.zetas = hk.get_parameter(
+            'zetas', [len(zetas)], init=lambda shape, dtype: jnp.array(zetas)
+        )
 
     def __call__(self, diffs):
         return jnp.exp(-jnp.abs(self.zetas) * jnp.sqrt(diffs[..., self.center_idx, -1]))
