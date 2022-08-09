@@ -22,6 +22,13 @@ def get_mlp_params(torch_mlp, prefix):
     return params
 
 
+def get_ee_params(torch_ee):
+    zetas = []
+    for shell in torch_ee.shells:
+        zetas.append(*shell.zetas.detach().tolist())
+    return {'zetas': jnp.array(zetas)}
+
+
 def get_schnet_params(torch_schnet, prefix):
     params = {}
     prefix += 'SchNet/~/'
@@ -45,8 +52,11 @@ def get_schnet_params(torch_schnet, prefix):
                     channels = labels
             subnet = getattr(layer, sub_label)
             for channel in channels:
+                paulinet_channel = channel
+                if channel == '_ne':
+                    paulinet_channel = '_n'
                 mlp_params = get_mlp_params(
-                    subnet[channel[1:]] if channel else subnet,
+                    subnet[paulinet_channel[1:]] if channel else subnet,
                     prefix + f'{i}/~/' + sub_label + channel + '/~/',
                 )
                 params = dict(params, **mlp_params)
@@ -54,30 +64,35 @@ def get_schnet_params(torch_schnet, prefix):
 
 
 def get_omni_params(torch_omni, prefix):
+    if torch_omni.schnet is None:
+        return {}
     params = {}
     prefix += 'omni_net/~/'
     sep = '/~/'
     schnet_params = get_schnet_params(torch_omni.schnet, prefix)
     params = dict(params, **schnet_params)
-    jastrow_params = get_mlp_params(
-        torch_omni.jastrow.net, prefix + 'Jastrow' + sep + 'mlp' + sep
-    )
-    params = dict(params, **jastrow_params)
-    for i, backflow in enumerate(torch_omni.backflow.mlps):
-        if i == 0:
-            mlp_lbl = ''
-        else:
-            mlp_lbl = f'_{i}'
-        backflow_params = get_mlp_params(
-            backflow, prefix + 'Backflow' + sep + 'mlp' + mlp_lbl + sep
+    if getattr(torch_omni, 'jastrow', False):
+        jastrow_params = get_mlp_params(
+            torch_omni.jastrow.net, prefix + 'Jastrow' + sep + 'mlp' + sep
         )
-        params = dict(params, **backflow_params)
+        params = dict(params, **jastrow_params)
+    if getattr(torch_omni, 'backflow', False):
+        for i, backflow in enumerate(torch_omni.backflow.mlps):
+            if i == 0:
+                mlp_lbl = ''
+            else:
+                mlp_lbl = f'_{i}'
+            backflow_params = get_mlp_params(
+                backflow, prefix + 'Backflow' + sep + 'mlp' + mlp_lbl + sep
+            )
+            params = dict(params, **backflow_params)
     return params
 
 
 def get_paulinet_params(torch_paulinet):
     params = {}
     prefix = 'pauli_net/~/'
+    params[prefix + 'exponential_envelopes'] = get_ee_params(torch_paulinet.mo.basis)
     params[prefix + 'mo_coeff'] = get_linear_params(torch_paulinet.mo.mo_coeff)
     if isinstance(torch_paulinet.conf_coeff, nn.Identity):
         params[prefix + 'conf_coeff'] = {'w': jnp.eye(len(torch_paulinet.confs))}
