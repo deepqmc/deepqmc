@@ -17,20 +17,7 @@ class ExponentialEnvelopes(hk.Module):
     @classmethod
     def from_mol(cls, mol):
         shells = []
-        for i, z in enumerate(mol.charges):
-            # find number of occupied shells for atom
-            max_elec = 0
-            n_shells = 0
-            for n in range(10):
-                if z <= max_elec:
-                    break
-                else:
-                    n_shells += 1
-                    for m in range(n + 1):
-                        max_elec += 2 * (2 * m + 1)
-            # adding the lowest unoccupied shell might be beneficial,
-            # especially for transition metals
-            #  n_shells += 1
-            for k in range(n_shells):
+        for i, (z, n_shell) in enumerate(zip(mol.charges, mol.n_shells)):
+            for k in range(n_shell):
                 shells.append((i, z / (k + 1)))
         return cls(shells)

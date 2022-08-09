@@ -26,6 +26,11 @@ class Molecule:
         self.spin = spin
         self.data = data or {}
 
+        n_elec = int(self.charges.sum()) - self.charge
+        self.n_up = (n_elec + self.spin) // 2
+        self.n_down = n_elec - self.n_up
+        self.n_shells = self._n_shells()
+
     def __len__(self):
         return len(self.charges)
 
@@ -41,6 +46,25 @@ class Molecule:
             f'  spin={self.spin}\n'
             ')'
         )
+
+    def _n_shells(self):
+        shells = []
+        for z in self.charges:
+            # find number of occupied shells for atom
+            max_elec = 0
+            n_shells = 0
+            for n in range(10):
+                if z <= max_elec:
+                    break
+                else:
+                    n_shells += 1
+                    for m in range(n + 1):
+                        max_elec += 2 * (2 * m + 1)
+            # adding the lowest unoccupied shell might be beneficial,
+            # especially for transition metals
+            #  n_shells += 1
+            shells.append(n_shells)
+        return tuple(shells)
 
     def as_pyscf(self):
         return [(int(charge), coord) for coord, charge in self]

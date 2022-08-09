@@ -12,9 +12,7 @@ class WaveFunction(hk.Module):
     def __init__(self, mol):
         super().__init__()
         self.mol = mol
-        n_elec = int(mol.charges.sum() - mol.charge)
-        self.n_up = (n_elec + mol.spin) // 2
-        self.n_down = (n_elec - mol.spin) // 2
+        self.n_up, self.n_down = mol.n_up, mol.n_down
 
     @property
     def spin_slices(self):
