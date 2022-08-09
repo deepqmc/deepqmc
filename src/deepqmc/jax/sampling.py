@@ -12,12 +12,9 @@ class MetropolisSampler:
         self.edge_builder = edge_builder
 
     def _update(self, state, wf):
-        psi = (
-            wf(state['r'])
-            if self.edge_builder is None
-            else wf(state['r'], self.edge_builder(state['r']))
-        )
-        state = {**state, 'psi': psi}
+        edges = self.edge_builder(state['r']) if self.edge_builder else None
+        psi = wf(state['r'], edges) if self.edge_builder else wf(state['r'])
+        state = {**state, 'psi': psi, **({'edges': edges} if self.edge_builder else {})}
         return state
 
     def init(self, rng, wf, n):
@@ -39,7 +36,7 @@ class MetropolisSampler:
         state = jax.tree_map(
             lambda xp, x: jax.vmap(jnp.where)(accepted, xp, x), prop, state
         )
-        return state['r'], state
+        return (state['r'], *((state['edges'],) if self.edge_builder else ())), state
 
 
 class DecorrSampler:
@@ -51,7 +48,10 @@ class DecorrSampler:
         return self.sampler.init(*args)
 
     def sample(self, state, rng, wf):
-        if self.sampler.edge_builder is None:
+        if self.sampler.edge_builder:
+            for rng_sample in jax.random.split(rng, self.decorr):
+                _, state = self.sampler.sample(state, rng_sample, wf)
+        else:
             state, _ = lax.scan(
                 lambda state, rng: (
                     self.sampler.sample(state, rng, wf)[1],
@@ -60,7 +60,7 @@ class DecorrSampler:
                 state,
                 jax.random.split(rng, self.decorr),
             )
-        else:
-            for rng_sample in jax.random.split(rng, self.decorr):
-                _, state = self.sampler.sample(state, rng_sample, wf)
-        return state['r'], state
+        return (
+            state['r'],
+            *((state['edges'],) if self.sampler.edge_builder else ()),
+        ), state
