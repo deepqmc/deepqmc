@@ -88,11 +88,6 @@ class OmniNet(hk.Module):
     ):
         super().__init__()
 
-        n_elec = int(mol.charges.sum() - mol.charge)
-        n_up = (n_elec + mol.spin) // 2
-        n_down = (n_elec - mol.spin) // 2
-        n_nuc = len(mol.coords)
-
         if jastrow or backflow or rs_backflow:
             if gnn_factory is None:
                 gnn_factory = partial(
@@ -100,9 +95,9 @@ class OmniNet(hk.Module):
                     **(gnn_kwargs or {}),
                 )
             self.gnn = gnn_factory(
-                n_nuc,
-                n_up,
-                n_down,
+                len(mol.coords),
+                mol.n_up,
+                mol.n_down,
                 mol.coords,
                 embedding_dim,
             )

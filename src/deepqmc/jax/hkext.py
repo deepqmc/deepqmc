@@ -12,7 +12,7 @@ class MLP(hk.Module):
         self,
         in_dim,
         out_dim,
-        hidden_layers=[],
+        hidden_layers=None,
         last_bias=True,
         last_linear=False,
         activation=SSP,
@@ -21,10 +21,11 @@ class MLP(hk.Module):
         super().__init__(name=name)
         self.activation = activation
         self.last_linear = last_linear
+        hidden_layers = hidden_layers or []
         if len(hidden_layers) == 2 and hidden_layers[0] == 'log':
             n_hidden = hidden_layers[1]
             qs = [k / n_hidden for k in range(1, n_hidden + 1)]
-            dims = [int(jnp.round(in_dim ** (1 - q) * out_dim**q)) for q in qs]
+            dims = [round(in_dim ** (1 - q) * out_dim**q) for q in qs]
         else:
             dims = [*hidden_layers, out_dim]
         layers = []
@@ -32,7 +33,7 @@ class MLP(hk.Module):
             with_bias = index < (len(dims) - 1) or last_bias
             layers.append(
                 hk.Linear(
-                    output_size=dim, with_bias=with_bias, name="linear_%d" % index
+                    output_size=dim, with_bias=with_bias, name='linear_%d' % index
                 )
             )
         self.layers = layers
