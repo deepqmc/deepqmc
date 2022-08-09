@@ -48,18 +48,18 @@ def fit_wf(
     exclude_width=jnp.inf,
     clip_quantile=0.95,
 ):
-    def loss_fn(params, r, graph_edges):
+    def loss_fn(params, r):
         wf = partial(ansatz.apply, params)
-        E_loc = jax.vmap(hamil.local_energy(wf))(r, graph_edges)
-        psi = jax.vmap(wf)(r, graph_edges)
+        E_loc = jax.vmap(hamil.local_energy(wf))(*r)
+        psi = jax.vmap(wf)(*r)
         kfac_jax.register_normal_predictive_distribution(psi.log[:, None])
         E_loc_s, sigma = median_log_squeeze(E_loc, clip_width, clip_quantile)
         loss = lax.stop_gradient(E_loc_s - E_loc_s.mean()) * psi.log
         loss = masked_mean(loss, sigma < exclude_width)
         return loss, E_loc
 
-    def energy_and_grad_fn(params, r, graph_edges):
-        grads, E_loc = jax.grad(loss_fn, has_aux=True)(params, r, graph_edges)
+    def energy_and_grad_fn(params, r):
+        grads, E_loc = jax.grad(loss_fn, has_aux=True)(params, r)
         return (jnp.mean(E_loc), E_loc), grads
 
     params = ansatz.init(
@@ -76,7 +76,7 @@ def fit_wf(
             r, smpl_state = sampler.sample(
                 smpl_state, rng, jax.vmap(partial(ansatz.apply, params))
             )
-            (_, E_loc), grads = energy_and_grad_fn(params, r, edge_builder(r))
+            (_, E_loc), grads = energy_and_grad_fn(params, r)
             updates, opt_state = opt.update(grads, opt_state)
             params = optax.apply_updates(params, updates)
             return params, opt_state, smpl_state, E_loc
