@@ -55,7 +55,7 @@ class Backflow(hk.Module):
 
     def __call__(self, xs):
         if self.multi_head:
-            return jnp.stack([net(xs) for net in self.nets], axis=1)
+            return jnp.stack([net(xs) for net in self.nets], axis=-3)
         else:
             xs = self.net(xs)
             xs = unflatten(xs, -1, (-1, self.n_orbitals))
