@@ -48,10 +48,14 @@ def fit_wf(
     exclude_width=jnp.inf,
     clip_quantile=0.95,
 ):
+    vec_ansatz = jax.jit(
+        jax.vmap(ansatz.apply, (None, 0, 0) if edge_builder else (None, 0))
+    )
+
     def loss_fn(params, r):
         wf = partial(ansatz.apply, params)
         E_loc = jax.vmap(hamil.local_energy(wf))(*r)
-        psi = jax.vmap(wf)(*r)
+        psi = vec_ansatz(params, *r)
         kfac_jax.register_normal_predictive_distribution(psi.log[:, None])
         E_loc_s, sigma = median_log_squeeze(E_loc, clip_width, clip_quantile)
         loss = lax.stop_gradient(E_loc_s - E_loc_s.mean()) * psi.log
@@ -72,20 +76,26 @@ def fit_wf(
 
     if isinstance(opt, optax.GradientTransformation):
         #  @jax.jit
-        def train_step(rng, params, opt_state, smpl_state):
-            r, smpl_state = sampler.sample(
-                smpl_state, rng, jax.vmap(partial(ansatz.apply, params))
-            )
+        def sample(params, state, rng):
+            return sampler.sample(state, rng, partial(vec_ansatz, params))
+
+        @jax.jit
+        def update_model(params, r, opt_state):
             (_, E_loc), grads = energy_and_grad_fn(params, r)
             updates, opt_state = opt.update(grads, opt_state)
             params = optax.apply_updates(params, updates)
+            return params, opt_state, E_loc
+
+        def train_step(rng, params, opt_state, smpl_state):
+            r, smpl_state = sample(params, smpl_state, rng)
+            params, opt_state, E_loc = update_model(params, r, opt_state)
             return params, opt_state, smpl_state, E_loc
 
         opt_state = opt.init(params)
     else:
         #  @jax.jit
         def sample(params, state, rng):
-            return sampler.sample(state, rng, jax.vmap(partial(ansatz.apply, params)))
+            return sampler.sample(state, rng, partial(vec_ansatz, params))
 
         def train_step(rng, params, opt_state, smpl_state):
             r, smpl_state = sample(params, smpl_state, rng)
@@ -97,7 +107,7 @@ def fit_wf(
         opt = opt(value_and_grad_func=energy_and_grad_fn, value_func_has_aux=True)
         opt_state = opt.init(params, rng, jnp.zeros((sample_size, *hamil.dim)))
 
-    smpl_state = sampler.init(rng, jax.vmap(partial(ansatz.apply, params)), sample_size)
+    smpl_state = sampler.init(rng, partial(vec_ansatz, params), sample_size)
     train_state = params, opt_state, smpl_state
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
         *train_state, E_loc = train_step(rng, *train_state)
