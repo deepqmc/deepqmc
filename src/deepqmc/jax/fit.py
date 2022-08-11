@@ -43,6 +43,7 @@ def fit_wf(
     edge_builder,
     sample_size,
     steps,
+    equilibration_steps=None,
     *,
     clip_width,
     exclude_width=jnp.inf,
@@ -107,7 +108,12 @@ def fit_wf(
         opt = opt(value_and_grad_func=energy_and_grad_fn, value_func_has_aux=True)
         opt_state = opt.init(params, rng, jnp.zeros((sample_size, *hamil.dim)))
 
-    smpl_state = sampler.init(rng, partial(vec_ansatz, params), sample_size)
+    initial_ansatz = partial(vec_ansatz, params)
+    smpl_state = sampler.init(rng, initial_ansatz, sample_size)
+    if equilibration_steps:
+        rng, rng_equilibrate = jax.random.split(rng, 2)
+        for _, rng_eq in zip(equilibration_steps, hk.PRNGSequence(rng_equilibrate)):
+            _, smpl_state = sampler.sample(smpl_state, rng_eq, initial_ansatz)
     train_state = params, opt_state, smpl_state
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
         *train_state, E_loc = train_step(rng, *train_state)
