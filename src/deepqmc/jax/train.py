@@ -35,6 +35,7 @@ def train(
     sample_size,
     decorr,
     seed,
+    equilibrate=500,
     **params,
 ):
     ewm_state = ewm()
@@ -45,10 +46,24 @@ def train(
         chkpts = CheckpointStore(workdir)
         writer = tensorboard.summary.Writer(workdir)
     log.info('Start training')
+    eq_pbar = (
+        tqdm(range(equilibrate), desc='equilibrate', disable=None)
+        if equilibrate
+        else None
+    )
     pbar = tqdm(range(steps), desc='train', disable=None)
     enes, best_ene = [], None
     for step, train_state, E_loc in fit_wf(  # noqa: B007
-        rng, hamil, ansatz, opt, sampler, edge_builder, sample_size, pbar, **params
+        rng,
+        hamil,
+        ansatz,
+        opt,
+        sampler,
+        edge_builder,
+        sample_size,
+        pbar,
+        eq_pbar,
+        **params,
     ):
         stats = {
             'E_loc/mean': jnp.mean(E_loc).item(),
