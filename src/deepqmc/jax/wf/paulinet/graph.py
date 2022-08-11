@@ -73,6 +73,7 @@ def prune_graph_edges(
 
 
 @partial(jit, static_argnums=(3, 4, 5, 6, 7, 8))
+@partial(vmap, in_axes=(0, 0, None, None, None, None, None, None, None))
 def compute_graph_edges(
     pos1,
     pos2,
@@ -111,9 +112,6 @@ class GraphEdgesBuilder:
         self.mask_self = mask_self
         self.send_mask_val = send_mask_val
         self.rec_mask_val = rec_mask_val
-        self.compute_edges_fn = vmap(
-            compute_graph_edges, (0, 0, None, None, None, None, None, None, None)
-        )
 
     def __call__(self, pos1, pos2, send_offset=0, rec_offset=0):
         """Creates sparse graph edges form particle positions.
@@ -147,7 +145,7 @@ class GraphEdgesBuilder:
         _pos2 = lax.stop_gradient(pos2.reshape(-1, *pos2.shape[-2:]))
 
         def compute_edges_fn(occupancy_limit):
-            return self.compute_edges_fn(
+            return compute_graph_edges(
                 _pos1,
                 _pos2,
                 self.cutoff,
@@ -212,6 +210,22 @@ class MessagePassingLayer(hk.Module):
         pass
 
 
+@jit
+def transpose_cat(list_of_edges):
+    def transpose_with_list(outer_structure, tree):
+        return tree_transpose(tree_structure([0, 0]), outer_structure, tree)
+
+    edges_of_lists = transpose_with_list(
+        tree_structure(list_of_edges[0]), list_of_edges
+    )
+    edges = tree_map(
+        lambda x: jnp.concatenate(x, axis=-1),
+        edges_of_lists,
+        is_leaf=lambda x: isinstance(x, list),
+    )
+    return edges
+
+
 class EdgeFactory:
     def __init__(self, mol, edge_types, kwargs_by_edge_type=None):
         known_labels = {'nn', 'ne', 'en', 'same', 'anti'}
@@ -260,20 +274,6 @@ class EdgeFactory:
 
     def __call__(self, rs):
         assert rs.shape[-2] == self.n_up + self.n_down
-
-        def transpose_cat(list_of_edges):
-            def transpose_with_list(outer_structure, tree):
-                return tree_transpose(tree_structure([0, 0]), outer_structure, tree)
-
-            edges_of_lists = transpose_with_list(
-                tree_structure(list_of_edges[0]), list_of_edges
-            )
-            edges = tree_map(
-                lambda x: jnp.concatenate(x, axis=-1),
-                edges_of_lists,
-                is_leaf=lambda x: isinstance(x, list),
-            )
-            return edges
 
         batch_dims = rs.shape[:-2]
         coords = jnp.broadcast_to(
