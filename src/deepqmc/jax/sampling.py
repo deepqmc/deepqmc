@@ -2,6 +2,8 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 
+from .utils import vec_where
+
 __all__ = ()
 
 
@@ -33,9 +35,7 @@ class MetropolisSampler:
         prob = jnp.exp(2 * (prop['psi'].log - state['psi'].log))
         accepted = prob > jax.random.uniform(rng_acc, prob.shape)
         state = {**state, 'age': state['age'] + 1}
-        state = jax.tree_map(
-            lambda xp, x: jax.vmap(jnp.where)(accepted, xp, x), prop, state
-        )
+        state = jax.tree_map(lambda xp, x: vec_where(accepted, xp, x), prop, state)
         return (state['r'], *((state['edges'],) if self.edge_builder else ())), state
 
 

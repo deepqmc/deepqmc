@@ -68,3 +68,9 @@ def electronic_potential(rs):
         (rs[..., :, None, :] - rs[..., None, :, :])[..., i, j, :], axis=-1
     )
     return (1 / dists).sum(axis=-1)
+
+
+@jax.jit
+@jax.vmap
+def vec_where(cond, x, y):
+    return jnp.where(cond, x, y)
