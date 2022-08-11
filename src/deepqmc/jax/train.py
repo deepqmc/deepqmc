@@ -38,7 +38,7 @@ def train(
     **params,
 ):
     ewm_state = ewm()
-    sampler = sampler(hamil, 0.1, edge_builder)
+    sampler = sampler(hamil, edge_builder)
     sampler = DecorrSampler(sampler, decorr=decorr)
     rng = jax.random.PRNGKey(seed)
     if workdir:
