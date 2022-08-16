@@ -12,7 +12,7 @@ class ExponentialEnvelopes(hk.Module):
         )
 
     def __call__(self, diffs):
-        return jnp.exp(-jnp.abs(self.zetas) * jnp.sqrt(diffs[..., self.center_idx, -1]))
+        return jnp.exp(-jnp.abs(self.zetas * jnp.sqrt(diffs[..., self.center_idx, -1])))
 
     @classmethod
     def from_mol(cls, mol):
