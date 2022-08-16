@@ -84,11 +84,21 @@ class PaiNNLayer(MessagePassingLayer):
         )
         self.distance_basis = distance_basis
         self.V = {
-            lbl: hk.Linear(embedding_dim, with_bias=False, name=f'V_{lbl}')
+            lbl: hk.Linear(
+                embedding_dim,
+                with_bias=False,
+                name=f'V_{lbl}',
+                init=lambda shape, dtype: jnp.eye(shape[0], dtype),
+            )
             for lbl in self.labels
         }
         self.U = {
-            lbl: hk.Linear(embedding_dim, with_bias=False, name=f'U_{lbl}')
+            lbl: hk.Linear(
+                embedding_dim,
+                with_bias=False,
+                name=f'U_{lbl}',
+                init=lambda shape, dtype: jnp.eye(shape[0], dtype),
+            )
             for lbl in self.labels
         }
         self.shared_h = shared_h
@@ -220,13 +230,15 @@ class PaiNN(hk.Module):
         n_up,
         n_down,
         coords,
-        embedding_dim,
+        _embedding_dim,
         dist_feat_dim,
         n_interactions=1,
         cutoff=10.0,
         layer_kwargs=None,
     ):
         super().__init__('PaiNN')
+        assert _embedding_dim % 4 == 0
+        embedding_dim = _embedding_dim // 4
         self.n_elec = n_up + n_down
         self.coords = coords
         self.spin_idxs = jnp.array(
