@@ -102,12 +102,27 @@ class SchNetLayer(MessagePassingLayer):
             we_same, we_anti, we_n = (
                 self.w[lbl](edges.data['distances'][lbl]) for lbl in self.labels
             )
-            hx_same, hx_anti = (
-                (self.h if self.shared_h else self.h[lbl])(
-                    nodes.electrons[edges.senders[lbl]]
+            if self.shared_h:
+                # TODO: this fails if same and anti occupancy are not equal
+                x_elec = jnp.stack(
+                    [nodes.electrons[edges.senders[lbl]] for lbl in self.labels[:2]],
+                    axis=-2,
                 )
-                for lbl in self.labels[:2]
-            )
+                hx_same, hx_anti = (
+                    lambda hx: hx.squeeze(axis=-2)
+                    for hx in jnp.split(self.h(x_elec), 2, axis=-2)
+                )
+            else:
+                hx_same, hx_anti = (
+                    self.h[lbl](nodes.electrons[edges.senders[lbl]])
+                    for lbl in self.labels[:2]
+                )
+            #  hx_same, hx_anti = (
+            #  (self.h if self.shared_h else self.h[lbl])(
+            #  nodes.electrons[edges.senders[lbl]]
+            #  )
+            #  for lbl in self.labels[:2]
+            #  )
             weh_same = we_same * hx_same
             weh_anti = we_anti * hx_anti
             weh_n = we_n * nodes.nuclei[edges.senders['ne']]
@@ -130,6 +145,7 @@ class SchNetLayer(MessagePassingLayer):
 
     def get_update_nodes_fn(self):
         def update_nodes_fn(nodes, z):
+            # TODO: implement shared_g with KFAC optimizer
             updated_nodes = nodes._replace(
                 electrons=nodes.electrons
                 + (
@@ -159,13 +175,13 @@ class SchNet(hk.Module):
     ):
         super().__init__('SchNet')
         self.coords = coords
-        elec_vocab_size = 1 if n_up == n_down else 2
-        self.spin_idxs = jnp.array(
+        spin_idxs = jnp.array(
             (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
         )
-        self.X = hk.Embed(elec_vocab_size, embedding_dim, name='ElectronicEmbedding')
-        self.Y = hk.Embed(n_nuc, kernel_dim, name='NuclearEmbedding')
-        self.nuclei_idxs = jnp.arange(n_nuc)
+        self.init_elec = jnp.eye(1 if n_up == n_down else 2)[spin_idxs]
+        self.init_nuc = jnp.eye(n_nuc)
+        self.X = hk.Linear(embedding_dim, with_bias=False, name='ElectronicEmbedding')
+        self.Y = hk.Linear(kernel_dim, with_bias=False, name='NuclearEmbedding')
         self.layers = [
             SchNetLayer(
                 'SchNetLayer',
@@ -201,8 +217,8 @@ class SchNet(hk.Module):
             }
             return data
 
-        nuc_embedding = self.Y(self.nuclei_idxs)
-        elec_embedding = self.X(self.spin_idxs)
+        nuc_embedding = self.Y(self.init_nuc)
+        elec_embedding = self.X(self.init_elec)
         graph = Graph(
             GraphNodes(nuc_embedding, elec_embedding),
             graph_edges._replace(

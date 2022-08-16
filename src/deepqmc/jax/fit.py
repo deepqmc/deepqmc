@@ -10,6 +10,7 @@ import kfac_jax
 import optax
 from jax import lax
 
+from .kfacext import GRAPH_PATTERNS
 from .utils import masked_mean
 
 __all__ = ()
@@ -97,13 +98,20 @@ def fit_wf(
     else:
 
         def train_step(rng, params, opt_state, smpl_state):
-            r, smpl_state = sample(params, smpl_state, rng)
+            rng_sample, rng_kfac = jax.random.split(rng)
+            r, smpl_state = sample(params, smpl_state, rng_sample)
             params, opt_state, stats = opt.step(
-                params, opt_state, None, batch=r, momentum=0, damping=1e-3
+                params, opt_state, rng_kfac, batch=r, momentum=0, damping=1e-3
             )
             return params, opt_state, smpl_state, stats['aux']
 
-        opt = opt(value_and_grad_func=energy_and_grad_fn, value_func_has_aux=True)
+        opt = opt(
+            value_and_grad_func=energy_and_grad_fn,
+            l2_reg=0.0,
+            value_func_has_aux=True,
+            use_adaptive_learning_rate=True,
+            auto_register_kwargs={'graph_patterns': GRAPH_PATTERNS},
+        )
         opt_state = opt.init(params, rng, sample_for_init)
 
     smpl_state = sampler.init(rng, partial(jit_ansatz, params), sample_size)

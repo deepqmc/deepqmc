@@ -10,7 +10,7 @@ GraphEdges = namedtuple('GraphEdges', 'senders receivers data')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
 
-DEFAULT_EDGE_KWARGS = {'cutoff': 10.0, 'occupancy_limit': 2}
+DEFAULT_EDGE_KWARGS = {'cutoff': 10.0, 'occupancy_limit': 8}
 
 
 def all_graph_edges(pos1, pos2):
