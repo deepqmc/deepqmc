@@ -74,7 +74,7 @@ class PauliNet(WaveFunction):
         )
         self.basis = basis or ExponentialEnvelopes.from_mol(mol)
         self.mo_coeff = hk.Linear(n_orbitals, with_bias=False, name='mo_coeff')
-        self.conf_coeff = hk.Linear(len(self.confs), with_bias=False, name='conf_coeff')
+        self.conf_coeff = hk.Linear(1, with_bias=False, name='conf_coeff')
         self.cusp_same, self.cusp_anti = (
             (ElectronicAsymptotic(cusp=cusp, alpha=cusp_alpha) for cusp in (0.25, 0.5))
             if cusp_electrons
