@@ -3,7 +3,7 @@ from torch import nn
 
 
 def get_embedding_params(torch_embed):
-    return {'embeddings': jnp.array(torch_embed.weight.detach())}
+    return {'w': jnp.array(torch_embed.weight.detach())}
 
 
 def get_linear_params(torch_linear):
@@ -44,7 +44,7 @@ def get_schnet_params(torch_schnet, prefix):
                 if layer.shared_h:
                     channels = ['']
                 else:
-                    channels = labels
+                    channels = labels[1:]
             elif sub_label == 'g':
                 if layer.shared_g:
                     channels = ['']

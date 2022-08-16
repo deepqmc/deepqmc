@@ -4,7 +4,6 @@ from jax import ops
 from jax.tree_util import tree_map
 
 from ...hkext import MLP
-from ...utils import pairwise_diffs
 from .distbasis import DistanceBasis
 from .graph import Graph, GraphNodes, MessagePassingLayer
 
@@ -201,7 +200,7 @@ class DiffSchNet(hk.Module):
             def diff(senders, receivers):
                 diffs = receivers - senders
                 return jnp.concatenate(
-                    [diffs, jnp.sqrt((diffs ** 2).sum(axis=-1, keepdims=True))], axis=-1
+                    [diffs, jnp.sqrt((diffs**2).sum(axis=-1, keepdims=True))], axis=-1
                 )
 
             data = {
