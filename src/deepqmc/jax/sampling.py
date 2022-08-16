@@ -56,6 +56,12 @@ class DecorrSampler:
         self.sampler = sampler
         self.decorr = decorr
 
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.sampler, name)
+
     def init(self, *args):
         return self.sampler.init(*args)
 
