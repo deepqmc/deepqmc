@@ -90,16 +90,14 @@ class OmniNet(hk.Module):
 
         if jastrow or backflow or rs_backflow:
             if gnn_factory is None:
-                gnn_factory = partial(
-                    SchNet,
-                    **(gnn_kwargs or {}),
-                )
+                gnn_factory = SchNet
             self.gnn = gnn_factory(
                 len(mol.coords),
                 mol.n_up,
                 mol.n_down,
                 mol.coords,
                 embedding_dim,
+                **(gnn_kwargs or {}),
             )
         else:
             self.gnn = None
