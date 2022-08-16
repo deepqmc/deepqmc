@@ -22,7 +22,7 @@ class QHOHamiltonian:
         return loc_ene
 
     def init_sample(self, rng, n):
-        return jax.random.normal(rng, (n, self.dim))
+        return jax.random.normal(rng, (n, *self.dim))
 
     def stats(self, r):
         mean = jnp.mean(r, axis=0, keepdims=True)
