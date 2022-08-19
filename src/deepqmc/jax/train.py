@@ -14,7 +14,7 @@ from .ewm import ewm
 from .fit import fit_wf
 from .sampling import DecorrSampler
 
-__all__ = ()
+__all__ = 'train'
 
 log = logging.getLogger(__name__)
 

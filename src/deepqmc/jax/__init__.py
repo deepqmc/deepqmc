@@ -1,7 +1,8 @@
 from .hamil import MolecularHamiltonian
 from .molecule import Molecule
+from .train import train
 
-__all__ = ['Molecule', 'MolecularHamiltonian']
+__all__ = ['Molecule', 'MolecularHamiltonian', 'train']
 
 if __name__ == '__main__':
     from functools import partial
