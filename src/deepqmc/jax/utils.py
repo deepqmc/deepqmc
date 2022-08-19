@@ -6,7 +6,7 @@ import jax.numpy as jnp
 __all__ = ()
 
 
-def laplacian(f):
+def laplacian_oneshot(f):
     def lap(x, **kwargs):
         _f = partial(f, **kwargs)
         grad_f = jax.grad(_f)
@@ -14,6 +14,20 @@ def laplacian(f):
         eye = jnp.eye(len(x))
         d2f = jnp.diag(jax.vmap(grad_f_jvp)(eye))
         return jnp.sum(d2f), df
+
+    return lap
+
+
+def laplacian(f):
+    def lap(x, **kwargs):
+        n_coord = len(x)
+        _f = partial(f, **kwargs)
+        grad_f = jax.grad(_f)
+        df, grad_f_jvp = jax.linearize(grad_f, x)
+        eye = jnp.eye(n_coord)
+        d2f = lambda i, val: val + grad_f_jvp(eye[i])[i]
+        d2f_sum = jax.lax.fori_loop(0, n_coord, d2f, 0.0)
+        return d2f_sum, df
 
     return lap
 
