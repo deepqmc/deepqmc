@@ -8,7 +8,6 @@ import jax
 import jax.numpy as jnp
 import kfac_jax
 import optax
-from jax import lax
 
 from .kfacext import GRAPH_PATTERNS
 from .utils import masked_mean
@@ -50,23 +49,39 @@ def fit_wf(
     exclude_width=jnp.inf,
     clip_quantile=0.95,
 ):
-    vec_ansatz = jax.vmap(ansatz.apply, (None, 0, 0) if edge_builder else (None, 0))
-    jit_ansatz = jax.jit(vec_ansatz)
-    sampled_ansatz = lambda params, r: jit_ansatz(params, r, edge_builder(r))
+    jit_ansatz = jax.jit(
+        jax.vmap(ansatz.apply, (None, 0, 0) if edge_builder else (None, 0))
+    )
+    sampled_ansatz = lambda params, rs: jit_ansatz(params, rs, edge_builder(rs))
 
-    def loss_fn(params, r):
+    @partial(jax.custom_jvp, nondiff_argnums=(2,))
+    def loss_fn(params, rs, edges):
         wf = partial(ansatz.apply, params)
-        E_loc = jax.vmap(hamil.local_energy(wf))(*r)
-        psi = vec_ansatz(params, *r)
-        kfac_jax.register_normal_predictive_distribution(psi.log[:, None])
-        E_loc_s, sigma = median_log_squeeze(E_loc, clip_width, clip_quantile)
-        loss = lax.stop_gradient(E_loc_s - E_loc_s.mean()) * psi.log
-        loss = masked_mean(loss, sigma < exclude_width)
+        ansatz_args = (rs, edges) if edges else (rs,)
+        E_loc = jax.vmap(hamil.local_energy(wf))(*ansatz_args)
+        loss = jnp.mean(E_loc)
         return loss, E_loc
 
-    def energy_and_grad_fn(params, r):
-        grads, E_loc = jax.grad(loss_fn, has_aux=True)(params, r)
-        return (jnp.mean(E_loc), E_loc), grads
+    @loss_fn.defjvp
+    def loss_jvp(edge, primals, tangents):
+        params, r = primals
+        params_tan, r_tan = tangents
+        loss, E_loc = loss_fn(params, r, edge)
+        E_loc_s, sigma = median_log_squeeze(E_loc, clip_width, clip_quantile)
+        E_diff = E_loc_s - jnp.mean(E_loc_s)
+        grad_ansatz = (
+            partial(jax.vmap(ansatz.apply, (None, 0)), graph_edges=edge)
+            if edge
+            else jit_ansatz
+        )
+        log_psi, log_psi_tangent = jax.jvp(
+            lambda *x: grad_ansatz(*x).log, (params, r), (params_tan, r_tan)
+        )
+        kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
+        loss_tangent = masked_mean(E_diff * log_psi_tangent, sigma < exclude_width)
+        return (loss, E_loc), (loss_tangent, E_loc)
+
+    energy_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
     def sample(params, state, rng):
         return sampler.sample(state, rng, partial(sampled_ansatz, params))
@@ -84,16 +99,17 @@ def fit_wf(
     if isinstance(opt, optax.GradientTransformation):
 
         @jax.jit
-        def update_model(params, r, opt_state):
-            (_, E_loc), grads = energy_and_grad_fn(params, r)
+        def update_model(params, r, edge, opt_state):
+            (_, E_loc), grads = energy_and_grad_fn(params, r, edge)
             updates, opt_state = opt.update(grads, opt_state, params)
             params = optax.apply_updates(params, updates)
             return params, opt_state, E_loc
 
         def train_step(rng, params, opt_state, smpl_state):
             r, smpl_state = sample(params, smpl_state, rng)
-            r = (r, edge_builder(r))
-            params, opt_state, E_loc = update_model(params, r, opt_state)
+            params, opt_state, E_loc = update_model(
+                params, r, edge_builder(r) if edge_builder else None, opt_state
+            )
             return params, opt_state, smpl_state, E_loc
 
         opt_state = opt.init(params)
@@ -102,9 +118,13 @@ def fit_wf(
         def train_step(rng, params, opt_state, smpl_state):
             rng_sample, rng_kfac = jax.random.split(rng)
             r, smpl_state = sample(params, smpl_state, rng_sample)
-            r = (r, edge_builder(r))
             params, opt_state, stats = opt.step(
-                params, opt_state, rng_kfac, batch=r, momentum=0, damping=1e-3
+                params,
+                opt_state,
+                rng_kfac,
+                batch=(r, edge_builder(r) if edge_builder else None),
+                momentum=0,
+                damping=1e-3,
             )
             return params, opt_state, smpl_state, stats['aux']
 
