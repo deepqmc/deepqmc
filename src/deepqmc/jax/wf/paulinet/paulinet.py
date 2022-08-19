@@ -102,6 +102,7 @@ class PauliNet(WaveFunction):
                 **(omni_kwargs or {}),
             )
         self.omni = omni_factory(mol, *backflow_spec)
+        self.full_determinant = full_determinant
 
     def _backflow_op(self, xs, fs, dists_nuc):
         if self.backflow_transform == 'mult':
@@ -132,12 +133,20 @@ class PauliNet(WaveFunction):
 
         if fs is not None and self.backflow_type == 'det':
             n_conf = len(self.confs)
-            fs = (
-                unflatten(fs[0], -3, (fs[0].shape[-3] // n_conf, n_conf)),
-                unflatten(fs[1], -3, (fs[1].shape[-3] // n_conf, n_conf)),
-            )
-            det_up = self._backflow_op(det_up, fs[0], dists_nuc[..., :n_up, :])
-            det_down = self._backflow_op(det_down, fs[1], dists_nuc[..., n_up:, :])
+            if self.full_determinant:
+                fs = unflatten(fs, -3, (fs.shape[-3] // n_conf, n_conf))
+                det_full = jnp.zeros((*det_up.shape[:-2], n_elec, n_elec))
+                det_full = det_full.at[..., :n_up, :n_up].set(det_up)
+                det_full = det_full.at[..., n_up:, n_up:].set(det_down)
+                det_up = det_full = self._backflow_op(det_full, fs, dists_nuc)
+                det_down = jnp.empty((*det_down.shape[:-2], 0, 0))
+            else:
+                fs = (
+                    unflatten(fs[0], -3, (fs[0].shape[-3] // n_conf, n_conf)),
+                    unflatten(fs[1], -3, (fs[1].shape[-3] // n_conf, n_conf)),
+                )
+                det_up = self._backflow_op(det_up, fs[0], dists_nuc[..., :n_up, :])
+                det_down = self._backflow_op(det_down, fs[1], dists_nuc[..., n_up:, :])
 
         sign_up, det_up = eval_log_slater(det_up)
         sign_down, det_down = eval_log_slater(det_down)
