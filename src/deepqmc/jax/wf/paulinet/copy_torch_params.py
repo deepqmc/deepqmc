@@ -76,15 +76,30 @@ def get_omni_params(torch_omni, prefix):
             torch_omni.jastrow.net, prefix + 'Jastrow' + sep + 'mlp' + sep
         )
         params = dict(params, **jastrow_params)
+
     if getattr(torch_omni, 'backflow', False):
-        for i, backflow in enumerate(torch_omni.backflow.mlps):
-            if i == 0:
-                mlp_lbl = ''
-            else:
-                mlp_lbl = f'_{i}'
-            backflow_params = get_mlp_params(
-                backflow, prefix + 'Backflow' + sep + 'mlp' + mlp_lbl + sep
-            )
+
+        if getattr(torch_omni.backflow, 'up', False):
+            backflows = [
+                ('Backflow_up', torch_omni.backflow.up),
+                ('Backflow_down', torch_omni.backflow.down),
+            ]
+
+        else:
+            backflows = [('Backflow', torch_omni.backflow)]
+
+        for name, backflow in backflows:
+
+            for i, mlp in enumerate(backflow.mlps):
+                if i == 0:
+                    mlp_lbl = ''
+                else:
+                    mlp_lbl = f'_{i}'
+
+                backflow_params = get_mlp_params(
+                    mlp, prefix + name + sep + 'mlp' + mlp_lbl + sep
+                )
+
             params = dict(params, **backflow_params)
     return params
 
