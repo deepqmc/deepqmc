@@ -9,12 +9,14 @@ from .schnet import SchNet
 
 
 class Jastrow(hk.Module):
-    def __init__(self, embedding_dim, *, n_layers=3, sum_first=True, **kwargs):
+    def __init__(
+        self, embedding_dim, *, n_layers=3, sum_first=True, name='Jastrow', **kwargs
+    ):
         kwargs.setdefault('activation', SSP)
         kwargs.setdefault('hidden_layers', ('log', n_layers))
         kwargs.setdefault('last_linear', True)
         kwargs.setdefault('last_bias', False)
-        super().__init__(name='Jastrow')
+        super().__init__(name=name)
         self.net = MLP(embedding_dim, 1, **kwargs)
         self.sum_first = sum_first
 
@@ -35,12 +37,13 @@ class Backflow(hk.Module):
         multi_head=True,
         *,
         n_layers=3,
+        name='Backflow',
         **kwargs,
     ):
         kwargs.setdefault('activation', SSP)
         kwargs.setdefault('hidden_layers', ('log', n_layers))
         kwargs.setdefault('last_linear', True)
-        super().__init__(name='Backflow')
+        super().__init__(name=name)
         self.multi_head = multi_head
         if multi_head:
             self.nets = [
@@ -87,7 +90,7 @@ class OmniNet(hk.Module):
         subnet_kwargs=None,
     ):
         super().__init__()
-
+        self.n_up = mol.n_up
         if jastrow or backflow or rs_backflow:
             if gnn_factory is None:
                 gnn_factory = SchNet
@@ -106,18 +109,34 @@ class OmniNet(hk.Module):
             jastrow_factory = partial(Jastrow, **(jastrow_kwargs or {}))
         self.jastrow = jastrow_factory(embedding_dim) if jastrow else None
 
-        if backflow_factory is None:
-            backflow_factory = partial(Backflow, **(backflow_kwargs or {}))
-        self.backflow = (
-            backflow_factory(embedding_dim, n_orbitals, n_backflows)
-            if backflow
-            else None
-        )
+        if backflow:
+            if backflow_factory is None:
+                backflow_factory = partial(Backflow, **(backflow_kwargs or {}))
+            self.backflow = (
+                backflow_factory(embedding_dim, n_orbitals, n_backflows)
+                if isinstance(n_orbitals, int)
+                else {
+                    l: backflow_factory(
+                        embedding_dim, n, n_backflows, name=f'Backflow_{l}'
+                    )
+                    for l, n in zip(['up', 'down'], n_orbitals)
+                }
+            )
+        else:
+            self.backflow = None
 
     def __call__(self, rs, graph_edges):
         if self.gnn:
             embeddings = self.gnn(rs, graph_edges)
         jastrow = self.jastrow(embeddings) if self.jastrow else None
-        backflow = self.backflow(embeddings) if self.backflow else None
-
+        backflow = (
+            None
+            if not self.backflow
+            else (
+                self.backflow['up'](embeddings[..., : self.n_up, :]),
+                self.backflow['down'](embeddings[..., self.n_up :, :]),
+            )
+            if isinstance(self.backflow, dict)
+            else self.backflow(embeddings)
+        )
         return jastrow, backflow

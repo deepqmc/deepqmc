@@ -121,7 +121,7 @@ class PauliNet(WaveFunction):
         aos = self.basis(diffs_nuc)
         xs = self.mo_coeff(aos)
         xs = xs.reshape(-1, 1, n_elec, xs.shape[-1])
-        J, fs = self.omni(rs, graph_edges)
+        J, fs = self.omni(rs, graph_edges) if self.omni else (None, None)
         if fs is not None and self.backflow_type == 'orbital':
             xs = self._backflow_op(xs, fs, dists_nuc)
 
@@ -133,8 +133,8 @@ class PauliNet(WaveFunction):
         if fs is not None and self.backflow_type == 'det':
             n_conf = len(self.confs)
             fs = (
-                unflatten(fs[0], 1, (fs[0].shape[-3] // n_conf, n_conf)),
-                unflatten(fs[1], 1, (fs[1].shape[-3] // n_conf, n_conf)),
+                unflatten(fs[0], -3, (fs[0].shape[-3] // n_conf, n_conf)),
+                unflatten(fs[1], -3, (fs[1].shape[-3] // n_conf, n_conf)),
             )
             det_up = self._backflow_op(det_up, fs[0], dists_nuc[..., :n_up, :])
             det_down = self._backflow_op(det_down, fs[1], dists_nuc[..., n_up:, :])
