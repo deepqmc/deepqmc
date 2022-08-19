@@ -114,7 +114,7 @@ class OmniNet(hk.Module):
                 backflow_factory = partial(Backflow, **(backflow_kwargs or {}))
             self.backflow = (
                 backflow_factory(embedding_dim, n_orbitals, n_backflows)
-                if isinstance(n_orbitals, int)
+                if not isinstance(n_orbitals, tuple)
                 else {
                     l: backflow_factory(
                         embedding_dim, n, n_backflows, name=f'Backflow_{l}'
