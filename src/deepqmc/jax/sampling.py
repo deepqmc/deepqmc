@@ -1,6 +1,5 @@
 import jax
 import jax.numpy as jnp
-from jax import lax
 
 from .utils import vec_where
 
@@ -8,15 +7,12 @@ __all__ = ()
 
 
 class MetropolisSampler:
-    def __init__(self, hamil, edge_builder=None, target_acceptance=0.57):
+    def __init__(self, hamil, target_acceptance=0.57):
         self.hamil = hamil
-        self.edge_builder = edge_builder
         self.target_acceptance = target_acceptance
 
     def _update(self, state, wf):
-        edges = self.edge_builder(state['r']) if self.edge_builder else None
-        psi = wf(state['r'], edges) if self.edge_builder else wf(state['r'])
-        state = {**state, 'psi': psi, **({'edges': edges} if self.edge_builder else {})}
+        state = {**state, 'psi': wf(state['r'])}
         return state
 
     def init(self, rng, wf, n, tau=0.1):
@@ -45,7 +41,7 @@ class MetropolisSampler:
             tau /= self.target_acceptance / max(acceptance, 0.05)
         state = {**state, 'age': state['age'] + 1}
         state = jax.tree_map(lambda xp, x: vec_where(accepted, xp, x), prop, state)
-        return (state['r'], *((state['edges'],) if self.edge_builder else ())), {
+        return state['r'], {
             **state,
             'tau': tau,
         }
@@ -66,19 +62,6 @@ class DecorrSampler:
         return self.sampler.init(*args)
 
     def sample(self, state, rng, wf):
-        if self.sampler.edge_builder:
-            for rng_sample in jax.random.split(rng, self.decorr):
-                _, state = self.sampler.sample(state, rng_sample, wf)
-        else:
-            state, _ = lax.scan(
-                lambda state, rng: (
-                    self.sampler.sample(state, rng, wf)[1],
-                    None,
-                ),
-                state,
-                jax.random.split(rng, self.decorr),
-            )
-        return (
-            state['r'],
-            *((state['edges'],) if self.sampler.edge_builder else ()),
-        ), state
+        for rng_sample in jax.random.split(rng, self.decorr):
+            _, state = self.sampler.sample(state, rng_sample, wf)
+        return state['r'], state

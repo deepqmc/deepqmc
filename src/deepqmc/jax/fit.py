@@ -52,6 +52,7 @@ def fit_wf(
 ):
     vec_ansatz = jax.vmap(ansatz.apply, (None, 0, 0) if edge_builder else (None, 0))
     jit_ansatz = jax.jit(vec_ansatz)
+    sampled_ansatz = lambda params, r: jit_ansatz(params, r, edge_builder(r))
 
     def loss_fn(params, r):
         wf = partial(ansatz.apply, params)
@@ -68,12 +69,12 @@ def fit_wf(
         return (jnp.mean(E_loc), E_loc), grads
 
     def sample(params, state, rng):
-        return sampler.sample(state, rng, partial(jit_ansatz, params))
+        return sampler.sample(state, rng, partial(sampled_ansatz, params))
 
     rng, rng_init_sample, rng_init_ansatz = jax.random.split(rng, 3)
     sample_for_init = (hamil.init_sample(rng_init_sample, sample_size),)
-    if sampler.edge_builder:
-        sample_for_init = sample_for_init + (sampler.edge_builder(sample_for_init[0]),)
+    if edge_builder:
+        sample_for_init = sample_for_init + (edge_builder(sample_for_init[0]),)
     params = ansatz.init(rng, *jax.tree_util.tree_map(lambda x: x[0], sample_for_init))
     num_params = jax.tree_util.tree_reduce(
         operator.add, jax.tree_map(lambda x: x.size, params)
@@ -91,6 +92,7 @@ def fit_wf(
 
         def train_step(rng, params, opt_state, smpl_state):
             r, smpl_state = sample(params, smpl_state, rng)
+            r = (r, edge_builder(r))
             params, opt_state, E_loc = update_model(params, r, opt_state)
             return params, opt_state, smpl_state, E_loc
 
@@ -100,6 +102,7 @@ def fit_wf(
         def train_step(rng, params, opt_state, smpl_state):
             rng_sample, rng_kfac = jax.random.split(rng)
             r, smpl_state = sample(params, smpl_state, rng_sample)
+            r = (r, edge_builder(r))
             params, opt_state, stats = opt.step(
                 params, opt_state, rng_kfac, batch=r, momentum=0, damping=1e-3
             )
@@ -114,7 +117,7 @@ def fit_wf(
         )
         opt_state = opt.init(params, rng, sample_for_init)
 
-    smpl_state = sampler.init(rng, partial(jit_ansatz, params), sample_size)
+    smpl_state = sampler.init(rng, partial(sampled_ansatz, params), sample_size)
     if equilibration_steps:
         rng, rng_equilibrate = jax.random.split(rng, 2)
         for _, rng_eq in zip(equilibration_steps, hk.PRNGSequence(rng_equilibrate)):
