@@ -51,7 +51,6 @@ class PauliNet(WaveFunction):
         mol,
         basis=None,
         confs=None,
-        n_orbitals=None,
         backflow_op=None,
         *,
         full_determinant=False,
@@ -63,15 +62,19 @@ class PauliNet(WaveFunction):
         omni_factory=None,
         omni_kwargs=None,
     ):
-        assert not full_determinant or backflow_type == 'det'
         super().__init__(mol)
         n_up, n_down = self.n_up, self.n_down
-        n_orbitals = n_orbitals or max(n_up, n_down)
-        self.confs = (
-            jnp.array([list(range(n_up)) + list(range(n_down))])
+        confs = (
+            (
+                [list(range(n_up)) + list(range(n_down))]
+                if not full_determinant
+                else [list(range(n_up + n_down)) * 2]
+            )
             if confs is None
             else confs
         )
+        n_orbitals = max(sum(confs, [])) + 1
+        self.confs = jnp.array(confs)
         self.basis = basis or ExponentialEnvelopes.from_mol(mol)
         self.mo_coeff = hk.Linear(n_orbitals, with_bias=False, name='mo_coeff')
         self.conf_coeff = hk.Linear(1, with_bias=False, name='conf_coeff')
@@ -125,28 +128,28 @@ class PauliNet(WaveFunction):
         J, fs = self.omni(rs, graph_edges) if self.omni else (None, None)
         if fs is not None and self.backflow_type == 'orbital':
             xs = self._backflow_op(xs, fs, dists_nuc)
-
         n_up = self.n_up
-        conf_up, conf_down = self.confs[..., :n_up], self.confs[..., n_up:]
+        n_slice = n_up + self.n_down if self.full_determinant else n_up
+        conf_up, conf_down = self.confs[..., :n_slice], self.confs[..., n_slice:]
         det_up = xs[..., :n_up, conf_up].swapaxes(-2, -3)
         det_down = xs[..., n_up:, conf_down].swapaxes(-2, -3)
-
+        if self.full_determinant:
+            det_full = jnp.zeros((*det_up.shape[:-2], n_elec, n_elec))
+            det_full = det_full.at[..., :n_up, :].set(det_up)
+            det_full = det_full.at[..., n_up:, :].set(det_down)
+            det_up = det_full
+            det_down = jnp.empty((*det_down.shape[:-2], 0, 0))
         if fs is not None and self.backflow_type == 'det':
             n_conf = len(self.confs)
             if self.full_determinant:
-                fs = unflatten(fs, -3, (fs.shape[-3] // n_conf, n_conf))
-                det_full = jnp.zeros((*det_up.shape[:-2], n_elec, n_elec))
-                det_full = det_full.at[..., :n_up, :n_up].set(det_up)
-                det_full = det_full.at[..., n_up:, n_up:].set(det_down)
-                det_up = det_full = self._backflow_op(det_full, fs, dists_nuc)
-                det_down = jnp.empty((*det_down.shape[:-2], 0, 0))
+                fs = (unflatten(fs, -3, (fs.shape[-3] // n_conf, n_conf)), None)
             else:
                 fs = (
                     unflatten(fs[0], -3, (fs[0].shape[-3] // n_conf, n_conf)),
                     unflatten(fs[1], -3, (fs[1].shape[-3] // n_conf, n_conf)),
                 )
-                det_up = self._backflow_op(det_up, fs[0], dists_nuc[..., :n_up, :])
-                det_down = self._backflow_op(det_down, fs[1], dists_nuc[..., n_up:, :])
+            det_up = self._backflow_op(det_up, fs[0], dists_nuc[..., :n_up, :])
+            det_down = self._backflow_op(det_down, fs[1], dists_nuc[..., n_up:, :])
 
         sign_up, det_up = eval_log_slater(det_up)
         sign_down, det_down = eval_log_slater(det_down)
