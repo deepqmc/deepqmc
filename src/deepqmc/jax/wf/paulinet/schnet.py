@@ -11,7 +11,6 @@ from .graph import Graph, GraphNodes, MessagePassingLayer
 class SchNetLayer(MessagePassingLayer):
     def __init__(
         self,
-        name,
         ilayer,
         embedding_dim,
         kernel_dim,
@@ -27,7 +26,7 @@ class SchNetLayer(MessagePassingLayer):
         n_layers_h=1,
         n_layers_g=1,
     ):
-        super().__init__(name, ilayer)
+        super().__init__('SchNetLayer', ilayer)
 
         def default_subnet_kwargs(n_layers):
             return {
@@ -61,7 +60,7 @@ class SchNetLayer(MessagePassingLayer):
                     name=f'h_{lbl}',
                     **(h_subnet or default_subnet_kwargs(n_layers_h)),
                 )
-                for lbl in labels
+                for lbl in labels[:2]
             }
         )
         self.g = (
@@ -103,26 +102,13 @@ class SchNetLayer(MessagePassingLayer):
                 self.w[lbl](edges.data['distances'][lbl]) for lbl in self.labels
             )
             if self.shared_h:
-                # TODO: this fails if same and anti occupancy are not equal
-                x_elec = jnp.stack(
-                    [nodes.electrons[edges.senders[lbl]] for lbl in self.labels[:2]],
-                    axis=-2,
-                )
-                hx_same, hx_anti = (
-                    lambda hx: hx.squeeze(axis=-2)
-                    for hx in jnp.split(self.h(x_elec), 2, axis=-2)
-                )
+                hx = self.h(nodes.electrons)
+                hx_same, hx_anti = (hx[edges.senders[lbl]] for lbl in self.labels[:2])
             else:
                 hx_same, hx_anti = (
-                    self.h[lbl](nodes.electrons[edges.senders[lbl]])
+                    self.h[lbl](nodes.electrons)[edges.senders[lbl]]
                     for lbl in self.labels[:2]
                 )
-            #  hx_same, hx_anti = (
-            #  (self.h if self.shared_h else self.h[lbl])(
-            #  nodes.electrons[edges.senders[lbl]]
-            #  )
-            #  for lbl in self.labels[:2]
-            #  )
             weh_same = we_same * hx_same
             weh_anti = we_anti * hx_anti
             weh_n = we_n * nodes.nuclei[edges.senders['ne']]
@@ -145,15 +131,12 @@ class SchNetLayer(MessagePassingLayer):
 
     def get_update_nodes_fn(self):
         def update_nodes_fn(nodes, z):
-            # TODO: implement shared_g with KFAC optimizer
-            updated_nodes = nodes._replace(
-                electrons=nodes.electrons
-                + (
-                    (self.g if self.shared_g else self.g['ne'])(z['ne'])
-                    + (self.g if self.shared_g else self.g['same'])(z['same'])
-                    + (self.g if self.shared_g else self.g['anti'])(z['anti'])
-                )
-            )
+            if self.shared_g:
+                z_all = jnp.stack([z['same'], z['anti'], z['ne']])
+                updates = jnp.sum(self.g(z_all), axis=0)
+            else:
+                updates = sum(self.g[lbl](z[lbl]) for lbl in self.labels)
+            updated_nodes = nodes._replace(electrons=nodes.electrons + updates)
             return updated_nodes
 
         return update_nodes_fn
@@ -168,7 +151,7 @@ class SchNet(hk.Module):
         coords,
         embedding_dim,
         dist_feat_dim=32,
-        kernel_dim=128,
+        kernel_dim=64,
         n_interactions=3,
         cutoff=10.0,
         layer_kwargs=None,
@@ -184,7 +167,6 @@ class SchNet(hk.Module):
         self.Y = hk.Linear(kernel_dim, with_bias=False, name='NuclearEmbedding')
         self.layers = [
             SchNetLayer(
-                'SchNetLayer',
                 i,
                 embedding_dim,
                 kernel_dim,
