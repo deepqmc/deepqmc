@@ -1,8 +1,6 @@
 import jax
 import jax.numpy as jnp
 
-from .utils import vec_where
-
 __all__ = ()
 
 
@@ -12,12 +10,13 @@ class MetropolisSampler:
         self.target_acceptance = target_acceptance
 
     def _update(self, state, wf):
-        state = {**state, 'psi': wf(state['r'])}
+        psi, wf_state = wf(state['r'])
+        state = {**state, 'psi': psi, 'wf_state': wf_state}
         return state
 
     def init(self, rng, wf, n, tau=0.1):
         state = {
-            'tau': tau,
+            'tau': jnp.array(tau),
             'r': self.hamil.init_sample(rng, n),
             'age': jnp.zeros(n, jnp.int32),
         }
@@ -37,14 +36,21 @@ class MetropolisSampler:
         prob = jnp.exp(2 * (prop['psi'].log - state['psi'].log))
         accepted = prob > jax.random.uniform(rng_acc, prob.shape)
         if self.target_acceptance:
-            acceptance = accepted.astype(int).sum().item() / accepted.shape[0]
-            tau /= self.target_acceptance / max(acceptance, 0.05)
+            acceptance = accepted.astype(int).sum() / accepted.shape[0]
+            tau /= self.target_acceptance / jnp.max(
+                jnp.stack([acceptance, jnp.array(0.05)])
+            )
         state = {**state, 'age': state['age'] + 1}
-        state = jax.tree_map(lambda xp, x: vec_where(accepted, xp, x), prop, state)
-        return state['r'], {
-            **state,
-            'tau': tau,
-        }
+        state = jax.tree_util.tree_map(
+            lambda xp, x: jax.vmap(jnp.where)(accepted, xp, x), prop, state
+        )
+        return (
+            state['r'],
+            {
+                **state,
+                'tau': tau,
+            },
+        )
 
 
 class DecorrSampler:
@@ -62,6 +68,9 @@ class DecorrSampler:
         return self.sampler.init(*args)
 
     def sample(self, state, rng, wf):
-        for rng_sample in jax.random.split(rng, self.decorr):
-            _, state = self.sampler.sample(state, rng_sample, wf)
+        state, _ = jax.lax.scan(
+            lambda state, rng: (self.sampler.sample(state, rng, wf)[1], None),
+            state,
+            jax.random.split(rng, self.decorr),
+        )
         return state['r'], state

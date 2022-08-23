@@ -4,7 +4,13 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 
-from deepqmc.jax.utils import pairwise_diffs, pairwise_self_distance, triu_flat
+from deepqmc.jax.utils import (
+    freeze_dict,
+    pairwise_diffs,
+    pairwise_self_distance,
+    triu_flat,
+    unfreeze_dict,
+)
 from deepqmc.jax.wf.base import WaveFunction
 
 from ...jaxext import flatten, unflatten
@@ -116,7 +122,7 @@ class PauliNet(WaveFunction):
             fs_mult, fs_add = fs[:, : fs.shape[1] // 2], fs[:, fs.shape[1] // 2 :]
         return self.backflow_op(xs, fs_mult, fs_add, dists_nuc)
 
-    def __call__(self, rs, graph_edges):
+    def __call__(self, rs):
         n_elec = rs.shape[-2]
         n_nuc = len(self.mol.coords)
         diffs_nuc = pairwise_diffs(rs.reshape(-1, 3), self.mol.coords)
@@ -125,7 +131,7 @@ class PauliNet(WaveFunction):
         aos = self.basis(diffs_nuc)
         xs = self.mo_coeff(aos)
         xs = xs.reshape(-1, 1, n_elec, xs.shape[-1])
-        J, fs = self.omni(rs, graph_edges) if self.omni else (None, None)
+        J, fs = self.omni(rs) if self.omni else (None, None)
         if fs is not None and self.backflow_type == 'orbital':
             xs = self._backflow_op(xs, fs, dists_nuc)
         n_up = self.n_up
@@ -180,3 +186,17 @@ class PauliNet(WaveFunction):
             log_psi = log_psi + J
 
         return Psi(sign_psi.squeeze(), log_psi.squeeze())
+
+
+def state_callback(state, new_state):
+    state = unfreeze_dict(state)
+    int_or_tuple = lambda x: x.item() if x.size == 1 else tuple(x.tolist())
+    new_state = jax.tree_util.tree_map(
+        lambda x: int_or_tuple(jnp.max(x, axis=0)), new_state
+    )
+    overflow = jax.tree_util.tree_reduce(
+        lambda x, y: x or y,
+        jax.tree_util.tree_map(lambda x, y: x > y, new_state, state),
+    )
+    max_state = jax.tree_util.tree_map(lambda x, y: max(x, y), new_state, state)
+    return freeze_dict(max_state), overflow

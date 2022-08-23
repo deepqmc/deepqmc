@@ -78,7 +78,6 @@ def get_omni_params(torch_omni, prefix):
         params = dict(params, **jastrow_params)
 
     if getattr(torch_omni, 'backflow', False):
-
         if getattr(torch_omni.backflow, 'up', False):
             backflows = [
                 ('Backflow_up', torch_omni.backflow.up),
@@ -89,7 +88,6 @@ def get_omni_params(torch_omni, prefix):
             backflows = [('Backflow', torch_omni.backflow)]
 
         for name, backflow in backflows:
-
             for i, mlp in enumerate(backflow.mlps):
                 if i == 0:
                     mlp_lbl = ''
