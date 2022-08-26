@@ -2,27 +2,8 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from frozendict import frozendict
 
 __all__ = ()
-
-
-def freeze_dict(dictionary):
-    new_dict = {}
-    for k, v in dictionary.items():
-        if isinstance(v, dict):
-            v = freeze_dict(v)
-        new_dict[k] = v
-    return frozendict(new_dict)
-
-
-def unfreeze_dict(dictionary):
-    new_dict = {}
-    for k, v in dictionary.items():
-        if isinstance(v, frozendict):
-            v = unfreeze_dict(v)
-        new_dict[k] = v
-    return dict(new_dict)
 
 
 def laplacian_oneshot(f):
