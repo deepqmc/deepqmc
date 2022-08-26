@@ -76,6 +76,17 @@ def distance_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
     return {'distances': distances}
 
 
+def distance_difference_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
+    if len(pos_sender) == 0 or len(pos_receiver) == 0:
+        return {
+            'distances': jnp.zeros_like(sender_idx, pos_sender.dtype),
+            'differences': jnp.zeros((len(sender_idx), 3)),
+        }
+    differences = pos_receiver[receiver_idx] - pos_sender[sender_idx]
+    distances = jnp.sqrt((differences**2).sum(axis=-1))
+    return {'distances': distances, 'differences': differences}
+
+
 def distance_direction_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
     if len(pos_sender) == 0 or len(pos_receiver) == 0:
         return {

@@ -1,11 +1,16 @@
 import haiku as hk
 import jax.numpy as jnp
 from jax import ops
-from jax.tree_util import tree_map
 
 from ...hkext import MLP
 from .distbasis import DistanceBasis
-from .graph import Graph, GraphNodes, MessagePassingLayer
+from .graph import (
+    Graph,
+    GraphNodes,
+    MessagePassingLayer,
+    MolecularGraphEdgeBuilder,
+    distance_difference_callback,
+)
 
 
 class DiffSchNetLayer(MessagePassingLayer):
@@ -87,22 +92,28 @@ class DiffSchNetLayer(MessagePassingLayer):
         self.shared_h = shared_h
         self.shared_g = shared_g
 
-    def expand_diffs(self, diffs):
+    def expand_diffs(self, dists, diffs):
         diffs_expanded = []
-        for i, diff in enumerate(diffs.T):
-            if i < 3:
-                diff_pos = jnp.abs(diff) * (diff > 0)
-                diff_neg = jnp.abs(diff) * (diff < 0)
-                diffs_expanded.append(self.distance_basis(diff_pos))
-                diffs_expanded.append(self.distance_basis(diff_neg))
-            else:
-                diffs_expanded.append(self.distance_basis(diff))
+        for diff in diffs.T:
+            diff_pos = jnp.abs(diff) * (diff > 0)
+            diff_neg = jnp.abs(diff) * (diff < 0)
+            diffs_expanded.append(self.distance_basis(diff_pos))
+            diffs_expanded.append(self.distance_basis(diff_neg))
+        diffs_expanded.append(self.distance_basis(diff))
         return jnp.concatenate(diffs_expanded, axis=-1)
 
     def get_update_edges_fn(self):
         def update_edges_fn(nodes, edges):
-            expanded = edges._replace(data=tree_map(self.expand_diffs, edges.data))
-            return expanded
+            return {
+                k: edge._replace(
+                    data={
+                        'diffs': self.expand_diffs(
+                            edge.data['distances'], edge.data['differences']
+                        )
+                    }
+                )
+                for k, edge in edges.items()
+            }
 
         return update_edges_fn if self.ilayer == 0 else None
 
@@ -110,25 +121,25 @@ class DiffSchNetLayer(MessagePassingLayer):
         def aggregate_edges_for_nodes_fn(nodes, edges):
             n_elec = nodes.electrons.shape[-2]
             we_same, we_anti, we_n = (
-                self.w[lbl](edges.data['diffs'][lbl]) for lbl in self.labels
+                self.w[lbl](edges[lbl].data['diffs']) for lbl in self.labels
             )
             hx_same, hx_anti = (
                 (self.h if self.shared_h else self.h[lbl])(
-                    nodes.electrons[edges.senders[lbl]]
+                    nodes.electrons[edges[lbl].senders]
                 )
                 for lbl in self.labels[:2]
             )
             weh_same = we_same * hx_same
             weh_anti = we_anti * hx_anti
-            weh_n = we_n * nodes.nuclei[edges.senders['ne']]
+            weh_n = we_n * nodes.nuclei[edges['ne'].senders]
             z_same = ops.segment_sum(
-                data=weh_same, segment_ids=edges.receivers['same'], num_segments=n_elec
+                data=weh_same, segment_ids=edges['same'].receivers, num_segments=n_elec
             )
             z_anti = ops.segment_sum(
-                data=weh_anti, segment_ids=edges.receivers['anti'], num_segments=n_elec
+                data=weh_anti, segment_ids=edges['anti'].receivers, num_segments=n_elec
             )
             z_n = ops.segment_sum(
-                data=weh_n, segment_ids=edges.receivers['ne'], num_segments=n_elec
+                data=weh_n, segment_ids=edges['ne'].receivers, num_segments=n_elec
             )
             return {
                 'same': z_same,
@@ -167,15 +178,27 @@ class DiffSchNet(hk.Module):
         cutoff=10.0,
         layer_kwargs=None,
     ):
-        super().__init__('SchNet')
+        super().__init__('DiffSchNet')
+        labels = ['same', 'anti', 'ne']
         self.coords = coords
-        elec_vocab_size = 1 if n_up == n_down else 2
-        self.spin_idxs = jnp.array(
+        self.edge_factory = MolecularGraphEdgeBuilder(
+            n_nuc,
+            n_up,
+            n_down,
+            coords,
+            labels,
+            {
+                lbl: {'cutoff': 10.0, 'data_callback': distance_difference_callback}
+                for lbl in labels
+            },
+        )
+        spin_idxs = jnp.array(
             (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
         )
-        self.X = hk.Embed(elec_vocab_size, embedding_dim, name='ElectronicEmbedding')
-        self.Y = hk.Embed(n_nuc, kernel_dim, name='NuclearEmbedding')
-        self.nuclei_idxs = jnp.arange(n_nuc)
+        self.init_elec = jnp.eye(1 if n_up == n_down else 2)[spin_idxs]
+        self.init_nuc = jnp.eye(n_nuc)
+        self.X = hk.Linear(embedding_dim, with_bias=False, name='ElectronicEmbedding')
+        self.Y = hk.Linear(kernel_dim, with_bias=False, name='NuclearEmbedding')
         self.layers = [
             DiffSchNetLayer(
                 'DiffSchNetLayer',
@@ -191,38 +214,30 @@ class DiffSchNet(hk.Module):
             for i in range(n_interactions)
         ]
 
-    @classmethod
-    def required_edge_types(cls):
-        return ['ne', 'same', 'anti']
+    def __call__(self, rs):
+        def init_state(shape, dtype):
+            zeros = jnp.zeros(shape, dtype)
+            return {'anti': (zeros, zeros), 'ne': zeros, 'same': (zeros, zeros)}
 
-    def __call__(self, rs, graph_edges):
-        def compute_distances(labels, positions):
-            def diff(senders, receivers):
-                diffs = receivers - senders
-                return jnp.concatenate(
-                    [diffs, jnp.sqrt((diffs**2).sum(axis=-1, keepdims=True))], axis=-1
-                )
-
-            data = {
-                'diffs': {
-                    lbl: diff(
-                        pos[0][graph_edges.senders[lbl]],
-                        pos[1][graph_edges.receivers[lbl]],
-                    )
-                    for lbl, pos in zip(labels, positions)
-                }
-            }
-            return data
-
-        nuc_embedding = self.Y(self.nuclei_idxs)
-        elec_embedding = self.X(self.spin_idxs)
+        occupancies = hk.get_state(
+            'occupancies',
+            shape=1,
+            dtype=jnp.int32,
+            init=init_state,
+        )
+        n_occupancies = hk.get_state(
+            'n_occupancies', shape=[], dtype=jnp.int32, init=jnp.zeros
+        )
+        nuc_embedding = self.Y(self.init_nuc)
+        elec_embedding = self.X(self.init_elec)
+        graph_edges, occupancies, n_occupancies = self.edge_factory(
+            rs, occupancies, n_occupancies
+        )
+        hk.set_state('occupancies', occupancies)
+        hk.set_state('n_occupancies', n_occupancies)
         graph = Graph(
             GraphNodes(nuc_embedding, elec_embedding),
-            graph_edges._replace(
-                data=compute_distances(
-                    ['ne', 'same', 'anti'], [(self.coords, rs), (rs, rs), (rs, rs)]
-                )
-            ),
+            graph_edges,
         )
         for layer in self.layers:
             graph = layer(graph)
