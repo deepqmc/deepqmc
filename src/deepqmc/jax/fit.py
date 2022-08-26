@@ -1,5 +1,4 @@
 import logging
-import operator
 from collections import namedtuple
 from functools import partial
 
@@ -38,11 +37,11 @@ def fit_wf(
     rng,
     hamil,
     ansatz,
+    params,
     opt,
-    sampler,
-    sample_size,
+    sample_wf,
+    smpl_state,
     steps,
-    equilibration_steps=None,
     *,
     clip_width,
     exclude_width=jnp.inf,
@@ -54,52 +53,59 @@ def fit_wf(
     @partial(jax.custom_jvp, nondiff_argnums=(1, 2))
     def loss_fn(params, state, rs):
         wf = lambda state, r: ansatz.apply(params, state, r)[0]
-        E_loc = jax.vmap(hamil.local_energy(wf))(state, rs)
+        E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(state, rs)
         loss = jnp.mean(E_loc)
-        return loss, E_loc
+        stats = {
+            'E_loc/mean': jnp.mean(E_loc),
+            'E_loc/std': jnp.std(E_loc),
+            'E_loc/max': jnp.max(E_loc),
+            'E_loc/min': jnp.min(E_loc),
+            **jax.tree_util.tree_map(jnp.mean, hamil_stats),
+        }
+        return loss, (E_loc, stats)
 
     @loss_fn.defjvp
     def loss_jvp(state, rs, primals, tangents):
         (params,) = primals
-        loss, E_loc = loss_fn(params, state, rs)
+        loss, (E_loc, stats) = loss_fn(params, state, rs)
         E_loc_s, sigma = median_log_squeeze(E_loc, clip_width, clip_quantile)
         E_diff = E_loc_s - jnp.mean(E_loc_s)
         grad_ansatz = lambda params: vec_ansatz(params, state, rs)[0].log
         log_psi, log_psi_tangent = jax.jvp(grad_ansatz, primals, tangents)
         kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
         loss_tangent = masked_mean(E_diff * log_psi_tangent, sigma < exclude_width)
-        return (loss, E_loc), (loss_tangent, E_loc)
+
+        return (loss, stats), (loss_tangent, stats)
 
     energy_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-
-    @jax.jit
-    def sample(params, smpl_state, rng):
-        return sampler.sample(smpl_state, rng, partial(vec_ansatz, params))
-
-    rng, rng_init_sample, rng_init_ansatz = jax.random.split(rng, 3)
-    sample_for_init = hamil.init_sample(rng_init_sample, sample_size)
-    params, state = jax.vmap(ansatz.init, (None, 0), (None, 0))(rng, sample_for_init)
-    num_params = jax.tree_util.tree_reduce(
-        operator.add, jax.tree_map(lambda x: x.size, params)
-    )
-    log.info(f'Number of model parameters: {num_params}')
 
     if isinstance(opt, optax.GradientTransformation):
 
         @jax.jit
         def train_step(rng, params, opt_state, smpl_state):
-            rs, smpl_state = sample(params, smpl_state, rng)
-            (_, E_loc), grads = energy_and_grad_fn(params, state, rs)
+            rs, smpl_state, smpl_stats = sample_wf(rng, params, smpl_state)
+            (loss, loss_stats), grads = energy_and_grad_fn(
+                params, smpl_state['wf_state'], rs
+            )
             updates, opt_state = opt.update(grads, opt_state, params)
             params = optax.apply_updates(params, updates)
-            return params, opt_state, smpl_state, E_loc
+            grad_norm = jax.tree_util.tree_reduce(
+                lambda norm, x: norm + jnp.linalg.norm(x), grads, 0
+            )
+            stats = {
+                'loss/value': loss,
+                'loss/grad_norm': grad_norm,
+                **smpl_stats,
+                **loss_stats,
+            }
+            return params, opt_state, smpl_state, stats
 
         opt_state = opt.init(params)
     else:
 
         def train_step(rng, params, opt_state, smpl_state):
             rng_sample, rng_kfac = jax.random.split(rng)
-            r, smpl_state = sample(params, smpl_state, rng_sample)
+            r, smpl_state = sample_wf(rng_sample, params, smpl_state)
             params, opt_state, stats = opt.step(
                 params,
                 opt_state,
@@ -117,35 +123,20 @@ def fit_wf(
             use_adaptive_learning_rate=True,
             auto_register_kwargs={'graph_patterns': GRAPH_PATTERNS},
         )
-        opt_state = opt.init(params, rng, sample_for_init)
+        opt_state = opt.init(params, rng, smpl_state['r'])
 
-    smpl_state = sampler.init(rng, partial(vec_ansatz, params), state, sample_size)
-    if state_callback:
-        state, overflow = state_callback(smpl_state['wf_state'])
-        if overflow:
-            smpl_state = sampler.init(
-                rng, partial(vec_ansatz, params), state, sample_size
-            )
-    if equilibration_steps:
-        rng, rng_equilibrate = jax.random.split(rng, 2)
-        for _, rng_eq in zip(equilibration_steps, hk.PRNGSequence(rng_equilibrate)):
-            _, new_smpl_state = sample(params, smpl_state, rng_eq)
-            if state_callback:
-                state, overflow = state_callback(new_smpl_state['wf_state'])
-                if overflow:
-                    smpl_state['wf_state'] = state
-                    _, _, new_smpl_state = sample(params, smpl_state, rng_eq)
-            smpl_state = new_smpl_state
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        new_params, new_opt_state, new_smpl_state, E_loc = train_step(
+        new_params, new_opt_state, new_smpl_state, stats = train_step(
             rng, params, opt_state, smpl_state
         )
         if state_callback:
             state, overflow = state_callback(new_smpl_state['wf_state'])
             if overflow:
                 smpl_state['wf_state'] = state
-                new_params, new_opt_state, new_smpl_state, E_loc = train_step(
+                new_params, new_opt_state, new_smpl_state, stats = train_step(
                     rng, params, opt_state, smpl_state
                 )
         params, opt_state, smpl_state = new_params, new_opt_state, new_smpl_state
-        yield step, TrainState(params, opt_state, smpl_state), E_loc
+        yield step, TrainState(params, opt_state, smpl_state), {
+            k: v.item() for k, v in stats.items()
+        },

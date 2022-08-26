@@ -4,13 +4,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 
-from deepqmc.jax.utils import (
-    freeze_dict,
-    pairwise_diffs,
-    pairwise_self_distance,
-    triu_flat,
-    unfreeze_dict,
-)
+from deepqmc.jax.utils import pairwise_diffs, pairwise_self_distance, triu_flat
 from deepqmc.jax.wf.base import WaveFunction
 
 from ...jaxext import flatten, unflatten
@@ -188,21 +182,9 @@ class PauliNet(WaveFunction):
         return Psi(sign_psi.squeeze(), log_psi.squeeze())
 
 
-def state_callback(state, new_state):
-    state = unfreeze_dict(state)
-    int_or_tuple = lambda x: x.item() if x.size == 1 else tuple(x.tolist())
-    new_state = jax.tree_util.tree_map(
-        lambda x: int_or_tuple(jnp.max(x, axis=0)), new_state
-    )
-    overflow = jax.tree_util.tree_reduce(
-        lambda x, y: x or y,
-        jax.tree_util.tree_map(lambda x, y: x > y, new_state, state),
-    )
-    max_state = jax.tree_util.tree_map(lambda x, y: max(x, y), new_state, state)
-    return freeze_dict(max_state), overflow
-
-
-def process_state(state):
+def state_callback(state):
+    if not state:
+        return state
     key = list(state.keys())[0]
     occupancies = state[key]['occupancies']
     n_occupancies = state[key]['n_occupancies']

@@ -1,10 +1,11 @@
 import logging
+import operator
 import pickle
 from collections import namedtuple
 from pathlib import Path
 
+import haiku as hk
 import jax
-import jax.numpy as jnp
 import numpy as np
 import tensorboard.summary
 from tqdm.auto import tqdm
@@ -12,7 +13,7 @@ from uncertainties import ufloat
 
 from .ewm import ewm
 from .fit import fit_wf
-from .sampling import DecorrSampler
+from .sampling import init_sampling
 
 __all__ = 'train'
 
@@ -27,47 +28,65 @@ def train(
     hamil,
     ansatz,
     opt,
-    sampler,
     workdir=None,
     *,
+    sampling_kwargs=None,
     steps,
-    sample_size,
-    decorr,
     seed,
-    equilibrate=500,
-    **params,
+    steps_eq=500,
+    state_callback=None,
+    **kwargs,
 ):
     ewm_state = ewm()
-    sampler = sampler(hamil)
-    sampler = DecorrSampler(sampler, decorr=decorr)
     rng = jax.random.PRNGKey(seed)
+    rng, rng_init = jax.random.split(rng)
+    params, smpl_state, sample_wf = init_sampling(
+        rng_init, hamil, ansatz, state_callback, **(sampling_kwargs or {})
+    )
     if workdir:
         chkpts = CheckpointStore(workdir)
         writer = tensorboard.summary.Writer(workdir)
-    log.info('Start training')
-    eq_pbar = (
-        tqdm(range(equilibrate), desc='equilibrate', disable=None)
-        if equilibrate
-        else None
+
+    num_params = jax.tree_util.tree_reduce(
+        operator.add, jax.tree_map(lambda x: x.size, params)
     )
+    log.info(f'Number of model parameters: {num_params}')
+
+    if steps_eq:
+        log.info('Start equilibrating')
+        rng, rng_eq = jax.random.split(rng, 2)
+        eq_pbar = tqdm(range(steps_eq), desc='equilibrate', disable=None)
+        wf = jax.vmap(ansatz.apply, (None, 0, 0))
+        for step, rng_eq in zip(eq_pbar, hk.PRNGSequence(rng_eq)):
+            smpl_state, eq_stats = equilibration_step(
+                rng_eq,
+                wf,
+                params,
+                sample_wf,
+                smpl_state,
+                state_callback,
+            )
+            eq_pbar.set_postfix(tau=f'{smpl_state["tau"].item():5.3f}')
+            if workdir:
+                for k, v in eq_stats.items():
+                    writer.add_scalar(f'equilibrate/{k}', v.item(), step)
+
+    log.info('Start training')
     pbar = tqdm(range(steps), desc='train', disable=None)
     enes, best_ene = [], None
-    for step, train_state, E_loc in fit_wf(  # noqa: B007
+    for step, train_state, fit_stats in fit_wf(  # noqa: B007
         rng,
         hamil,
         ansatz,
+        params,
         opt,
-        sampler,
-        sample_size,
+        sample_wf,
+        smpl_state,
         pbar,
-        eq_pbar,
-        **params,
+        **kwargs,
     ):
         stats = {
-            'E_loc/mean': jnp.mean(E_loc).item(),
-            'E_loc/std': jnp.std(E_loc).item(),
-            'E_loc/max': jnp.max(E_loc).item(),
-            'E_loc/min': jnp.min(E_loc).item(),
+            **fit_stats,
             **hamil.stats(train_state.sampler['r']),
         }
         ewm_state = ewm(stats['E_loc/mean'], ewm_state)
@@ -83,7 +102,19 @@ def train(
             writer.add_scalar('energy/ewm', ene.n, step)
             for k, v in stats.items():
                 writer.add_scalar(k, v, step)
-    return train_state, E_loc, np.array(enes)
+    return train_state, np.array(enes)
+
+
+def equilibration_step(rng, wf, params, sample_wf, smpl_state, state_callback):
+    _, new_smpl_state, smpl_stats = sample_wf(rng, params, smpl_state)
+    if state_callback:
+        state, overflow = state_callback(new_smpl_state['wf_state'])
+        if overflow:
+            smpl_state['wf_state'] = state
+            _, new_smpl_state, smpl_stats = sample_wf(rng, params, smpl_state)
+    smpl_state = new_smpl_state
+
+    return smpl_state, smpl_stats
 
 
 Checkpoint = namedtuple('Checkpoint', 'step loss path')
