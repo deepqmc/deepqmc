@@ -190,15 +190,26 @@ class SchNet(hk.Module):
         ]
 
     def __call__(self, rs):
-        occupancy = hk.get_state(
-            'occupancy',
-            shape=[],
-            init=lambda shape, dtype: {'anti': (1, 1), 'ne': 1, 'same': (1, 1)},
+        def init_state(shape, dtype):
+            zeros = jnp.zeros(shape, dtype)
+            return {'anti': (zeros, zeros), 'ne': zeros, 'same': (zeros, zeros)}
+
+        occupancies = hk.get_state(
+            'occupancies',
+            shape=1,
+            dtype=jnp.int32,
+            init=init_state,
+        )
+        n_occupancies = hk.get_state(
+            'n_occupancies', shape=[], dtype=jnp.int32, init=jnp.zeros
         )
         nuc_embedding = self.Y(self.init_nuc)
         elec_embedding = self.X(self.init_elec)
-        graph_edges, occupancy = self.edge_factory(rs, occupancy)
-        hk.set_state('occupancy', occupancy)
+        graph_edges, occupancies, n_occupancies = self.edge_factory(
+            rs, occupancies, n_occupancies
+        )
+        hk.set_state('occupancies', occupancies)
+        hk.set_state('n_occupancies', n_occupancies)
         graph = Graph(
             GraphNodes(nuc_embedding, elec_embedding),
             graph_edges,

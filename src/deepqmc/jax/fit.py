@@ -10,17 +10,17 @@ import kfac_jax
 import optax
 
 from .kfacext import GRAPH_PATTERNS
-from .utils import freeze_dict, masked_mean
+from .utils import masked_mean
 
 __all__ = ()
 
 log = logging.getLogger(__name__)
-TrainState = namedtuple('TrainState', 'params state opt sampler')
+TrainState = namedtuple('TrainState', 'params opt sampler')
 
 
 def log_squeeze(x):
     sgn, x = jnp.sign(x), jnp.abs(x)
-    return sgn * jnp.log1p((x + 1 / 2 * x ** 2 + x ** 3) / (1 + x ** 2))
+    return sgn * jnp.log1p((x + 1 / 2 * x**2 + x**3) / (1 + x**2))
 
 
 def median_log_squeeze(x, width, quantile):
@@ -49,12 +49,12 @@ def fit_wf(
     clip_quantile=0.95,
     state_callback=None,
 ):
-    vec_ansatz = jax.vmap(ansatz.apply, (None, None, 0))
+    vec_ansatz = jax.vmap(ansatz.apply, (None, 0, 0))
 
     @partial(jax.custom_jvp, nondiff_argnums=(1, 2))
     def loss_fn(params, state, rs):
-        wf = lambda r: ansatz.apply(params, state, r)[0]
-        E_loc = jax.vmap(hamil.local_energy(wf))(rs)
+        wf = lambda state, r: ansatz.apply(params, state, r)[0]
+        E_loc = jax.vmap(hamil.local_energy(wf))(state, rs)
         loss = jnp.mean(E_loc)
         return loss, E_loc
 
@@ -72,14 +72,13 @@ def fit_wf(
 
     energy_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
-    @partial(jax.jit, static_argnums=(1,))
-    def sample(params, state, smpl_state, rng):
-        return sampler.sample(smpl_state, rng, partial(vec_ansatz, params, state))
+    @jax.jit
+    def sample(params, smpl_state, rng):
+        return sampler.sample(smpl_state, rng, partial(vec_ansatz, params))
 
     rng, rng_init_sample, rng_init_ansatz = jax.random.split(rng, 3)
     sample_for_init = hamil.init_sample(rng_init_sample, sample_size)
-    params, state = ansatz.init(rng, sample_for_init[0])
-    state = freeze_dict(state)
+    params, state = jax.vmap(ansatz.init, (None, 0), (None, 0))(rng, sample_for_init)
     num_params = jax.tree_util.tree_reduce(
         operator.add, jax.tree_map(lambda x: x.size, params)
     )
@@ -87,13 +86,13 @@ def fit_wf(
 
     if isinstance(opt, optax.GradientTransformation):
 
-        @partial(jax.jit, static_argnums=(2,))
-        def train_step(rng, params, state, opt_state, smpl_state):
-            rs, smpl_state = sample(params, state, smpl_state, rng)
+        @jax.jit
+        def train_step(rng, params, opt_state, smpl_state):
+            rs, smpl_state = sample(params, smpl_state, rng)
             (_, E_loc), grads = energy_and_grad_fn(params, state, rs)
             updates, opt_state = opt.update(grads, opt_state, params)
             params = optax.apply_updates(params, updates)
-            return params, smpl_state['wf_state'], opt_state, smpl_state, E_loc
+            return params, opt_state, smpl_state, E_loc
 
         opt_state = opt.init(params)
     else:
@@ -120,33 +119,33 @@ def fit_wf(
         )
         opt_state = opt.init(params, rng, sample_for_init)
 
-    smpl_state = sampler.init(rng, partial(vec_ansatz, params, state), sample_size)
+    smpl_state = sampler.init(rng, partial(vec_ansatz, params), state, sample_size)
     if state_callback:
-        state, overflow = state_callback(state, smpl_state['wf_state'])
+        state, overflow = state_callback(smpl_state['wf_state'])
         if overflow:
             smpl_state = sampler.init(
-                rng, partial(vec_ansatz, params, state), sample_size
+                rng, partial(vec_ansatz, params), state, sample_size
             )
     if equilibration_steps:
         rng, rng_equilibrate = jax.random.split(rng, 2)
         for _, rng_eq in zip(equilibration_steps, hk.PRNGSequence(rng_equilibrate)):
-            _, new_smpl_state = sample(params, state, smpl_state, rng_eq)
+            _, new_smpl_state = sample(params, smpl_state, rng_eq)
             if state_callback:
-                new_state, overflow = state_callback(state, new_smpl_state['wf_state'])
+                state, overflow = state_callback(new_smpl_state['wf_state'])
                 if overflow:
-                    _, _, new_smpl_state = sample(params, new_state, smpl_state, rng_eq)
+                    smpl_state['wf_state'] = state
+                    _, _, new_smpl_state = sample(params, smpl_state, rng_eq)
             smpl_state = new_smpl_state
-            state = new_state
-    train_state = params, state, opt_state, smpl_state
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        new_params, new_state, new_opt_state, new_smpl_state, E_loc = train_step(
-            rng, *train_state
+        new_params, new_opt_state, new_smpl_state, E_loc = train_step(
+            rng, params, opt_state, smpl_state
         )
         if state_callback:
-            new_state, overflow = state_callback(state, new_state)
+            state, overflow = state_callback(new_smpl_state['wf_state'])
             if overflow:
-                new_params, _, new_opt_state, new_smpl_state, E_loc = train_step(
-                    rng, new_params, new_state, new_opt_state, new_smpl_state
+                smpl_state['wf_state'] = state
+                new_params, new_opt_state, new_smpl_state, E_loc = train_step(
+                    rng, params, opt_state, smpl_state
                 )
-        (*train_state,) = new_params, new_state, new_opt_state, new_smpl_state
-        yield step, TrainState(*train_state), E_loc
+        params, opt_state, smpl_state = new_params, new_opt_state, new_smpl_state
+        yield step, TrainState(params, opt_state, smpl_state), E_loc

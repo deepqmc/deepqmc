@@ -1,7 +1,6 @@
 from collections import namedtuple
 
 import haiku as hk
-import jax
 import jax.numpy as jnp
 from jax.tree_util import tree_map, tree_structure, tree_transpose
 
@@ -69,6 +68,8 @@ def prune_graph_edges(
 
 
 def distance_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
+    if len(pos_sender) == 0 or len(pos_receiver) == 0:
+        return {'distances': jnp.zeros_like(sender_idx, pos_sender.dtype)}
     distances = jnp.sqrt(
         ((pos_receiver[receiver_idx] - pos_sender[sender_idx]) ** 2).sum(axis=-1)
     )
@@ -76,6 +77,11 @@ def distance_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
 
 
 def distance_direction_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
+    if len(pos_sender) == 0 or len(pos_receiver) == 0:
+        return {
+            'distances': jnp.zeros_like(sender_idx, pos_sender.dtype),
+            'directions': jnp.zeros((len(sender_idx), 3)),
+        }
     eps = jnp.finfo(pos_sender.dtype).eps
     differences = pos_receiver[receiver_idx] - pos_sender[sender_idx]
     distances = jnp.sqrt((differences**2).sum(axis=-1))
@@ -95,32 +101,35 @@ def GraphEdgeBuilder(
     mask_vals,
     data_callback=None,
 ):
-    def build(pos1, pos2, occupancy_limit):
+    def build(pos1, pos2, occupancies, n_occupancies):
         assert pos1.shape[-1] == 3 and pos2.shape[-1] == 3
         assert len(pos1.shape) == 2
         assert not mask_self or pos1.shape[0] == pos2.shape[0]
 
-        _pos1, _pos2 = (jax.lax.stop_gradient(pos) for pos in (pos1, pos2))
-        if _pos1.shape[0] == 0 or _pos2.shape[0] == 0:
-            ones = jax.lax.stop_gradient(jnp.ones(occupancy_limit, jnp.int32))
-            sender_idx = (offsets[0] * ones,)
-            receiver_idx = (offsets[1] * ones,)
-            return GraphEdges(
-                sender_idx,
-                receiver_idx,
-                jnp.array(0),
-                data_callback(_pos1, _pos2, sender_idx, receiver_idx)
-                if data_callback
-                else {},
+        occupancy_limit = occupancies.shape[0]
+        if pos1.shape[0] == 0 or pos2.shape[0] == 0:
+            ones = jnp.ones_like(occupancies)
+            sender_idx = offsets[0] * ones
+            receiver_idx = offsets[1] * ones
+            return (
+                GraphEdges(
+                    sender_idx,
+                    receiver_idx,
+                    data_callback(pos1, pos2, sender_idx, receiver_idx)
+                    if data_callback
+                    else {},
+                ),
+                occupancies.at[1:].set(occupancies[:-1]).at[0].set(0),
+                n_occupancies + 1,
             )
 
-        edges_idx = all_graph_edges(_pos1, _pos2)
+        edges_idx = all_graph_edges(pos1, pos2)
         if mask_self:
             edges_idx = mask_self_edges(edges_idx)
 
         edges, occupancy = prune_graph_edges(
-            _pos1,
-            _pos2,
+            pos1,
+            pos2,
             cutoff,
             edges_idx,
             occupancy_limit,
@@ -128,20 +137,26 @@ def GraphEdgeBuilder(
             mask_vals,
             data_callback,
         )
-        return edges, occupancy
+        return (
+            edges,
+            occupancies.at[1:].set(occupancies[:-1]).at[0].set(occupancy),
+            n_occupancies + 1,
+        )
 
     return build
 
 
 def concatenate_edges(edges_and_occs):
     edges = [edge_occ[0] for edge_occ in edges_and_occs]
-    occupancies = jnp.array([edge_occ[1] for edge_occ in edges_and_occs])
+    occupancies = tuple(edge_occ[1] for edge_occ in edges_and_occs)
+    n_occupancies = edges_and_occs[0][2]
     edge_of_lists = tree_transpose(
         tree_structure([0] * len(edges)), tree_structure(edges[0]), edges
     )
     return (
         tree_map(jnp.concatenate, edge_of_lists, is_leaf=lambda x: isinstance(x, list)),
         occupancies,
+        n_occupancies,
     )
 
 
@@ -198,40 +213,43 @@ def MolecularGraphEdgeBuilder(
         for builder_type in builder_mapping[edge_type]
     }
 
-    def build_same(r, occ_lim):
+    def build_same(r, occs, n_occs):
         return concatenate_edges(
             [
-                builders['uu'](r[:n_up], r[:n_up], occ_lim['same'][0]),
-                builders['dd'](r[n_up:], r[n_up:], occ_lim['same'][1]),
+                builders['uu'](r[:n_up], r[:n_up], occs['same'][0], n_occs),
+                builders['dd'](r[n_up:], r[n_up:], occs['same'][1], n_occs),
             ]
         )
 
-    def build_anti(r, occ_lim):
+    def build_anti(r, occs, n_occs):
         return concatenate_edges(
             [
-                builders['ud'](r[:n_up], r[n_up:], occ_lim['anti'][0]),
-                builders['du'](r[n_up:], r[:n_up], occ_lim['anti'][1]),
+                builders['ud'](r[:n_up], r[n_up:], occs['anti'][0], n_occs),
+                builders['du'](r[n_up:], r[:n_up], occs['anti'][1], n_occs),
             ]
         )
 
     build_rules = {
-        'nn': lambda r, occ_lim: builders['nn'](coords, coords, occ_lim['nn']),
-        'ne': lambda r, occ_lim: builders['ne'](coords, r, occ_lim['ne']),
-        'en': lambda r, occ_lim: builders['en'](r, coords, occ_lim['en']),
+        'nn': lambda r, occs, n_occs: builders['nn'](
+            coords, coords, occs['nn'], n_occs
+        ),
+        'ne': lambda r, occs, n_occs: builders['ne'](coords, r, occs['ne'], n_occs),
+        'en': lambda r, occs, n_occs: builders['en'](r, coords, occs['en'], n_occs),
         'same': build_same,
         'anti': build_anti,
     }
 
-    def build(r, occupancy_limit):
+    def build(r, occupancies, n_occupancies):
         assert r.shape[0] == n_up + n_down
 
         edges_and_occs = {
-            edge_type: build_rules[edge_type](r, occupancy_limit)
+            edge_type: build_rules[edge_type](r, occupancies, n_occupancies)
             for edge_type in edge_types
         }
         edges = {k: edge_and_occ[0] for k, edge_and_occ in edges_and_occs.items()}
         occupancies = {k: edge_and_occ[1] for k, edge_and_occ in edges_and_occs.items()}
-        return edges, occupancies
+        n_occupancies = next(iter(edges_and_occs.values()))[2]
+        return edges, occupancies, n_occupancies
 
     return build
 
