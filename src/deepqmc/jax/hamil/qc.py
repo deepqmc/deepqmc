@@ -12,7 +12,7 @@ all__ = ()
 
 
 def laplacian_flat(f):
-    return lambda state, r: laplacian(lambda r: f(state, r.reshape((-1, 3))).log)(
+    return lambda state, r: laplacian(lambda r: f(state, r.reshape((-1, 3))))(
         r.flatten()
     )
 

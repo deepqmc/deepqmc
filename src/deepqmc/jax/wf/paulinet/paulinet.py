@@ -184,7 +184,7 @@ class PauliNet(WaveFunction):
 
 def state_callback(state):
     if not state:
-        return state
+        return state, False
     key = list(state.keys())[0]
     occupancies = state[key]['occupancies']
     n_occupancies = state[key]['n_occupancies']
