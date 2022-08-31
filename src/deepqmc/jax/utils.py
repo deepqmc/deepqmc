@@ -19,10 +19,9 @@ def laplacian_oneshot(f):
 
 
 def laplacian(f):
-    def lap(x, **kwargs):
+    def lap(x):
         n_coord = len(x)
-        _f = partial(f, **kwargs)
-        grad_f = jax.grad(_f)
+        grad_f = jax.grad(f)
         df, grad_f_jvp = jax.linearize(grad_f, x)
         eye = jnp.eye(n_coord)
         d2f = lambda i, val: val + grad_f_jvp(eye[i])[i]

@@ -94,10 +94,11 @@ def init_sampling(
     state_callback,
     *,
     sampler=MetropolisSampler,
+    sampler_kwargs=None,
     sample_size=2000,
     decorr=1,
 ):
-    sampler = sampler(hamil)
+    sampler = sampler(hamil, **(sampler_kwargs or {}))
     if decorr > 1:
         sampler = DecorrSampler(sampler, decorr=decorr)
 
