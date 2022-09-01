@@ -36,6 +36,11 @@ def masked_mean(x, mask):
     return x.sum() / jnp.sum(mask)
 
 
+def exp_normalize_mean(x):
+    x_shifted = x - x.max()
+    return jnp.exp(x_shifted) / jnp.exp(x_shifted).mean()
+
+
 def pairwise_distance(coords1, coords2):
     return jnp.linalg.norm(coords1[..., :, None, :] - coords2[..., None, :, :], axis=-1)
 
