@@ -179,8 +179,8 @@ class DiffSchNet(hk.Module):
             n_down,
             coords,
             labels,
-            {
-                lbl: {'cutoff': 10.0, 'data_callback': distance_difference_callback}
+            kwargs_by_edge_type={
+                lbl: {'cutoff': cutoff, 'data_callback': distance_difference_callback}
                 for lbl in labels
             },
         )

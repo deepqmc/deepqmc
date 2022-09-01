@@ -4,7 +4,13 @@ from jax import ops
 
 from ...hkext import MLP
 from .distbasis import DistanceBasis
-from .graph import Graph, GraphNodes, MessagePassingLayer, MolecularGraphEdgeBuilder
+from .graph import (
+    Graph,
+    GraphNodes,
+    MessagePassingLayer,
+    MolecularGraphEdgeBuilder,
+    distance_callback,
+)
 
 
 class SchNetLayer(MessagePassingLayer):
@@ -156,6 +162,10 @@ class SchNet(hk.Module):
             n_down,
             coords,
             labels,
+            kwargs_by_edge_type={
+                lbl: {'cutoff': cutoff, 'data_callback': distance_callback}
+                for lbl in labels
+            },
         )
         self.spin_idxs = jnp.array(
             (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
