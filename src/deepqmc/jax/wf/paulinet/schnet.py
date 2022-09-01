@@ -17,6 +17,8 @@ class SchNetLayer(MessagePassingLayer):
     def __init__(
         self,
         ilayer,
+        n_up,
+        n_down,
         embedding_dim,
         kernel_dim,
         dist_feat_dim,
@@ -49,8 +51,13 @@ class SchNetLayer(MessagePassingLayer):
             )
             for lbl in labels
         }
+        self.spin_idxs = jnp.array(
+            (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
+        )
         self.h = {
-            lbl: MLP(
+            lbl: hk.Embed(1 if n_up == n_down else 2, kernel_dim, name=f'h_{lbl}')
+            if self.ilayer == 0
+            else MLP(
                 embedding_dim,
                 kernel_dim,
                 name=f'h_{lbl}',
@@ -97,15 +104,12 @@ class SchNetLayer(MessagePassingLayer):
             we_same, we_anti, we_n = (
                 self.w[lbl](edges[lbl].data['distances']) for lbl in self.labels
             )
-            if self.ilayer == 0:
-                hx_same, hx_anti = (
-                    nodes.electrons[edges[lbl].senders] for lbl in self.labels[:2]
-                )
-            else:
-                hx_same, hx_anti = (
-                    self.h[lbl](nodes.electrons)[edges[lbl].senders]
-                    for lbl in self.labels[:2]
-                )
+            hx_same, hx_anti = (
+                self.h[lbl](self.spin_idxs if self.ilayer == 0 else nodes.electrons)[
+                    edges[lbl].senders
+                ]
+                for lbl in self.labels[:2]
+            )
             weh_same = we_same * hx_same
             weh_anti = we_anti * hx_anti
             weh_n = we_n * nodes.nuclei[edges['ne'].senders]
@@ -171,13 +175,15 @@ class SchNet(hk.Module):
             (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
         )
         self.X = hk.Embed(
-            1 if n_up == n_down else 2, kernel_dim, name='ElectronicEmbedding'
+            1 if n_up == n_down else 2, embedding_dim, name='ElectronicEmbedding'
         )
         self.init_nuc = jnp.eye(n_nuc)
         self.Y = hk.Linear(kernel_dim, with_bias=False, name='NuclearEmbedding')
         self.layers = [
             SchNetLayer(
                 i,
+                n_up,
+                n_down,
                 embedding_dim,
                 kernel_dim,
                 dist_feat_dim,
