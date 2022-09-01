@@ -102,7 +102,7 @@ def distance_direction_callback(pos_sender, pos_receiver, sender_idx, receiver_i
     return {'distances': distances, 'directions': directions}
 
 
-DEFAULT_EDGE_KWARGS = {'cutoff': 10.0, 'data_callback': distance_callback}
+DEFAULT_EDGE_KWARGS = {'cutoff': 10.0}
 
 
 def GraphEdgeBuilder(
