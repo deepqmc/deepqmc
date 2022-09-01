@@ -22,7 +22,6 @@ class DiffSchNetLayer(MessagePassingLayer):
         kernel_dim,
         dist_feat_dim,
         distance_basis,
-        shared_h=True,
         shared_g=False,
         w_subnet=None,
         h_subnet=None,
@@ -51,24 +50,15 @@ class DiffSchNetLayer(MessagePassingLayer):
             )
             for lbl in labels
         }
-        self.h = (
-            MLP(
+        self.h = {
+            lbl: MLP(
                 embedding_dim,
                 kernel_dim,
-                name='h',
+                name=f'h_{lbl}',
                 **(h_subnet or default_subnet_kwargs(n_layers_h)),
             )
-            if shared_h
-            else {
-                lbl: MLP(
-                    embedding_dim,
-                    kernel_dim,
-                    name=f'h_{lbl}',
-                    **(h_subnet or default_subnet_kwargs(n_layers_h)),
-                )
-                for lbl in labels
-            }
-        )
+            for lbl in labels
+        }
         self.g = (
             MLP(
                 kernel_dim,
@@ -89,7 +79,6 @@ class DiffSchNetLayer(MessagePassingLayer):
         )
         self.distance_basis = distance_basis
         self.labels = labels
-        self.shared_h = shared_h
         self.shared_g = shared_g
 
     def expand_diffs(self, dists, diffs):
@@ -123,12 +112,15 @@ class DiffSchNetLayer(MessagePassingLayer):
             we_same, we_anti, we_n = (
                 self.w[lbl](edges[lbl].data['diffs']) for lbl in self.labels
             )
-            hx_same, hx_anti = (
-                (self.h if self.shared_h else self.h[lbl])(
-                    nodes.electrons[edges[lbl].senders]
+            if self.ilayer == 0:
+                hx_same, hx_anti = (
+                    nodes.electrons[edges[lbl].senders] for lbl in self.labels[:2]
                 )
-                for lbl in self.labels[:2]
-            )
+            else:
+                hx_same, hx_anti = (
+                    (self.h[lbl])(nodes.electrons[edges[lbl].senders])
+                    for lbl in self.labels[:2]
+                )
             weh_same = we_same * hx_same
             weh_anti = we_anti * hx_anti
             weh_n = we_n * nodes.nuclei[edges['ne'].senders]
@@ -192,12 +184,13 @@ class DiffSchNet(hk.Module):
                 for lbl in labels
             },
         )
-        spin_idxs = jnp.array(
+        self.spin_idxs = jnp.array(
             (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
         )
-        self.init_elec = jnp.eye(1 if n_up == n_down else 2)[spin_idxs]
+        self.X = hk.Embed(
+            1 if n_up == n_down else 2, kernel_dim, name='ElectronicEmbedding'
+        )
         self.init_nuc = jnp.eye(n_nuc)
-        self.X = hk.Linear(embedding_dim, with_bias=False, name='ElectronicEmbedding')
         self.Y = hk.Linear(kernel_dim, with_bias=False, name='NuclearEmbedding')
         self.layers = [
             DiffSchNetLayer(
@@ -229,7 +222,7 @@ class DiffSchNet(hk.Module):
             'n_occupancies', shape=[], dtype=jnp.int32, init=jnp.zeros
         )
         nuc_embedding = self.Y(self.init_nuc)
-        elec_embedding = self.X(self.init_elec)
+        elec_embedding = self.X(self.spin_idxs)
         graph_edges, occupancies, n_occupancies = self.edge_factory(
             rs, occupancies, n_occupancies
         )

@@ -13,6 +13,8 @@ from .cusp import ElectronicAsymptotic
 from .env import ExponentialEnvelopes
 from .omni import OmniNet
 
+__all__ = ['PauliNet', 'state_callback']
+
 
 class BackflowOp(hk.Module):
     def __init__(self, mult_act=None, add_act=None, with_envelope=True):
