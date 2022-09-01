@@ -3,7 +3,13 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 
+from deepqmc.jax.jaxext import multinomial_resampling
+
 __all__ = ()
+
+
+def null_func(state, rng):
+    return state
 
 
 class MetropolisSampler:
@@ -13,27 +19,34 @@ class MetropolisSampler:
         sample_size=2000,
         target_acceptance=0.57,
         decorr=20,
-        n_first_certain=None,
+        n_first_certain=0,
+        keep_walker_weights=False,
+        resampling_frequency=0,
     ):
+        assert keep_walker_weights or not resampling_frequency
+        assert not n_first_certain or n_first_certain < decorr
         self.hamil = hamil
         self.sample_size = 2000
         self.target_acceptance = target_acceptance
         self.decorr = decorr
-        if n_first_certain is None:
-            n_first_certain = decorr // 10
-        assert n_first_certain < decorr
         self.n_first_certain = n_first_certain
+        self.resampling_frequency = resampling_frequency
+        self.keep_walker_weights = keep_walker_weights
 
-    def _update(self, state, wf, wf_state):
+    def _update(self, state, wf, wf_state, log_weights=None):
         psi, wf_state = wf(wf_state, state['r'])
+        if self.keep_walker_weights and log_weights is not None:
+            state['log_weights'] = log_weights + 2 * (psi.log - state['psi'].log)
         state = {**state, 'psi': psi, 'wf_state': wf_state}
         return state
 
     def init(self, rng, wf, wf_state, tau=0.1):
         state = {
+            'step': jnp.array(0),
             'tau': jnp.array(tau),
             'r': self.hamil.init_sample(rng, self.sample_size),
             'age': jnp.zeros(self.sample_size, jnp.int32),
+            'log_weights': jnp.zeros(self.sample_size),
         }
         state = self._update(state, wf, wf_state)
         return state
@@ -63,11 +76,16 @@ class MetropolisSampler:
                 jnp.stack([acceptance, jnp.array(0.05)])
             )
         state = {**state, 'age': state['age'] + 1}
-        tau = state.pop('tau')
-        state = jax.tree_util.tree_map(
-            lambda xp, x: jax.vmap(jnp.where)(accepted, xp, x), prop, state
+        tmp_state = {key: state.pop(key) for key in ['tau', 'step', 'log_weights']}
+        state = {
+            **jax.tree_util.tree_map(
+                lambda xp, x: jax.vmap(jnp.where)(accepted, xp, x), prop, state
+            ),
+            **tmp_state,
+        }
+        ess = jnp.sum(jnp.exp(state['log_weights'])) ** 2 / jnp.sum(
+            jnp.exp(state['log_weights']) ** 2
         )
-        state['tau'] = tau
         stats = {
             'sampling/acceptance': acceptance,
             'sampling/tau': state['tau'],
@@ -75,10 +93,33 @@ class MetropolisSampler:
             'sampling/age/max': jnp.max(state['age']),
             'sampling/log_psi/mean': jnp.mean(state['psi'].log),
             'sampling/log_psi/std': jnp.std(state['psi'].log),
+            'sampling/effective sample size': ess,
         }
         return state['r'], state, stats
 
+    def resample_walkers(self, state, rng):
+        weights = jnp.exp(state['log_weights'])
+        idxs = multinomial_resampling(rng, weights)
+        tmp_state = {key: state.pop(key) for key in ['tau', 'step']}
+        state = {
+            **jax.tree_util.tree_map(lambda x: x[idxs], state),
+            **tmp_state,
+            'log_weights': jnp.zeros_like(weights),
+            'step': jnp.array(0),
+        }
+        return state
+
     def sample(self, state, rng, wf):
+        state['step'] = state['step'] + 1
+        self._update(state, wf, state['wf_state'], state['log_weights'])
+        if self.resampling_frequency:
+            state = jax.lax.cond(
+                self.resampling_frequency <= state['step'],
+                self.resample_walkers,
+                lambda state, rng: state,
+                state,
+                rng,
+            )
         if self.n_first_certain:
             rng, rng_certain = jax.random.split(rng)
             state, _ = jax.lax.scan(
@@ -95,7 +136,6 @@ class MetropolisSampler:
                 state,
                 jax.random.split(rng, self.decorr - self.n_first_certain),
             )
-
         return self._step(state, rng, wf)
 
 
