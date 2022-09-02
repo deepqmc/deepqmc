@@ -139,7 +139,7 @@ class SchNet(hk.Module):
         kernel_dim=64,
         n_interactions=3,
         cutoff=10.0,
-        envelope='nocusp',
+        envelope='nocusp_smooth_cutoff',
         layer_kwargs=None,
     ):
         super().__init__('SchNet')
