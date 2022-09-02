@@ -15,7 +15,7 @@ class Jastrow(hk.Module):
         kwargs.setdefault('activation', SSP)
         kwargs.setdefault('hidden_layers', ('log', n_layers))
         kwargs.setdefault('last_linear', True)
-        kwargs.setdefault('last_bias', False)
+        kwargs.setdefault('bias', 'not_last')
         super().__init__(name=name)
         self.net = MLP(embedding_dim, 1, **kwargs)
         self.sum_first = sum_first

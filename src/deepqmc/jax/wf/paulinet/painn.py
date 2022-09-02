@@ -31,7 +31,7 @@ class PaiNNLayer(MessagePassingLayer):
         def default_subnet_kwargs(n_layers):
             return {
                 'hidden_layers': ('log', n_layers),
-                'last_bias': True,
+                'bias': 'not_last',
                 'last_linear': True,
                 'activation': nn.silu,
             }

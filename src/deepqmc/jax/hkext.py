@@ -13,7 +13,7 @@ class MLP(hk.Module):
         in_dim,
         out_dim,
         hidden_layers=None,
-        last_bias=True,
+        bias='all',
         last_linear=False,
         activation=SSP,
         name=None,
@@ -29,12 +29,10 @@ class MLP(hk.Module):
         else:
             dims = [*hidden_layers, out_dim]
         layers = []
-        for index, dim in enumerate(dims):
-            with_bias = index < (len(dims) - 1) or last_bias
+        for idx, dim in enumerate(dims):
+            with_bias = bias == 'all' or (bias == 'not_last' and idx < (len(dims) - 1))
             layers.append(
-                hk.Linear(
-                    output_size=dim, with_bias=with_bias, name='linear_%d' % index
-                )
+                hk.Linear(output_size=dim, with_bias=with_bias, name='linear_%d' % idx)
             )
         self.layers = layers
 
