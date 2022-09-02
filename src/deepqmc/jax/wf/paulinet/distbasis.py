@@ -61,6 +61,14 @@ class DistanceBasis:
             )
         elif self.envelope == 'nocusp':
             envelope = dists**2 * jnp.exp(-dists)
+        elif self.envelope == 'nocusp_smooth_cutoff':
+            f = (
+                lambda x: (x * (self.cutoff - x)) ** 2
+                * jnp.exp(-x / 3)
+                * (x < self.cutoff)
+            )
+            f_max = f(0.5 * (-jnp.sqrt(self.cutoff**2 + 144) + self.cutoff + 12))
+            envelope = f(dists) / f_max
         else:
             raise AssertionError()
         x = envelope[..., None] * jnp.exp(
