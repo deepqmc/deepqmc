@@ -78,7 +78,6 @@ class OmniNet(hk.Module):
         rs_backflow_factory=None,
         *,
         embedding_dim=128,
-        cutoff_distance=10.0,
         occupancy=10,
         gnn_kwargs=None,
         jastrow=True,
