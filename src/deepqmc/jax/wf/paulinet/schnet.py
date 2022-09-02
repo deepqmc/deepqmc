@@ -4,13 +4,7 @@ from jax import ops
 
 from ...hkext import MLP
 from .distbasis import DistanceBasis
-from .graph import (
-    Graph,
-    GraphNodes,
-    MessagePassingLayer,
-    MolecularGraphEdgeBuilder,
-    distance_callback,
-)
+from .graph import Graph, GraphNodes, MessagePassingLayer, MolecularGraphEdgeBuilder
 
 
 class SchNetLayer(MessagePassingLayer):
@@ -22,7 +16,6 @@ class SchNetLayer(MessagePassingLayer):
         embedding_dim,
         kernel_dim,
         dist_feat_dim,
-        distance_basis,
         labels,
         shared_g=False,
         w_subnet=None,
@@ -83,20 +76,11 @@ class SchNetLayer(MessagePassingLayer):
                 for lbl in labels
             }
         )
-        self.distance_basis = distance_basis
         self.labels = labels
         self.shared_g = shared_g
 
     def get_update_edges_fn(self):
-        def update_edges_fn(nodes, edges):
-            return {
-                k: edge._replace(
-                    data={'distances': self.distance_basis(edge.data['distances'])}
-                )
-                for k, edge in edges.items()
-            }
-
-        return update_edges_fn if self.ilayer == 0 else None
+        return None
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes_fn(nodes, edges):
@@ -155,11 +139,25 @@ class SchNet(hk.Module):
         kernel_dim=64,
         n_interactions=3,
         cutoff=10.0,
+        envelope='nocusp',
         layer_kwargs=None,
     ):
         super().__init__('SchNet')
         labels = ['same', 'anti', 'ne']
         self.coords = coords
+        dist_basis = DistanceBasis(dist_feat_dim, cutoff, envelope=envelope)
+
+        def distance_basis_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
+            if len(pos_sender) == 0 or len(pos_receiver) == 0:
+                return {'distances': jnp.zeros_like(sender_idx, pos_sender.dtype)}
+            distances = jnp.sqrt(
+                ((pos_receiver[receiver_idx] - pos_sender[sender_idx]) ** 2).sum(
+                    axis=-1
+                )
+            )
+            distances_expanded = dist_basis(distances)
+            return {'distances': distances_expanded}
+
         self.edge_factory = MolecularGraphEdgeBuilder(
             n_nuc,
             n_up,
@@ -167,7 +165,7 @@ class SchNet(hk.Module):
             coords,
             labels,
             kwargs_by_edge_type={
-                lbl: {'cutoff': cutoff, 'data_callback': distance_callback}
+                lbl: {'cutoff': cutoff, 'data_callback': distance_basis_callback}
                 for lbl in labels
             },
         )
@@ -187,9 +185,6 @@ class SchNet(hk.Module):
                 embedding_dim,
                 kernel_dim,
                 dist_feat_dim,
-                DistanceBasis(dist_feat_dim, cutoff, envelope='nocusp')
-                if i == 0
-                else None,
                 labels,
                 **(layer_kwargs or {}),
             )
