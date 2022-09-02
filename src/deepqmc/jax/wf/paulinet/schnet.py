@@ -38,7 +38,7 @@ class SchNetLayer(MessagePassingLayer):
         def default_subnet_kwargs(n_layers):
             return {
                 'hidden_layers': ('log', n_layers),
-                'bias': 'not_last',
+                'bias': False,
                 'last_linear': True,
             }
 
