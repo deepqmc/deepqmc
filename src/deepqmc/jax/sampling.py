@@ -8,10 +8,6 @@ from deepqmc.jax.jaxext import multinomial_resampling
 __all__ = ()
 
 
-def null_func(state, rng):
-    return state
-
-
 class MetropolisSampler:
     def __init__(
         self,
@@ -22,16 +18,18 @@ class MetropolisSampler:
         n_first_certain=0,
         keep_walker_weights=False,
         resampling_frequency=0,
+        max_age=None,
     ):
         assert keep_walker_weights or not resampling_frequency
         assert not n_first_certain or n_first_certain < decorr
         self.hamil = hamil
-        self.sample_size = 2000
+        self.sample_size = sample_size
         self.target_acceptance = target_acceptance
         self.decorr = decorr
         self.n_first_certain = n_first_certain
         self.resampling_frequency = resampling_frequency
         self.keep_walker_weights = keep_walker_weights
+        self.max_age = max_age
 
     def _update(self, state, wf, wf_state, log_weights=None):
         psi, wf_state = wf(wf_state, state['r'])
@@ -70,6 +68,8 @@ class MetropolisSampler:
             jnp.broadcast_to(jnp.array([accept_all]), log_prob.shape),
             log_prob > jnp.log(jax.random.uniform(rng_acc, log_prob.shape)),
         )
+        if self.max_age:
+            accepted = jnp.logical_or(accepted, self.max_age <= state['age'])
         acceptance = accepted.astype(int).sum() / accepted.shape[0]
         if self.target_acceptance:
             state['tau'] /= self.target_acceptance / jnp.max(

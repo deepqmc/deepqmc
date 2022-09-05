@@ -129,8 +129,6 @@ def fit_wf(
                 func_state=wf_state,
                 batch=(rs, weights),
                 momentum=0,
-                learning_rate=0.05,
-                damping=1.0e-3,
             )
             stats = {
                 'opt/param_norm': opt_stats['param_norm'],
@@ -149,8 +147,13 @@ def fit_wf(
             use_adaptive_learning_rate=False,
             auto_register_kwargs={'graph_patterns': GRAPH_PATTERNS},
             inverse_update_period=1,
-            norm_constraint=1e-3,
+            norm_constraint=3e-3,
             include_norms_in_stats=True,
+            estimation_mode='fisher_exact',
+            num_burnin_steps=0,
+            damping_schedule=lambda s: 1e-3 / (1 + s / 6000),
+            min_damping=1e-4,
+            learning_rate_schedule=lambda s: 1e-1 / (1 + s / 6000),
         )
         opt_state = opt.init(
             params,
