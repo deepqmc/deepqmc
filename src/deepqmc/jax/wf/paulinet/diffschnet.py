@@ -172,9 +172,13 @@ class DiffSchNet(hk.Module):
         n_interactions=3,
         cutoff=10.0,
         layer_kwargs=None,
+        ghost_coords=None,
     ):
         super().__init__('DiffSchNet')
         labels = ['same', 'anti', 'ne']
+        if ghost_coords is not None:
+            n_nuc += len(ghost_coords)
+            coords = jnp.concatenate([coords, jnp.asarray(ghost_coords)])
         self.coords = coords
         self.edge_factory = MolecularGraphEdgeBuilder(
             n_nuc,
@@ -193,8 +197,8 @@ class DiffSchNet(hk.Module):
         self.X = hk.Embed(
             1 if n_up == n_down else 2, embedding_dim, name='ElectronicEmbedding'
         )
-        self.init_nuc = jnp.eye(n_nuc)
-        self.Y = hk.Linear(kernel_dim, with_bias=False, name='NuclearEmbedding')
+        self.nuc_idxs = jnp.arange(n_nuc)
+        self.Y = hk.Embed(n_nuc, kernel_dim, name='NuclearEmbedding')
         self.layers = [
             DiffSchNetLayer(
                 i,
@@ -225,7 +229,7 @@ class DiffSchNet(hk.Module):
         n_occupancies = hk.get_state(
             'n_occupancies', shape=[], dtype=jnp.int32, init=jnp.zeros
         )
-        nuc_embedding = self.Y(self.init_nuc)
+        nuc_embedding = self.Y(self.nuc_idxs)
         elec_embedding = self.X(self.spin_idxs)
         graph_edges, occupancies, n_occupancies = self.edge_factory(
             rs, occupancies, n_occupancies

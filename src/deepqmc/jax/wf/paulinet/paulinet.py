@@ -78,8 +78,12 @@ class PauliNet(WaveFunction):
         n_orbitals = max(sum(confs, [])) + 1
         self.confs = jnp.array(confs)
         self.basis = basis or ExponentialEnvelopes.from_mol(mol)
-        self.mo_coeff = hk.Linear(n_orbitals, with_bias=False, name='mo_coeff')
-        self.conf_coeff = hk.Linear(1, with_bias=False, name='conf_coeff')
+        self.mo_coeff = hk.Linear(
+            n_orbitals, with_bias=False, w_init=jnp.ones, name='mo_coeff'
+        )
+        self.conf_coeff = hk.Linear(
+            1, with_bias=False, w_init=jnp.ones, name='conf_coeff'
+        )
         self.cusp_same, self.cusp_anti = (
             (ElectronicAsymptotic(cusp=cusp, alpha=cusp_alpha) for cusp in (0.25, 0.5))
             if cusp_electrons
