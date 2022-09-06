@@ -142,7 +142,7 @@ class DiffSchNet(hk.Module):
         kernel_dim=128,
         n_interactions=3,
         cutoff=10.0,
-        envelope='nocusp',
+        envelope='nocusp_smooth_cutoff',
         layer_kwargs=None,
         ghost_coords=None,
     ):
