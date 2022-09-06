@@ -3,14 +3,9 @@ import jax.numpy as jnp
 from jax import ops
 
 from ...hkext import MLP
+from ...jaxext import flatten
 from .distbasis import DistanceBasis
-from .graph import (
-    Graph,
-    GraphNodes,
-    MessagePassingLayer,
-    MolecularGraphEdgeBuilder,
-    distance_difference_callback,
-)
+from .graph import Graph, GraphNodes, MessagePassingLayer, MolecularGraphEdgeBuilder
 
 
 class DiffSchNetLayer(MessagePassingLayer):
@@ -22,7 +17,6 @@ class DiffSchNetLayer(MessagePassingLayer):
         embedding_dim,
         kernel_dim,
         dist_feat_dim,
-        distance_basis,
         shared_g=False,
         w_subnet=None,
         h_subnet=None,
@@ -83,40 +77,17 @@ class DiffSchNetLayer(MessagePassingLayer):
                 for lbl in labels
             }
         )
-        self.distance_basis = distance_basis
         self.labels = labels
         self.shared_g = shared_g
 
-    def expand_diffs(self, dists, diffs):
-        diffs_expanded = []
-        for diff in diffs.T:
-            diff_pos = jnp.abs(diff) * (diff > 0)
-            diff_neg = jnp.abs(diff) * (diff < 0)
-            diffs_expanded.append(self.distance_basis(diff_pos))
-            diffs_expanded.append(self.distance_basis(diff_neg))
-        diffs_expanded.append(self.distance_basis(diff))
-        return jnp.concatenate(diffs_expanded, axis=-1)
-
     def get_update_edges_fn(self):
-        def update_edges_fn(nodes, edges):
-            return {
-                k: edge._replace(
-                    data={
-                        'diffs': self.expand_diffs(
-                            edge.data['distances'], edge.data['differences']
-                        )
-                    }
-                )
-                for k, edge in edges.items()
-            }
-
-        return update_edges_fn if self.ilayer == 0 else None
+        return None
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes_fn(nodes, edges):
             n_elec = nodes.electrons.shape[-2]
             we_same, we_anti, we_n = (
-                self.w[lbl](edges[lbl].data['diffs']) for lbl in self.labels
+                self.w[lbl](edges[lbl].data['differences']) for lbl in self.labels
             )
             hx_same, hx_anti = (
                 self.h[lbl](self.spin_idxs if self.ilayer == 0 else nodes.electrons)[
@@ -171,6 +142,7 @@ class DiffSchNet(hk.Module):
         kernel_dim=128,
         n_interactions=3,
         cutoff=10.0,
+        envelope='nocusp',
         layer_kwargs=None,
         ghost_coords=None,
     ):
@@ -180,6 +152,26 @@ class DiffSchNet(hk.Module):
             n_nuc += len(ghost_coords)
             coords = jnp.concatenate([coords, jnp.asarray(ghost_coords)])
         self.coords = coords
+        dist_basis = DistanceBasis(dist_feat_dim, cutoff, envelope=envelope)
+
+        def difference_basis_callback(
+            pos_sender, pos_receiver, sender_idx, receiver_idx
+        ):
+            if len(pos_sender) == 0 or len(pos_receiver) == 0:
+                return {'differences': jnp.zeros_like(sender_idx, pos_sender.dtype)}
+            diffs = pos_receiver[receiver_idx] - pos_sender[sender_idx]
+            dists = (diffs ** 2).sum(axis=-1)
+            concat = jnp.concatenate(
+                [
+                    jnp.abs(diffs) * (diffs > 0),
+                    jnp.abs(diffs) * (diffs < 0),
+                    dists[:, None],
+                ],
+                axis=1,
+            )
+            concat_expanded = flatten(dist_basis(concat), start_axis=1)
+            return {'differences': concat_expanded}
+
         self.edge_factory = MolecularGraphEdgeBuilder(
             n_nuc,
             n_up,
@@ -187,7 +179,7 @@ class DiffSchNet(hk.Module):
             coords,
             labels,
             kwargs_by_edge_type={
-                lbl: {'cutoff': cutoff, 'data_callback': distance_difference_callback}
+                lbl: {'cutoff': cutoff, 'data_callback': difference_basis_callback}
                 for lbl in labels
             },
         )
@@ -207,9 +199,6 @@ class DiffSchNet(hk.Module):
                 embedding_dim,
                 kernel_dim,
                 7 * dist_feat_dim,
-                DistanceBasis(dist_feat_dim, cutoff, envelope='nocusp')
-                if i == 0
-                else None,
                 **(layer_kwargs or {}),
             )
             for i in range(n_interactions)
