@@ -16,11 +16,9 @@ class MetropolisSampler:
         target_acceptance=0.57,
         decorr=20,
         n_first_certain=0,
-        keep_walker_weights=False,
         resampling_frequency=0,
         max_age=None,
     ):
-        assert keep_walker_weights or not resampling_frequency
         assert not n_first_certain or n_first_certain < decorr
         self.hamil = hamil
         self.sample_size = sample_size
@@ -28,12 +26,11 @@ class MetropolisSampler:
         self.decorr = decorr
         self.n_first_certain = n_first_certain
         self.resampling_frequency = resampling_frequency
-        self.keep_walker_weights = keep_walker_weights
         self.max_age = max_age
 
     def _update(self, state, wf, wf_state, log_weights=None):
         psi, wf_state = wf(wf_state, state['r'])
-        if self.keep_walker_weights and log_weights is not None:
+        if log_weights is not None:
             state['log_weights'] = log_weights + 2 * (psi.log - state['psi'].log)
         state = {**state, 'psi': psi, 'wf_state': wf_state}
         return state
@@ -111,7 +108,12 @@ class MetropolisSampler:
 
     def sample(self, state, rng, wf):
         state['step'] = state['step'] + 1
-        self._update(state, wf, state['wf_state'], state['log_weights'])
+        self._update(
+            state,
+            wf,
+            state['wf_state'],
+            state['log_weights'] if self.resampling_frequency else None,
+        )
         if self.resampling_frequency:
             state = jax.lax.cond(
                 self.resampling_frequency <= state['step'],
