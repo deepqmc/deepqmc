@@ -38,7 +38,7 @@ class MetropolisSampler:
         state = {**state, 'psi': psi, 'wf_state': wf_state}
         return state
 
-    def init(self, rng, wf, wf_state, tau=0.1):
+    def init(self, rng, wf, wf_state, tau):
         state = {
             'step': jnp.array(0),
             'tau': jnp.array(tau),
@@ -145,6 +145,8 @@ def init_sampling(
     ansatz,
     state_callback,
     *,
+    params=None,
+    tau=0.1,
     sampler=MetropolisSampler,
     sampler_kwargs=None,
 ):
@@ -152,17 +154,18 @@ def init_sampling(
 
     rng_hamil, rng_ansatz, rng_smpl = jax.random.split(rng, 3)
     init_smpl = hamil.init_sample(rng_hamil, sampler.sample_size)
-    params, wf_state = jax.vmap(ansatz.init, (None, 0), (None, 0))(
+    maybe_params, wf_state = jax.vmap(ansatz.init, (None, 0), (None, 0))(
         rng_ansatz, init_smpl
     )
+    params = params or maybe_params
     wf = jax.vmap(ansatz.apply, (None, 0, 0))
     init_wf = partial(wf, params)
 
-    smpl_state = sampler.init(rng_smpl, init_wf, wf_state)
+    smpl_state = sampler.init(rng_smpl, init_wf, wf_state, tau)
     if state_callback:
         wf_state, overflow = state_callback(smpl_state['wf_state'])
         if overflow:
-            smpl_state = sampler.init(rng_smpl, init_wf, wf_state)
+            smpl_state = sampler.init(rng_smpl, init_wf, wf_state, tau)
 
     @jax.jit
     def sample_wf(rng, params, smpl_state):

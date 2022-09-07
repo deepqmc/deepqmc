@@ -4,13 +4,13 @@ import pickle
 from collections import namedtuple
 from pathlib import Path
 
-import haiku as hk
 import jax
 import numpy as np
 import tensorboard.summary
 from tqdm.auto import tqdm
 from uncertainties import ufloat
 
+from .equilibrate import equilibrate
 from .ewm import ewm
 from .fit import fit_wf
 from .sampling import init_sampling
@@ -53,23 +53,17 @@ def train(
     log.info(f'Number of model parameters: {num_params}')
 
     if steps_eq:
-        log.info('Start equilibrating')
-        rng, rng_eq = jax.random.split(rng, 2)
-        eq_pbar = tqdm(range(steps_eq), desc='equilibrate', disable=None)
-        wf = jax.vmap(ansatz.apply, (None, 0, 0))
-        for step, rng_eq in zip(eq_pbar, hk.PRNGSequence(rng_eq)):
-            smpl_state, eq_stats = equilibration_step(
-                rng_eq,
-                wf,
-                params,
-                sample_wf,
-                smpl_state,
-                state_callback,
-            )
-            eq_pbar.set_postfix(tau=f'{smpl_state["tau"].item():5.3f}')
-            if workdir:
-                for k, v in eq_stats.items():
-                    writer.add_scalar(f'equilibrate/{k}', v.item(), step)
+        rng, rng_eq = jax.random.split(rng)
+        smpl_state = equilibrate(
+            rng_eq,
+            ansatz,
+            sample_wf,
+            params,
+            smpl_state,
+            steps=steps_eq,
+            writer=writer if workdir else None,
+            state_callback=state_callback,
+        )
 
     log.info('Start training')
     pbar = tqdm(range(steps), desc='train', disable=None)
@@ -103,18 +97,6 @@ def train(
             for k, v in stats.items():
                 writer.add_scalar(k, v, step)
     return train_state, np.array(enes)
-
-
-def equilibration_step(rng, wf, params, sample_wf, smpl_state, state_callback):
-    _, new_smpl_state, smpl_stats = sample_wf(rng, params, smpl_state)
-    if state_callback:
-        state, overflow = state_callback(new_smpl_state['wf_state'])
-        if overflow:
-            smpl_state['wf_state'] = state
-            _, new_smpl_state, smpl_stats = sample_wf(rng, params, smpl_state)
-    smpl_state = new_smpl_state
-
-    return smpl_state, smpl_stats
 
 
 Checkpoint = namedtuple('Checkpoint', 'step loss path')
