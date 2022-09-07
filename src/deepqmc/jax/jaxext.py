@@ -1,5 +1,6 @@
 import jax.numpy as jnp
 from jax.random import uniform
+from jax.scipy.special import gammaln
 
 
 def flatten(x, start_axis=0):
@@ -21,3 +22,12 @@ def multinomial_resampling(rng, weights, n_samples=None):
     i, j = jnp.triu_indices(n)
     weights_cum = jnp.zeros((n, n)).at[i, j].set(weights_normalized[j]).sum(axis=-1)
     return n - (uniform(rng, (n_samples,))[:, None] > weights_cum).sum(axis=-1)
+
+
+def factorial2(n):
+    n = jnp.asarray(n)
+    gamma = jnp.exp(gammaln(n / 2 + 1))
+    factor = jnp.where(
+        n % 2, jnp.power(2, n / 2 + 0.5) / jnp.sqrt(jnp.pi), jnp.power(2, n / 2)
+    )
+    return factor * gamma
