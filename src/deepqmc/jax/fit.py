@@ -23,9 +23,9 @@ def log_squeeze(x):
 
 
 def median_log_squeeze(x, width, quantile):
-    x_median = jnp.median(x)
+    x_median = jnp.nanmedian(x)
     x_diff = x - x_median
-    quantile = jnp.quantile(jnp.abs(x_diff), quantile)
+    quantile = jnp.nanquantile(jnp.abs(x_diff), quantile)
     width = width * quantile
     return (
         x_median + 2 * width * log_squeeze(x_diff / (2 * width)),
@@ -55,13 +55,13 @@ def fit_wf(
         rs, weights = batch
         wf = lambda state, rs: ansatz.apply(params, state, rs)[0].log
         E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(state, rs)
-        loss = jnp.mean(E_loc * weights)
+        loss = jnp.nanmean(E_loc * weights)
         stats = {
-            'E_loc/mean': jnp.mean(E_loc),
-            'E_loc/std': jnp.std(E_loc),
-            'E_loc/max': jnp.max(E_loc),
-            'E_loc/min': jnp.min(E_loc),
-            **jax.tree_util.tree_map(jnp.mean, hamil_stats),
+            'E_loc/mean': jnp.nanmean(E_loc),
+            'E_loc/std': jnp.nanstd(E_loc),
+            'E_loc/max': jnp.nanmax(E_loc),
+            'E_loc/min': jnp.nanmin(E_loc),
+            **jax.tree_util.tree_map(jnp.nanmean, hamil_stats),
         }
         return loss, (state, (E_loc, stats))
 
