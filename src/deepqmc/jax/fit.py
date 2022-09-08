@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import kfac_jax
 import optax
 
+from .errors import NanError
 from .kfacext import GRAPH_PATTERNS
 from .utils import exp_normalize_mean, masked_mean
 
@@ -166,6 +167,8 @@ def fit_wf(
         new_params, new_opt_state, new_smpl_state, stats = train_step(
             rng, params, opt_state, smpl_state
         )
+        if jnp.isnan(new_smpl_state['psi'].log).any():
+            raise NanError()
         if state_callback:
             state, overflow = state_callback(new_smpl_state['wf_state'])
             if overflow:
