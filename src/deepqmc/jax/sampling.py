@@ -3,7 +3,7 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 
-from deepqmc.jax.jaxext import multinomial_resampling
+from .jaxext import multinomial_resampling
 
 __all__ = ()
 
