@@ -4,11 +4,10 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 
-from deepqmc.jax.utils import pairwise_diffs, pairwise_self_distance, triu_flat
-from deepqmc.jax.wf.base import WaveFunction
-
 from ...jaxext import flatten, unflatten
 from ...types import Psi
+from ...utils import pairwise_diffs, pairwise_self_distance, triu_flat
+from ..base import WaveFunction
 from .cusp import ElectronicAsymptotic
 from .env import ExponentialEnvelopes
 from .omni import OmniNet
