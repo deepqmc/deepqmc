@@ -93,6 +93,7 @@ class OmniNet(hk.Module):
         if jastrow or backflow or rs_backflow:
             if gnn_factory is None:
                 gnn_factory = SchNet
+            gnn_kwargs.setdefault('Z', mol.charges)
             self.gnn = gnn_factory(
                 len(mol.coords),
                 mol.n_up,

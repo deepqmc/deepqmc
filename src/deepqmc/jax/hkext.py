@@ -17,6 +17,7 @@ class MLP(hk.Module):
         last_linear=False,
         activation=SSP,
         name=None,
+        w_init=None,
     ):
         super().__init__(name=name)
         self.activation = activation
@@ -32,7 +33,16 @@ class MLP(hk.Module):
         for idx, dim in enumerate(dims):
             with_bias = bias == 'all' or (bias == 'not_last' and idx < (len(dims) - 1))
             layers.append(
-                hk.Linear(output_size=dim, with_bias=with_bias, name='linear_%d' % idx)
+                hk.Linear(
+                    output_size=dim,
+                    with_bias=with_bias,
+                    name='linear_%d' % idx,
+                    w_init=w_init,
+                )
+                if w_init
+                else hk.Linear(
+                    output_size=dim, with_bias=with_bias, name='linear_%d' % idx
+                )
             )
         self.layers = layers
 
