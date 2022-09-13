@@ -4,7 +4,9 @@ import jax
 import jax.numpy as jnp
 
 from .jaxext import multinomial_resampling
+import jax
 from .utils import pairwise_diffs
+from .utils import pairwise_self_distance
 
 __all__ = ()
 
@@ -96,6 +98,7 @@ class MetropolisSampler:
             'sampling/log_psi/mean': jnp.mean(state['psi'].log),
             'sampling/log_psi/std': jnp.std(state['psi'].log),
             'sampling/effective sample size': ess,
+            'sampling/dists/mean': jnp.mean(pairwise_self_distance(state['r'])),
         }
         return state['r'], state, stats
 
