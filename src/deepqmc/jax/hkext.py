@@ -1,5 +1,6 @@
 import haiku as hk
 import jax.numpy as jnp
+from haiku.initializers import VarianceScaling
 from jax.nn import softplus
 
 
@@ -17,11 +18,15 @@ class MLP(hk.Module):
         last_linear=False,
         activation=SSP,
         name=None,
-        w_init=None,
+        w_init='default',
     ):
         super().__init__(name=name)
         self.activation = activation
         self.last_linear = last_linear
+        w_init = {
+            'deeperwin': VarianceScaling(1.0, 'fan_avg', 'uniform'),
+            'default': VarianceScaling(1.0, 'fan_in', 'truncated_normal'),
+        }[w_init]
         hidden_layers = hidden_layers or []
         if len(hidden_layers) == 2 and hidden_layers[0] == 'log':
             n_hidden = hidden_layers[1]
@@ -38,10 +43,6 @@ class MLP(hk.Module):
                     with_bias=with_bias,
                     name='linear_%d' % idx,
                     w_init=w_init,
-                )
-                if w_init
-                else hk.Linear(
-                    output_size=dim, with_bias=with_bias, name='linear_%d' % idx
                 )
             )
         self.layers = layers
