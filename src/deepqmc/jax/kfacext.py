@@ -28,7 +28,6 @@ class DenseBlock(kfac_jax.DenseTwoKroneckerFactored):
         if not kfac_jax.utils.first_dim_is_size(batch_size, x, dy):
             log.debug("Input of dense block doesn't have first dim of batch_size")
             log.debug(f"It's shape is {x.shape}, expanding to {(batch_size, *x.shape)}")
-            assert not self.has_bias
             x, dy = (
                 jnp.tile(a[None], (batch_size, *(1 for _ in a.shape))).reshape(
                     (-1, a.shape[-1])
