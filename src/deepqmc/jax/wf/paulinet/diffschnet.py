@@ -3,7 +3,6 @@ import jax.numpy as jnp
 from jax import ops
 
 from ...hkext import MLP
-from ...jaxext import flatten
 from .distbasis import DistanceBasis
 from .graph import Graph, GraphNodes, MessagePassingLayer, MolecularGraphEdgeBuilder
 
@@ -22,9 +21,9 @@ class DiffSchNetLayer(MessagePassingLayer):
         h_subnet=None,
         g_subnet=None,
         *,
-        n_layers_w=2,
-        n_layers_h=1,
-        n_layers_g=1,
+        n_layers_w=3,
+        n_layers_h=3,
+        n_layers_g=2,
     ):
         super().__init__('DiffSchNetLayer', ilayer)
 
@@ -40,6 +39,7 @@ class DiffSchNetLayer(MessagePassingLayer):
             lbl: MLP(
                 dist_feat_dim,
                 kernel_dim,
+                activation=jnp.tanh,
                 name=f'w_{lbl}',
                 **(w_subnet or default_subnet_kwargs(n_layers_w)),
             )
@@ -54,6 +54,7 @@ class DiffSchNetLayer(MessagePassingLayer):
             else MLP(
                 embedding_dim,
                 kernel_dim,
+                activation=jnp.tanh,
                 name=f'h_{lbl}',
                 **(h_subnet or default_subnet_kwargs(n_layers_h)),
             )
@@ -63,6 +64,7 @@ class DiffSchNetLayer(MessagePassingLayer):
             MLP(
                 kernel_dim,
                 embedding_dim,
+                activation=jnp.tanh,
                 name='g',
                 **(g_subnet or default_subnet_kwargs(n_layers_g)),
             )
@@ -71,12 +73,14 @@ class DiffSchNetLayer(MessagePassingLayer):
                 lbl: MLP(
                     kernel_dim,
                     embedding_dim,
+                    activation=jnp.tanh,
                     name=f'g_{lbl}',
                     **(g_subnet or default_subnet_kwargs(n_layers_g)),
                 )
                 for lbl in labels
             }
         )
+        self.residual = hk.Linear(1, with_bias=False, w_init=jnp.ones, name='residual')
         self.labels = labels
         self.shared_g = shared_g
 
@@ -87,7 +91,7 @@ class DiffSchNetLayer(MessagePassingLayer):
         def aggregate_edges_for_nodes_fn(nodes, edges):
             n_elec = nodes.electrons.shape[-2]
             we_same, we_anti, we_n = (
-                self.w[lbl](edges[lbl].data['differences']) for lbl in self.labels
+                self.w[lbl](edges[lbl].data['features']) for lbl in self.labels
             )
             hx_same, hx_anti = (
                 self.h[lbl](self.spin_idxs if self.ilayer == 0 else nodes.electrons)[
@@ -118,12 +122,17 @@ class DiffSchNetLayer(MessagePassingLayer):
     def get_update_nodes_fn(self):
         def update_nodes_fn(nodes, z):
             updated_nodes = nodes._replace(
-                electrons=nodes.electrons
-                + (
-                    (self.g if self.shared_g else self.g['ne'])(z['ne'])
-                    + (self.g if self.shared_g else self.g['same'])(z['same'])
-                    + (self.g if self.shared_g else self.g['anti'])(z['anti'])
-                )
+                electrons=self.residual(
+                    jnp.stack(
+                        (
+                            nodes.electrons,
+                            (self.g if self.shared_g else self.g['ne'])(z['ne']),
+                            (self.g if self.shared_g else self.g['same'])(z['same']),
+                            (self.g if self.shared_g else self.g['anti'])(z['anti']),
+                        ),
+                        axis=-1,
+                    )
+                ).squeeze()
             )
             return updated_nodes
 
@@ -142,8 +151,7 @@ class DiffSchNet(hk.Module):
         kernel_dim=128,
         n_interactions=3,
         cutoff=10.0,
-        envelope='nocusp_smooth_cutoff',
-        #  envelope='some_cusp',
+        envelope=None,
         layer_kwargs=None,
         ghost_coords=None,
     ):
@@ -153,25 +161,17 @@ class DiffSchNet(hk.Module):
             n_nuc += len(ghost_coords)
             coords = jnp.concatenate([coords, jnp.asarray(ghost_coords)])
         self.coords = coords
-        dist_basis = DistanceBasis(dist_feat_dim, cutoff, envelope=envelope)
+        dist_basis = DistanceBasis(
+            dist_feat_dim, cutoff, powers=[1], envelope=envelope, offset=False
+        )
 
         def difference_basis_callback(
             pos_sender, pos_receiver, sender_idx, receiver_idx
         ):
-            if len(pos_sender) == 0 or len(pos_receiver) == 0:
-                return {'differences': jnp.zeros_like(sender_idx, pos_sender.dtype)}
-            diffs = pos_receiver[receiver_idx] - pos_sender[sender_idx]
-            dists = (diffs ** 2).sum(axis=-1)
-            concat = jnp.concatenate(
-                [
-                    jnp.abs(diffs) * (diffs > 0),
-                    jnp.abs(diffs) * (diffs < 0),
-                    dists[:, None],
-                ],
-                axis=1,
-            )
-            concat_expanded = flatten(dist_basis(concat), start_axis=1)
-            return {'differences': concat_expanded}
+            differences = pos_receiver[receiver_idx] - pos_sender[sender_idx]
+            distances = jnp.linalg.norm(differences, axis=-1)
+            features = [dist_basis(distances), differences]
+            return {'features': jnp.concatenate(features, axis=-1)}
 
         self.edge_factory = MolecularGraphEdgeBuilder(
             n_nuc,
