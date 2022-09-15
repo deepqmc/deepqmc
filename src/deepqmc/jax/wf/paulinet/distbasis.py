@@ -26,7 +26,7 @@ class DistanceBasis:
         self,
         dist_feat_dim,
         cutoff=10.0,
-        envelope='physnet',
+        envelope=None,
         smooth=None,
         offset=True,
         powers=None,
@@ -52,7 +52,9 @@ class DistanceBasis:
             dists = dists + 1 / self.smooth * jnp.log(
                 1 + jnp.exp(-2 * self.smooth * dists)
             )
-        if self.envelope == 'physnet':
+        if self.envelope is None:
+            envelope = jnp.ones_like(dists)
+        elif self.envelope == 'physnet':
             dists_rel = dists / self.cutoff
             envelope = jnp.where(
                 dists_rel > 1,
