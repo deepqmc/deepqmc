@@ -21,7 +21,7 @@ def multinomial_resampling(rng, weights, n_samples=None):
     weights_normalized = weights / jnp.sum(weights)
     i, j = jnp.triu_indices(n)
     weights_cum = jnp.zeros((n, n)).at[i, j].set(weights_normalized[j]).sum(axis=-1)
-    return n - (uniform(rng, (n_samples,))[:, None] > weights_cum).sum(axis=-1)
+    return n - 1 - (uniform(rng, (n_samples,))[:, None] > weights_cum).sum(axis=-1)
 
 
 def factorial2(n):
