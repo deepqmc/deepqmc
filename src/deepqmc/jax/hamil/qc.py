@@ -57,6 +57,3 @@ class MolecularHamiltonian:
             return result, stats
 
         return loc_ene
-
-    def stats(self, r):
-        return {}

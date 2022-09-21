@@ -81,7 +81,6 @@ def train(
     ):
         stats = {
             **fit_stats,
-            **hamil.stats(train_state.sampler['r']),
         }
         ewm_state = ewm(stats['E_loc/mean'], ewm_state)
         ene = ufloat(ewm_state.mean, np.sqrt(ewm_state.sqerr))
