@@ -67,7 +67,7 @@ def train(
 
     log.info('Start training')
     pbar = tqdm(range(steps), desc='train', disable=None)
-    enes, best_ene = [], None
+    enes = []
     for step, train_state, fit_stats in fit_wf(  # noqa: B007
         rng,
         hamil,
@@ -88,9 +88,7 @@ def train(
         enes.append(ene)
         if ene.s:
             pbar.set_postfix(E=f'{ene:S}')
-            if best_ene is None or ene.n < best_ene.n - 3 * ene.s:
-                best_ene = ene
-                log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
+            log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
         if workdir:
             chkpts.update(stats['E_loc/std'], train_state)
             writer.add_scalar('energy/ewm', ene.n, step)
