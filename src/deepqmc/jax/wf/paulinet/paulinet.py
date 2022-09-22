@@ -187,14 +187,19 @@ class PauliNet(WaveFunction):
         return Psi(sign_psi.squeeze(), log_psi.squeeze())
 
 
-def state_callback(state):
+def state_callback(state, batch_dim=True):
     if not state:
         return state, False
     key = list(state.keys())[0]
     occupancies = state[key]['occupancies']
     n_occupancies = state[key]['n_occupancies']
-    # Aggregate within batch
-    new_shape = jax.tree_util.tree_map(lambda x: jax.numpy.max(x, axis=0), occupancies)
+    if batch_dim:
+        # Aggregate within batch
+        new_shape = jax.tree_util.tree_map(
+            lambda x: jax.numpy.max(x, axis=0), occupancies
+        )
+    else:
+        new_shape = occupancies
     # Aggregate over batches
     new_shape = jax.tree_util.tree_map(
         lambda x: jax.numpy.max(x, axis=-1).item(), new_shape

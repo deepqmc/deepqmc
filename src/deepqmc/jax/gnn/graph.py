@@ -1,10 +1,9 @@
 from collections import namedtuple
 
-import haiku as hk
 import jax.numpy as jnp
 from jax.tree_util import tree_map, tree_structure, tree_transpose
 
-GraphEdges = namedtuple('GraphEdges', 'senders receivers data')
+GraphEdges = namedtuple('GraphEdges', 'senders receivers features')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
 
@@ -29,8 +28,28 @@ def prune_graph_edges(
     occupancy_limit,
     offsets,
     mask_vals,
-    data_callback,
+    feature_callback,
 ):
+    def apply_callback(pos_sender, pos2, sender_idx, receiver_idx):
+        return (
+            feature_callback(pos_sender, pos2, sender_idx, receiver_idx)
+            if feature_callback
+            else {}
+        )
+
+    if pos_sender.shape[0] == 0 or pos_receiver.shape[0] == 0:
+        ones = jnp.ones(occupancy_limit, idx.dtype)
+        sender_idx = offsets[0] * ones
+        receiver_idx = offsets[1] * ones
+        return (
+            GraphEdges(
+                sender_idx,
+                receiver_idx,
+                apply_callback(pos_sender, pos_receiver, sender_idx, receiver_idx),
+            ),
+            jnp.array(0),
+        )
+
     def dist(sender, receiver):
         return jnp.sqrt(((receiver - sender) ** 2).sum(axis=-1))
 
@@ -55,51 +74,21 @@ def prune_graph_edges(
     sender_idx = out_sender_idx.at[index].set(sender_idx)[:occupancy_limit]
     receiver_idx = out_receiver_idx.at[index].set(receiver_idx)[:occupancy_limit]
 
-    data = (
-        data_callback(pos_sender, pos_receiver, sender_idx, receiver_idx)
-        if data_callback
-        else {}
-    )
+    features = apply_callback(pos_sender, pos_receiver, sender_idx, receiver_idx)
 
     return (
-        GraphEdges(sender_idx + offsets[0], receiver_idx + offsets[1], data),
+        GraphEdges(sender_idx + offsets[0], receiver_idx + offsets[1], features),
         occupancy,
     )
 
 
-def distance_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
-    if len(pos_sender) == 0 or len(pos_receiver) == 0:
-        return {'distances': jnp.zeros_like(sender_idx, pos_sender.dtype)}
-    distances = jnp.sqrt(
-        ((pos_receiver[receiver_idx] - pos_sender[sender_idx]) ** 2).sum(axis=-1)
-    )
-    return {'distances': distances}
-
-
-def distance_difference_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
+def difference_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
     if len(pos_sender) == 0 or len(pos_receiver) == 0:
         return {
-            'distances': jnp.zeros_like(sender_idx, pos_sender.dtype),
-            'differences': jnp.zeros((len(sender_idx), 3)),
+            'diffs': jnp.zeros((len(sender_idx), 3)),
         }
-    differences = pos_receiver[receiver_idx] - pos_sender[sender_idx]
-    distances = jnp.sqrt((differences**2).sum(axis=-1))
-    return {'distances': distances, 'differences': differences}
-
-
-def distance_direction_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
-    if len(pos_sender) == 0 or len(pos_receiver) == 0:
-        return {
-            'distances': jnp.zeros_like(sender_idx, pos_sender.dtype),
-            'directions': jnp.zeros((len(sender_idx), 3)),
-        }
-    eps = jnp.finfo(pos_sender.dtype).eps
-    differences = pos_receiver[receiver_idx] - pos_sender[sender_idx]
-    distances = jnp.sqrt((differences**2).sum(axis=-1))
-    directions = differences / jnp.where(
-        distances[..., None] > eps, distances[..., None], eps
-    )
-    return {'distances': distances, 'directions': directions}
+    diffs = pos_receiver[receiver_idx] - pos_sender[sender_idx]
+    return diffs
 
 
 def GraphEdgeBuilder(
@@ -107,44 +96,30 @@ def GraphEdgeBuilder(
     mask_self,
     offsets,
     mask_vals,
-    data_callback=None,
+    feature_callback,
 ):
-    def build(pos1, pos2, occupancies, n_occupancies):
-        assert pos1.shape[-1] == 3 and pos2.shape[-1] == 3
-        assert len(pos1.shape) == 2
-        assert not mask_self or pos1.shape[0] == pos2.shape[0]
+    def build(pos_sender, pos_receiver, occupancies, n_occupancies):
+        assert pos_sender.shape[-1] == 3 and pos_receiver.shape[-1] == 3
+        assert len(pos_sender.shape) == 2
+        assert not mask_self or pos_sender.shape[0] == pos_receiver.shape[0]
 
         occupancy_limit = occupancies.shape[0]
-        if pos1.shape[0] == 0 or pos2.shape[0] == 0:
-            ones = jnp.ones_like(occupancies)
-            sender_idx = offsets[0] * ones
-            receiver_idx = offsets[1] * ones
-            return (
-                GraphEdges(
-                    sender_idx,
-                    receiver_idx,
-                    data_callback(pos1, pos2, sender_idx, receiver_idx)
-                    if data_callback
-                    else {},
-                ),
-                occupancies.at[1:].set(occupancies[:-1]).at[0].set(0),
-                n_occupancies + 1,
-            )
 
-        edges_idx = all_graph_edges(pos1, pos2)
+        edges_idx = all_graph_edges(pos_sender, pos_receiver)
+
         if mask_self:
             edges_idx = mask_self_edges(edges_idx)
-
         edges, occupancy = prune_graph_edges(
-            pos1,
-            pos2,
+            pos_sender,
+            pos_receiver,
             cutoff,
             edges_idx,
             occupancy_limit,
             offsets,
             mask_vals,
-            data_callback,
+            feature_callback,
         )
+
         return (
             edges,
             occupancies.at[1:].set(occupancies[:-1]).at[0].set(occupancy),
@@ -169,7 +144,7 @@ def concatenate_edges(edges_and_occs):
 
 
 def MolecularGraphEdgeBuilder(
-    n_nuc, n_up, n_down, coords, edge_types, kwargs_by_edge_type=None
+    n_nuc, n_up, n_down, nuc_coords, edge_types, kwargs_by_edge_type=None
 ):
     n_elec = n_up + n_down
     builder_mapping = {
@@ -239,10 +214,10 @@ def MolecularGraphEdgeBuilder(
 
     build_rules = {
         'nn': lambda r, occs, n_occs: builders['nn'](
-            coords, coords, occs['nn'], n_occs
+            nuc_coords, nuc_coords, occs['nn'], n_occs
         ),
-        'ne': lambda r, occs, n_occs: builders['ne'](coords, r, occs['ne'], n_occs),
-        'en': lambda r, occs, n_occs: builders['en'](r, coords, occs['en'], n_occs),
+        'ne': lambda r, occs, n_occs: builders['ne'](nuc_coords, r, occs['ne'], n_occs),
+        'en': lambda r, occs, n_occs: builders['en'](r, nuc_coords, occs['en'], n_occs),
         'same': build_same,
         'anti': build_anti,
     }
@@ -267,7 +242,7 @@ def GraphUpdate(
     update_nodes_fn=None,
     update_edges_fn=None,
 ):
-    def _update(graph):
+    def update_graph(graph):
         nodes, edges = graph
 
         if update_edges_fn:
@@ -279,27 +254,4 @@ def GraphUpdate(
 
         return Graph(nodes, edges)
 
-    return _update
-
-
-class MessagePassingLayer(hk.Module):
-    def __init__(self, name, ilayer):
-        super().__init__(f'{name}_{ilayer}')
-        self.ilayer = ilayer
-        self.update_graph = GraphUpdate(
-            update_nodes_fn=self.get_update_nodes_fn(),
-            update_edges_fn=self.get_update_edges_fn(),
-            aggregate_edges_for_nodes_fn=self.get_aggregate_edges_for_nodes_fn(),
-        )
-
-    def __call__(self, graph):
-        return self.update_graph(graph)
-
-    def get_update_edges_fn(self):
-        pass
-
-    def get_update_nodes_fn(self):
-        pass
-
-    def get_aggregate_edges_for_nodes_fn(self):
-        pass
+    return update_graph

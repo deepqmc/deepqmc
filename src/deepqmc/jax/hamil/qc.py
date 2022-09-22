@@ -20,7 +20,7 @@ def laplacian_flat(f):
 class MolecularHamiltonian:
     def __init__(self, mol):
         self.mol = mol
-        _, *n_elecs = mol.n_particles()
+        _, *n_elecs = mol.n_particles
         self.dim = (sum(n_elecs), 3)
 
     def init_sample(self, rng, n, elec_std=1.0):

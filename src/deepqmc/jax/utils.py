@@ -55,7 +55,10 @@ def tree_norm(x):
     return jax.tree_util.tree_reduce(lambda norm, x: norm + jnp.linalg.norm(x), x, 0)
 
 
-@jax.jit
-@jax.vmap
-def vec_where(cond, x, y):
-    return jnp.where(cond, x, y)
+def norm(rs, safe=False, axis=-1):
+    eps = jnp.finfo(rs.dtype).eps
+    return (
+        jnp.sqrt(eps + (rs * rs).sum(axis=axis))
+        if safe
+        else jnp.linalg.norm(rs, axis=axis)
+    )
