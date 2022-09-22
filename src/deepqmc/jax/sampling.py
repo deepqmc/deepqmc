@@ -1,4 +1,6 @@
+import logging
 from functools import partial
+from operator import add
 
 import jax
 import jax.numpy as jnp
@@ -7,6 +9,8 @@ from .physics import pairwise_diffs, pairwise_self_distance
 from .utils import multinomial_resampling
 
 __all__ = ()
+
+log = logging.getLogger(__name__)
 
 
 class MetropolisSampler:
@@ -230,8 +234,12 @@ def init_sampling(
         rng_ansatz, init_smpl
     )
     params = params or maybe_params
-    wf = partial(ansatz.apply, params)
+    n_params = jax.tree_util.tree_reduce(
+        add, jax.tree_util.tree_map(lambda x: x.size, params)
+    )
+    log.info(f'Number of WF parameters: {n_params}')
 
+    wf = partial(ansatz.apply, params)
     smpl_state = sampler.init(rng_smpl, wf, wf_state)
     if state_callback:
         wf_state, overflow = state_callback(smpl_state['wf_state'])

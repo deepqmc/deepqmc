@@ -3,9 +3,9 @@ from functools import partial
 import haiku as hk
 import jax.numpy as jnp
 
+from ...gnn import SchNet
 from ...hkext import MLP, SSP
 from ...utils import unflatten
-from .schnet import SchNet
 
 
 class Jastrow(hk.Module):
@@ -93,12 +93,8 @@ class OmniNet(hk.Module):
         if jastrow or backflow or rs_backflow:
             if gnn_factory is None:
                 gnn_factory = SchNet
-            gnn_kwargs.setdefault('Z', mol.charges)
             self.gnn = gnn_factory(
-                len(mol.coords),
-                mol.n_up,
-                mol.n_down,
-                mol.coords,
+                mol,
                 embedding_dim,
                 **(gnn_kwargs or {}),
             )

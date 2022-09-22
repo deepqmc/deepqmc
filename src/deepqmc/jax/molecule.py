@@ -69,12 +69,9 @@ class Molecule:
     def as_pyscf(self):
         return [(int(charge), coord) for coord, charge in self]
 
+    @property
     def n_particles(self):
         """Returns the number of nuclei, spin-up, and spin-down electrons
         of the molecule.
         """
-        n_nuclei = len(self.charges)
-        n_elec = int(self.charges.sum()) - self.charge
-        n_up = (n_elec + self.spin) // 2
-        n_down = n_elec - n_up
-        return n_nuclei, n_up, n_down
+        return (len(self), self.n_up, self.n_down)
