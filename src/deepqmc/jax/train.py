@@ -5,13 +5,11 @@ from collections import namedtuple
 from pathlib import Path
 
 import jax
-import numpy as np
 import tensorboard.summary
 from tqdm.auto import tqdm
 from uncertainties import ufloat
 
 from .equilibrate import equilibrate
-from .ewm import ewm
 from .fit import fit_wf
 from .sampling import init_sampling
 
@@ -37,7 +35,6 @@ def train(
     state_callback=None,
     **kwargs,
 ):
-    ewm_state = ewm()
     rng = jax.random.PRNGKey(seed)
     rng, rng_init = jax.random.split(rng)
     params, smpl_state, sample_wf = init_sampling(
@@ -67,33 +64,30 @@ def train(
 
     log.info('Start training')
     pbar = tqdm(range(steps), desc='train', disable=None)
-    enes = []
-    for step, train_state, fit_stats in fit_wf(  # noqa: B007
-        rng,
-        hamil,
-        ansatz,
-        params,
-        opt,
-        sample_wf,
-        smpl_state,
-        pbar,
-        **kwargs,
-    ):
-        stats = {
-            **fit_stats,
-        }
-        ewm_state = ewm(stats['E_loc/mean'], ewm_state)
-        ene = ufloat(ewm_state.mean, np.sqrt(ewm_state.sqerr))
-        enes.append(ene)
-        if ene.s:
-            pbar.set_postfix(E=f'{ene:S}')
-            log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
+    try:
+        for step, train_state, fit_stats in fit_wf(  # noqa: B007
+            rng,
+            hamil,
+            ansatz,
+            params,
+            opt,
+            sample_wf,
+            smpl_state,
+            pbar,
+        ):
+            ene = ufloat(fit_stats['energy/ewm'], fit_stats['energy/ewm_error'])
+            if ene.s:
+                pbar.set_postfix(E=f'{ene:S}')
+                log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
+            if workdir:
+                chkpts.update(fit_stats['E_loc/std'], train_state)
+                for k, v in fit_stats.items():
+                    writer.add_scalar(k, v, step)
+        return train_state
+    finally:
+        pbar.close()
         if workdir:
-            chkpts.update(stats['E_loc/std'], train_state)
-            writer.add_scalar('energy/ewm', ene.n, step)
-            for k, v in stats.items():
-                writer.add_scalar(k, v, step)
-    return train_state, np.array(enes)
+            writer.close()
 
 
 Checkpoint = namedtuple('Checkpoint', 'step loss path')
