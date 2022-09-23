@@ -51,18 +51,7 @@ def evaluate(
         h5file.flush()
         log.debug('Done')
 
-    if steps_eq:
-        rng, rng_eq = jax.random.split(rng)
-        smpl_state = equilibrate(
-            rng_eq,
-            ansatz,
-            sample_wf,
-            params,
-            smpl_state,
-            steps=steps_eq,
-            writer=writer if workdir else None,
-            state_callback=state_callback,
-        )
+    wf = lambda state, rs: ansatz.apply(params, state, rs)[0].log
 
     @jax.jit
     def eval_step(rng, smpl_state):
@@ -80,11 +69,28 @@ def evaluate(
         }
         return smpl_state, stats, E_loc
 
-    log.info('Start evaluating')
-    pbar = tqdm(range(steps), desc='evaluate', disable=None)
-    wf = lambda state, rs: ansatz.apply(params, state, rs)[0].log
-    enes = []
     try:
+        if steps_eq:
+            log.info('Equilibrating...')
+            rng, rng_eq = jax.random.split(rng)
+            pbar = tqdm(range(steps_eq), desc='equilibrate', disable=None)
+            for step, smpl_state, smpl_stats in equilibrate(
+                rng_eq,
+                ansatz,
+                sample_wf,
+                params,
+                smpl_state,
+                pbar,
+                state_callback=state_callback,
+            ):
+                if workdir:
+                    for k, v in smpl_stats.items():
+                        writer.add_scalar(k, v, step - steps_eq)
+            pbar.close()
+
+        log.info('Start evaluating')
+        pbar = tqdm(range(steps), desc='evaluate', disable=None)
+        enes = []
         for step, rng in zip(pbar, hk.PRNGSequence(rng)):
             log_dict = table.row if workdir else None
             new_smpl_state, eval_stats, E_loc = eval_step(rng, smpl_state)
