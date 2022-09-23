@@ -1,34 +1,39 @@
-from functools import partial
-
 import jax
 import jax.numpy as jnp
+from jax.random import uniform
+from jax.scipy.special import gammaln
 
 __all__ = ()
 
 
-def laplacian_oneshot(f):
-    def lap(x, **kwargs):
-        _f = partial(f, **kwargs)
-        grad_f = jax.grad(_f)
-        df, grad_f_jvp = jax.linearize(grad_f, x)
-        eye = jnp.eye(len(x))
-        d2f = jnp.diag(jax.vmap(grad_f_jvp)(eye))
-        return jnp.sum(d2f), df
-
-    return lap
+def flatten(x, start_axis=0):
+    return x.reshape(*x.shape[:start_axis], -1)
 
 
-def laplacian(f):
-    def lap(x):
-        n_coord = len(x)
-        grad_f = jax.grad(f)
-        df, grad_f_jvp = jax.linearize(grad_f, x)
-        eye = jnp.eye(n_coord)
-        d2f = lambda i, val: val + grad_f_jvp(eye[i])[i]
-        d2f_sum = jax.lax.fori_loop(0, n_coord, d2f, 0.0)
-        return d2f_sum, df
+def unflatten(x, axis, shape):
+    if axis < 0:
+        axis = len(x.shape) + axis
+    begin = x.shape[:axis]
+    end = x.shape[axis + 1 :]
+    return x.reshape(*begin, *shape, *end)
 
-    return lap
+
+def multinomial_resampling(rng, weights, n_samples=None):
+    n = len(weights)
+    n_samples = n_samples or n
+    weights_normalized = weights / jnp.sum(weights)
+    i, j = jnp.triu_indices(n)
+    weights_cum = jnp.zeros((n, n)).at[i, j].set(weights_normalized[j]).sum(axis=-1)
+    return n - 1 - (uniform(rng, (n_samples,))[:, None] > weights_cum).sum(axis=-1)
+
+
+def factorial2(n):
+    n = jnp.asarray(n)
+    gamma = jnp.exp(gammaln(n / 2 + 1))
+    factor = jnp.where(
+        n % 2, jnp.power(2, n / 2 + 0.5) / jnp.sqrt(jnp.pi), jnp.power(2, n / 2)
+    )
+    return factor * gamma
 
 
 def masked_mean(x, mask):
@@ -41,51 +46,9 @@ def exp_normalize_mean(x):
     return jnp.exp(x_shifted) / jnp.exp(x_shifted).mean()
 
 
-def pairwise_distance(coords1, coords2):
-    return jnp.linalg.norm(coords1[..., :, None, :] - coords2[..., None, :, :], axis=-1)
-
-
-def pairwise_diffs(coords1, coords2):
-    diffs = coords1[..., :, None, :] - coords2[..., None, :, :]
-    return jnp.concatenate([diffs, (diffs**2).sum(axis=-1, keepdims=True)], axis=-1)
-
-
-def pairwise_self_distance(coords, full=False):
-    i, j = jnp.triu_indices(coords.shape[-2], k=1)
-    diffs = coords[..., :, None, :] - coords[..., None, :, :]
-    dists = jnp.linalg.norm(diffs[..., i, j, :], axis=-1)
-    if full:
-        dists_full = jnp.zeros(diffs.shape[:-1])
-        dists_full = dists_full.at[..., i, j].set(dists)
-        dists_full = dists_full.at[..., j, i].set(dists)
-        dists = dists_full
-    return dists
-
-
 def triu_flat(x):
     i, j = jnp.triu_indices(x.shape[-1], 1)
     return x[..., i, j]
-
-
-def nuclear_energy(mol):
-    coords, charges = mol.coords, mol.charges
-    coulombs = (
-        charges[:, None] * charges / jnp.linalg.norm(coords[:, None] - coords, axis=-1)
-    )
-    return jnp.triu(coulombs, 1).sum()
-
-
-def nuclear_potential(rs, mol):
-    dists = jnp.linalg.norm(rs[..., :, None, :] - mol.coords, axis=-1)
-    return -(mol.charges / dists).sum(axis=(-1, -2))
-
-
-def electronic_potential(rs):
-    i, j = jnp.triu_indices(rs.shape[-2], k=1)
-    dists = jnp.linalg.norm(
-        (rs[..., :, None, :] - rs[..., None, :, :])[..., i, j, :], axis=-1
-    )
-    return (1 / dists).sum(axis=-1)
 
 
 @jax.jit

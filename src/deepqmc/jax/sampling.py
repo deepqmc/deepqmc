@@ -3,10 +3,8 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 
-from .jaxext import multinomial_resampling
-import jax
-from .utils import pairwise_diffs
-from .utils import pairwise_self_distance
+from .physics import pairwise_diffs, pairwise_self_distance
+from .utils import multinomial_resampling
 
 __all__ = ()
 

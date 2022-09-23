@@ -4,7 +4,7 @@ import haiku as hk
 import jax.numpy as jnp
 
 from ...hkext import MLP, SSP
-from ...jaxext import unflatten
+from ...utils import unflatten
 from .schnet import SchNet
 
 

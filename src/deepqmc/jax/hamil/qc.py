@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from jax import random
 
-from ..utils import (
+from ..physics import (
     electronic_potential,
     laplacian,
     nuclear_energy,
