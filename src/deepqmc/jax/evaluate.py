@@ -21,11 +21,11 @@ def evaluate(
     hamil,
     ansatz,
     params,
-    workdir=None,
-    *,
-    sampling_kwargs=None,
     steps,
     seed,
+    workdir=None,
+    sampling_kwargs=None,
+    *,
     steps_eq=500,
     state_callback=None,
 ):
@@ -69,32 +69,39 @@ def evaluate(
             'E_loc/min': jnp.min(E_loc),
             **jax.tree_util.tree_map(jnp.mean, hamil_stats),
         }
-        return smpl_state, stats
+        return smpl_state, stats, E_loc
 
     log.info('Start evaluating')
     pbar = tqdm(range(steps), desc='evaluate', disable=None)
     wf = lambda state, rs: ansatz.apply(params, state, rs)[0].log
-    enes, best_ene = [], None
-    for step, rng in zip(pbar, hk.PRNGSequence(rng)):
-        new_smpl_state, eval_stats = eval_step(rng, smpl_state)
-        if state_callback:
-            state, overflow = state_callback(new_smpl_state['wf_state'])
-            if overflow:
-                smpl_state['wf_state'] = state
-                _, new_smpl_state, smpl_stats = sample_wf(rng, smpl_state)
-        smpl_state = new_smpl_state
+    enes = []
+    try:
+        for step, rng in zip(pbar, hk.PRNGSequence(rng)):
+            new_smpl_state, eval_stats, E_loc = eval_step(rng, smpl_state)
+            if state_callback:
+                state, overflow = state_callback(new_smpl_state['wf_state'])
+                if overflow:
+                    smpl_state['wf_state'] = state
+                    _, new_smpl_state, smpl_stats = sample_wf(rng, smpl_state)
+            smpl_state = new_smpl_state
 
-        ewm_state = ewm(eval_stats['E_loc/mean'], ewm_state)
-        ene = ufloat(ewm_state.mean, np.sqrt(ewm_state.sqerr))
-        enes.append(ene)
+            ewm_state = ewm(eval_stats['E_loc/mean'], ewm_state)
+            eval_stats = {
+                'energy/ewm': ewm_state.mean,
+                'energy/ewm_error': jnp.sqrt(ewm_state.sqerr),
+                **eval_stats,
+            }
+            ene = ufloat(ewm_state.mean, np.sqrt(ewm_state.sqerr))
+            enes.append(ene)
 
-        if ene.s:
-            pbar.set_postfix(E=f'{ene:S}')
-            if best_ene is None or ene.n < best_ene.n - 3 * ene.s:
-                best_ene = ene
+            if ene.s:
+                pbar.set_postfix(E=f'{ene:S}')
                 log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
+            if workdir:
+                for k, v in eval_stats.items():
+                    writer.add_scalar(k, v, step)
+        return np.array(enes)
+    finally:
+        pbar.close()
         if workdir:
-            writer.add_scalar('energy/ewm', ene.n, step)
-            for k, v in eval_stats.items():
-                writer.add_scalar(k, v, step)
-    return np.array(enes)
+            writer.close()

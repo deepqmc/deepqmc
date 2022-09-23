@@ -8,6 +8,7 @@ import kfac_jax
 import optax
 
 from .errors import NanError
+from .ewm import ewm
 from .kfacext import GRAPH_PATTERNS
 from .utils import exp_normalize_mean, masked_mean
 
@@ -43,7 +44,7 @@ def fit_wf(
     smpl_state,
     steps,
     *,
-    clip_width,
+    clip_width=1.0,
     exclude_width=jnp.inf,
     clip_quantile=0.95,
     state_callback=None,
@@ -113,7 +114,7 @@ def fit_wf(
                 **smpl_stats,
                 **loss_stats,
             }
-            return params, opt_state, smpl_state, stats
+            return TrainState(params, opt_state, smpl_state), stats, E_loc
 
         opt_state = opt.init(params)
     else:
@@ -138,7 +139,7 @@ def fit_wf(
                 **smpl_stats,
                 **opt_stats['aux'][1],
             }
-            return params, opt_state, smpl_state, stats
+            return TrainState(params, opt_state, smpl_state), stats, opt_stats['aux'][0]
 
         opt = opt(
             value_and_grad_func=energy_and_grad_fn,
@@ -163,20 +164,22 @@ def fit_wf(
             func_state=smpl_state['wf_state'],
         )
 
+    ewm_state = ewm()
+    train_state = TrainState(params, opt_state, smpl_state)
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        new_params, new_opt_state, new_smpl_state, stats = train_step(
-            rng, params, opt_state, smpl_state
-        )
-        if jnp.isnan(new_smpl_state['psi'].log).any():
+        new_train_state, train_stats, E_loc = train_step(rng, *train_state)
+        if jnp.isnan(new_train_state[2]['psi'].log).any():
             raise NanError()
         if state_callback:
-            state, overflow = state_callback(new_smpl_state['wf_state'])
+            state, overflow = state_callback(new_train_state[2]['wf_state'])
             if overflow:
-                smpl_state['wf_state'] = state
-                new_params, new_opt_state, new_smpl_state, stats = train_step(
-                    rng, params, opt_state, smpl_state
-                )
-        params, opt_state, smpl_state = new_params, new_opt_state, new_smpl_state
-        yield step, TrainState(params, opt_state, smpl_state), {
-            k: v.item() for k, v in stats.items()
-        },
+                train_state[2]['wf_state'] = state
+                new_train_state, stats, E_loc = train_step(rng, train_state)
+        train_state = new_train_state
+        ewm_state = ewm(train_stats['E_loc/mean'], ewm_state)
+        train_stats = {
+            'energy/ewm': ewm_state.mean,
+            'energy/ewm_error': jnp.sqrt(ewm_state.sqerr),
+            **train_stats,
+        }
+        yield step, TrainState(params, opt_state, smpl_state), train_stats
