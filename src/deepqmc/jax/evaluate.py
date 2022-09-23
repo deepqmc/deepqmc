@@ -19,7 +19,7 @@ __all__ = ['evaluate']
 log = logging.getLogger(__name__)
 
 
-def evaluate(
+def evaluate(  # noqa: C901
     hamil,
     ansatz,
     params,
@@ -51,11 +51,10 @@ def evaluate(
         h5file.flush()
         log.debug('Done')
 
-    wf = lambda state, rs: ansatz.apply(params, state, rs)[0].log
-
     @jax.jit
     def eval_step(rng, smpl_state):
         rs, smpl_state, smpl_stats = sample_wf(rng, params, smpl_state)
+        wf = lambda state, rs: ansatz.apply(params, state, rs)[0].log
         E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(
             smpl_state['wf_state'], rs
         )
