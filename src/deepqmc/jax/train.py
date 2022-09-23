@@ -56,22 +56,26 @@ def train(
         operator.add, jax.tree_map(lambda x: x.size, params)
     )
     log.info(f'Number of model parameters: {num_params}')
-    if steps_eq:
-        rng, rng_eq = jax.random.split(rng)
-        smpl_state = equilibrate(
-            rng_eq,
-            ansatz,
-            sample_wf,
-            params,
-            smpl_state,
-            steps=steps_eq,
-            writer=writer if workdir else None,
-            state_callback=state_callback,
-        )
-
-    log.info('Start training')
-    pbar = tqdm(range(steps), desc='train', disable=None)
     try:
+        if steps_eq:
+            log.info('Equilibrating...')
+            rng, rng_eq = jax.random.split(rng)
+            pbar = tqdm(range(steps_eq), desc='equilibrate', disable=None)
+            for step, smpl_state, smpl_stats in equilibrate(
+                rng_eq,
+                ansatz,
+                sample_wf,
+                params,
+                smpl_state,
+                pbar,
+                state_callback=state_callback,
+            ):
+                if workdir:
+                    for k, v in smpl_stats.items():
+                        writer.add_scalar(k, v, step - steps_eq)
+            pbar.close()
+        log.info('Start training')
+        pbar = tqdm(range(steps), desc='train', disable=None)
         for step, train_state, fit_stats in fit_wf(  # noqa: B007
             rng,
             hamil,
