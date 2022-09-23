@@ -10,7 +10,7 @@ import optax
 from .errors import NanError
 from .ewm import ewm
 from .kfacext import GRAPH_PATTERNS
-from .utils import exp_normalize_mean, masked_mean
+from .utils import exp_normalize_mean, masked_mean, tree_norm
 
 __all__ = ()
 
@@ -97,17 +97,10 @@ def fit_wf(
                 params, smpl_state['wf_state'], (rs, weights)
             )
             updates, opt_state = opt.update(grads, opt_state, params)
-            param_norm = jax.tree_util.tree_reduce(
-                lambda norm, x: norm + jnp.linalg.norm(x), params, 0
+            param_norm, update_norm, grad_norm = map(
+                tree_norm, [params, updates, grads]
             )
-            update_norm = jax.tree_util.tree_reduce(
-                lambda norm, x: norm + jnp.linalg.norm(x), updates, 0
-            )
-
             params = optax.apply_updates(params, updates)
-            grad_norm = jax.tree_util.tree_reduce(
-                lambda norm, x: norm + jnp.linalg.norm(x), grads, 0
-            )
             stats = {
                 'opt/param_norm': param_norm,
                 'opt/grad_norm': grad_norm,

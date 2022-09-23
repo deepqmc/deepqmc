@@ -51,6 +51,10 @@ def triu_flat(x):
     return x[..., i, j]
 
 
+def tree_norm(x):
+    return jax.tree_util.tree_reduce(lambda norm, x: norm + jnp.linalg.norm(x), x, 0)
+
+
 @jax.jit
 @jax.vmap
 def vec_where(cond, x, y):
