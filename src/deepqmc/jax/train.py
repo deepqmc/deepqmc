@@ -85,6 +85,7 @@ def train(
             sample_wf,
             smpl_state,
             pbar,
+            state_callback=state_callback,
             log_dict=table.row if workdir else None,
             **kwargs,
         ):

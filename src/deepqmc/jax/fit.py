@@ -1,3 +1,4 @@
+import copy
 import logging
 from collections import namedtuple
 
@@ -34,7 +35,7 @@ def median_log_squeeze(x, width, quantile):
     )
 
 
-def fit_wf(
+def fit_wf(  # noqa: C901
     rng,
     hamil,
     ansatz,
@@ -44,6 +45,7 @@ def fit_wf(
     smpl_state,
     steps,
     log_dict=None,
+    rewind=0,
     *,
     clip_width=1.0,
     exclude_width=jnp.inf,
@@ -158,18 +160,29 @@ def fit_wf(
             func_state=smpl_state['wf_state'],
         )
 
+    history = []
     ewm_state = ewm()
     train_state = TrainState(params, opt_state, smpl_state)
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        new_train_state, train_stats, E_loc = train_step(rng, *train_state)
-        if jnp.isnan(new_train_state[2]['psi'].log).any():
-            raise NanError()
-        if state_callback:
-            state, overflow = state_callback(new_train_state[2]['wf_state'])
-            if overflow:
-                train_state[2]['wf_state'] = state
-                new_train_state, stats, E_loc = train_step(rng, train_state)
-        train_state = new_train_state
+        history.append(copy.deepcopy(train_state))
+        history = history[-max(rewind, 1) :]
+        done = False
+        while not done:
+            new_train_state, train_stats, E_loc = train_step(rng, *train_state)
+            if state_callback:
+                wf_state, overflow = state_callback(new_train_state[2]['wf_state'])
+            if state_callback and overflow:
+                train_state = copy.deepcopy(history.pop(-1))
+                train_state[2]['wf_state'] = wf_state
+                history.append(copy.deepcopy(train_state))
+            elif jnp.isnan(new_train_state[2]['psi'].log).any():
+                if rewind and len(history) > rewind:
+                    train_state = history.pop(0)
+                else:
+                    raise NanError()
+            else:
+                train_state = new_train_state
+                done = True
         ewm_state = ewm(train_stats['E_loc/mean'], ewm_state)
         train_stats = {
             'energy/ewm': ewm_state.mean,
