@@ -4,6 +4,7 @@ import pickle
 from collections import namedtuple
 from pathlib import Path
 
+import h5py
 import jax
 import tensorboard.summary
 from tqdm.auto import tqdm
@@ -11,6 +12,7 @@ from uncertainties import ufloat
 
 from .equilibrate import equilibrate
 from .fit import fit_wf
+from .log import H5LogTable
 from .sampling import init_sampling
 
 __all__ = 'train'
@@ -43,12 +45,17 @@ def train(
     if workdir:
         chkpts = CheckpointStore(workdir)
         writer = tensorboard.summary.Writer(workdir)
+        log.debug('Setting up HDF5 file...')
+        h5file = h5py.File(f'{workdir}/fit.h5', 'a', libver='v110')
+        h5file.swmr_mode = True
+        table = H5LogTable(h5file)
+        h5file.flush()
+        log.debug('Done')
 
     num_params = jax.tree_util.tree_reduce(
         operator.add, jax.tree_map(lambda x: x.size, params)
     )
     log.info(f'Number of model parameters: {num_params}')
-
     if steps_eq:
         rng, rng_eq = jax.random.split(rng)
         smpl_state = equilibrate(
@@ -74,6 +81,8 @@ def train(
             sample_wf,
             smpl_state,
             pbar,
+            log_dict=table.row if workdir else None,
+            **kwargs,
         ):
             ene = ufloat(fit_stats['energy/ewm'], fit_stats['energy/ewm_error'])
             if ene.s:
@@ -88,6 +97,7 @@ def train(
         pbar.close()
         if workdir:
             writer.close()
+            h5file.close()
 
 
 Checkpoint = namedtuple('Checkpoint', 'step loss path')

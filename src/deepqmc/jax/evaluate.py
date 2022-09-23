@@ -1,5 +1,6 @@
 import logging
 
+import h5py
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -10,6 +11,7 @@ from uncertainties import ufloat
 
 from .equilibrate import equilibrate
 from .ewm import ewm
+from .log import H5LogTable
 from .sampling import init_sampling
 
 __all__ = ['evaluate']
@@ -42,6 +44,13 @@ def evaluate(
     )
     if workdir:
         writer = tensorboard.summary.Writer(workdir)
+        log.debug('Setting up HDF5 file...')
+        h5file = h5py.File(f'{workdir}/sample.h5', 'a', libver='v110')
+        h5file.swmr_mode = True
+        table = H5LogTable(h5file)
+        h5file.flush()
+        log.debug('Done')
+
     if steps_eq:
         rng, rng_eq = jax.random.split(rng)
         smpl_state = equilibrate(
@@ -77,6 +86,7 @@ def evaluate(
     enes = []
     try:
         for step, rng in zip(pbar, hk.PRNGSequence(rng)):
+            log_dict = table.row if workdir else None
             new_smpl_state, eval_stats, E_loc = eval_step(rng, smpl_state)
             if state_callback:
                 state, overflow = state_callback(new_smpl_state['wf_state'])
@@ -100,8 +110,14 @@ def evaluate(
             if workdir:
                 for k, v in eval_stats.items():
                     writer.add_scalar(k, v, step)
+            if log_dict:
+                log_dict['E_loc'] = E_loc
+                log_dict['E_ewm'] = ewm_state.mean
+                log_dict['sign_psi'] = smpl_state['psi'].sign
+                log_dict['log_psi'] = smpl_state['psi'].log
         return np.array(enes)
     finally:
         pbar.close()
         if workdir:
             writer.close()
+            h5file.close()

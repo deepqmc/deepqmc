@@ -43,6 +43,7 @@ def fit_wf(
     sample_wf,
     smpl_state,
     steps,
+    log_dict=None,
     *,
     clip_width=1.0,
     exclude_width=jnp.inf,
@@ -182,4 +183,9 @@ def fit_wf(
             'energy/ewm_error': jnp.sqrt(ewm_state.sqerr),
             **train_stats,
         }
+        if log_dict:
+            log_dict['E_loc'] = E_loc
+            log_dict['E_ewm'] = ewm_state.mean
+            log_dict['sign_psi'] = train_state[2]['psi'].sign
+            log_dict['log_psi'] = train_state[2]['psi'].log
         yield step, TrainState(params, opt_state, smpl_state), train_stats
