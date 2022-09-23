@@ -4,9 +4,9 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 
-from ...jaxext import flatten, unflatten
+from ...physics import pairwise_diffs, pairwise_self_distance
 from ...types import Psi
-from ...utils import pairwise_diffs, pairwise_self_distance, triu_flat
+from ...utils import flatten, triu_flat, unflatten
 from ..base import WaveFunction
 from .cusp import ElectronicAsymptotic
 from .env import ExponentialEnvelopes
