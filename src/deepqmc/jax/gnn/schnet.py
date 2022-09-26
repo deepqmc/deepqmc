@@ -47,10 +47,15 @@ class SchNetLayer(MessagePassingLayer):
         subnet_kwargs=None,
         subnet_kwargs_by_lbl=None,
         residual=True,
+        sum_z=False,
+        deep_w=False,
     ):
         super().__init__(ilayer, shared)
         self.shared_h = shared_h
         self.shared_g = shared_g
+        assert shared_g or not sum_z
+        self.sum_z = sum_z
+        self.deep_w = deep_w
         default_n_layers = {'w': n_layers_w, 'h': n_layers_h, 'g': n_layers_g}
 
         subnet_kwargs = subnet_kwargs or {}
@@ -69,7 +74,9 @@ class SchNetLayer(MessagePassingLayer):
 
         self.w = {
             typ: MLP(
-                self.edge_feat_dim[typ],
+                self.edge_feat_dim[typ]
+                if not deep_w or self.ilayer == 0
+                else self.kernel_dim,
                 self.kernel_dim,
                 name=f'w_{typ}',
                 **subnet_kwargs_by_lbl['w'],
@@ -109,7 +116,12 @@ class SchNetLayer(MessagePassingLayer):
             if shared_g
             else {
                 typ: MLP(
-                    self.kernel_dim,
+                    self.kernel_dim
+                    + (
+                        self.embedding_dim + self.kernel_dim
+                        if shared_g and not sum_z
+                        else 0
+                    ),
                     self.embedding_dim,
                     name=f'g_{typ}',
                     **subnet_kwargs_by_lbl['g'],
@@ -126,13 +138,23 @@ class SchNetLayer(MessagePassingLayer):
         return ('w', 'h', 'g')
 
     def get_update_edges_fn(self):
-        return None
+        def update_edges(nodes, edges):
+            updated_edges = {
+                typ: edge._replace(features=self.w[typ](edge.features))
+                for typ, edge in edges.items()
+            }
+            return updated_edges if self.deep_w else edges
+
+        return update_edges
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes(nodes, edges):
             n_elec = nodes.electrons.shape[-2]
 
-            we = {typ: self.w[typ](edges[typ].features) for typ in self.edge_types}
+            if self.deep_w:
+                we = {typ: edge.features for typ, edge in edges.items()}
+            else:
+                we = {typ: self.w[typ](edges[typ].features) for typ in self.edge_types}
             if self.shared_h:
                 hx = self.h(self.spin_idxs if self.use_embed_h else nodes.electrons)
                 hx = {typ: hx[edges[typ].senders] for typ in self.edge_types[:2]}
@@ -158,16 +180,23 @@ class SchNetLayer(MessagePassingLayer):
     def get_update_nodes_fn(self):
         def update_nodes(nodes, z):
             if self.shared_g:
-                gzs = self.g(
-                    jnp.stack([z[typ] for typ in self.edge_types], axis=-2)
-                ).swapaxes(-1, -2)
+                if self.sum_z:
+                    zs = jnp.stack(list(z.values()), axis=-1)
+                    fz = self.f(zs).squeeze(axis=-1)
+                    updated = self.g(fz) + (nodes.electrons if self.residual else 0)
+                else:
+                    zs = jnp.concatenate(
+                        [nodes.electrons, z['same'] + z['anti'], z['ne']], axis=-1
+                    )
+                    updated = self.g(zs)
             else:
-                gzs = jnp.stack(
+                gs = jnp.stack(
                     [self.g[typ](z[typ]) for typ in self.edge_types], axis=-1
                 )
-            if self.residual:
-                gzs = jnp.concatenate([nodes.electrons[..., None], gzs], axis=-1)
-            updated_nodes = nodes._replace(electrons=self.f(gzs).squeeze(axis=-1))
+                if self.residual:
+                    gs = jnp.concatenate([nodes.electrons[..., None], gs], axis=-1)
+                updated = self.f(gs).squeeze(axis=-1)
+            updated_nodes = nodes._replace(electrons=updated)
 
             return updated_nodes
 
