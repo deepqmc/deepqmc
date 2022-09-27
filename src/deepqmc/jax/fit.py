@@ -175,7 +175,7 @@ def fit_wf(  # noqa: C901
                 train_state[2]['wf_state'] = wf_state
                 history.append(copy.deepcopy(train_state))
             elif jnp.isnan(new_train_state[2]['psi'].log).any():
-                if rewind and len(history) > rewind:
+                if rewind and len(history) >= rewind:
                     train_state = history.pop(0)
                 else:
                     raise NanError()
@@ -193,4 +193,4 @@ def fit_wf(  # noqa: C901
             log_dict['E_ewm'] = ewm_state.mean
             log_dict['sign_psi'] = train_state[2]['psi'].sign
             log_dict['log_psi'] = train_state[2]['psi'].log
-        yield step, TrainState(params, opt_state, smpl_state), train_stats
+        yield step, train_state, train_stats
