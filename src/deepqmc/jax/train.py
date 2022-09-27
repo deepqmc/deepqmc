@@ -62,7 +62,7 @@ def train(
             log.info('Equilibrating...')
             rng, rng_eq = jax.random.split(rng)
             pbar = tqdm(range(steps_eq), desc='equilibrate', disable=None)
-            for step, smpl_state, smpl_stats in equilibrate(
+            for step, smpl_state, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
                 ansatz,
                 sample_wf,
