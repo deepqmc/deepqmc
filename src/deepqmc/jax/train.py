@@ -27,16 +27,16 @@ def InverseLR(lr, decay_rate):
 def train(
     hamil,
     ansatz,
+    state_callback,
     opt,
-    workdir=None,
-    *,
-    sampling_kwargs=None,
-    steps,
     seed,
-    steps_eq=500,
-    state_callback=None,
+    workdir=None,
     save_every=None,
-    **kwargs,
+    *,
+    n_steps=1e4,
+    n_steps_eq=500,
+    sampling_kwargs=None,
+    fit_kwargs=None,
 ):
     rng = jax.random.PRNGKey(seed)
     rng, rng_init = jax.random.split(rng)
@@ -58,42 +58,42 @@ def train(
     )
     log.info(f'Number of model parameters: {num_params}')
     try:
-        if steps_eq:
+        if n_steps_eq:
             log.info('Equilibrating...')
             rng, rng_eq = jax.random.split(rng)
-            pbar = tqdm(range(steps_eq), desc='equilibrate', disable=None)
+            pbar = tqdm(range(n_steps_eq), desc='equilibrate', disable=None)
             for step, smpl_state, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
                 ansatz,
+                state_callback,
                 sample_wf,
                 params,
                 smpl_state,
                 pbar,
-                state_callback=state_callback,
             ):
                 if workdir:
                     for k, v in smpl_stats.items():
-                        writer.add_scalar(k, v, step - steps_eq)
+                        writer.add_scalar(k, v, step - n_steps_eq)
             pbar.close()
         log.info('Start training')
-        pbar = tqdm(range(steps), desc='train', disable=None)
+        pbar = tqdm(range(n_steps), desc='train', disable=None)
         for step, train_state, fit_stats in fit_wf(  # noqa: B007
             rng,
             hamil,
             ansatz,
+            state_callback,
             params,
             opt,
             sample_wf,
             smpl_state,
             pbar,
-            state_callback=state_callback,
             log_dict=table.row if workdir else None,
-            **kwargs,
+            **(fit_kwargs or {}),
         ):
             ene = ufloat(fit_stats['energy/ewm'], fit_stats['energy/ewm_error'])
             if ene.s:
                 pbar.set_postfix(E=f'{ene:S}')
-                log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
+                log.info(f'Progress: {step + 1}/{n_steps}, energy = {ene:S}')
             if workdir:
                 if save_every and not (step + 1) % save_every:
                     chkpts.store(step + 1, train_state)
