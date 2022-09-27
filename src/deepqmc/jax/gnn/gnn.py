@@ -18,9 +18,10 @@ class MessagePassingLayer(hk.Module):
 
     def __init__(self, ilayer, shared):
         super().__init__()
-        self.ilayer = ilayer
         for k, v in shared.items():
             setattr(self, k, v)
+        self.first_layer = ilayer == 0
+        self.last_layer = ilayer == self.n_interactions - 1
         self.update_graph = GraphUpdate(
             update_nodes_fn=self.get_update_nodes_fn(),
             update_edges_fn=self.get_update_edges_fn(),
@@ -114,6 +115,7 @@ class GraphNeuralNetwork(hk.Module):
         for k, v in share_with_layers.items():
             setattr(self, k, v)
         share_with_layers.setdefault('edge_types', self.edge_types)
+        share_with_layers.setdefault('n_interactions', n_interactions)
         self.layers = [
             self.layer_factory(
                 i,
