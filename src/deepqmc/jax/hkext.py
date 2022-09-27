@@ -58,10 +58,11 @@ class MLP(hk.Module):
         super().__init__(name=name)
         self.activation = activation
         self.last_linear = last_linear
-        w_init = {
-            'deeperwin': VarianceScaling(1.0, 'fan_avg', 'uniform'),
-            'default': VarianceScaling(1.0, 'fan_in', 'truncated_normal'),
-        }[w_init]
+        if isinstance(w_init, str):
+            w_init = {
+                'deeperwin': VarianceScaling(1.0, 'fan_avg', 'uniform'),
+                'default': VarianceScaling(1.0, 'fan_in', 'truncated_normal'),
+            }[w_init]
         hidden_layers = hidden_layers or []
         if len(hidden_layers) == 2 and hidden_layers[0] == 'log':
             n_hidden = hidden_layers[1]

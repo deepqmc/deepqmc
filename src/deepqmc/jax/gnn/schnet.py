@@ -75,7 +75,7 @@ class SchNetLayer(MessagePassingLayer):
         self.w = {
             typ: MLP(
                 self.edge_feat_dim[typ]
-                if not deep_w or self.ilayer == 0
+                if not deep_w or self.first_layer
                 else self.kernel_dim,
                 self.kernel_dim,
                 name=f'w_{typ}',
@@ -84,12 +84,12 @@ class SchNetLayer(MessagePassingLayer):
             for typ in self.edge_types
         }
 
-        self.use_embed_h = self.ilayer == 0 and not self.fix_init_emb
+        self.use_embed_h = self.first_layer and not self.fix_init_emb
 
         def h_factory(typ=None):
             name = 'h' if shared_h else f'h_{typ}'
             n_spin = 1 if self.n_up == self.n_down else 2
-            from_fixed_emb = self.ilayer == 0 and self.fix_init_emb
+            from_fixed_emb = self.first_layer and self.fix_init_emb
             return (
                 hk.Embed(n_spin, self.kernel_dim, name=name)
                 if self.use_embed_h
