@@ -35,6 +35,7 @@ def train(
     seed,
     steps_eq=500,
     state_callback=None,
+    save_every=None,
     **kwargs,
 ):
     rng = jax.random.PRNGKey(seed)
@@ -94,7 +95,8 @@ def train(
                 pbar.set_postfix(E=f'{ene:S}')
                 log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
             if workdir:
-                chkpts.update(fit_stats['E_loc/std'], train_state)
+                if save_every and not (step + 1) % save_every:
+                    chkpts.store(step + 1, train_state)
                 for k, v in fit_stats.items():
                     writer.add_scalar(k, v, step)
         return train_state
@@ -111,30 +113,12 @@ Checkpoint = namedtuple('Checkpoint', 'step loss path')
 class CheckpointStore:
     PATTERN = 'chkpt-{}.pt'
 
-    def __init__(self, workdir, size=3, min_interval=100, threshold=0.95):
+    def __init__(self, workdir):
         self.workdir = Path(workdir)
         for p in self.workdir.glob(self.PATTERN.format('*')):
             p.unlink()
-        self.size = size
-        self.min_interval = min_interval
-        self.threshold = threshold
-        self.chkpts = []
-        self.step = 0
 
-    def update(self, loss, state) -> None:
-        self.step += 1
-        if (
-            self.step < self.min_interval
-            or self.chkpts
-            and (
-                self.step < self.min_interval + self.chkpts[-1].step
-                or loss > self.threshold * self.chkpts[-1].loss
-            )
-        ):
-            return
-        path = self.workdir / self.PATTERN.format(self.step)
-        self.chkpts.append(Checkpoint(self.step, loss, path))
+    def store(self, step, state) -> None:
+        path = self.workdir / self.PATTERN.format(step)
         with open(path, 'wb') as f:
             pickle.dump(state, f)
-        while len(self.chkpts) > self.size:
-            self.chkpts.pop(0).path.unlink()
