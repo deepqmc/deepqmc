@@ -22,6 +22,7 @@ log = logging.getLogger(__name__)
 def evaluate(  # noqa: C901
     hamil,
     ansatz,
+    state_callback,
     params,
     steps,
     seed,
@@ -29,7 +30,6 @@ def evaluate(  # noqa: C901
     sampling_kwargs=None,
     *,
     steps_eq=500,
-    state_callback=None,
 ):
     ewm_state = ewm()
     rng = jax.random.PRNGKey(seed)
@@ -76,11 +76,11 @@ def evaluate(  # noqa: C901
             for step, smpl_state, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
                 ansatz,
+                state_callback,
                 sample_wf,
                 params,
                 smpl_state,
                 pbar,
-                state_callback=state_callback,
             ):
                 if workdir:
                     for k, v in smpl_stats.items():

@@ -10,12 +10,11 @@ log = logging.getLogger(__name__)
 def equilibrate(
     rng,
     ansatz,
+    state_callback,
     sample_wf,
     params,
     smpl_state,
     pbar,
-    *,
-    state_callback,
 ):
     log.info('Start equilibrating')
     for step, rng in zip(pbar, hk.PRNGSequence(rng)):

@@ -39,6 +39,7 @@ def fit_wf(  # noqa: C901
     rng,
     hamil,
     ansatz,
+    state_callback,
     params,
     opt,
     sample_wf,
@@ -50,7 +51,6 @@ def fit_wf(  # noqa: C901
     clip_width=1.0,
     exclude_width=jnp.inf,
     clip_quantile=0.95,
-    state_callback=None,
 ):
     vec_ansatz = jax.vmap(ansatz.apply, (None, 0, 0))
 
