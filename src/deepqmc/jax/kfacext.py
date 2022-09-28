@@ -131,5 +131,6 @@ for n_extra_dims in range(2, 0, -1):
 kfac_jax.set_default_tag_to_block_ctor('dense_tag', DenseBlock)
 
 GRAPH_PATTERNS = (
-    tuple(custom_patterns) + kfac_jax.tag_graph_matcher.DEFAULT_GRAPH_PATTERNS
+    *(custom_patterns),
+    *kfac_jax.tag_graph_matcher.DEFAULT_GRAPH_PATTERNS,
 )
