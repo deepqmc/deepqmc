@@ -69,6 +69,10 @@ autodoc_mock_imports = [
     'torch',
     'tqdm',
     'uncertainties',
+    'jax',
+    'kfac_jax',
+    'haiku',
+    'optax',
 ]
 todo_include_todos = True
 napoleon_numpy_docstring = False
