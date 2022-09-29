@@ -24,6 +24,7 @@ API reference
 .. toctree::
 
     api
+    jax-api
 
 .. toctree::
     :hidden:
