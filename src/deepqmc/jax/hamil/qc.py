@@ -7,11 +7,12 @@ from ..physics import (
     nuclear_energy,
     nuclear_potential,
 )
+from .base import Hamiltonian
 
-all__ = ()
+__all__ = ['MolecularHamiltonian']
 
 
-class MolecularHamiltonian:
+class MolecularHamiltonian(Hamiltonian):
     def __init__(self, mol):
         self.mol = mol
 
