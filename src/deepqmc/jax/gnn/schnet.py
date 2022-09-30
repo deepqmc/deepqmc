@@ -5,10 +5,35 @@ from jax import ops
 from ..hkext import MLP
 from .edge_features import EdgeFeatures
 from .gnn import GraphNeuralNetwork, MessagePassingLayer
-from .graph import difference_callback
+from .graph import GraphNodes, difference_callback
 
 
 class SchNetLayer(MessagePassingLayer):
+    r"""
+    The message passing layer of :class:`SchNet`.
+
+    Derived from :class:`~deepqmc.jax.gnn.gnn.MessagePassingLayer`.
+
+    Args:
+        ilayer (int): the index of the current layer in the list of all layers
+        shared (dict): attribute names and values which are shared between the
+            layers and the :class:`SchNet` instance.
+        shared_h (bool): optional, whether to use a shared :data:`h` subnetwork.
+        shared_g (bool): optional, whether to use a shared :data:`g` subnetwork.
+        n_layers_w (int): optional, the number of layers in the :data:`w`
+            subnetwork.
+        n_layers_h (int): optional, the number of layers in the :data:`h`
+            subnetwork.
+        n_layers_g (int): optional, the number of layers in the :data:`g`
+            subnetwork.
+        subnet_kwargs (dict): optional, extra arguments passed to the
+            :class:`~jax.hkext.MLP` constructor of the subnetworks.
+        subnet_kwargs_by_lbl (dict): optional, extra arguments passed to the
+            :class:`~jax.hkext.MLP` constructor of the subnetworks. Arguments
+            can be specified independently for each subnet
+            (:data:`w`, :data:`h` or :data:`g`).
+    """
+
     def __init__(
         self,
         ilayer,
@@ -150,6 +175,30 @@ class SchNetLayer(MessagePassingLayer):
 
 
 class SchNet(GraphNeuralNetwork):
+    r"""
+    The SchNet graph message passing architecture adapted for graphs
+    of nuclei and electrons.
+
+    Derived from :class:`~deepqmc.jax.gnn.gnn.GraphNeuralNetwork`.
+
+    Args:
+        mol (~jax.Molecule): the molecule on which the graph is defined.
+        embedding_dim (int): the lenght of the electron embedding vectors.
+        cutoff (float, a.u.): the distance cutoff beyond which interactions
+            are discarded.
+        n_interactions (int): number of message passing interactions.
+        edge_feat_kwargs (dict): extra arguments passed to
+            :class:`~jax.gnn.edge_features.EdgeFeatures`.
+        edge_feat_kwargs_by_typ (dict): extra arguments passed to
+            :class:`~jax.gnn.edge_features.EdgeFeatures`, specified
+            indepenedently for different edge types.
+        kernel_dim (int): size of the kernel vectors.
+        fix_init_emb (bool): whether to use a fixed initial embedding for the
+            electrons or to use :class:`hk.Embed`.
+        gnn_kwargs (dict): extra arguments passed to the
+            :class:`~deepqmc.jax.gnn.gnn.GraphNeuralNetwork` base class.
+    """
+
     def __init__(
         self,
         mol,
@@ -213,7 +262,7 @@ class SchNet(GraphNeuralNetwork):
             )
 
         Y = hk.Linear(self.kernel_dim, name='NuclearEmbedding')
-        return Y(jnp.eye(self.n_nuc)), X(self.spin_idxs)
+        return GraphNodes(Y(jnp.eye(self.n_nuc)), X(self.spin_idxs))
 
     def init_state(self, shape, dtype):
         zeros = jnp.zeros(shape, dtype)
