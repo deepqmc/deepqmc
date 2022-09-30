@@ -9,26 +9,59 @@ This implementation uses the `JAX library <https://github.com/google/jax>`_, the
 
 - `JAX documentation <https://jax.readthedocs.io/en/latest>`_
 
-.. Training
-.. --------
+.. automodule:: deepqmc.jax
+   :exclude-members: train,evaluate
 
-.. .. automodule:: deepqmc
+.. automodule:: deepqmc.jax.hamil
 
-.. .. automodule:: deepqmc.fit
+Training
+--------
 
-.. .. automodule:: deepqmc.sampling
+.. automodule:: deepqmc.jax.train
 
-.. Wave functions
-.. --------------
+.. automodule:: deepqmc.jax.fit
 
-.. .. module:: deepqmc.wf
+Evaluation
+----------
 
-.. .. autoclass:: deepqmc.wf.WaveFunction
+.. automodule:: deepqmc.jax.evaluate
 
-.. PauliNet
-.. ~~~~~~~~
+Sampling
+--------
 
-.. .. autoclass:: deepqmc.wf.PauliNet
+.. automodule:: deepqmc.jax.sampling
 
-.. .. automodule:: deepqmc.wf.paulinet
-   .. :exclude-members: PauliNet
+Wave functions
+--------------
+
+.. autoclass:: deepqmc.jax.wf.WaveFunction
+
+Graph neural networks
+---------------------
+
+A graph neural network is the most important component of the PauliNet Ansatz.
+This module implements the most useful GNNs used in deep QMC.
+
+Graphs
+~~~~~~
+
+This submodule implements the basic functionality for working with (truncated) graphs.
+
+.. automodule:: deepqmc.jax.gnn.graph
+
+.. automodule:: deepqmc.jax.gnn.edge_features
+
+GNNs
+~~~~
+
+This submodule provides the base classes that all GNN instances should inherit from.
+
+.. automodule:: deepqmc.jax.gnn.gnn
+
+SchNet
+~~~~~~
+
+This submodule defines the SchNet architecutre adapted for graphs of nuclei and electrons.
+
+.. automodule:: deepqmc.jax.gnn.schnet
+

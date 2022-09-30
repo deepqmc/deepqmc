@@ -39,6 +39,30 @@ def train(
     max_restarts=3,
     **kwargs,
 ):
+    r"""Train a JAX wave function model.
+
+    It initializes and equilibrates the MCMC sampling of the wave function ansatz,
+    then optimizes it using the variational principle. It optionally saves
+    checkpoints and rewinds the training if an error is encountered.
+
+    Args:
+        hamil (~jax.hamil.Hamiltonian): the Hamiltonian of the physical system.
+        ansatz (~jax.wf.WaveFunction): the wave function ansatz.
+        opt: the optimizer. Either the :class:`kfac_jax.Optimizer` class or an instance
+            of an :class:`optax` optimizer.
+        sampler (~jax.sampling.Sampler): a sampler instance
+        workdir (str): optional, path, where results and checkpoints should be saved.
+        state_callback (Callable): optional, a function processing the :class:`haiku`
+            state of the wave function ansatz.
+        steps (int): optional, number of optimization steps.
+        sample_size (int): the number of samples considered in a batch
+        seed (int): the seed used for PRNG.
+        max_restarts (int): optional, the maximum number of times the training is
+                retried before a :class:`NaNError` is raised.
+        kwargs (dict): optional, extra arguments passed to the :func:`~.fit.fit_wf`
+            function.
+    """
+
     ewm_state = ewm()
     rng = jax.random.PRNGKey(seed)
     mode = 'evaluate' if opt is None else 'train'

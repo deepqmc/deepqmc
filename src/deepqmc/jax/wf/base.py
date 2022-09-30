@@ -6,11 +6,14 @@ __all__ = ['state_callback']
 
 
 class WaveFunction(hk.Module):
-    r"""Base class for all trial wave functions.
+    r"""
+    Base class for all trial wave functions.
+
     Shape:
-        - Input, :math:`\mathbf r`, a.u.: :math:`(\cdot,N,3)`
-        - Output1, :math:`\ln|\psi(\mathbf r)|`: :math:`(\cdot)`
-        - Output2, :math:`\operatorname{sgn}\psi(\mathbf r)`: :math:`(\cdot)`
+        - Input, :math:`\mathbf r`, (float, :math:`(N,3)`, a.u.): particle
+            coordinates
+        - Output1, :math:`\ln|\psi(\mathbf r)|` (float):
+        - Output2, :math:`\operatorname{sgn}\psi(\mathbf r)` (float):
     """
 
     def __init__(self, mol):

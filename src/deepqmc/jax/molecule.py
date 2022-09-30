@@ -10,6 +10,18 @@ __all__ = ['Molecule']
 
 @dataclass(frozen=True, init=False)
 class Molecule:
+    r"""Represents a molecule.
+    The array-like arguments accept anything that can be transformed to
+    :class:`jax.numpy.DeviceArray`.
+
+    Args:
+        coords (float, (:math:`N_\text{nuc}`, 3), a.u.):
+            nuclear coordinates as rows
+        charges (int, (:math:`N_\text{nuc}`)): atom charges
+        charge (int): total charge of a molecule
+        spin (int): total spin multiplicity
+    """
+
     coords: jnp.ndarray
     charges: jnp.ndarray
     charge: int

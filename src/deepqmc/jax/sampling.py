@@ -11,12 +11,35 @@ from jax import lax
 from .physics import pairwise_diffs, pairwise_self_distance
 from .utils import check_overflow, multinomial_resampling, split_dict
 
-__all__ = ()
+__all__ = [
+    'MetropolisSampler',
+    'LangevinSampler',
+    'DecorrSampler',
+    'ResampledSampler',
+    'chain',
+]
 
 log = logging.getLogger(__name__)
 
 
 class MetropolisSampler:
+    r"""
+    Metropolis--Hastings Monte Carlo sampler.
+
+    The :meth:`sample` method of this class returns electron coordinate samples
+    from the distribution defined by the square of the sampled wave function.
+
+    Args:
+        hamil (jax.hamil.Hamiltonian): the Hamiltonian of the physical system
+        tau (float): optional, the proposal step size scaling factor. Adjusted during
+            every step if :data:`target_acceptance` is specified.
+        target_acceptance (float): optional, if specified the proposal step size
+            will be scaled such that the ratio of accepted proposal steps approaches
+            :data:`target_acceptance`.
+        max_age (int): optional, if specified the next proposed step will always be
+            accepted for a walker that hasn't moved in the last :data:`max_age` steps.
+    """
+
     WALKER_STATE = ['r', 'psi', 'age']
 
     def __init__(self, hamil, *, tau, target_acceptance=0.57, max_age=None):
@@ -92,6 +115,12 @@ class MetropolisSampler:
 
 
 class LangevinSampler(MetropolisSampler):
+    r"""
+    Langevin Monte Carlo sampler.
+
+    Derived from :class:`MetropolisSampler`.
+    """
+
     WALKER_STATE = MetropolisSampler.WALKER_STATE + ['force']
 
     def _update(self, state, wf):

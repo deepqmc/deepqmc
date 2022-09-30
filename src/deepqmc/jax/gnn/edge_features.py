@@ -7,14 +7,15 @@ __all__ = ['EdgeFeatures']
 
 
 class EdgeFeatures:
-    r"""Computes edge features for message passing in GNNs.
+    r"""
+    Computes edge features for message passing in GNNs.
 
-    Maps particle position difference vectors, *r*, to edge features,
-    :math:`\mathbf e(r)`.
+    Maps particle position difference vectors, :math:`\mathbf r`, to edge features,
+    :math:`\mathbf e(\mathbf r)`.
 
     Args:
-        feature_dim (int): :math:`\dim(\mathbf e)`, number of features
-        cutoff (float, a.u.): distance at which all features go to zero
+        feature_dim (int): :math:`\dim(\mathbf e)`, number of features.
+        cutoff (float, a.u.): distance at which all features go to zero.
         envelope (str): optional, the type of envelope the distance
             features are multiplied with
 
@@ -25,21 +26,21 @@ class EdgeFeatures:
                  features are zero at the cutoff distance
         smooth (float, a.u.): if specified, distances are smoothed
             around zero such that they have a vanishing first derivative.
-        offset (bool): if ``True`` the mean of the first distance feature
+        offset (bool): if :data:`True` the mean of the first distance feature
             is shifted away from zero.
-        powers (List[int]): if specified, the first ``len(powers)`` edge
+        powers (List[int]): if specified, the first :data:`len(powers)` edge
             features will be :math:`\vert \mathbf r \vert ^\text{powers}`.
         eps (float): numerical epsilon applied in the computation of
-            ``powers``<0.
-        difference (bool): If ``True`,` the last 3 edge features will be
+            :data:`powers` < 0.
+        difference (bool): if :data:`True`, the last 3 edge features will be
             the plain difference vectors.
-        safe (bool): If ``True``, a numerical epsilon is added to distances
-            around zero to avoid instabilities of ```jnp.linalg.norm```
+        safe (bool): if :data:`True`, a numerical epsilon is added to distances
+            around zero to avoid instabilities of :func:`jnp.linalg.norm`
             tangents.
 
     Shape:
-        - Input, *r*: :math:`(*,3)`
-        - Output, :math:`\mathbf e(r)`: :math:`(*,\dim(\mathbf e))`
+        - Input, :math:`\mathbf r`: :math:`(*,3)`
+        - Output, :math:`\mathbf e(\mathbf r)`: :math:`(*,\dim(\mathbf e))`
     """
 
     def __init__(

@@ -9,13 +9,36 @@ GraphEdges = namedtuple('GraphEdges', 'senders receivers features')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
 
+def all_graph_edges(pos_sender, pos_receiver):
+    r"""Creates all graph edges.
 
-def all_graph_edges(pos1, pos2):
-    idx = jnp.arange(pos2.shape[0])
-    return jnp.broadcast_to(idx[None, :], (pos1.shape[0], pos2.shape[0]))
+    Args:
+        pos_sender (float, (:math:`N_\text{nodes}`, 3)): coordinates of graph
+            nodes that send edges.
+        pos_receiver (float, (:math:`M_\text{nodes}`, 3)): coordinates of graph
+            nodes that receive edges.
+
+    Returns:
+        int, (:math:`N`, :math:`M`): matrix of node indeces, indicating
+        the receiver node of the :math:`N \cdot M` possible edges.
+    """
+    idx = jnp.arange(pos_receiver.shape[0])
+    return jnp.broadcast_to(idx[None, :], (pos_sender.shape[0], pos_receiver.shape[0]))
 
 
 def mask_self_edges(idx):
+    r"""Masks the edges where sender and receiver nodes have the same index.
+
+    Args:
+        idx (int, (:math:`N_\text{nodes}`, :math:`N_\text{nodes}`)):
+            index of receiving nodes, assumed to be square since sets of sender
+            and receiver nodes should be identical.
+
+    Returns:
+        int, (:math:`N_\text{nodes}`, :math:`N_\text{nodes}`): matrix of
+        receiving node indeces, the appropriate entries masked with
+        :math:`N_\text{nodes}`.
+    """
     self_mask = idx == jnp.reshape(
         jnp.arange(idx.shape[0], dtype=jnp.int32), (idx.shape[0], 1)
     )
@@ -32,7 +55,37 @@ def prune_graph_edges(
     mask_vals,
     feature_callback,
 ):
+    r"""Discards graph edges which have a distance larger than :data:`cutoff`.
+
+    Args:
+        pos_sender (float, (:math:`N_{nodes}`, 3)): coordinates of graph nodes
+            that send edges.
+        pos_receiver (float, (:math:`M_{nodes}`, 3)): coordinates of graph nodes
+            that receive edges.
+        cutoff (float): cutoff distance above which edges are discarded.
+        idx (int, (:math:`N_\text{nodes}`, :math:`N_\text{nodes}`)): matrix of
+            receiving node indices as created by :func:`all_graph_edges`
+            (or :func:`mask_self_edges`).
+        occupancy_limit (int): the number of edges that can be considered
+            without overflow. The arrays describing the edges will have
+            a last dimension of size :data:`occupancy_limit`.
+        offsets ((int, int)): node index offset to be added to the returned
+            sender and receiver node indeces respectively.
+        mask_vals ((int, int)): if :data:`occupancy_limit` is larger than the number
+            of valid edges, the remaining node indices will be filled with these
+            values for the sender and receiver nodes respectively
+            (i.e. the value to pad the node index arrays with).
+        feature_callback (Callable): a function that takes the sender positions,
+            receiver positions, sender node indeces and receiver node indeces and
+            returns some data (features) computed for the edges.
+
+    Returns:
+        ~jax.types.GraphEdges: object containing the indeces of the edge
+        sending and edge receiving nodes, along with the features associated
+        with the edges.
+    """
     def apply_callback(pos_sender, pos2, sender_idx, receiver_idx):
+        r"Applies the feature_callback function, or returns the default of no features."
         return (
             feature_callback(pos_sender, pos2, sender_idx, receiver_idx)
             if feature_callback
@@ -54,6 +107,7 @@ def prune_graph_edges(
 
     @no_grad
     def dist(sender, receiver):
+        r"Computes pairwise distances between inputs."
         return jnp.sqrt(((receiver - sender) ** 2).sum(axis=-1))
 
     N_sender, N_receiver = pos_sender.shape[0], pos_receiver.shape[0]
@@ -86,10 +140,9 @@ def prune_graph_edges(
 
 
 def difference_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
+    r"A feature_callback which computes the Euclidian difference vector for each edge."
     if len(pos_sender) == 0 or len(pos_receiver) == 0:
-        return {
-            'diffs': jnp.zeros((len(sender_idx), 3)),
-        }
+        return jnp.zeros((len(sender_idx), 3))
     diffs = pos_receiver[receiver_idx] - pos_sender[sender_idx]
     return diffs
 
@@ -101,7 +154,39 @@ def GraphEdgeBuilder(
     mask_vals,
     feature_callback,
 ):
+    r"""
+    Creates a function that builds graph edges.
+
+    Args:
+        cutoff (float): the cutoff distance above which edges are discarded.
+        mask_self (bool): whether to mask edges between nodes of the same index.
+        offsets ((int, int)): node index offset to be added to the returned
+            sender and receiver node indeces respectively.
+        mask_vals ((int, int)): if ``occupancy_limit`` is larger than the number
+            of valid edges, the remaining node indices will be filled with these
+            values for the sender and receiver nodes respectively
+            (i.e. the value to pad the node index arrays with).
+        feature_callback (Callable): a function that takes the sender positions,
+            receiver positions, sender node indeces and receiver node indeces and
+            returns some data (features) computed for the edges.
+    """
     def build(pos_sender, pos_receiver, occupancies):
+        r"""
+        Builds graph edges.
+
+        Args:
+            pos_sender (float, (:math:`N_{nodes}`, 3)): coordinates of graph nodes
+                that send edges.
+            pos_receiver (float, (:math:`M_{nodes}`, 3)): coordinates of graph nodes
+                that receive edges.
+            occupancies (int, (:data:`occupancy_limit`)): array to store
+                occupancies in.
+
+        Returns:
+            tuple: a tuple containing the graph edges, the input occupancies
+            updated with the current occupancy, and the number of stored
+            occupancies.
+        """
         assert pos_sender.shape[-1] == 3 and pos_receiver.shape[-1] == 3
         assert len(pos_sender.shape) == 2
         assert not mask_self or pos_sender.shape[0] == pos_receiver.shape[0]
@@ -132,6 +217,12 @@ def GraphEdgeBuilder(
 
 
 def concatenate_edges(edges_and_occs):
+    r"""
+    Utility function to concatenate two edge lists.
+
+    Used only internally, e.g. to concatenate ``uu`` and ``dd`` edges to get all
+    ``same`` edges.
+    """
     edges = [edge_occ[0] for edge_occ in edges_and_occs]
     occupancies = tuple(edge_occ[1] for edge_occ in edges_and_occs)
     edge_of_lists = tree_transpose(
@@ -146,6 +237,24 @@ def concatenate_edges(edges_and_occs):
 def MolecularGraphEdgeBuilder(
     n_nuc, n_up, n_down, nuc_coords, edge_types, kwargs_by_edge_type=None
 ):
+    r"""
+    Creates a function that builds many types of molecular edges.
+
+    Args:
+        n_nuc (int): number of nuclei.
+        n_up (int): number of spin-up electrons.
+        n_down (int): number of spin-down electrons.
+        nuc_coords (float, (:math:`N_\text{nuc}`, 3)): coordinates of nuclei.
+        edge_types (List[str]): list of edge type names to build. Possible names are:
+
+                - ``'nn'``: nuclei->nuclei edges
+                - ``'ne'``: nuclei->electrons edges
+                - ``'en'``: electrons->nuclei edges
+                - ``'same'``: edges betwen same-spin electrons
+                - ``'anti'``: edges betwen opposite-spin electrons
+        kwargs_by_edge_type (dict): a mapping from names of edge types to the
+            kwargs to be passed to the :class:`GraphEdgeBuilder` of that edge type.
+    """
     n_elec = n_up + n_down
     builder_mapping = {
         'nn': ['nn'],
@@ -239,6 +348,17 @@ def GraphUpdate(
     update_nodes_fn=None,
     update_edges_fn=None,
 ):
+    r"""
+    Creates a function that updates a graph.
+
+    The update function is tailored to be used in GNNs.
+
+    Args:
+        aggregate_edges_for_nodes_fn (bool): whether to perform the aggregation
+            of edges for nodes.
+        update_nodes_fn (Callable): optional, function that updates the nodes.
+        update_edges_fn (Callable): optional, function that updates the edges.
+    """
     def update_graph(graph):
         nodes, edges = graph
 
