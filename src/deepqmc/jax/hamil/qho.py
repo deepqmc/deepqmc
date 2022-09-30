@@ -2,11 +2,12 @@ import jax
 import jax.numpy as jnp
 
 from ..physics import laplacian
+from .base import Hamiltonian
 
-__all__ = ()
+__all__ = ['QHOHamiltonian']
 
 
-class QHOHamiltonian:
+class QHOHamiltonian(Hamiltonian):
     def __init__(self, dim, mass, nu):
         self.dim = (dim,)
         self.mass = mass
