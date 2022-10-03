@@ -5,10 +5,44 @@ from jax.nn import softplus
 
 
 def ssp(x):
+    r"""
+    Compute the shifted softplus activation function.
+
+    Computes the elementwise function
+    :math:`\text{softplus}(x)=\log(1+\text{e}^x)+\log\frac{1}{2}`
+    """
     return softplus(x) + jnp.log(0.5)
 
 
 class MLP(hk.Module):
+    r"""
+    Represent a multilayer perceptron.
+
+    Args:
+        in_dim (int): the input dimension.
+        out_dim (int): the output dimension.
+        hidden_layers (tuple): optional, either ('log', :math:`N_\text{layers}`),
+            in which case the network will have :math:`N_\text{layers}` layers
+            with logarithmically changing widths, or a tuple of ints specifying
+            the width of each layer.
+        bias (str): optional, specifies which layers should have a bias term.
+            Possible values are
+
+            - ``'all'``: all layers will have a bias term
+            - ``'not_last'``: all but the last layer will have a bias term
+            - ``'none'``: no layers will have a bias term
+        last_linear (bool): optional, if :data:`True` the activation function
+            is not applied to the activation of the last layer.
+        activation (Callable): optional, the activation function.
+        name (str): optional, the name of the network.
+        w_init (str or Callable): optional, specifies the initialization of the
+            linear weights. Possible string values are:
+
+            - ``'default'``: the default haiku initialization method is used.
+            - ``'deeperwin'``: the initialization method of the :class:`deeperwin`
+                package is used.
+    """
+
     def __init__(
         self,
         in_dim,

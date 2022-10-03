@@ -29,6 +29,8 @@ class MessagePassingLayer(hk.Module):
 
     def __call__(self, graph):
         r"""
+        Execute the message passing layer.
+
         Args:
             graph (:class:`Graph`)
 
@@ -39,7 +41,7 @@ class MessagePassingLayer(hk.Module):
 
     def get_update_edges_fn(self):
         r"""
-        Creates a function that updates the graph edges.
+        Create a function that updates the graph edges.
 
         Returns:
             :data:`Callable[GraphNodes,GraphEdges]`: a function
@@ -49,7 +51,7 @@ class MessagePassingLayer(hk.Module):
 
     def get_update_nodes_fn(self):
         r"""
-        Creates a function that updates the graph nodes.
+        Create a function that updates the graph nodes.
 
         Returns:
             :data:`Callable[GraphNodes,*]`: a function
@@ -60,7 +62,7 @@ class MessagePassingLayer(hk.Module):
 
     def get_aggregate_edges_for_nodes_fn(self):
         r"""
-        Creates a function that aggregates the graph edges.
+        Create a function that aggregates the graph edges.
 
         Returns:
             :data:`Callable[GraphNodes,GraphEdges]`: a function
@@ -72,6 +74,19 @@ class MessagePassingLayer(hk.Module):
 class GraphNeuralNetwork(hk.Module):
     r"""
     Base class for all graph neural networks on molecules.
+
+    Args:
+        mol (:class:`deepqmc.jax.Molecule`): the molecule on which the GNN
+            is defined
+        embedding_dim (int): the size of the electron embeddings to be returned.
+        cutoff (float): cutoff distance above which graph edges are discarded.
+        n_interactions (int): the number of interaction layers in the GNN.
+        layer_kwargs (dict): optional, kwargs to be passed to the layers.
+        ghost_coords (float, [N, 3]): optional, coordinates of ghost atoms.
+            These will be included as nuclear nodes in the graph. Useful for
+            breaking undesired spatial symmetries.
+        share_with_layers (dict): optional, attribute names and values to share
+            with the interaction layers.
     """
 
     def __init__(
@@ -84,20 +99,6 @@ class GraphNeuralNetwork(hk.Module):
         ghost_coords=None,
         share_with_layers=None,
     ):
-        r"""
-        Args:
-            mol (:class:`deepqmc.jax.Molecule`): the molecule on which the GNN
-                is defined
-            embedding_dim (int): the size of the electron embeddings to be returned.
-            cutoff (float): cutoff distance above which graph edges are discarded.
-            n_interactions (int): the number of interaction layers in the GNN.
-            layer_kwargs (dict): optional, kwargs to be passed to the layers.
-            ghost_coords (float, [N, 3]): optional, coordinates of ghost atoms.
-                These will be included as nuclear nodes in the graph. Useful for
-                breaking undesired spatial symmetries.
-            share_with_layers (dict): optional, attribute names and values to share
-                with the interaction layers.
-        """
         super().__init__()
         n_nuc, n_up, n_down = mol.n_particles
         self.coords = mol.coords
@@ -124,23 +125,18 @@ class GraphNeuralNetwork(hk.Module):
         self.n_up, self.n_down = n_up, n_down
 
     def init_state(self, shape, dtype):
-        r"""
-        Initializes the haiku state that communicates the sizes of edge lists.
-        """
+        r"""Initialize the haiku state that communicates the sizes of edge lists."""
         raise NotImplementedError
 
     def initial_embeddings(self):
-        r"""
-        Returns the initial embeddings as a :class:`GraphNodes` instance.
-        """
+        r"""Return the initial embeddings as a :class:`GraphNodes` instance."""
         raise NotImplementedError
 
     def edge_feature_callback(
         self, edge_type, pos_sender, pos_receiver, sender_idx, receiver_idx
     ):
         r"""
-        Defines the :func:`feature_callback` to be called on the edges
-        of different types.
+        Define the :func:`feature_callback` for the different types of edges.
 
         Args:
             edge_typ (str): name of the edge_type for which features are calculated.
@@ -161,13 +157,15 @@ class GraphNeuralNetwork(hk.Module):
     @property
     def edge_types(cls):
         r"""
-        A tuple containing the names of the edge types used in the GNN.
+        Return a tuple containing the names of the edge types used in the GNN.
+
         See :class:`~deepqmc.jax.gnn.graph.MolecularGraphEdgeBuilder` for possible
         edge types.
         """
         raise NotImplementedError
 
     def edge_factory(self, r, occupancies):
+        r"""Return a function that builds all the edges used in the GNN."""
         edge_factory = MolecularGraphEdgeBuilder(
             self.n_nuc,
             self.n_up,
@@ -187,13 +185,13 @@ class GraphNeuralNetwork(hk.Module):
     @classmethod
     @property
     def layer_factory(cls):
-        r"""
-        The class of interaction layer to be used.
-        """
+        r"""Return the class of the interaction layer to be used."""
         return MessagePassingLayer
 
     def __call__(self, r):
         r"""
+        Execute the graph neural network.
+
         Args:
             r (float, (:math:`N_\text{elec}`, 3)): electron coordinates.
 

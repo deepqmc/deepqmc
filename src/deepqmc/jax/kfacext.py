@@ -10,8 +10,11 @@ log = logging.getLogger(__name__)
 
 
 class DenseBlock(kfac_jax.DenseTwoKroneckerFactored):
-    """Modification of the kfac_jax dense block
-    that expands input to include batch dimension if necessary."""
+    r"""
+    Modification of the kfac_jax dense block.
+
+    Expand the input to include batch dimension, if necessary.
+    """
 
     def update_curvature_matrix_estimate(
         self,
@@ -78,14 +81,14 @@ class RepeatedDenseBlock(kfac_jax.DenseTwoKroneckerFactored):
 
 
 def _dense(x, params):
-    """Example of a dense layer function."""
+    """Compute a dense layer."""
     w, *opt_b = params
     y = jnp.matmul(x, w)
     return y if not opt_b else y + opt_b[0]
 
 
 def _dense_parameter_extractor(eqns):
-    """Extracts all parameters from the dot_general operator."""
+    """Extract all parameters from the dot_general operator."""
     for eqn in eqns:
         if eqn.primitive.name == 'dot_general':
             return dict(**eqn.params)
@@ -98,8 +101,7 @@ def make_dense_pattern(
     out_dim=7,
     extra_dims=None,
 ):
-    """Creates :class:`kfac_jax.tag_graph_matcher.GraphPattern`s
-    that match dense layers."""
+    r"""Create :class:`GraphPattern`s matching dense layers."""
     n_extra_dims = len(extra_dims or ())
     x_shape = (2, *(extra_dims or ()), in_dim)
     p_shapes = [[in_dim, out_dim], [out_dim]] if with_bias else [[in_dim, out_dim]]

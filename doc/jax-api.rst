@@ -14,6 +14,14 @@ This implementation uses the `JAX library <https://github.com/google/jax>`_, the
 
 .. automodule:: deepqmc.jax.hamil
 
+Haiku
+-----
+
+The JAX implementation uses the `haiku library <https://github.com/deepmind/dm-haiku>`_ to create, train and evaluate neural network models.
+Some additional neural network functionality is implemented in the package and documented here.
+
+.. automodule:: deepqmc.jax.hkext
+
 Training
 --------
 
@@ -21,10 +29,9 @@ Training
 
 .. automodule:: deepqmc.jax.fit
 
-Evaluation
-----------
-
 .. automodule:: deepqmc.jax.evaluate
+
+.. automodule:: deepqmc.jax.equilibrate
 
 Sampling
 --------
@@ -35,6 +42,11 @@ Wave functions
 --------------
 
 .. autoclass:: deepqmc.jax.wf.WaveFunction
+
+.. autoclass:: deepqmc.jax.wf.PauliNet
+
+.. automodule:: deepqmc.jax.wf.paulinet.paulinet
+   :exclude-members: PauliNet
 
 Graph neural networks
 ---------------------

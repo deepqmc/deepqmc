@@ -11,6 +11,7 @@ __all__ = ['Molecule']
 @dataclass(frozen=True, init=False)
 class Molecule:
     r"""Represents a molecule.
+
     The array-like arguments accept anything that can be transformed to
     :class:`jax.numpy.DeviceArray`.
 
