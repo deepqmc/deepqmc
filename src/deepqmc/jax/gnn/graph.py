@@ -9,8 +9,9 @@ GraphEdges = namedtuple('GraphEdges', 'senders receivers features')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
 
+
 def all_graph_edges(pos_sender, pos_receiver):
-    r"""Creates all graph edges.
+    r"""Create all graph edges.
 
     Args:
         pos_sender (float, (:math:`N_\text{nodes}`, 3)): coordinates of graph
@@ -27,7 +28,7 @@ def all_graph_edges(pos_sender, pos_receiver):
 
 
 def mask_self_edges(idx):
-    r"""Masks the edges where sender and receiver nodes have the same index.
+    r"""Mask the edges where sender and receiver nodes have the same index.
 
     Args:
         idx (int, (:math:`N_\text{nodes}`, :math:`N_\text{nodes}`)):
@@ -84,8 +85,9 @@ def prune_graph_edges(
         sending and edge receiving nodes, along with the features associated
         with the edges.
     """
+
     def apply_callback(pos_sender, pos2, sender_idx, receiver_idx):
-        r"Applies the feature_callback function, or returns the default of no features."
+        r"""Apply the feature_callback function, or return no features."""
         return (
             feature_callback(pos_sender, pos2, sender_idx, receiver_idx)
             if feature_callback
@@ -107,7 +109,7 @@ def prune_graph_edges(
 
     @no_grad
     def dist(sender, receiver):
-        r"Computes pairwise distances between inputs."
+        r"""Compute pairwise distances between inputs."""
         return jnp.sqrt(((receiver - sender) ** 2).sum(axis=-1))
 
     N_sender, N_receiver = pos_sender.shape[0], pos_receiver.shape[0]
@@ -140,7 +142,7 @@ def prune_graph_edges(
 
 
 def difference_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
-    r"A feature_callback which computes the Euclidian difference vector for each edge."
+    r"""feature_callback computing the Euclidian difference vector for each edge."""
     if len(pos_sender) == 0 or len(pos_receiver) == 0:
         return jnp.zeros((len(sender_idx), 3))
     diffs = pos_receiver[receiver_idx] - pos_sender[sender_idx]
@@ -155,7 +157,7 @@ def GraphEdgeBuilder(
     feature_callback,
 ):
     r"""
-    Creates a function that builds graph edges.
+    Create a function that builds graph edges.
 
     Args:
         cutoff (float): the cutoff distance above which edges are discarded.
@@ -170,9 +172,10 @@ def GraphEdgeBuilder(
             receiver positions, sender node indeces and receiver node indeces and
             returns some data (features) computed for the edges.
     """
+
     def build(pos_sender, pos_receiver, occupancies):
         r"""
-        Builds graph edges.
+        Build graph edges.
 
         Args:
             pos_sender (float, (:math:`N_{nodes}`, 3)): coordinates of graph nodes
@@ -218,10 +221,10 @@ def GraphEdgeBuilder(
 
 def concatenate_edges(edges_and_occs):
     r"""
-    Utility function to concatenate two edge lists.
+    Concatenate two edge lists.
 
-    Used only internally, e.g. to concatenate ``uu`` and ``dd`` edges to get all
-    ``same`` edges.
+    Utility function used only internally, e.g. to concatenate ``uu`` and ``dd``
+    edges to get all ``same`` edges.
     """
     edges = [edge_occ[0] for edge_occ in edges_and_occs]
     occupancies = tuple(edge_occ[1] for edge_occ in edges_and_occs)
@@ -238,7 +241,7 @@ def MolecularGraphEdgeBuilder(
     n_nuc, n_up, n_down, nuc_coords, edge_types, kwargs_by_edge_type=None
 ):
     r"""
-    Creates a function that builds many types of molecular edges.
+    Create a function that builds many types of molecular edges.
 
     Args:
         n_nuc (int): number of nuclei.
@@ -330,6 +333,14 @@ def MolecularGraphEdgeBuilder(
     }
 
     def build(r, occupancies):
+        r"""
+        Build many types of molecular graph edges.
+
+        Args:
+            r (float (:math:`N_\text{elec}`, 3)): electron coordinates.
+            occupancies (dict): mapping of edge type names to arrays where the occupancy
+                of the given edge type is stored.
+        """
         assert r.shape[0] == n_up + n_down
 
         edges_and_occs = {
@@ -349,7 +360,7 @@ def GraphUpdate(
     update_edges_fn=None,
 ):
     r"""
-    Creates a function that updates a graph.
+    Create a function that updates a graph.
 
     The update function is tailored to be used in GNNs.
 
@@ -359,6 +370,7 @@ def GraphUpdate(
         update_nodes_fn (Callable): optional, function that updates the nodes.
         update_edges_fn (Callable): optional, function that updates the edges.
     """
+
     def update_graph(graph):
         nodes, edges = graph
 

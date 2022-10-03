@@ -47,6 +47,45 @@ def eval_log_slater(xs):
 
 
 class PauliNet(WaveFunction):
+    r"""
+    Implement the PauliNet Ansatz from [HermannNC20]_.
+
+    Args:
+        hamil (~jax.MolecularHamiltonian): the Hamiltonian of the system.
+        basis (~jax.wf.paulinet.env.ExponentialEnvelopes): optional, the orbital
+            envelopes.
+        confs (int, (:math:`N_\text{conf}`, :math:`N_\text{elec}`)): optional,
+            specifies the electronic configuration, i.e. the occupied orbitals
+            in each determinant. The value of :data:`confs[i,j]` is the index of
+            the orbital occupied by the :data:`j` th electron in the :data:`i` th
+            determinant.
+        backflow_op (Callable): optional, specifies how the backflow is applied
+            to the orbitals.
+        full_determinant (bool): optional, if :data:`False`, the determinants are
+            factorized into spin-up and spin-down parts.
+        cusp_electrons (bool): optional, whether to apply the electronic cusp
+            correction.
+        cusp_alpha (float): optional, the :math:`\alpha` factor of the electronic
+            cusp correction.
+        backflow_type (str): optional, specifies the type of backflow applied:
+
+            - ``'orbital'``: the same backflow is applied to an orbital in
+                    all determinants
+            - ``'determinant'``: separate backflows are applied to each orbital in
+                    each determinant
+        backflow_channels (int): optional, the number of chanells of backflow.
+        backflow_transform (str): optional, describes the backflow transformation.
+            Possible values:
+
+            - ``'mult'``: the backflow is a multiplicative factor
+            - ``'add'``: the backflow is an additive term
+            - ``'both'``: the backflow consist of a multiplicative factor
+                and an additive term
+        omni_factory (Callable): optional, creates the omni net.
+        omni_kwargs (dict): optional, extra arguments passed to
+            :data:`omni_factory`.
+    """
+
     def __init__(
         self,
         hamil,

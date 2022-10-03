@@ -176,8 +176,7 @@ class SchNetLayer(MessagePassingLayer):
 
 class SchNet(GraphNeuralNetwork):
     r"""
-    The SchNet graph message passing architecture adapted for graphs
-    of nuclei and electrons.
+    The SchNet GNN architecture adapted for graphs of nuclei and electrons.
 
     Derived from :class:`~deepqmc.jax.gnn.gnn.GraphNeuralNetwork`.
 
