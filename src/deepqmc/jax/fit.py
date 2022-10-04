@@ -55,10 +55,10 @@ def fit_wf(  # noqa: C901
 ):
     @partial(jax.custom_jvp, nondiff_argnums=(1, 2))
     def loss_fn(params, state, batch):
-        rs, weights = batch
-        wf = lambda state, rs: ansatz.apply(params, state, rs)[0]
-        E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(state, rs)
-        loss = jnp.nanmean(E_loc * weights)
+        r, weight = batch
+        wf = lambda state, r: ansatz.apply(params, state, r)[0]
+        E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(state, r)
+        loss = jnp.nanmean(E_loc * weight)
         stats = {
             'E_loc/mean': jnp.nanmean(E_loc),
             'E_loc/std': jnp.nanstd(E_loc),
@@ -75,7 +75,7 @@ def fit_wf(  # noqa: C901
 
     @loss_fn.defjvp
     def loss_jvp(state, batch, primals, tangents):
-        rs, weights = batch
+        r, weight = batch
         (params,) = primals
         loss, other = loss_fn(params, state, batch)
         # other is (state, aux) as per kfac-jax's convention
@@ -83,12 +83,12 @@ def fit_wf(  # noqa: C901
         E_loc_s, sigma = median_log_squeeze(E_loc, clip_width, clip_quantile)
 
         def log_likelihood(params):  # log(psi(theta))
-            wf = lambda state, rs: ansatz.apply(params, state, rs)[0]
-            return jax.vmap(wf)(state, rs).log
+            wf = lambda state, r: ansatz.apply(params, state, r)[0]
+            return jax.vmap(wf)(state, r).log
 
         log_psi, log_psi_tangent = jax.jvp(log_likelihood, primals, tangents)
         kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
-        loss_tangent = (E_loc_s - jnp.mean(E_loc_s)) * log_psi_tangent * weights
+        loss_tangent = (E_loc_s - jnp.mean(E_loc_s)) * log_psi_tangent * weight
         loss_tangent = masked_mean(loss_tangent, sigma < exclude_width)
         return (loss, other), (loss_tangent, other)
         # jax.custom_jvp has actually no official support for auxiliary output.
@@ -102,10 +102,10 @@ def fit_wf(  # noqa: C901
 
         @jax.jit
         def train_step(rng, params, opt_state, smpl_state):
-            rs, smpl_state, smpl_stats = sample_wf(rng, params, smpl_state)
-            weights = exp_normalize_mean(smpl_state['log_weights'])
+            r, smpl_state, smpl_stats = sample_wf(rng, params, smpl_state)
+            weight = exp_normalize_mean(smpl_state['log_weights'])
             (loss, (_, (E_loc, loss_stats))), grads = energy_and_grad_fn(
-                params, smpl_state['wf_state'], (rs, weights)
+                params, smpl_state['wf_state'], (r, weight)
             )
             updates, opt_state = opt.update(grads, opt_state, params)
             param_norm, update_norm, grad_norm = map(
@@ -126,15 +126,15 @@ def fit_wf(  # noqa: C901
 
         def train_step(rng, params, opt_state, smpl_state):
             rng_sample, rng_kfac = jax.random.split(rng)
-            rs, smpl_state, smpl_stats = sample_wf(rng_sample, params, smpl_state)
-            weights = exp_normalize_mean(jnp.copy(smpl_state['log_weights']))
+            r, smpl_state, smpl_stats = sample_wf(rng_sample, params, smpl_state)
+            weight = exp_normalize_mean(jnp.copy(smpl_state['log_weights']))
             wf_state = jax.tree_util.tree_map(jnp.copy, smpl_state['wf_state'])
             params, opt_state, _, opt_stats = opt.step(
                 params,
                 opt_state,
                 rng_kfac,
                 func_state=wf_state,
-                batch=(rs, weights),
+                batch=(r, weight),
                 momentum=0,
                 damping=5e-4,
             )
