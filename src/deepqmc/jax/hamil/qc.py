@@ -11,12 +11,6 @@ from ..physics import (
 all__ = ()
 
 
-def laplacian_flat(f):
-    return lambda state, r: laplacian(lambda r: f(state, r.reshape((-1, 3))))(
-        r.flatten()
-    )
-
-
 class MolecularHamiltonian:
     def __init__(self, mol):
         self.mol = mol
@@ -46,7 +40,9 @@ class MolecularHamiltonian:
 
     def local_energy(self, wf, return_grad=False):
         def loc_ene(state, r, mol=self.mol):
-            lap_log_psis, quantum_force = laplacian_flat(wf)(state, r)
+            lap_log_psis, quantum_force = laplacian(
+                lambda r: wf(state, r.reshape((-1, 3))).log
+            )(r.flatten())
             Es_kin = -0.5 * (lap_log_psis + (quantum_force**2).sum(axis=-1))
             Es_nuc = nuclear_energy(mol)
             Vs_nuc = nuclear_potential(r, mol)
