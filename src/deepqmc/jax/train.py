@@ -20,10 +20,6 @@ __all__ = 'train'
 log = logging.getLogger(__name__)
 
 
-def InverseLR(lr, decay_rate):
-    return lambda n: lr / (1 + n / decay_rate)
-
-
 def train(
     hamil,
     ansatz,
