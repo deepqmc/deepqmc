@@ -1,7 +1,9 @@
 import logging
 from functools import partial
 from operator import add
+from statistics import mean, stdev
 
+import haiku as hk
 import jax
 import jax.numpy as jnp
 
@@ -216,6 +218,41 @@ def clean_force(force, r, mol, *, tau):
     return force
 
 
+def equilibrate(
+    rng,
+    wf,
+    sampler,
+    state,
+    criterion,
+    steps,
+    state_callback=None,
+    *,
+    block_size,
+    n_blocks=5,
+):
+    @jax.jit
+    def sample_wf(state, rng):
+        return sampler.sample(state, rng, wf)
+
+    buffer_size = block_size * n_blocks
+    buffer = []
+    for step, rng in zip(steps, hk.PRNGSequence(rng)):
+        r, state, stats = sample_wf(state_prev := state, rng)
+        if state_callback:
+            wf_state, overflow = state_callback(state['wf_state'])
+            if overflow:
+                state = state_prev
+                state['wf_state'] = wf_state
+                continue
+        yield step, state, stats
+        buffer = [*buffer[-buffer_size + 1 :], criterion(r)]
+        if len(buffer) < buffer_size:
+            continue
+        b1, b2 = buffer[:block_size], buffer[-block_size:]
+        if abs(mean(b1) - mean(b2)) < min(stdev(b1), stdev(b2)):
+            break
+
+
 def init_sampling(
     rng,
     hamil,
@@ -246,8 +283,4 @@ def init_sampling(
         if overflow:
             smpl_state = sampler.init(rng_smpl, wf, wf_state)
 
-    @jax.jit
-    def sample_wf(rng, params, smpl_state):
-        return sampler.sample(smpl_state, rng, partial(ansatz.apply, params))
-
-    return params, smpl_state, sample_wf
+    return params, smpl_state, sampler

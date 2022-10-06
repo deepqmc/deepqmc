@@ -1,4 +1,3 @@
-import copy
 import logging
 from collections import namedtuple
 from functools import partial
@@ -9,8 +8,6 @@ import jax.numpy as jnp
 import kfac_jax
 import optax
 
-from .errors import NanError
-from .ewm import ewm
 from .kfacext import GRAPH_PATTERNS
 from .utils import exp_normalize_mean, masked_mean, tree_norm
 
@@ -40,14 +37,13 @@ def fit_wf(  # noqa: C901
     rng,
     hamil,
     ansatz,
-    state_callback,
     params,
     opt,
-    sample_wf,
+    sampler,
     smpl_state,
     steps,
-    log_dict=None,
-    rewind=0,
+    state_callback=None,
+    opt_state=None,
     *,
     clip_width=1.0,
     exclude_width=jnp.inf,
@@ -102,7 +98,9 @@ def fit_wf(  # noqa: C901
 
         @jax.jit
         def train_step(rng, params, opt_state, smpl_state):
-            r, smpl_state, smpl_stats = sample_wf(rng, params, smpl_state)
+            r, smpl_state, smpl_stats = sampler.sample(
+                smpl_state, rng, partial(ansatz.apply, params)
+            )
             weight = exp_normalize_mean(smpl_state['log_weights'])
             (loss, (_, (E_loc, loss_stats))), grads = energy_and_grad_fn(
                 params, smpl_state['wf_state'], (r, weight)
@@ -119,10 +117,15 @@ def fit_wf(  # noqa: C901
                 **smpl_stats,
                 **loss_stats,
             }
-            return TrainState(params, opt_state, smpl_state), stats, E_loc
+            return TrainState(params, opt_state, smpl_state), E_loc, stats
 
-        opt_state = opt.init(params)
+        if not opt_state:
+            opt_state = opt.init(params)
     else:
+
+        @jax.jit
+        def sample_wf(rng, params, state):
+            return sampler.sample(state, rng, partial(ansatz.apply, params))
 
         def train_step(rng, params, opt_state, smpl_state):
             rng_sample, rng_kfac = jax.random.split(rng)
@@ -145,7 +148,7 @@ def fit_wf(  # noqa: C901
                 **smpl_stats,
                 **opt_stats['aux'][1],
             }
-            return TrainState(params, opt_state, smpl_state), stats, opt_stats['aux'][0]
+            return TrainState(params, opt_state, smpl_state), opt_stats['aux'][0], stats
 
         opt = opt(
             value_and_grad_func=energy_and_grad_fn,
@@ -161,45 +164,21 @@ def fit_wf(  # noqa: C901
             num_burnin_steps=0,
             learning_rate_schedule=lambda s: 1e-2 / (1 + s / 6000),
         )
-        opt_state = opt.init(
-            params,
-            rng,
-            (smpl_state['r'], exp_normalize_mean(smpl_state['log_weights'])),
-            func_state=smpl_state['wf_state'],
-        )
+        if not opt_state:
+            opt_state = opt.init(
+                params,
+                rng,
+                (smpl_state['r'], smpl_state['log_weights']),
+                smpl_state['wf_state'],
+            )
 
-    history = []
-    ewm_state = ewm()
-    train_state = TrainState(params, opt_state, smpl_state)
+    train_state = params, opt_state, smpl_state
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        history.append(copy.deepcopy(train_state))
-        history = history[-max(rewind, 1) :]
-        done = False
-        while not done:
-            new_train_state, train_stats, E_loc = train_step(rng, *train_state)
-            if state_callback:
-                wf_state, overflow = state_callback(new_train_state[2]['wf_state'])
-            if state_callback and overflow:
-                train_state = copy.deepcopy(history.pop(-1))
-                train_state[2]['wf_state'] = wf_state
-                history.append(copy.deepcopy(train_state))
-            elif jnp.isnan(new_train_state[2]['psi'].log).any():
-                if rewind and len(history) >= rewind:
-                    train_state = history.pop(0)
-                else:
-                    raise NanError()
-            else:
-                train_state = new_train_state
-                done = True
-        ewm_state = ewm(train_stats['E_loc/mean'], ewm_state)
-        train_stats = {
-            'energy/ewm': ewm_state.mean,
-            'energy/ewm_error': jnp.sqrt(ewm_state.sqerr),
-            **train_stats,
-        }
-        if log_dict:
-            log_dict['E_loc'] = E_loc
-            log_dict['E_ewm'] = ewm_state.mean
-            log_dict['sign_psi'] = train_state[2]['psi'].sign
-            log_dict['log_psi'] = train_state[2]['psi'].log
-        yield step, train_state, train_stats
+        train_state, E_loc, stats = train_step(rng, *(train_state_prev := train_state))
+        if state_callback:
+            wf_state, overflow = state_callback(train_state.sampler['wf_state'])
+            if overflow:
+                train_state = train_state_prev
+                train_state.sampler['wf_state'] = wf_state
+                continue
+        yield step, train_state, E_loc, stats
