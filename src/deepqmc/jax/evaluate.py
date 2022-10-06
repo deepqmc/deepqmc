@@ -24,12 +24,12 @@ def evaluate(  # noqa: C901
     ansatz,
     state_callback,
     params,
-    steps,
+    n_steps,
     seed,
     workdir=None,
     sampling_kwargs=None,
     *,
-    steps_eq=500,
+    n_steps_eq=500,
 ):
     ewm_state = ewm()
     rng = jax.random.PRNGKey(seed)
@@ -69,10 +69,10 @@ def evaluate(  # noqa: C901
         return smpl_state, stats, E_loc
 
     try:
-        if steps_eq:
+        if n_steps_eq:
             log.info('Equilibrating...')
             rng, rng_eq = jax.random.split(rng)
-            pbar = tqdm(range(steps_eq), desc='equilibrate', disable=None)
+            pbar = tqdm(range(n_steps_eq), desc='equilibrate', disable=None)
             for step, smpl_state, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
                 ansatz,
@@ -84,11 +84,11 @@ def evaluate(  # noqa: C901
             ):
                 if workdir:
                     for k, v in smpl_stats.items():
-                        writer.add_scalar(k, v, step - steps_eq)
+                        writer.add_scalar(k, v, step - n_steps_eq)
             pbar.close()
 
         log.info('Start evaluating')
-        pbar = tqdm(range(steps), desc='evaluate', disable=None)
+        pbar = tqdm(range(n_steps), desc='evaluate', disable=None)
         enes = []
         for step, rng in zip(pbar, hk.PRNGSequence(rng)):
             log_dict = table.row if workdir else None
@@ -111,7 +111,7 @@ def evaluate(  # noqa: C901
 
             if ene.s:
                 pbar.set_postfix(E=f'{ene:S}')
-                log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
+                log.info(f'Progress: {step + 1}/{n_steps}, energy = {ene:S}')
             if workdir:
                 for k, v in eval_stats.items():
                     writer.add_scalar(k, v, step)
