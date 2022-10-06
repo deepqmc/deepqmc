@@ -1,4 +1,5 @@
 import logging
+from functools import partial
 
 import h5py
 import haiku as hk
@@ -9,10 +10,10 @@ import tensorboard.summary
 from tqdm.auto import tqdm
 from uncertainties import ufloat
 
-from .equilibrate import equilibrate
 from .ewm import ewm
 from .log import H5LogTable
-from .sampling import init_sampling
+from .physics import pairwise_self_distance
+from .sampling import equilibrate, init_sampling
 
 __all__ = ['evaluate']
 
@@ -24,7 +25,7 @@ def evaluate(  # noqa: C901
     ansatz,
     state_callback,
     params,
-    n_steps,
+    steps,
     seed,
     workdir=None,
     sampling_kwargs=None,
@@ -34,7 +35,7 @@ def evaluate(  # noqa: C901
     ewm_state = ewm()
     rng = jax.random.PRNGKey(seed)
     rng, rng_init = jax.random.split(rng)
-    _, smpl_state, sample_wf = init_sampling(
+    _, smpl_state, sampler = init_sampling(
         rng_init,
         hamil,
         ansatz,
@@ -53,7 +54,9 @@ def evaluate(  # noqa: C901
 
     @jax.jit
     def eval_step(rng, smpl_state):
-        rs, smpl_state, smpl_stats = sample_wf(rng, params, smpl_state)
+        rs, smpl_state, smpl_stats = sampler.sample(
+            smpl_state, rng, partial(ansatz.apply, params)
+        )
         wf = lambda state, rs: ansatz.apply(params, state, rs)[0]
         E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(
             smpl_state['wf_state'], rs
@@ -66,7 +69,7 @@ def evaluate(  # noqa: C901
             'E_loc/min': jnp.min(E_loc),
             **jax.tree_util.tree_map(jnp.mean, hamil_stats),
         }
-        return smpl_state, stats, E_loc
+        return smpl_state, E_loc, stats
 
     try:
         if n_steps_eq:
@@ -75,12 +78,13 @@ def evaluate(  # noqa: C901
             pbar = tqdm(range(n_steps_eq), desc='equilibrate', disable=None)
             for step, smpl_state, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
-                ansatz,
-                state_callback,
-                sample_wf,
-                params,
+                partial(ansatz.apply, params),
+                sampler,
                 smpl_state,
+                lambda r: pairwise_self_distance(r).mean().item(),
                 pbar,
+                state_callback,
+                block_size=10,
             ):
                 if workdir:
                     for k, v in smpl_stats.items():
@@ -88,38 +92,37 @@ def evaluate(  # noqa: C901
             pbar.close()
 
         log.info('Start evaluating')
-        pbar = tqdm(range(n_steps), desc='evaluate', disable=None)
+        pbar = tqdm(range(steps), desc='evaluate', disable=None)
         enes = []
+        best_err = None
         for step, rng in zip(pbar, hk.PRNGSequence(rng)):
-            log_dict = table.row if workdir else None
-            new_smpl_state, eval_stats, E_loc = eval_step(rng, smpl_state)
+            smpl_state, E_loc, stats = eval_step(rng, smpl_state_prev := smpl_state)
             if state_callback:
-                state, overflow = state_callback(new_smpl_state['wf_state'])
+                wf_state, overflow = state_callback(smpl_state['wf_state'])
                 if overflow:
-                    smpl_state['wf_state'] = state
-                    _, new_smpl_state, smpl_stats = sample_wf(rng, smpl_state)
-            smpl_state = new_smpl_state
-
-            ewm_state = ewm(eval_stats['E_loc/mean'], ewm_state)
-            eval_stats = {
+                    smpl_state = smpl_state_prev
+                    smpl_state['wf_state'] = wf_state
+                    continue
+            ewm_state = ewm(stats['E_loc/mean'], ewm_state)
+            stats = {
                 'energy/ewm': ewm_state.mean,
                 'energy/ewm_error': jnp.sqrt(ewm_state.sqerr),
-                **eval_stats,
+                **stats,
             }
-            ene = ufloat(ewm_state.mean, np.sqrt(ewm_state.sqerr))
+            ene = ufloat(stats['energy/ewm'], stats['energy/ewm_error'])
             enes.append(ene)
-
             if ene.s:
                 pbar.set_postfix(E=f'{ene:S}')
-                log.info(f'Progress: {step + 1}/{n_steps}, energy = {ene:S}')
+                if best_err is None or ene.s < 0.5 * best_err:
+                    best_err = ene.s
+                    log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
             if workdir:
-                for k, v in eval_stats.items():
+                for k, v in stats.items():
                     writer.add_scalar(k, v, step)
-            if log_dict:
-                log_dict['E_loc'] = E_loc
-                log_dict['E_ewm'] = ewm_state.mean
-                log_dict['sign_psi'] = smpl_state['psi'].sign
-                log_dict['log_psi'] = smpl_state['psi'].log
+                table.row['E_loc'] = E_loc
+                table.row['E_ewm'] = ewm_state.mean
+                table.row['sign_psi'] = smpl_state['psi'].sign
+                table.row['log_psi'] = smpl_state['psi'].log
         return np.array(enes)
     finally:
         pbar.close()
