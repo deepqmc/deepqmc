@@ -54,7 +54,7 @@ def evaluate(  # noqa: C901
     @jax.jit
     def eval_step(rng, smpl_state):
         rs, smpl_state, smpl_stats = sample_wf(rng, params, smpl_state)
-        wf = lambda state, rs: ansatz.apply(params, state, rs)[0].log
+        wf = lambda state, rs: ansatz.apply(params, state, rs)[0]
         E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(
             smpl_state['wf_state'], rs
         )
