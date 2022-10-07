@@ -1,6 +1,8 @@
 import jax
 import jax.numpy as jnp
 
+from .utils import triu_flat
+
 
 def pairwise_distance(coords1, coords2):
     return jnp.linalg.norm(coords1[..., :, None, :] - coords2[..., None, :, :], axis=-1)
@@ -28,22 +30,17 @@ def pairwise_self_distance(coords, full=False):
 
 def nuclear_energy(mol):
     coords, charges = mol.coords, mol.charges
-    coulombs = (
-        charges[:, None] * charges / jnp.linalg.norm(coords[:, None] - coords, axis=-1)
-    )
-    return jnp.triu(coulombs, 1).sum()
+    coulombs = triu_flat(charges[:, None] * charges) / pairwise_self_distance(coords)
+    return coulombs.sum()
 
 
 def nuclear_potential(rs, mol):
-    dists = jnp.linalg.norm(rs[..., :, None, :] - mol.coords, axis=-1)
+    dists = pairwise_distance(rs, mol.coords)
     return -(mol.charges / dists).sum(axis=(-1, -2))
 
 
 def electronic_potential(rs):
-    i, j = jnp.triu_indices(rs.shape[-2], k=1)
-    dists = jnp.linalg.norm(
-        (rs[..., :, None, :] - rs[..., None, :, :])[..., i, j, :], axis=-1
-    )
+    dists = pairwise_self_distance(rs)
     return (1 / dists).sum(axis=-1)
 
 
