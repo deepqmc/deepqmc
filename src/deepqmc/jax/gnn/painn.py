@@ -29,13 +29,13 @@ class PaiNNLayer(MessagePassingLayer):
         default_n_layers = {'w': n_layers_w, 'h': n_layers_h, 'g': n_layers_g}
 
         subnet_kwargs = subnet_kwargs or {}
-        subnet_kwargs.setdefault('bias', False)
         subnet_kwargs.setdefault('last_linear', True)
         subnet_kwargs.setdefault('activation', nn.silu)
 
         subnet_kwargs_by_lbl = subnet_kwargs_by_lbl or {}
         for lbl in self.subnet_labels:
             subnet_kwargs_by_lbl.setdefault(lbl, {})
+            subnet_kwargs_by_lbl[lbl].setdefault('bias', lbl != 'w')
             for k, v in subnet_kwargs.items():
                 subnet_kwargs_by_lbl[lbl].setdefault(k, v)
             subnet_kwargs_by_lbl[lbl].setdefault(

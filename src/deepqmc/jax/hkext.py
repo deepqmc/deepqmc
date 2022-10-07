@@ -28,9 +28,9 @@ class MLP(hk.Module):
         bias (str): optional, specifies which layers should have a bias term.
             Possible values are
 
-            - ``'all'``: all layers will have a bias term
+            - :data:`True`: all layers will have a bias term
+            - :data:`False`: no layers will have a bias term
             - ``'not_last'``: all but the last layer will have a bias term
-            - ``'none'``: no layers will have a bias term
         last_linear (bool): optional, if :data:`True` the activation function
             is not applied to the activation of the last layer.
         activation (Callable): optional, the activation function.
@@ -48,13 +48,13 @@ class MLP(hk.Module):
         in_dim,
         out_dim,
         hidden_layers=None,
-        bias='all',
+        bias=True,
         last_linear=False,
         activation=ssp,
         name=None,
         w_init='default',
     ):
-        assert bias in ('all', 'not_last', False)
+        assert bias in (True, False, 'not_last')
         super().__init__(name=name)
         self.activation = activation
         self.last_linear = last_linear
@@ -72,7 +72,7 @@ class MLP(hk.Module):
             dims = [*hidden_layers, out_dim]
         self.layers = []
         for idx, dim in enumerate(dims):
-            with_bias = bias == 'all' or (bias == 'not_last' and idx < (len(dims) - 1))
+            with_bias = bias is True or (bias == 'not_last' and idx < (len(dims) - 1))
             self.layers.append(
                 hk.Linear(
                     output_size=dim,
