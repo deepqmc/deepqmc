@@ -14,10 +14,10 @@ from tqdm.auto import tqdm
 from uncertainties import ufloat
 
 from .ewm import ewm
-from .fit import fit_wf
+from .fit import fit_wf, init_fit
 from .log import H5LogTable
 from .physics import pairwise_self_distance
-from .sampling import equilibrate, init_sampling
+from .sampling import equilibrate
 
 __all__ = ['train']
 
@@ -28,21 +28,18 @@ def train(
     hamil,
     ansatz,
     opt,
+    sampler,
     workdir=None,
     state_callback=None,
     *,
     steps,
+    sample_size,
     seed,
-    sampling_kwargs=None,
-    fit_kwargs=None,
     max_restarts=3,
+    **kwargs,
 ):
     ewm_state = ewm()
     rng = jax.random.PRNGKey(seed)
-    rng, rng_init = jax.random.split(rng)
-    params, smpl_state, sampler = init_sampling(
-        rng_init, hamil, ansatz, state_callback, **(sampling_kwargs or {})
-    )
     if workdir:
         chkpts = CheckpointStore(workdir)
         writer = tensorboard.summary.Writer(workdir)
@@ -51,16 +48,16 @@ def train(
         h5file.swmr_mode = True
         table = H5LogTable(h5file)
         h5file.flush()
-    num_params = jax.tree_util.tree_reduce(
-        operator.add, jax.tree_map(lambda x: x.size, params)
-    )
-    log.info(f'Number of model parameters: {num_params}')
     try:
+        params, smpl_state = init_fit(rng, hamil, ansatz, sampler, sample_size)
+        num_params = jax.tree_util.tree_reduce(
+            operator.add, jax.tree_map(lambda x: x.size, params)
+        )
+        log.info(f'Number of model parameters: {num_params}')
         log.info('Equilibrating sampler...')
-        rng, rng_eq = jax.random.split(rng)
         pbar = tqdm(count(), desc='equilibrate', disable=None)
         for _, smpl_state, smpl_stats in equilibrate(  # noqa: B007
-            rng_eq,
+            rng,
             partial(ansatz.apply, params),
             sampler,
             smpl_state,
@@ -78,24 +75,23 @@ def train(
         log.info('Start training')
         pbar = tqdm(range(steps), desc='train', disable=None)
         best_ene = None
-        opt_state = None
+        train_state = params, None, smpl_state
         for _ in range(max_restarts):
             for step, train_state, E_loc, stats in fit_wf(  # noqa: B007
                 rng,
                 hamil,
                 ansatz,
-                params,
                 opt,
                 sampler,
-                smpl_state,
+                sample_size,
                 pbar,
                 state_callback,
-                opt_state,
-                **(fit_kwargs or {}),
+                train_state,
+                **kwargs,
             ):
                 if jnp.isnan(train_state.sampler['psi'].log).any():
                     log.warn('Restarting due to a NaN...')
-                    step, (params, opt_state, smpl_state) = chkpts.last
+                    step, train_state = chkpts.last
                     pbar.close()
                     pbar = tqdm(range(step, steps), desc='train', disable=None)
                     break

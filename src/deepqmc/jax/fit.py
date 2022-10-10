@@ -1,4 +1,3 @@
-import logging
 from collections import namedtuple
 from functools import partial
 
@@ -13,7 +12,6 @@ from .utils import exp_normalize_mean, masked_mean, tree_norm
 
 __all__ = ()
 
-log = logging.getLogger(__name__)
 TrainState = namedtuple('TrainState', 'params opt sampler')
 
 
@@ -33,19 +31,25 @@ def median_log_squeeze(x, width, quantile):
     )
 
 
+def init_fit(rng, hamil, ansatz, sampler, sample_size):
+    r = hamil.init_sample(rng, sample_size)
+    params, wf_state = jax.vmap(ansatz.init, (None, 0), (None, 0))(rng, r)
+    smpl_state = sampler.init(rng, partial(ansatz.apply, params), wf_state, sample_size)
+    return params, smpl_state
+
+
 def fit_wf(  # noqa: C901
     rng,
     hamil,
     ansatz,
-    params,
     opt,
     sampler,
-    smpl_state,
+    sample_size,
     steps,
     state_callback=None,
-    opt_state=None,
+    train_state=None,
     *,
-    clip_width=1.0,
+    clip_width,
     exclude_width=jnp.inf,
     clip_quantile=0.95,
 ):
@@ -94,6 +98,13 @@ def fit_wf(  # noqa: C901
 
     energy_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
+    if train_state:
+        params, opt_state, smpl_state = train_state
+    else:
+        params, smpl_state = init_fit(rng, hamil, ansatz, sampler, sample_size)
+        opt_state = None
+    smpl_state = {'log_weight': jnp.zeros(sample_size), **smpl_state}
+
     if isinstance(opt, optax.GradientTransformation):
 
         @jax.jit
@@ -101,9 +112,9 @@ def fit_wf(  # noqa: C901
             r, smpl_state, smpl_stats = sampler.sample(
                 smpl_state, rng, partial(ansatz.apply, params)
             )
-            weight = exp_normalize_mean(smpl_state['log_weights'])
+            weight = exp_normalize_mean(smpl_state['log_weight'])
             (loss, (_, (E_loc, loss_stats))), grads = energy_and_grad_fn(
-                params, smpl_state['wf_state'], (r, weight)
+                params, smpl_state['wf'], (r, weight)
             )
             updates, opt_state = opt.update(grads, opt_state, params)
             param_norm, update_norm, grad_norm = map(
@@ -130,8 +141,8 @@ def fit_wf(  # noqa: C901
         def train_step(rng, params, opt_state, smpl_state):
             rng_sample, rng_kfac = jax.random.split(rng)
             r, smpl_state, smpl_stats = sample_wf(rng_sample, params, smpl_state)
-            weight = exp_normalize_mean(jnp.copy(smpl_state['log_weights']))
-            wf_state = jax.tree_util.tree_map(jnp.copy, smpl_state['wf_state'])
+            weight = exp_normalize_mean(jnp.copy(smpl_state['log_weight']))
+            wf_state = jax.tree_util.tree_map(jnp.copy, smpl_state['wf'])
             params, opt_state, _, opt_stats = opt.step(
                 params,
                 opt_state,
@@ -168,17 +179,17 @@ def fit_wf(  # noqa: C901
             opt_state = opt.init(
                 params,
                 rng,
-                (smpl_state['r'], smpl_state['log_weights']),
-                smpl_state['wf_state'],
+                (smpl_state['r'], smpl_state['log_weight']),
+                smpl_state['wf'],
             )
 
     train_state = params, opt_state, smpl_state
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
         train_state, E_loc, stats = train_step(rng, *(train_state_prev := train_state))
         if state_callback:
-            wf_state, overflow = state_callback(train_state.sampler['wf_state'])
+            wf_state, overflow = state_callback(train_state.sampler['wf'])
             if overflow:
                 train_state = train_state_prev
-                train_state.sampler['wf_state'] = wf_state
+                train_state.sampler['wf'] = wf_state
                 continue
         yield step, train_state, E_loc, stats

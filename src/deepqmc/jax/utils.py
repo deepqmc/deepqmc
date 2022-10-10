@@ -62,3 +62,10 @@ def norm(rs, safe=False, axis=-1):
         if safe
         else jnp.linalg.norm(rs, axis=axis)
     )
+
+
+def split_dict(dct, cond):
+    included, excluded = {}, {}
+    for k, v in dct.items():
+        (included if cond(k) else excluded)[k] = v
+    return included, excluded
