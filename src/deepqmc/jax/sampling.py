@@ -6,9 +6,10 @@ from statistics import mean, stdev
 import haiku as hk
 import jax
 import jax.numpy as jnp
+from jax import lax
 
 from .physics import pairwise_diffs, pairwise_self_distance
-from .utils import multinomial_resampling
+from .utils import multinomial_resampling, split_dict
 
 __all__ = ()
 
@@ -16,43 +17,27 @@ log = logging.getLogger(__name__)
 
 
 class MetropolisSampler:
-    def __init__(
-        self,
-        hamil,
-        sample_size=2000,
-        target_acceptance=0.57,
-        decorr=20,
-        n_first_certain=0,
-        resampling_frequency=0,
-        max_age=None,
-        tau=0.1,
-    ):
-        assert not n_first_certain or n_first_certain < decorr
+    WALKER_STATE = ['r', 'psi', 'age']
+
+    def __init__(self, hamil, *, tau, target_acceptance=0.57, max_age=None):
         self.hamil = hamil
-        self.sample_size = sample_size
         self.initial_tau = tau
         self.target_acceptance = target_acceptance
-        self.decorr = decorr
-        self.n_first_certain = n_first_certain
-        self.resampling_frequency = resampling_frequency
         self.max_age = max_age
 
-    def _update(self, state, wf, wf_state, log_weights=None):
-        psi, wf_state = jax.vmap(wf)(wf_state, state['r'])
-        if log_weights is not None:
-            state['log_weights'] = log_weights + 2 * (psi.log - state['psi'].log)
-        state = {**state, 'psi': psi, 'wf_state': wf_state}
+    def _update(self, state, wf):
+        psi, wf_state = jax.vmap(wf)(state['wf'], state['r'])
+        state = {**state, 'psi': psi, 'wf': wf_state}
         return state
 
-    def init(self, rng, wf, wf_state):
+    def init(self, rng, wf, wf_state, n):
         state = {
-            'step': jnp.array(0),
+            'r': self.hamil.init_sample(rng, n),
+            'age': jnp.zeros(n, jnp.int32),
             'tau': jnp.array(self.initial_tau),
-            'r': self.hamil.init_sample(rng, self.sample_size),
-            'age': jnp.zeros(self.sample_size, jnp.int32),
-            'log_weights': jnp.zeros(self.sample_size),
+            'wf': wf_state,
         }
-        state = self._update(state, wf, wf_state)
+        state = self._update(state, wf)
         return state
 
     def _proposal(self, state, rng):
@@ -62,38 +47,33 @@ class MetropolisSampler:
     def _acc_log_prob(self, state, prop):
         return 2 * (prop['psi'].log - state['psi'].log)
 
-    def _step(self, state, rng, wf, accept_all=False):
+    def sample(self, state, rng, wf):
         rng_prop, rng_acc = jax.random.split(rng)
         prop = {
             'r': self._proposal(state, rng_prop),
             'age': jnp.zeros_like(state['age']),
-            'tau': state['tau'],
+            **{k: v for k, v in state.items() if k not in self.WALKER_STATE},
         }
-        prop = self._update(prop, wf, state['wf_state'])
-        del prop['tau']
+        prop = self._update(prop, wf)
         log_prob = self._acc_log_prob(state, prop)
-        accepted = jnp.logical_or(
-            jnp.broadcast_to(jnp.array([accept_all]), log_prob.shape),
-            log_prob > jnp.log(jax.random.uniform(rng_acc, log_prob.shape)),
-        )
+        accepted = log_prob > jnp.log(jax.random.uniform(rng_acc, log_prob.shape))
         if self.max_age:
-            accepted = jnp.logical_or(accepted, self.max_age <= state['age'])
+            accepted = accepted | (state['age'] >= self.max_age)
         acceptance = accepted.astype(int).sum() / accepted.shape[0]
         if self.target_acceptance:
-            state['tau'] /= self.target_acceptance / jnp.max(
+            prop['tau'] /= self.target_acceptance / jnp.max(
                 jnp.stack([acceptance, jnp.array(0.05)])
             )
         state = {**state, 'age': state['age'] + 1}
-        tmp_state = {key: state.pop(key) for key in ['tau', 'step', 'log_weights']}
+        (prop, other), (state, _) = (
+            split_dict(d, lambda k: k in self.WALKER_STATE) for d in (prop, state)
+        )
         state = {
             **jax.tree_util.tree_map(
                 lambda xp, x: jax.vmap(jnp.where)(accepted, xp, x), prop, state
             ),
-            **tmp_state,
+            **other,
         }
-        ess = jnp.sum(jnp.exp(state['log_weights'])) ** 2 / jnp.sum(
-            jnp.exp(state['log_weights']) ** 2
-        )
         stats = {
             'sampling/acceptance': acceptance,
             'sampling/tau': state['tau'],
@@ -101,71 +81,24 @@ class MetropolisSampler:
             'sampling/age/max': jnp.max(state['age']),
             'sampling/log_psi/mean': jnp.mean(state['psi'].log),
             'sampling/log_psi/std': jnp.std(state['psi'].log),
-            'sampling/effective sample size': ess,
             'sampling/dists/mean': jnp.mean(pairwise_self_distance(state['r'])),
         }
         return state['r'], state, stats
 
-    def resample_walkers(self, state, rng):
-        weights = jnp.exp(state['log_weights'])
-        idxs = multinomial_resampling(rng, weights)
-        tmp_state = {key: state.pop(key) for key in ['tau', 'step']}
-        state = {
-            **jax.tree_util.tree_map(lambda x: x[idxs], state),
-            **tmp_state,
-            'log_weights': jnp.zeros_like(weights),
-            'step': jnp.array(0),
-        }
-        return state
-
-    def sample(self, state, rng, wf):
-        state['step'] = state['step'] + 1
-        self._update(
-            state,
-            wf,
-            state['wf_state'],
-            state['log_weights'] if self.resampling_frequency else None,
-        )
-        if self.resampling_frequency:
-            state = jax.lax.cond(
-                self.resampling_frequency <= state['step'],
-                self.resample_walkers,
-                lambda state, rng: state,
-                state,
-                rng,
-            )
-        if self.n_first_certain:
-            rng, rng_certain = jax.random.split(rng)
-            state, _ = jax.lax.scan(
-                lambda state, rng: (
-                    self._step(state, rng, wf, accept_all=True)[1],
-                    None,
-                ),
-                state,
-                jax.random.split(rng_certain, self.n_first_certain),
-            )
-        if self.decorr - self.n_first_certain:
-            state, _ = jax.lax.scan(
-                lambda state, rng: (self._step(state, rng, wf)[1], None),
-                state,
-                jax.random.split(rng, self.decorr - self.n_first_certain),
-            )
-        return self._step(state, rng, wf)
-
 
 class LangevinSampler(MetropolisSampler):
-    def _update(self, state, wf, wf_state, log_weights=None):
-        assert log_weights is None  # TODO
+    WALKER_STATE = MetropolisSampler.WALKER_STATE + ['force']
 
+    def _update(self, state, wf):
         @jax.vmap
         @partial(jax.value_and_grad, argnums=1, has_aux=True)
         def wf_and_force(state, r):
             psi, state = wf(state, r)
             return psi.log, (psi, state)
 
-        (_, (psi, wf_state)), force = wf_and_force(wf_state, state['r'])
+        (_, (psi, wf_state)), force = wf_and_force(state['wf'], state['r'])
         force = clean_force(force, state['r'], self.hamil.mol, tau=state['tau'])
-        state = {**state, 'psi': psi, 'wf_state': wf_state, 'force': force}
+        state = {**state, 'psi': psi, 'force': force, 'wf': wf_state}
         return state
 
     def _proposal(self, state, rng):
@@ -183,6 +116,67 @@ class LangevinSampler(MetropolisSampler):
             axis=tuple(range(1, len(state['r'].shape))),
         )
         return log_G_ratios + 2 * (prop['psi'].log - state['psi'].log)
+
+
+class DecorrSampler:
+    def __init__(self, decorr):
+        self.decorr = decorr
+
+    def sample(self, state, rng, wf):
+        sample = super().sample  # lax cannot parse super()
+        state, stats = lax.scan(
+            lambda state, rng: sample(state, rng, wf)[1:3],
+            state,
+            jax.random.split(rng, self.decorr),
+        )
+        stats = {k: v[-1] for k, v in stats.items()}
+        return state['r'], state, stats
+
+
+class ResampledSampler:
+    def __init__(self, frequency):
+        self.frequency = frequency
+
+    def init(self, *args):
+        state = super().init(*args)
+        state = {
+            **state,
+            'step': jnp.array(0),
+            'log_weight': jnp.zeros_like(state['psi']),
+        }
+        return state
+
+    def sample(self, state, rng, wf):
+        rng_re, rng_smpl = jax.random.split(rng)
+        _, state, stats = super().sample(state, rng_smpl, wf)
+        state['log_weight'] -= 2 * state['psi'].log
+        state = self._update(state, wf)
+        state['log_weight'] += 2 * state['psi'].log
+        state['step'] += 1
+        weight = jnp.exp(state['log_weight'])
+        ess = jnp.sum(weight) ** 2 / jnp.sum(weight**2)
+        stats['sampling/effective sample size'] = ess
+        if state['step'] > self.frequency:
+            idx = multinomial_resampling(rng_re, weight)
+            state, other = split_dict(state, lambda k: k in self.WALKER_STATE)
+            state = {
+                **jax.tree_util.tree_map(lambda x: x[idx], state),
+                **other,
+                'log_weight': jnp.zeros_like(weight),
+                'step': jnp.array(0),
+            }
+        return state['r'], state, stats
+
+
+def chain(*samplers):
+    name = 'Sampler'
+    bases = tuple(map(type, samplers))
+    for base in bases:
+        name = name.replace('Sampler', base.__name__)
+    chained = type(name, bases, {'__init__': lambda self: None})()
+    for sampler in samplers:
+        chained.__dict__.update(sampler.__dict__)
+    return chained
 
 
 def diffs_to_nearest_nuc(r, coords):
@@ -239,10 +233,10 @@ def equilibrate(
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
         r, state, stats = sample_wf(state_prev := state, rng)
         if state_callback:
-            wf_state, overflow = state_callback(state['wf_state'])
+            wf_state, overflow = state_callback(state['wf'])
             if overflow:
                 state = state_prev
-                state['wf_state'] = wf_state
+                state['wf'] = wf_state
                 continue
         yield step, state, stats
         buffer = [*buffer[-buffer_size + 1 :], criterion(r)]
