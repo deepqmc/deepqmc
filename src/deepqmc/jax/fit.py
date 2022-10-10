@@ -193,3 +193,7 @@ def fit_wf(  # noqa: C901
                 train_state.sampler['wf'] = wf_state
                 continue
         yield step, train_state, E_loc, stats
+
+
+def InverseLR(lr, decay_rate):
+    return lambda n: lr / (1 + n / decay_rate)

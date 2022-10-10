@@ -119,15 +119,15 @@ class LangevinSampler(MetropolisSampler):
 
 
 class DecorrSampler:
-    def __init__(self, decorr):
-        self.decorr = decorr
+    def __init__(self, length):
+        self.length = length
 
     def sample(self, state, rng, wf):
         sample = super().sample  # lax cannot parse super()
         state, stats = lax.scan(
             lambda state, rng: sample(state, rng, wf)[1:3],
             state,
-            jax.random.split(rng, self.decorr),
+            jax.random.split(rng, self.length),
         )
         stats = {k: v[-1] for k, v in stats.items()}
         return state['r'], state, stats

@@ -9,6 +9,8 @@ from hydra.utils import call, instantiate
 from omegaconf import OmegaConf
 from tqdm.auto import tqdm
 
+from .sampling import chain
+
 __all__ = ()
 log = logging.getLogger(__name__)
 
@@ -16,14 +18,15 @@ log = logging.getLogger(__name__)
 def instantiate_ansatz(hamil, ansatz):
     import haiku as hk
 
-    return hk.without_apply_rng(hk.transform(lambda r: ansatz(hamil)(r)))
+    return hk.without_apply_rng(hk.transform_with_state(lambda r: ansatz(hamil)(r)))
 
 
-def train_from_factories(hamil, ansatz, **kwargs):
+def train_from_factories(hamil, ansatz, sampler, **kwargs):
     from .train import train
 
     ansatz = instantiate_ansatz(hamil, ansatz)
-    return train(hamil, ansatz, **kwargs)
+    sampler = chain(*sampler[:-1], sampler[-1](hamil))
+    return train(hamil, ansatz, sampler=sampler, **kwargs)
 
 
 def task_from_workdir(workdir, chkpt='LAST', device=None):
