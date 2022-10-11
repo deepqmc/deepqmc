@@ -85,3 +85,11 @@ def check_overflow(state_callback, func):
             return smpl_state, *other
 
     return wrapper
+
+
+def no_grad(func):
+    def wrapper(*args, **kwargs):
+        args = jax.tree_util.tree_map(jax.lax.stop_gradient, args)
+        return func(*args, **kwargs)
+
+    return wrapper

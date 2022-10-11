@@ -3,6 +3,8 @@ from collections import namedtuple
 import jax.numpy as jnp
 from jax.tree_util import tree_map, tree_structure, tree_transpose
 
+from ..utils import no_grad
+
 GraphEdges = namedtuple('GraphEdges', 'senders receivers features')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
@@ -50,6 +52,7 @@ def prune_graph_edges(
             jnp.array(0),
         )
 
+    @no_grad
     def dist(sender, receiver):
         return jnp.sqrt(((receiver - sender) ** 2).sum(axis=-1))
 
