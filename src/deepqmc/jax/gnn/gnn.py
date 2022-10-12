@@ -3,8 +3,7 @@ from functools import partial
 import haiku as hk
 import jax.numpy as jnp
 
-from ..types import Graph, GraphNodes
-from .graph import GraphUpdate, MolecularGraphEdgeBuilder
+from .graph import Graph, GraphNodes, GraphUpdate, MolecularGraphEdgeBuilder
 
 
 class MessagePassingLayer(hk.Module):
