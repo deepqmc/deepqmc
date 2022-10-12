@@ -49,7 +49,7 @@ def eval_log_slater(xs):
 class PauliNet(WaveFunction):
     def __init__(
         self,
-        mol,
+        hamil,
         basis=None,
         confs=None,
         backflow_op=None,
@@ -63,7 +63,7 @@ class PauliNet(WaveFunction):
         omni_factory=None,
         omni_kwargs=None,
     ):
-        super().__init__(mol)
+        super().__init__(hamil.mol)
         n_up, n_down = self.n_up, self.n_down
         confs = (
             (
@@ -76,7 +76,7 @@ class PauliNet(WaveFunction):
         )
         n_orbitals = max(sum(confs, [])) + 1
         self.confs = jnp.array(confs)
-        self.basis = basis or ExponentialEnvelopes.from_mol(mol)
+        self.basis = basis or ExponentialEnvelopes.from_mol(hamil.mol)
         self.mo_coeff = hk.Linear(
             n_orbitals, with_bias=False, w_init=jnp.ones, name='mo_coeff'
         )
@@ -109,7 +109,7 @@ class PauliNet(WaveFunction):
                 OmniNet,
                 **(omni_kwargs or {}),
             )
-        self.omni = omni_factory(mol, *backflow_spec)
+        self.omni = omni_factory(hamil.mol, *backflow_spec)
         self.full_determinant = full_determinant
 
     def _backflow_op(self, xs, fs, dists_nuc):
