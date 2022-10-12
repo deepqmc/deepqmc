@@ -168,6 +168,7 @@ class ResampledSampler:
         state['log_weight'] -= 2 * state['psi'].log
         state = self._update(state, wf)
         state['log_weight'] += 2 * state['psi'].log
+        state['log_weight'] -= state['log_weight'].max()
         state['step'] += 1
         weight = jnp.exp(state['log_weight'])
         ess = jnp.sum(weight) ** 2 / jnp.sum(weight**2)
