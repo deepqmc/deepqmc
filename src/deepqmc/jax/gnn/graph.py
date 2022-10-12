@@ -1,7 +1,11 @@
+from collections import namedtuple
+
 import jax.numpy as jnp
 from jax.tree_util import tree_map, tree_structure, tree_transpose
 
-from ..types import Graph, GraphEdges
+GraphEdges = namedtuple('GraphEdges', 'senders receivers features')
+GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
+Graph = namedtuple('Graph', 'nodes edges')
 
 
 def all_graph_edges(pos1, pos2):
