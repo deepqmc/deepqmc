@@ -48,6 +48,7 @@ def train(
         h5file.swmr_mode = True
         table = H5LogTable(h5file)
         h5file.flush()
+    pbar = None
     try:
         params, smpl_state = init_fit(rng, hamil, ansatz, sampler, sample_size)
         num_params = jax.tree_util.tree_reduce(
@@ -117,7 +118,8 @@ def train(
                         writer.add_scalar(k, v, step)
             return train_state
     finally:
-        pbar.close()
+        if pbar:
+            pbar.close()
         if workdir:
             writer.close()
             h5file.close()

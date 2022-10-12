@@ -14,8 +14,6 @@ all__ = ()
 class MolecularHamiltonian:
     def __init__(self, mol):
         self.mol = mol
-        _, *n_elecs = mol.n_particles
-        self.dim = (sum(n_elecs), 3)
 
     def init_sample(self, rng, n, elec_std=1.0):
         rng_remainder, rng_normal = random.split(rng)
@@ -32,7 +30,6 @@ class MolecularHamiltonian:
         if n_remainder > 0:
             extra = random.categorical(rng_remainder, prob, shape=(n, n_remainder))
             idxs = jnp.concatenate([idxs, extra], axis=-1)
-
         centers = self.mol.coords[idxs]
         std = elec_std * jnp.sqrt(self.mol.charges)[idxs][..., None]
         rs = centers + std * random.normal(rng_normal, centers.shape)

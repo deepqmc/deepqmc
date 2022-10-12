@@ -1,3 +1,5 @@
+from itertools import count
+
 import jax.numpy as jnp
 
 angstrom = 1 / 0.52917721092
@@ -14,6 +16,7 @@ class Molecule:
         spin (int): total spin multiplicity
     """
 
+    # TODO
     # all_names = set(_SYSTEMS.keys())
 
     def __init__(self, coords, charges, charge, spin, unit='bohr', data=None):
@@ -50,20 +53,12 @@ class Molecule:
     def _n_shells(self):
         shells = []
         for z in self.charges:
-            # find number of occupied shells for atom
             max_elec = 0
-            n_shells = 0
-            for n in range(10):
+            for n in count():
                 if z <= max_elec:
                     break
-                else:
-                    n_shells += 1
-                    for m in range(n + 1):
-                        max_elec += 2 * (2 * m + 1)
-            # adding the lowest unoccupied shell might be beneficial,
-            # especially for transition metals
-            #  n_shells += 1
-            shells.append(n_shells)
+                max_elec += 2 * (1 + n) ** 2
+            shells.append(n)
         return tuple(shells)
 
     def as_pyscf(self):
@@ -74,4 +69,4 @@ class Molecule:
         """Returns the number of nuclei, spin-up, and spin-down electrons
         of the molecule.
         """
-        return (len(self), self.n_up, self.n_down)
+        return len(self), self.n_up, self.n_down

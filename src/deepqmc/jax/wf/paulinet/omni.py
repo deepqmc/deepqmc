@@ -4,7 +4,7 @@ import haiku as hk
 import jax.numpy as jnp
 
 from ...gnn import SchNet
-from ...hkext import MLP, SSP
+from ...hkext import MLP, ssp
 from ...utils import unflatten
 
 
@@ -12,7 +12,7 @@ class Jastrow(hk.Module):
     def __init__(
         self, embedding_dim, *, n_layers=3, sum_first=True, name='Jastrow', **kwargs
     ):
-        kwargs.setdefault('activation', SSP)
+        kwargs.setdefault('activation', ssp)
         kwargs.setdefault('hidden_layers', ('log', n_layers))
         kwargs.setdefault('last_linear', True)
         kwargs.setdefault('bias', 'not_last')
@@ -40,7 +40,7 @@ class Backflow(hk.Module):
         name='Backflow',
         **kwargs,
     ):
-        kwargs.setdefault('activation', SSP)
+        kwargs.setdefault('activation', ssp)
         kwargs.setdefault('hidden_layers', ('log', n_layers))
         kwargs.setdefault('last_linear', True)
         super().__init__(name=name)

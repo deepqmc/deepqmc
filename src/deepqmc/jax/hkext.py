@@ -4,7 +4,7 @@ from haiku.initializers import VarianceScaling
 from jax.nn import softplus
 
 
-def SSP(x):
+def ssp(x):
     return softplus(x) + jnp.log(0.5)
 
 
@@ -16,10 +16,11 @@ class MLP(hk.Module):
         hidden_layers=None,
         bias='all',
         last_linear=False,
-        activation=SSP,
+        activation=ssp,
         name=None,
         w_init='default',
     ):
+        assert bias in ('all', 'not_last', False)
         super().__init__(name=name)
         self.activation = activation
         self.last_linear = last_linear
@@ -34,10 +35,10 @@ class MLP(hk.Module):
             dims = [round(in_dim ** (1 - q) * out_dim**q) for q in qs]
         else:
             dims = [*hidden_layers, out_dim]
-        layers = []
+        self.layers = []
         for idx, dim in enumerate(dims):
             with_bias = bias == 'all' or (bias == 'not_last' and idx < (len(dims) - 1))
-            layers.append(
+            self.layers.append(
                 hk.Linear(
                     output_size=dim,
                     with_bias=with_bias,
@@ -45,7 +46,6 @@ class MLP(hk.Module):
                     w_init=w_init,
                 )
             )
-        self.layers = layers
 
     def __call__(self, inputs):
         out = inputs
