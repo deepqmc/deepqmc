@@ -50,7 +50,9 @@ def train(
         h5file.flush()
     pbar = None
     try:
-        params, smpl_state = init_fit(rng, hamil, ansatz, sampler, sample_size)
+        params, smpl_state = init_fit(
+            rng, hamil, ansatz, sampler, sample_size, state_callback
+        )
         num_params = jax.tree_util.tree_reduce(
             operator.add, jax.tree_map(lambda x: x.size, params)
         )

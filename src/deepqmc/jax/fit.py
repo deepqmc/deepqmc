@@ -8,11 +8,11 @@ import kfac_jax
 import optax
 
 from .kfacext import GRAPH_PATTERNS
-from .utils import exp_normalize_mean, masked_mean, tree_norm
+from .utils import check_overflow, exp_normalize_mean, masked_mean, tree_norm
 
 __all__ = ()
 
-TrainState = namedtuple('TrainState', 'params opt sampler')
+TrainState = namedtuple('TrainState', 'sampler params opt')
 
 
 def log_squeeze(x):
@@ -31,10 +31,12 @@ def median_log_squeeze(x, width, quantile):
     )
 
 
-def init_fit(rng, hamil, ansatz, sampler, sample_size):
+def init_fit(rng, hamil, ansatz, sampler, sample_size, state_callback):
     r = hamil.init_sample(rng, sample_size)
     params, wf_state = jax.vmap(ansatz.init, (None, 0), (None, 0))(rng, r)
-    smpl_state = sampler.init(rng, partial(ansatz.apply, params), wf_state, sample_size)
+    smpl_state = sampler.init(
+        rng, partial(ansatz.apply, params), wf_state, sample_size, state_callback
+    )
     return params, smpl_state
 
 
@@ -101,16 +103,19 @@ def fit_wf(  # noqa: C901
     if train_state:
         params, opt_state, smpl_state = train_state
     else:
-        params, smpl_state = init_fit(rng, hamil, ansatz, sampler, sample_size)
+        params, smpl_state = init_fit(
+            rng, hamil, ansatz, sampler, sample_size, state_callback
+        )
         opt_state = None
     smpl_state = {'log_weight': jnp.zeros(sample_size), **smpl_state}
 
     if isinstance(opt, optax.GradientTransformation):
 
+        @partial(check_overflow, state_callback)
         @jax.jit
-        def train_step(rng, params, opt_state, smpl_state):
-            r, smpl_state, smpl_stats = sampler.sample(
-                smpl_state, rng, partial(ansatz.apply, params)
+        def train_step(rng, smpl_state, params, opt_state):
+            smpl_state, r, smpl_stats = sampler.sample(
+                rng, smpl_state, partial(ansatz.apply, params)
             )
             weight = exp_normalize_mean(smpl_state['log_weight'])
             (loss, (_, (E_loc, loss_stats))), grads = energy_and_grad_fn(
@@ -128,19 +133,20 @@ def fit_wf(  # noqa: C901
                 **smpl_stats,
                 **loss_stats,
             }
-            return TrainState(params, opt_state, smpl_state), E_loc, stats
+            return smpl_state, params, opt_state, E_loc, stats
 
         if not opt_state:
             opt_state = opt.init(params)
     else:
 
         @jax.jit
-        def sample_wf(rng, params, state):
-            return sampler.sample(state, rng, partial(ansatz.apply, params))
+        def sample_wf(rng, state, params):
+            return sampler.sample(rng, state, partial(ansatz.apply, params))
 
-        def train_step(rng, params, opt_state, smpl_state):
+        @partial(check_overflow, state_callback)
+        def train_step(rng, smpl_state, params, opt_state):
             rng_sample, rng_kfac = jax.random.split(rng)
-            r, smpl_state, smpl_stats = sample_wf(rng_sample, params, smpl_state)
+            smpl_state, r, smpl_stats = sample_wf(rng_sample, smpl_state, params)
             weight = exp_normalize_mean(jnp.copy(smpl_state['log_weight']))
             wf_state = jax.tree_util.tree_map(jnp.copy, smpl_state['wf'])
             params, opt_state, _, opt_stats = opt.step(
@@ -159,7 +165,7 @@ def fit_wf(  # noqa: C901
                 **smpl_stats,
                 **opt_stats['aux'][1],
             }
-            return TrainState(params, opt_state, smpl_state), opt_stats['aux'][0], stats
+            return smpl_state, params, opt_state, opt_stats['aux'][0], stats
 
         opt = opt(
             value_and_grad_func=energy_and_grad_fn,
@@ -183,16 +189,10 @@ def fit_wf(  # noqa: C901
                 smpl_state['wf'],
             )
 
-    train_state = params, opt_state, smpl_state
+    train_state = smpl_state, params, opt_state
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        train_state, E_loc, stats = train_step(rng, *(train_state_prev := train_state))
-        if state_callback:
-            wf_state, overflow = state_callback(train_state.sampler['wf'])
-            if overflow:
-                train_state = train_state_prev
-                train_state.sampler['wf'] = wf_state
-                continue
-        yield step, train_state, E_loc, stats
+        *train_state, E_loc, stats = train_step(rng, *train_state)
+        yield step, TrainState(*train_state), E_loc, stats
 
 
 def InverseLR(lr, decay_rate):

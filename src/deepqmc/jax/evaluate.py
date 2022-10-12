@@ -14,6 +14,7 @@ from .ewm import ewm
 from .log import H5LogTable
 from .physics import pairwise_self_distance
 from .sampling import equilibrate, init_sampling
+from .utils import check_overflow
 
 __all__ = ['evaluate']
 
@@ -52,10 +53,11 @@ def evaluate(  # noqa: C901
         h5file.flush()
         log.debug('Done')
 
+    @partial(check_overflow, state_callback)
     @jax.jit
     def eval_step(rng, smpl_state):
-        rs, smpl_state, smpl_stats = sampler.sample(
-            smpl_state, rng, partial(ansatz.apply, params)
+        smpl_state, rs, smpl_stats = sampler.sample(
+            rng, smpl_state, partial(ansatz.apply, params)
         )
         wf = lambda state, rs: ansatz.apply(params, state, rs)[0]
         E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(
@@ -96,13 +98,7 @@ def evaluate(  # noqa: C901
         enes = []
         best_err = None
         for step, rng in zip(pbar, hk.PRNGSequence(rng)):
-            smpl_state, E_loc, stats = eval_step(rng, smpl_state_prev := smpl_state)
-            if state_callback:
-                wf_state, overflow = state_callback(smpl_state['wf_state'])
-                if overflow:
-                    smpl_state = smpl_state_prev
-                    smpl_state['wf_state'] = wf_state
-                    continue
+            smpl_state, E_loc, stats = eval_step(rng, smpl_state)
             ewm_state = ewm(stats['E_loc/mean'], ewm_state)
             stats = {
                 'energy/ewm': ewm_state.mean,

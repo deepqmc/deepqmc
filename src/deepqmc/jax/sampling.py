@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from jax import lax
 
 from .physics import pairwise_diffs, pairwise_self_distance
-from .utils import multinomial_resampling, split_dict
+from .utils import check_overflow, multinomial_resampling, split_dict
 
 __all__ = ()
 
@@ -30,14 +30,20 @@ class MetropolisSampler:
         state = {**state, 'psi': psi, 'wf': wf_state}
         return state
 
-    def init(self, rng, wf, wf_state, n):
+    def init(self, rng, wf, wf_state, n, state_callback=None):
         state = {
             'r': self.hamil.init_sample(rng, n),
             'age': jnp.zeros(n, jnp.int32),
             'tau': jnp.array(self.initial_tau),
             'wf': wf_state,
         }
-        state = self._update(state, wf)
+
+        @partial(check_overflow, state_callback)
+        def update(_rng, state, wf):
+            return self._update(state, wf)
+
+
+        state = update(None, state, wf)
         return state
 
     def _proposal(self, state, rng):
@@ -47,7 +53,7 @@ class MetropolisSampler:
     def _acc_log_prob(self, state, prop):
         return 2 * (prop['psi'].log - state['psi'].log)
 
-    def sample(self, state, rng, wf):
+    def sample(self, rng, state, wf):
         rng_prop, rng_acc = jax.random.split(rng)
         prop = {
             'r': self._proposal(state, rng_prop),
@@ -83,7 +89,7 @@ class MetropolisSampler:
             'sampling/log_psi/std': jnp.std(state['psi'].log),
             'sampling/dists/mean': jnp.mean(pairwise_self_distance(state['r'])),
         }
-        return state['r'], state, stats
+        return state, state['r'], stats
 
 
 class LangevinSampler(MetropolisSampler):
@@ -122,7 +128,7 @@ class DecorrSampler:
     def __init__(self, length):
         self.length = length
 
-    def sample(self, state, rng, wf):
+    def sample(self, rng, state, wf):
         sample = super().sample  # lax cannot parse super()
         state, stats = lax.scan(
             lambda state, rng: sample(state, rng, wf)[1:3],
@@ -130,7 +136,7 @@ class DecorrSampler:
             jax.random.split(rng, self.length),
         )
         stats = {k: v[-1] for k, v in stats.items()}
-        return state['r'], state, stats
+        return state, state['r'], stats
 
 
 class ResampledSampler:
@@ -146,7 +152,7 @@ class ResampledSampler:
         }
         return state
 
-    def sample(self, state, rng, wf):
+    def sample(self, rng, state, wf):
         rng_re, rng_smpl = jax.random.split(rng)
         _, state, stats = super().sample(state, rng_smpl, wf)
         state['log_weight'] -= 2 * state['psi'].log
@@ -165,7 +171,7 @@ class ResampledSampler:
                 'log_weight': jnp.zeros_like(weight),
                 'step': jnp.array(0),
             }
-        return state['r'], state, stats
+        return state, state['r'], stats
 
 
 def chain(*samplers):
@@ -226,20 +232,15 @@ def equilibrate(
 ):
     criterion = jax.jit(criterion)
 
+    @partial(check_overflow, state_callback)
     @jax.jit
-    def sample_wf(state, rng):
-        return sampler.sample(state, rng, wf)
+    def sample_wf(rng, state):
+        return sampler.sample(rng, state, wf)
 
     buffer_size = block_size * n_blocks
     buffer = []
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        r, state, stats = sample_wf(state_prev := state, rng)
-        if state_callback:
-            wf_state, overflow = state_callback(state['wf'])
-            if overflow:
-                state = state_prev
-                state['wf'] = wf_state
-                continue
+        state, r, stats = sample_wf(rng, state)
         yield step, state, stats
         buffer = [*buffer[-buffer_size + 1 :], criterion(r).item()]
         if len(buffer) < buffer_size:
