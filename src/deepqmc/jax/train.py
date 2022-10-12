@@ -61,7 +61,7 @@ def train(
             partial(ansatz.apply, params),
             sampler,
             smpl_state,
-            lambda r: pairwise_self_distance(r).mean().item(),
+            lambda r: pairwise_self_distance(r).mean(),
             pbar,
             state_callback,
             block_size=10,
@@ -115,7 +115,7 @@ def train(
                     table.row['log_psi'] = train_state.sampler['psi'].log
                     for k, v in stats.items():
                         writer.add_scalar(k, v, step)
-                return train_state
+            return train_state
     finally:
         pbar.close()
         if workdir:
@@ -155,7 +155,7 @@ class CheckpointStore:
         with path.open('wb') as f:
             pickle.dump(state, f)
         while len(self.chkpts) > self.size:
-            self.chkpts.pop(0).unlink()
+            self.chkpts.pop(0).path.unlink()
 
     @property
     def last(self):
