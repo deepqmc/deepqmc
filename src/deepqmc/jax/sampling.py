@@ -151,9 +151,20 @@ class ResampledSampler:
         }
         return state
 
+    def resample_walkers(self, rng_re, state):
+        idx = multinomial_resampling(rng_re, jnp.exp(state['log_weight']))
+        state, other = split_dict(state, lambda k: k in self.WALKER_STATE)
+        state = {
+            **jax.tree_util.tree_map(lambda x: x[idx], state),
+            **other,
+            'step': jnp.array(0),
+            'log_weight': jnp.zeros_like(other['log_weight']),
+        }
+        return state
+
     def sample(self, rng, state, wf):
         rng_re, rng_smpl = jax.random.split(rng)
-        _, state, stats = super().sample(rng_smpl, state, wf)
+        state, _, stats = super().sample(rng_smpl, state, wf)
         state['log_weight'] -= 2 * state['psi'].log
         state = self._update(state, wf)
         state['log_weight'] += 2 * state['psi'].log
@@ -161,15 +172,13 @@ class ResampledSampler:
         weight = jnp.exp(state['log_weight'])
         ess = jnp.sum(weight) ** 2 / jnp.sum(weight**2)
         stats['sampling/effective sample size'] = ess
-        if state['step'] > self.frequency:
-            idx = multinomial_resampling(rng_re, weight)
-            state, other = split_dict(state, lambda k: k in self.WALKER_STATE)
-            state = {
-                **jax.tree_util.tree_map(lambda x: x[idx], state),
-                **other,
-                'log_weight': jnp.zeros_like(weight),
-                'step': jnp.array(0),
-            }
+        state = jax.lax.cond(
+            state['step'] > self.frequency,
+            self.resample_walkers,
+            lambda rng, state: state,
+            rng_re,
+            state,
+        )
         return state, state['r'], stats
 
 
