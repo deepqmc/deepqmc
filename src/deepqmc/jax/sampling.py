@@ -224,6 +224,8 @@ def equilibrate(
     block_size,
     n_blocks=5,
 ):
+    criterion = jax.jit(criterion)
+
     @jax.jit
     def sample_wf(state, rng):
         return sampler.sample(state, rng, wf)
@@ -239,7 +241,7 @@ def equilibrate(
                 state['wf'] = wf_state
                 continue
         yield step, state, stats
-        buffer = [*buffer[-buffer_size + 1 :], criterion(r)]
+        buffer = [*buffer[-buffer_size + 1 :], criterion(r).item()]
         if len(buffer) < buffer_size:
             continue
         b1, b2 = buffer[:block_size], buffer[-block_size:]
