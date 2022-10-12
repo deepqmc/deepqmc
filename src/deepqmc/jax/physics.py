@@ -16,10 +16,13 @@ def pairwise_self_distance(coords, full=False):
     diffs = coords[..., :, None, :] - coords[..., None, :, :]
     dists = jnp.linalg.norm(diffs[..., i, j, :], axis=-1)
     if full:
-        dists_full = jnp.zeros(diffs.shape[:-1])
-        dists_full = dists_full.at[..., i, j].set(dists)
-        dists_full = dists_full.at[..., j, i].set(dists)
-        dists = dists_full
+        dists = (
+            jnp.zeros(diffs.shape[:-1])
+            .at[..., i, j]
+            .set(dists)
+            .at[..., j, i]
+            .set(dists)
+        )
     return dists
 
 
