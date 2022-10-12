@@ -142,7 +142,7 @@ class ResampledSampler:
         state = {
             **state,
             'step': jnp.array(0),
-            'log_weight': jnp.zeros_like(state['psi']),
+            'log_weight': jnp.zeros_like(state['psi'].log),
         }
         return state
 
