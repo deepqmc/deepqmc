@@ -10,7 +10,7 @@ This implementation uses the `JAX library <https://github.com/google/jax>`_, the
 - `JAX documentation <https://jax.readthedocs.io/en/latest>`_
 
 .. automodule:: deepqmc.jax
-   :exclude-members: train,evaluate
+   :exclude-members: train,evaluate,MolecularHamiltonian
 
 .. automodule:: deepqmc.jax.hamil
 
