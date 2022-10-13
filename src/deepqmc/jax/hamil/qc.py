@@ -13,6 +13,19 @@ __all__ = ['MolecularHamiltonian']
 
 
 class MolecularHamiltonian(Hamiltonian):
+    r"""
+    Hamiltonian of non-relativistic molecular systems.
+
+    The system consists of nuclei with fixed positions and electrons moving
+    around them. The total energy is defined as the sum of the nuclear-nuclear
+    and electron-electron repulsion, the nuclear-electron attraction, and the
+    kinetic energy of the electrons:
+    :math:`E=V_\text{nuc-nuc} + V_\text{el-el} + V_\text{nuc-el} + E_\text{kin}`.
+
+    Args:
+        mol (~jax.Molecule): the molecule to consider
+    """
+
     def __init__(self, mol):
         self.mol = mol
 
