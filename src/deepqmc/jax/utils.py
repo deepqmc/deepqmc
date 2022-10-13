@@ -73,15 +73,15 @@ def split_dict(dct, cond):
 
 def check_overflow(state_callback, func):
     def wrapper(rng, smpl_state, *args, **kwargs):
-        get_wf_state = lambda x: x[0]['wf'] if isinstance(x, tuple) else x['wf']
+        extract_wf_state = lambda x: x[0]['wf']
 
         output = func(rng, smpl_state_prev := smpl_state, *args, **kwargs)
         if state_callback:
-            state, overflow = state_callback(get_wf_state(output))
+            state, overflow = state_callback(extract_wf_state(output))
             while overflow:
                 smpl_state_prev['wf'] = state
                 output = func(rng, smpl_state_prev, *args, **kwargs)
-                state, overflow = state_callback(get_wf_state(output))
+                state, overflow = state_callback(extract_wf_state(output))
         return output
 
     return wrapper

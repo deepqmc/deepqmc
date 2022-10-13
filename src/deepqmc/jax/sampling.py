@@ -39,11 +39,10 @@ class MetropolisSampler:
         }
 
         @partial(check_overflow, state_callback)
-        def update(_rng, state, wf):
-            return self._update(state, wf)
+        def update(rng, state, wf):
+            return (self._update(state, wf),)
 
-
-        state = update(None, state, wf)
+        (state,) = update(None, state, wf)
         return state
 
     def _proposal(self, state, rng):
