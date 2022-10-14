@@ -130,7 +130,7 @@ class DecorrSampler:
     def sample(self, rng, state, wf):
         sample = super().sample  # lax cannot parse super()
         state, stats = lax.scan(
-            lambda state, rng: sample(state, rng, wf)[1:3],
+            lambda state, rng: sample(rng, state, wf)[::2],
             state,
             jax.random.split(rng, self.length),
         )
@@ -153,7 +153,7 @@ class ResampledSampler:
 
     def sample(self, rng, state, wf):
         rng_re, rng_smpl = jax.random.split(rng)
-        _, state, stats = super().sample(state, rng_smpl, wf)
+        _, state, stats = super().sample(rng_smpl, state, wf)
         state['log_weight'] -= 2 * state['psi'].log
         state = self._update(state, wf)
         state['log_weight'] += 2 * state['psi'].log
