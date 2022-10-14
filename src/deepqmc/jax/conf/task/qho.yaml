@@ -1,0 +1,30 @@
+hamil:
+  _target_: deepqmc.jax.hamil.qho.QHOHamiltonian
+  dim: 3
+  mass: 1.0
+  nu: 1.0
+ansatz:
+  _target_: deepqmc.jax.wf.qho.QHOAnsatz
+  _partial_: true
+opt:
+  _target_: kfac_jax.Optimizer
+  _partial_: true
+  l2_reg: 0
+  learning_rate_schedule:
+    _target_: deepqmc.jax.fit.InverseLR
+    lr: 0.1
+    decay_rate: 100
+  norm_constraint: 1e-3
+  inverse_update_period: 1
+  min_damping: 1e-4
+  num_burnin_steps: 0
+  estimation_mode: 'fisher_exact'
+sampler:
+  - _target_: deepqmc.jax.sampling.DecorrSampler
+    length: 20
+  - _target_: deepqmc.jax.sampling.MetropolisSampler
+    _partial_: true
+    tau: 1.0
+steps: 10000
+sample_size: 10000
+clip_width: 2.0
