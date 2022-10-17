@@ -12,7 +12,7 @@ from .cusp import ElectronicAsymptotic
 from .env import ExponentialEnvelopes
 from .omni import OmniNet
 
-__all__ = ['PauliNet', 'state_callback']
+__all__ = ['PauliNet']
 
 
 class BackflowOp(hk.Module):
@@ -185,49 +185,3 @@ class PauliNet(WaveFunction):
             log_psi = log_psi + J
 
         return Psi(sign_psi.squeeze(), log_psi.squeeze())
-
-
-def state_callback(state, batch_dim=True):
-    if not state:
-        return state, False
-    key = list(state.keys())[0]
-    occupancies = state[key]['occupancies']
-    n_occupancies = state[key]['n_occupancies']
-    if batch_dim:
-        # Aggregate within batch
-        new_shape = jax.tree_util.tree_map(
-            lambda x: jax.numpy.max(x, axis=0), occupancies
-        )
-    else:
-        new_shape = occupancies
-    # Aggregate over batches
-    new_shape = jax.tree_util.tree_map(
-        lambda x: jax.numpy.max(x, axis=-1).item(), new_shape
-    )
-    larger = jax.tree_util.tree_map(
-        lambda old, new_shape: (old.shape[-1] < new_shape), occupancies, new_shape
-    )
-    overflow = jax.tree_util.tree_reduce(lambda x, y: x or y, larger)
-
-    def create_new_occupancies(old, shape):
-        if shape > old.shape[-1]:
-            return jax.numpy.zeros_like(old, shape=(*old.shape[:-1], shape))
-        else:
-            return old
-
-    new_occupancies = jax.tree_util.tree_map(
-        create_new_occupancies, occupancies, new_shape
-    )
-
-    def copy_state(old, new):
-        copy_len = min(old.shape[-1], new.shape[-1])
-        return new.at[..., :copy_len].set(old[..., :copy_len])
-
-    return {
-        key: {
-            'n_occupancies': n_occupancies,
-            'occupancies': jax.tree_util.tree_map(
-                copy_state, occupancies, new_occupancies
-            ),
-        }
-    }, overflow

@@ -18,6 +18,7 @@ from .fit import fit_wf, init_fit
 from .log import H5LogTable
 from .physics import pairwise_self_distance
 from .sampling import equilibrate
+from .wf.base import state_callback
 
 __all__ = ['train']
 
@@ -30,7 +31,7 @@ def train(
     opt,
     sampler,
     workdir=None,
-    state_callback=None,
+    state_callback=state_callback,
     *,
     steps,
     sample_size,
