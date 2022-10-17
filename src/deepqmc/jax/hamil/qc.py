@@ -16,6 +16,21 @@ class MolecularHamiltonian:
         self.mol = mol
 
     def init_sample(self, rng, n, elec_std=1.0):
+        r"""
+        Guess some initial electron positions.
+
+        Tries to make an educated guess about plausible initial electron
+        configurations. Places electrons according to normal distributions
+        centered on the nuclei. If the molecule is not neutral, extra electrons
+        are placed on or removed from random nuclei. The resulting configurations
+        are usually very crude, a subsequent, thorough equilibration is needed.
+
+        Args:
+            rng (jax.random.PRNGKey): key used for PRNG
+            n (int): the number of configurations to generate
+            elec_std (float): optional, a factor for scaling the spread of
+                electrons around the nuclei
+        """
         rng_remainder, rng_normal = random.split(rng)
         charges = self.mol.charges - self.mol.charge / len(self.mol.charges)
         base = jnp.floor(charges).astype(jnp.int32)
