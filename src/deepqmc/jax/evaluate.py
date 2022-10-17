@@ -15,6 +15,7 @@ from .log import H5LogTable
 from .physics import pairwise_self_distance
 from .sampling import equilibrate, init_sampling
 from .utils import check_overflow
+from .wf.base import state_callback
 
 __all__ = ['evaluate']
 
@@ -24,12 +25,12 @@ log = logging.getLogger(__name__)
 def evaluate(  # noqa: C901
     hamil,
     ansatz,
-    state_callback,
     params,
     steps,
     seed,
     workdir=None,
     sampling_kwargs=None,
+    state_callback=state_callback,
     *,
     n_steps_eq=500,
 ):
