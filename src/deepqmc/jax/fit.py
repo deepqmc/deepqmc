@@ -100,7 +100,15 @@ def fit_wf(  # noqa: C901
 
     energy_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
-    if isinstance(opt, optax.GradientTransformation):
+    if opt is None:
+
+        @jax.jit
+        def _step(_rng_opt, wf_state, params, _opt_state, batch):
+            loss, (_, (E_loc, stats)) = loss_fn(params, wf_state, batch)
+
+            return params, None, E_loc, stats
+
+    elif isinstance(opt, optax.GradientTransformation):
 
         @jax.jit
         def _step(rng, wf_state, params, opt_state, batch):
@@ -194,7 +202,7 @@ def fit_wf(  # noqa: C901
         )
         opt_state = None
     smpl_state = {**smpl_state, 'log_weight': jnp.zeros(sample_size)}
-    if opt_state is None:
+    if opt is not None and opt_state is None:
         opt_state = init_opt(
             rng, smpl_state['wf'], params, (smpl_state['r'], jnp.ones(sample_size))
         )
