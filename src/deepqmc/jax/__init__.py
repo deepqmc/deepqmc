@@ -1,4 +1,3 @@
-from .evaluate import evaluate
 from .hamil import MolecularHamiltonian
 from .molecule import Molecule
 from .train import train

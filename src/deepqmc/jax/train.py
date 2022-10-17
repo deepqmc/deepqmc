@@ -41,11 +41,13 @@ def train(
 ):
     ewm_state = ewm()
     rng = jax.random.PRNGKey(seed)
+    mode = 'evaluate' if opt is None else 'train'
     if workdir:
+        workdir = f'{workdir}/{mode}'
         chkpts = CheckpointStore(workdir)
         writer = tensorboard.summary.Writer(workdir)
         log.debug('Setting up HDF5 file...')
-        h5file = h5py.File(f'{workdir}/fit.h5', 'a', libver='v110')
+        h5file = h5py.File(f'{workdir}/result.h5', 'a', libver='v110')
         h5file.swmr_mode = True
         table = H5LogTable(h5file)
         h5file.flush()
@@ -112,7 +114,8 @@ def train(
                         best_ene = ene
                         log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
                 if workdir:
-                    chkpts.update(stats['E_loc/std'], train_state)
+                    if mode == 'train':
+                        chkpts.update(stats['E_loc/std'], train_state)
                     table.row['E_loc'] = E_loc
                     table.row['E_ewm'] = ewm_state.mean
                     table.row['sign_psi'] = train_state.sampler['psi'].sign
