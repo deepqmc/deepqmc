@@ -83,7 +83,7 @@ class GraphNeuralNetwork(hk.Module):
     def edge_types(cls):
         raise NotImplementedError
 
-    def edge_factory(self, r, occupancies, n_occupancies):
+    def edge_factory(self, r, occupancies):
         edge_factory = MolecularGraphEdgeBuilder(
             self.n_nuc,
             self.n_up,
@@ -98,7 +98,7 @@ class GraphNeuralNetwork(hk.Module):
                 for typ in self.edge_types
             },
         )
-        return edge_factory(r, occupancies, n_occupancies)
+        return edge_factory(r, occupancies)
 
     @classmethod
     @property
@@ -112,14 +112,8 @@ class GraphNeuralNetwork(hk.Module):
             dtype=jnp.int32,
             init=self.init_state,
         )
-        n_occupancies = hk.get_state(
-            'n_occupancies', shape=[], dtype=jnp.int32, init=jnp.zeros
-        )
-        graph_edges, occupancies, n_occupancies = self.edge_factory(
-            r, occupancies, n_occupancies
-        )
+        graph_edges, occupancies = self.edge_factory(r, occupancies)
         hk.set_state('occupancies', occupancies)
-        hk.set_state('n_occupancies', n_occupancies)
         nuc_embedding, elec_embedding = self.initial_embeddings()
         graph = Graph(
             GraphNodes(nuc_embedding, elec_embedding),
