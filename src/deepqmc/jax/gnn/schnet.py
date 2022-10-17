@@ -260,8 +260,8 @@ class SchNet(GraphNeuralNetwork):
                 name='ElectronicEmbedding',
             )
 
-        Y = hk.Linear(self.kernel_dim, name='NuclearEmbedding')
-        return GraphNodes(Y(jnp.eye(self.n_nuc)), X(self.spin_idxs))
+        Y = hk.Embed(self.n_nuc, self.kernel_dim, name='NuclearEmbedding')
+        return GraphNodes(Y(jnp.arange(self.n_nuc)), X(self.spin_idxs))
 
     def init_state(self, shape, dtype):
         zeros = jnp.zeros(shape, dtype)
