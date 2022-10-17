@@ -98,7 +98,7 @@ def GraphEdgeBuilder(
     mask_vals,
     feature_callback,
 ):
-    def build(pos_sender, pos_receiver, occupancies, n_occupancies):
+    def build(pos_sender, pos_receiver, occupancies):
         assert pos_sender.shape[-1] == 3 and pos_receiver.shape[-1] == 3
         assert len(pos_sender.shape) == 2
         assert not mask_self or pos_sender.shape[0] == pos_receiver.shape[0]
@@ -123,7 +123,6 @@ def GraphEdgeBuilder(
         return (
             edges,
             occupancies.at[1:].set(occupancies[:-1]).at[0].set(occupancy),
-            n_occupancies + 1,
         )
 
     return build
@@ -132,14 +131,12 @@ def GraphEdgeBuilder(
 def concatenate_edges(edges_and_occs):
     edges = [edge_occ[0] for edge_occ in edges_and_occs]
     occupancies = tuple(edge_occ[1] for edge_occ in edges_and_occs)
-    n_occupancies = edges_and_occs[0][2]
     edge_of_lists = tree_transpose(
         tree_structure([0] * len(edges)), tree_structure(edges[0]), edges
     )
     return (
         tree_map(jnp.concatenate, edge_of_lists, is_leaf=lambda x: isinstance(x, list)),
         occupancies,
-        n_occupancies,
     )
 
 
@@ -196,43 +193,40 @@ def MolecularGraphEdgeBuilder(
         for builder_type in builder_mapping[edge_type]
     }
 
-    def build_same(r, occs, n_occs):
+    def build_same(r, occs):
         return concatenate_edges(
             [
-                builders['uu'](r[:n_up], r[:n_up], occs['same'][0], n_occs),
-                builders['dd'](r[n_up:], r[n_up:], occs['same'][1], n_occs),
+                builders['uu'](r[:n_up], r[:n_up], occs['same'][0]),
+                builders['dd'](r[n_up:], r[n_up:], occs['same'][1]),
             ]
         )
 
-    def build_anti(r, occs, n_occs):
+    def build_anti(r, occs):
         return concatenate_edges(
             [
-                builders['ud'](r[:n_up], r[n_up:], occs['anti'][0], n_occs),
-                builders['du'](r[n_up:], r[:n_up], occs['anti'][1], n_occs),
+                builders['ud'](r[:n_up], r[n_up:], occs['anti'][0]),
+                builders['du'](r[n_up:], r[:n_up], occs['anti'][1]),
             ]
         )
 
     build_rules = {
-        'nn': lambda r, occs, n_occs: builders['nn'](
-            nuc_coords, nuc_coords, occs['nn'], n_occs
-        ),
-        'ne': lambda r, occs, n_occs: builders['ne'](nuc_coords, r, occs['ne'], n_occs),
-        'en': lambda r, occs, n_occs: builders['en'](r, nuc_coords, occs['en'], n_occs),
+        'nn': lambda r, occs: builders['nn'](nuc_coords, nuc_coords, occs['nn']),
+        'ne': lambda r, occs: builders['ne'](nuc_coords, r, occs['ne']),
+        'en': lambda r, occs: builders['en'](r, nuc_coords, occs['en']),
         'same': build_same,
         'anti': build_anti,
     }
 
-    def build(r, occupancies, n_occupancies):
+    def build(r, occupancies):
         assert r.shape[0] == n_up + n_down
 
         edges_and_occs = {
-            edge_type: build_rules[edge_type](r, occupancies, n_occupancies)
+            edge_type: build_rules[edge_type](r, occupancies)
             for edge_type in edge_types
         }
         edges = {k: edge_and_occ[0] for k, edge_and_occ in edges_and_occs.items()}
         occupancies = {k: edge_and_occ[1] for k, edge_and_occ in edges_and_occs.items()}
-        n_occupancies = next(iter(edges_and_occs.values()))[2]
-        return edges, occupancies, n_occupancies
+        return edges, occupancies
 
     return build
 
