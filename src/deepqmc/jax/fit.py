@@ -100,26 +100,12 @@ def fit_wf(  # noqa: C901
 
     energy_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
-    if train_state:
-        params, opt_state, smpl_state = train_state
-    else:
-        params, smpl_state = init_fit(
-            rng, hamil, ansatz, sampler, sample_size, state_callback
-        )
-        opt_state = None
-    smpl_state = {'log_weight': jnp.zeros(sample_size), **smpl_state}
-
     if isinstance(opt, optax.GradientTransformation):
 
-        @partial(check_overflow, state_callback)
         @jax.jit
-        def train_step(rng, smpl_state, params, opt_state):
-            smpl_state, r, smpl_stats = sampler.sample(
-                rng, smpl_state, partial(ansatz.apply, params)
-            )
-            weight = exp_normalize_mean(smpl_state['log_weight'])
+        def _step(rng, wf_state, params, opt_state, batch):
             (loss, (_, (E_loc, loss_stats))), grads = energy_and_grad_fn(
-                params, smpl_state['wf'], (r, weight)
+                params, wf_state, batch
             )
             updates, opt_state = opt.update(grads, opt_state, params)
             param_norm, update_norm, grad_norm = map(
@@ -130,31 +116,23 @@ def fit_wf(  # noqa: C901
                 'opt/param_norm': param_norm,
                 'opt/grad_norm': grad_norm,
                 'opt/update_norm': update_norm,
-                **smpl_stats,
                 **loss_stats,
             }
-            return smpl_state, params, opt_state, E_loc, stats
+            return params, opt_state, E_loc, stats
 
-        if not opt_state:
+        def init_opt(rng, wf_state, params, batch):
             opt_state = opt.init(params)
+            return opt_state
+
     else:
 
-        @jax.jit
-        def sample_wf(rng, state, params):
-            return sampler.sample(rng, state, partial(ansatz.apply, params))
-
-        @partial(check_overflow, state_callback)
-        def train_step(rng, smpl_state, params, opt_state):
-            rng_sample, rng_kfac = jax.random.split(rng)
-            smpl_state, r, smpl_stats = sample_wf(rng_sample, smpl_state, params)
-            weight = exp_normalize_mean(jnp.copy(smpl_state['log_weight']))
-            wf_state = jax.tree_util.tree_map(jnp.copy, smpl_state['wf'])
+        def _step(rng, wf_state, params, opt_state, batch):
             params, opt_state, _, opt_stats = opt.step(
                 params,
                 opt_state,
-                rng_kfac,
+                rng,
                 func_state=wf_state,
-                batch=(r, weight),
+                batch=batch,
                 momentum=0,
                 damping=5e-4,
             )
@@ -162,10 +140,18 @@ def fit_wf(  # noqa: C901
                 'opt/param_norm': opt_stats['param_norm'],
                 'opt/grad_norm': opt_stats['precon_grad_norm'],
                 'opt/update_norm': opt_stats['update_norm'],
-                **smpl_stats,
                 **opt_stats['aux'][1],
             }
-            return smpl_state, params, opt_state, opt_stats['aux'][0], stats
+            return params, opt_state, opt_stats['aux'][0], stats
+
+        def init_opt(rng, wf_state, params, batch):
+            opt_state = opt.init(
+                params,
+                rng,
+                batch,
+                wf_state,
+            )
+            return opt_state
 
         opt = opt(
             value_and_grad_func=energy_and_grad_fn,
@@ -181,15 +167,39 @@ def fit_wf(  # noqa: C901
             num_burnin_steps=0,
             learning_rate_schedule=lambda s: 1e-2 / (1 + s / 6000),
         )
-        if not opt_state:
-            opt_state = opt.init(
-                params,
-                rng,
-                (smpl_state['r'], smpl_state['log_weight']),
-                smpl_state['wf'],
-            )
 
+    @partial(check_overflow, state_callback)
+    @jax.jit
+    def sample_wf(state, rng, params):
+        return sampler.sample(rng, state, partial(ansatz.apply, params))
+
+    def train_step(rng, smpl_state, params, opt_state):
+        rng_sample, rng_kfac = jax.random.split(rng)
+        smpl_state, r, smpl_stats = sample_wf(smpl_state, rng_sample, params)
+        weight = exp_normalize_mean(smpl_state['log_weight'])
+        params, opt_state, E_loc, stats = _step(
+            rng_kfac, smpl_state['wf'], params, opt_state, (r, weight)
+        )
+        stats = {
+            **smpl_stats,
+            **stats,
+        }
+        return smpl_state, params, opt_state, E_loc, stats
+
+    if train_state:
+        params, opt_state, smpl_state = train_state
+    else:
+        params, smpl_state = init_fit(
+            rng, hamil, ansatz, sampler, sample_size, state_callback
+        )
+        opt_state = None
+    smpl_state = {**smpl_state, 'log_weight': jnp.zeros(sample_size)}
+    if opt_state is None:
+        opt_state = init_opt(
+            rng, smpl_state['wf'], params, (smpl_state['r'], jnp.ones(sample_size))
+        )
     train_state = smpl_state, params, opt_state
+
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
         *train_state, E_loc, stats = train_step(rng, *train_state)
         yield step, TrainState(*train_state), E_loc, stats
