@@ -1,6 +1,5 @@
 import logging
 from functools import partial
-from operator import add
 from statistics import mean, stdev
 
 import haiku as hk
@@ -22,7 +21,17 @@ __all__ = [
 log = logging.getLogger(__name__)
 
 
-class MetropolisSampler:
+class Sampler:
+    r"""Base class for all QMC samplers."""
+
+    def init(self, rng, wf, wf_state, n, state_callback=None):
+        raise NotImplementedError
+
+    def sample(self, rng, state, wf):
+        raise NotImplementedError
+
+
+class MetropolisSampler(Sampler):
     r"""
     Metropolis--Hastings Monte Carlo sampler.
 
@@ -152,7 +161,17 @@ class LangevinSampler(MetropolisSampler):
         return log_G_ratios + 2 * (prop['psi'].log - state['psi'].log)
 
 
-class DecorrSampler:
+class DecorrSampler(Sampler):
+    r"""
+    Insert decorrelating steps into chained samplers.
+
+    This sampler cannot be used as the last element of a sampler chain.
+
+    Args:
+        length (int): the samples will be taken in every :data:`length` MCMC step,
+            that is, :data:`length` :math:`-1` decorrelating steps are inserted.
+    """
+
     def __init__(self, length):
         self.length = length
 
@@ -167,7 +186,21 @@ class DecorrSampler:
         return state, state['r'], stats
 
 
-class ResampledSampler:
+class ResampledSampler(Sampler):
+    r"""
+    Add resampling to chained samplers.
+
+    This sampler cannot be used as the last element of a sampler chain.
+    The resampling is performed by accumulating weights on each MCMC walker
+    in each step. At every :data:`frequency` :math:`+1` step new walker
+    positions are sampled according to the multinomial distribution defined by
+    these weights, and the weigths are resetted to one.
+
+    Args:
+        frequency (int): :data:`frequency` :math:`+1` MCMC steps are performed
+            between resamplings.
+    """
+
     def __init__(self, frequency):
         self.frequency = frequency
 
@@ -213,6 +246,20 @@ class ResampledSampler:
 
 
 def chain(*samplers):
+    r"""
+    Combine multiple sampler types, to create advanced sampling schemes.
+
+    For example :data:`chain(DecorrSampler(10),MetropolisSampler(hamil, tau=1.))`
+    will create a :class:`MetropoliSampler`, where the samples are taken from
+    every 10th MCMC step. The last element of the sampler chain has to be either
+    a :class:`MetropolisSampler` or a :class:`LangevinSampler`.
+
+    Args:
+        samplers (~jax.sampling.Sampler): one or more sampler instances to combine.
+
+    Returns:
+        ~jax.sampling.Sampler: the combined sampler.
+    """
     name = 'Sampler'
     bases = tuple(map(type, samplers))
     for base in bases:
@@ -286,36 +333,3 @@ def equilibrate(
         b1, b2 = buffer[:block_size], buffer[-block_size:]
         if abs(mean(b1) - mean(b2)) < min(stdev(b1), stdev(b2)):
             break
-
-
-def init_sampling(
-    rng,
-    hamil,
-    ansatz,
-    state_callback,
-    *,
-    params=None,
-    sampler=MetropolisSampler,
-    sampler_kwargs=None,
-):
-    sampler = sampler(hamil, **(sampler_kwargs or {}))
-
-    rng_hamil, rng_ansatz, rng_smpl = jax.random.split(rng, 3)
-    init_smpl = hamil.init_sample(rng_hamil, sampler.sample_size)
-    maybe_params, wf_state = jax.vmap(ansatz.init, (None, 0), (None, 0))(
-        rng_ansatz, init_smpl
-    )
-    params = params or maybe_params
-    n_params = jax.tree_util.tree_reduce(
-        add, jax.tree_util.tree_map(lambda x: x.size, params)
-    )
-    log.info(f'Number of WF parameters: {n_params}')
-
-    wf = partial(ansatz.apply, params)
-    smpl_state = sampler.init(rng_smpl, wf, wf_state)
-    if state_callback:
-        wf_state, overflow = state_callback(smpl_state['wf_state'])
-        if overflow:
-            smpl_state = sampler.init(rng_smpl, wf, wf_state)
-
-    return params, smpl_state, sampler
