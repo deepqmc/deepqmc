@@ -1,0 +1,10 @@
+defaults:
+  - hamil: qc
+  - ansatz: paulinet
+  - sampler: decorr_langevin
+  - opt: kfac
+_target_: deepqmc.jax.app.train_from_factories
+steps: 1000
+sample_size: 1000
+clip_width: 1.0
+seed: 0

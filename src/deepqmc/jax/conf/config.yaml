@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - optional .@_here_: deepqmc
-  - task: qho
+  - task: train
   - override hydra/job_logging: custom
 hydra:
   job:
@@ -10,6 +10,4 @@ hydra:
   searchpath:
     - file://conf
 task:
-  _target_: deepqmc.jax.app.train_from_factories
   workdir: ???
-  seed: 0

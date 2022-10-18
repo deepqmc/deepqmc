@@ -5,7 +5,7 @@ from pathlib import Path
 
 import hydra
 import hydra.errors
-from hydra.utils import call, instantiate
+from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import OmegaConf
 from tqdm.auto import tqdm
 
@@ -29,22 +29,34 @@ def train_from_factories(hamil, ansatz, sampler, **kwargs):
     return train(hamil, ansatz, sampler=sampler, **kwargs)
 
 
-def task_from_workdir(workdir, chkpt='LAST', device=None):
+def train_from_checkpoint(workdir, restdir, evaluate, chkpt='LAST', **kwargs):
+    restdir = Path(to_absolute_path(get_original_cwd())) / restdir
+    assert restdir.is_dir()
+    cfg, step, train_state = task_from_workdir(restdir, chkpt)
+    cfg.task.workdir = workdir
+    if evaluate:
+        cfg.task.opt = None
+    else:
+        cfg.task.init_step = step
+    call(cfg.task, _convert_='all', train_state=train_state, **kwargs)
+
+
+def task_from_workdir(workdir, chkpt, device=None):
     from .train import CheckpointStore
 
     workdir = Path(workdir)
     assert workdir.is_dir()
     cfg = OmegaConf.load(workdir / '.hydra/config.yaml')
-    hamil = instantiate(cfg.task.hamil)
-    ansatz = instantiate_ansatz(hamil, cfg.task.ansatz)
-    chkpt = (
-        sorted(workdir.glob(CheckpointStore.PATTERN.format('*')))[-1]
-        if chkpt == 'LAST'
-        else workdir / chkpt
-    )
+    if chkpt == 'LAST':
+        chkpts = list(workdir.glob(CheckpointStore.PATTERN.format('*')))
+        if not chkpts:
+            chkpts = (workdir / 'train').glob(CheckpointStore.PATTERN.format('*'))
+        chkpt = sorted(chkpts)[-1]
+    else:
+        chkpt = workdir / chkpt
     with open(chkpt, 'rb') as f:
-        train_state = pickle.load(f)
-    return hamil, ansatz, train_state
+        step, train_state = pickle.load(f)
+    return cfg, step, train_state
 
 
 def main(cfg):

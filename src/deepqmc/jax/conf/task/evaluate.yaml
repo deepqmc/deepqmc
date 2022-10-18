@@ -1,0 +1,3 @@
+_target_: deepqmc.jax.app.train_from_checkpoint
+evaluate: true
+restdir: ???
