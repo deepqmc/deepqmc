@@ -1,11 +1,16 @@
+from copy import deepcopy
 from dataclasses import dataclass
+from importlib import resources
 from itertools import count
 
 import jax.numpy as jnp
+import toml
 
 angstrom = 1 / 0.52917721092
 
 __all__ = ['Molecule']
+
+_SYSTEMS = toml.loads(resources.read_text('deepqmc.data', 'systems.toml'))
 
 
 @dataclass(frozen=True, init=False)
@@ -93,3 +98,14 @@ class Molecule:
     def n_particles(self):
         r"""Return the number of nuclei, spin-up, and spin-down electrons."""
         return len(self), self.n_up, self.n_down
+
+    @classmethod
+    def from_name(cls, name, **kwargs):
+        """Create a molecule from a database of named molecules.
+        The available names are in :attr:`Molecule.all_names`.
+        """
+        if name in _SYSTEMS:
+            system = deepcopy(_SYSTEMS[name])
+            system.update(kwargs)
+        coords = system.pop('coords')
+        return cls(coords, **system)
