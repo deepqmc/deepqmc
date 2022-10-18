@@ -39,3 +39,8 @@ class H5LogTable:
                 ds[-1, ...] = row
 
         return Appender()
+
+
+def update_tensorboard_writer(writer, step, stats):
+    for k, v in stats.items():
+        writer.add_scalar(k, v, step)

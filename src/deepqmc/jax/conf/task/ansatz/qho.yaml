@@ -1,0 +1,2 @@
+_target_: deepqmc.jax.wf.qho.QHOAnsatz
+_partial_: true

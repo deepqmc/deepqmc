@@ -2,6 +2,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from importlib import resources
 from itertools import count
+from typing import ClassVar
 
 import jax.numpy as jnp
 import toml
@@ -28,6 +29,8 @@ class Molecule:
         spin (int): total spin multiplicity
     """
 
+    all_names: ClassVar[set] = set(_SYSTEMS.keys())
+
     coords: jnp.ndarray
     charges: jnp.ndarray
     charge: int
@@ -39,9 +42,6 @@ class Molecule:
     n_up: int
     n_down: int
     n_shells: tuple
-
-    # TODO
-    # all_names = set(_SYSTEMS.keys())
 
     def __init__(self, coords, charges, charge, spin, unit='bohr', data=None):
         def set_attr(**kwargs):
@@ -102,6 +102,7 @@ class Molecule:
     @classmethod
     def from_name(cls, name, **kwargs):
         """Create a molecule from a database of named molecules.
+
         The available names are in :attr:`Molecule.all_names`.
         """
         if name in _SYSTEMS:

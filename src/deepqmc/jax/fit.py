@@ -1,3 +1,4 @@
+import logging
 from collections import namedtuple
 from functools import partial
 
@@ -11,6 +12,7 @@ from .kfacext import GRAPH_PATTERNS
 from .utils import check_overflow, exp_normalize_mean, masked_mean, tree_norm
 
 __all__ = ()
+log = logging.getLogger(__name__)
 
 TrainState = namedtuple('TrainState', 'sampler params opt')
 
@@ -142,7 +144,6 @@ def fit_wf(  # noqa: C901
                 func_state=wf_state,
                 batch=batch,
                 momentum=0,
-                damping=5e-4,
             )
             stats = {
                 'opt/param_norm': opt_stats['param_norm'],
@@ -166,14 +167,12 @@ def fit_wf(  # noqa: C901
             l2_reg=0.0,
             value_func_has_aux=True,
             value_func_has_state=True,
-            use_adaptive_learning_rate=False,
             auto_register_kwargs={'graph_patterns': GRAPH_PATTERNS},
-            inverse_update_period=1,
-            norm_constraint=1e-3,
             include_norms_in_stats=True,
             estimation_mode='fisher_exact',
             num_burnin_steps=0,
-            learning_rate_schedule=lambda s: 1e-2 / (1 + s / 6000),
+            min_damping=5e-4,
+            inverse_update_period=1,
         )
 
     @partial(check_overflow, state_callback)
@@ -184,7 +183,9 @@ def fit_wf(  # noqa: C901
     def train_step(rng, smpl_state, params, opt_state):
         rng_sample, rng_kfac = jax.random.split(rng)
         smpl_state, r, smpl_stats = sample_wf(smpl_state, rng_sample, params)
-        weight = exp_normalize_mean(smpl_state['log_weight'])
+        weight = exp_normalize_mean(
+            smpl_state.get('log_weight', jnp.zeros(sample_size))
+        )
         params, opt_state, E_loc, stats = _step(
             rng_kfac, smpl_state['wf'], params, opt_state, (r, weight)
         )
@@ -195,13 +196,12 @@ def fit_wf(  # noqa: C901
         return smpl_state, params, opt_state, E_loc, stats
 
     if train_state:
-        params, opt_state, smpl_state = train_state
+        smpl_state, params, opt_state = train_state
     else:
         params, smpl_state = init_fit(
             rng, hamil, ansatz, sampler, sample_size, state_callback
         )
         opt_state = None
-    smpl_state = {**smpl_state, 'log_weight': jnp.zeros(sample_size)}
     if opt is not None and opt_state is None:
         opt_state = init_opt(
             rng, smpl_state['wf'], params, (smpl_state['r'], jnp.ones(sample_size))

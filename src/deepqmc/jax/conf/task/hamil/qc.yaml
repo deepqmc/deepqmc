@@ -1,0 +1,4 @@
+_target_: deepqmc.jax.hamil.MolecularHamiltonian
+mol:
+  _target_: deepqmc.jax.Molecule.from_name
+  name: LiH

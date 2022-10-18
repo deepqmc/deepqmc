@@ -1,0 +1,2 @@
+_target_: deepqmc.jax.wf.PauliNet
+_partial_: true
