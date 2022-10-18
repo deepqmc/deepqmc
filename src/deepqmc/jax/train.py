@@ -39,17 +39,26 @@ def train(
     max_restarts=3,
     **kwargs,
 ):
-    r"""Train a JAX wave function model.
+    r"""Train or evaluate a JAX wave function model.
 
     It initializes and equilibrates the MCMC sampling of the wave function ansatz,
-    then optimizes it using the variational principle. It optionally saves
-    checkpoints and rewinds the training if an error is encountered.
+    then optimizes or samples it using the variational principle. It optionally
+    saves checkpoints and rewinds the training/evaluation if an error is encountered.
+    If an optimizer is supplied, the Ansatz is optimized, otherwise the Ansatz is
+    only sampled.
 
     Args:
         hamil (~jax.hamil.Hamiltonian): the Hamiltonian of the physical system.
         ansatz (~jax.wf.WaveFunction): the wave function ansatz.
-        opt: the optimizer. Either the :class:`kfac_jax.Optimizer` class or an instance
-            of an :class:`optax` optimizer.
+        opt (``kfac_jax`` or ``optax`` optimizers, or :data:`None`): the optimizer.
+            Possible values are:
+
+            - :class:`kfac_jax.Optimizer`: the KFAC optimizer is used
+            - an :data:`optax` optimizer: the supplied :data:`optax` optimizer
+                is used.
+            - :data:`None`: no optimizer is used, e.g. the evaluation of the Ansatz
+                is performed.
+
         sampler (~jax.sampling.Sampler): a sampler instance
         workdir (str): optional, path, where results and checkpoints should be saved.
         state_callback (Callable): optional, a function processing the :class:`haiku`

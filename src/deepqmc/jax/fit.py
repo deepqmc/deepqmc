@@ -71,7 +71,7 @@ def fit_wf(  # noqa: C901
         return loss, (None, (E_loc, stats))
         # - kfac-jax docs says the API should be (loss, state, aux), but that's
         #   wrong, it in fact expects (loss, (state, aux)):
-        #   https://github.com/deepmind/kfac-jax/blob/17831f5a0621b0259c644503556ee7f65acdf0c5/kfac_jax/_src/optimizer.py#L1380-L1383
+        #   https://github.com/deepmind/kfac-jax/blob/17831f5a0621b0259c644503556ee7f65acdf0c5/kfac_jax/_src/optimizer.py#L1380-L1383  # noqa: B950
         # - we're passing out None as state to satisfy KFAC API, but we don't
         #   actually use it (hence None)
 

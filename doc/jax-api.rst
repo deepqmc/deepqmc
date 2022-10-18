@@ -22,19 +22,17 @@ Some additional neural network functionality is implemented in the package and d
 
 .. automodule:: deepqmc.jax.hkext
 
-Training
---------
+Training and evaluation
+-----------------------
 
 .. automodule:: deepqmc.jax.train
 
 .. automodule:: deepqmc.jax.fit
 
-.. automodule:: deepqmc.jax.evaluate
-
-.. automodule:: deepqmc.jax.equilibrate
-
 Sampling
 --------
+
+.. autoclass:: deepqmc.jax.sampling.Sampler
 
 .. automodule:: deepqmc.jax.sampling
 
