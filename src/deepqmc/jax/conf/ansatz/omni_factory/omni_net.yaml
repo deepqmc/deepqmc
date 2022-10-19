@@ -1,0 +1,4 @@
+defaults:
+  - gnn_factory: schnet
+_target_: deepqmc.jax.wf.paulinet.omni.OmniNet
+_partial_: true

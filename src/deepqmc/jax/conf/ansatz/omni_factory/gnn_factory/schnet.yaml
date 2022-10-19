@@ -1,0 +1,2 @@
+_target_: deepqmc.jax.gnn.SchNet
+_partial_: true
