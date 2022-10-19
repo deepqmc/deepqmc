@@ -2,6 +2,8 @@ defaults:
   - _self_
   - optional .@_here_: deepqmc
   - task: train
+  - ansatz: paulinet
+  - hamil: qc
   - override hydra/job_logging: custom
 hydra:
   job:

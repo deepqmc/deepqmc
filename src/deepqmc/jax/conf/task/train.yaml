@@ -1,8 +1,8 @@
 defaults:
-  - hamil: qc
-  - ansatz: paulinet
-  - sampler: decorr_langevin
+  - sampler: decorr_metropolis
 _target_: deepqmc.jax.app.train_from_factories
+hamil: ${hamil}
+ansatz: ${ansatz}
 opt: kfac
 steps: 1000
 sample_size: 1000
