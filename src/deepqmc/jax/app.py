@@ -59,10 +59,31 @@ def task_from_workdir(workdir, chkpt, device=None):
     return cfg, step, train_state
 
 
+def maybe_log_code_version():
+    if log.isEnabledFor(logging.DEBUG):
+        import subprocess
+
+        def git_command(command):
+            return (
+                subprocess.check_output(
+                    ['git'] + command, cwd=Path(__file__).resolve().parent
+                )
+                .strip()
+                .decode()
+            )
+
+        sha = git_command(['rev-parse', '--short', 'HEAD'])
+        diff = git_command(['diff'])
+        log.debug(f'Running with code version: {sha}')
+        if diff:
+            log.debug(f'With uncommitted changes:\n{diff}')
+
+
 def main(cfg):
     log.info('Entering application')
     cfg.task.workdir = str(Path.cwd())
     log.info(f'Will work in {cfg.task.workdir}')
+    maybe_log_code_version()
     call(cfg.task, _convert_='all')
 
 
