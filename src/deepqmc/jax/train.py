@@ -2,6 +2,7 @@ import logging
 import operator
 import pickle
 from collections import namedtuple
+from copy import deepcopy
 from functools import partial
 from itertools import count
 from pathlib import Path
@@ -160,6 +161,7 @@ def train(
         if pbar:
             pbar.close()
         if workdir:
+            chkpts.close()
             writer.close()
             h5file.close()
 
@@ -179,9 +181,11 @@ class CheckpointStore:
         self.threshold = threshold
         self.chkpts = []
         self.step = 0
+        self.buffer = None
 
     def update(self, loss, state):
         self.step += 1
+        self.buffer = deepcopy(state)
         if (
             self.step < self.min_interval
             or self.chkpts
@@ -191,12 +195,20 @@ class CheckpointStore:
             )
         ):
             return
-        path = self.workdir / self.PATTERN.format(self.step)
+        path = self.dump(state)
         self.chkpts.append(Checkpoint(self.step, loss, path))
-        with path.open('wb') as f:
-            pickle.dump(state, f)
         while len(self.chkpts) > self.size:
             self.chkpts.pop(0).path.unlink()
+
+    def dump(self, state):
+        path = self.workdir / self.PATTERN.format(self.step)
+        with path.open('wb') as f:
+            pickle.dump(state, f)
+        return path
+
+    def close(self):
+        if self.buffer is not None:
+            self.dump(self.buffer)
 
     @property
     def last(self):
