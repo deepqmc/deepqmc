@@ -1,0 +1,2 @@
+_target_: deepqmc.jax.gnn.PaiNN
+_partial_: true

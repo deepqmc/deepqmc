@@ -1,2 +1,4 @@
+defaults:
+  - omni_factory: omni_net
 _target_: deepqmc.jax.wf.PauliNet
 _partial_: true
