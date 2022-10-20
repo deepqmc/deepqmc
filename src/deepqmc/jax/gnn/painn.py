@@ -20,12 +20,14 @@ class PaiNNLayer(MessagePassingLayer):
         n_layers_w=2,
         n_layers_h=2,
         n_layers_g=2,
+        g_concat_norm=True,
         subnet_kwargs=None,
         subnet_kwargs_by_lbl=None,
     ):
         super().__init__(ilayer, shared)
         self.shared_h = shared_h
         self.shared_g = shared_g
+        self.g_concat_norm = g_concat_norm
         default_n_layers = {'w': n_layers_w, 'h': n_layers_h, 'g': n_layers_g}
 
         subnet_kwargs = subnet_kwargs or {}
@@ -70,7 +72,7 @@ class PaiNNLayer(MessagePassingLayer):
         }
         self.g = (
             MLP(
-                2 * self.embedding_dim,
+                2 * self.embedding_dim if g_concat_norm else self.embedding_dim,
                 3 * self.embedding_dim,
                 name='g',
                 **subnet_kwargs_by_lbl['g'],
@@ -171,6 +173,8 @@ class PaiNNLayer(MessagePassingLayer):
                         [z_edge['s'], norm(Vv[typ], safe=self.safe)],
                         axis=-1,
                     )
+                    if self.g_concat_norm
+                    else z_edge['s']
                 )
                 for typ, z_edge in z.items()
             }
