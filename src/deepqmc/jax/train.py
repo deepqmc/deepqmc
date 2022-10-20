@@ -10,15 +10,19 @@ from pathlib import Path
 import h5py
 import jax
 import jax.numpy as jnp
+import optax
 import tensorboard.summary
 from tqdm.auto import tqdm, trange
 from uncertainties import ufloat
+
+import kfac_jax
 
 from .ewm import ewm
 from .fit import fit_wf, init_fit
 from .log import H5LogTable, update_tensorboard_writer
 from .physics import pairwise_self_distance
 from .sampling import equilibrate
+from .utils import InverseSchedule
 from .wf.base import state_callback
 
 __all__ = ['train']
@@ -26,7 +30,18 @@ __all__ = ['train']
 log = logging.getLogger(__name__)
 
 
-def train(
+OPT_KWARGS = {
+    'adam': {'lr': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
+    'adamw': {'lr': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
+    'kfac': {
+        'learning_rate_schedule': InverseSchedule(0.01, 5000),
+        'damping_schedule': InverseSchedule(0.001, 5000),
+        'norm_constraint': 0.001,
+    },
+}
+
+
+def train(  # noqa: C901
     hamil,
     ansatz,
     opt,
@@ -53,12 +68,16 @@ def train(
     Args:
         hamil (~jax.hamil.Hamiltonian): the Hamiltonian of the physical system.
         ansatz (~jax.wf.WaveFunction): the wave function ansatz.
-        opt (``kfac_jax`` or ``optax`` optimizers, or :data:`None`): the optimizer.
-            Possible values are:
+        opt (``kfac_jax`` or ``optax`` optimizers, :class:`str` or :data:`None`):
+            the optimizer. Possible values are:
 
-            - :class:`kfac_jax.Optimizer`: the KFAC optimizer is used
+            - :class:`kfac_jax.Optimizer`: the partially initialized KFAC optimizer
+                is used
             - an :data:`optax` optimizer instance: the supplied :data:`optax`
                 optimizer is used.
+            - :class:`str`: the name of the optimizer to use (:data:`'kfac'` or an
+                :data:`optax` optimzier name). Arguments to the optimizer can be
+                passed in :data:`opt_kwargs`.
             - :data:`None`: no optimizer is used, e.g. the evaluation of the Ansatz
                 is performed.
 
@@ -80,6 +99,13 @@ def train(
     ewm_state = ewm()
     rng = jax.random.PRNGKey(seed)
     mode = 'evaluate' if opt is None else 'train'
+    if isinstance(opt, str):
+        opt_kwargs = kwargs.pop('opt_kwargs', OPT_KWARGS)[opt]
+        opt = (
+            partial(kfac_jax.Optimizer, **opt_kwargs)
+            if opt == 'kfac'
+            else getattr(optax, opt)(**opt_kwargs)
+        )
     if workdir:
         workdir = f'{workdir}/{mode}'
         chkpts = CheckpointStore(workdir)

@@ -93,3 +93,7 @@ def no_grad(func):
         return func(*args, **kwargs)
 
     return wrapper
+
+
+def InverseSchedule(init_value, decay_rate):
+    return lambda n: init_value / (1 + n / decay_rate)
