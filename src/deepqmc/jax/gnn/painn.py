@@ -212,10 +212,11 @@ class PaiNN(GraphNeuralNetwork):
         n_interactions=3,
         edge_feat_kwargs=None,
         edge_feat_kwargs_by_typ=None,
+        concat_vectors=True,
         **gnn_kwargs,
     ):
         assert embedding_dim % 4 == 0
-        _embedding_dim = embedding_dim // 4
+        _embedding_dim = embedding_dim // 4 if concat_vectors else embedding_dim
         n_nuc, n_up, n_down = mol.n_particles
         spin_idxs = jnp.array(
             (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
@@ -253,6 +254,7 @@ class PaiNN(GraphNeuralNetwork):
             typ: EdgeFeatures(**kwargs)
             for typ, kwargs in edge_feat_kwargs_by_typ.items()
         }
+        self.concat_vectors = concat_vectors
 
     def initial_embeddings(self):
         Y = hk.Embed(self.n_nuc, self.embedding_dim, name='NuclearEmbedding')
@@ -298,10 +300,13 @@ class PaiNN(GraphNeuralNetwork):
 
     def __call__(self, r):
         elec_embed = super().__call__(r)
-        return jnp.concatenate(
-            [
-                elec_embed['s'],
-                elec_embed['v'].reshape(self.n_up + self.n_down, -1),
-            ],
-            axis=-1,
-        )
+        if self.concat_vectors:
+            return jnp.concatenate(
+                [
+                    elec_embed['s'],
+                    elec_embed['v'].reshape(self.n_up + self.n_down, -1),
+                ],
+                axis=-1,
+            )
+        else:
+            return elec_embed['s']
