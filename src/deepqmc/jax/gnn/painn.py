@@ -15,7 +15,6 @@ class PaiNNLayer(MessagePassingLayer):
         ilayer,
         shared,
         *,
-        shared_h=True,
         shared_g=False,
         n_layers_w=2,
         n_layers_h=2,
@@ -26,7 +25,7 @@ class PaiNNLayer(MessagePassingLayer):
         subnet_kwargs_by_lbl=None,
     ):
         super().__init__(ilayer, shared)
-        self.shared_h = shared_h
+        assert not shared_g or self.has_vector_feat == self.edge_types
         self.shared_g = shared_g
         self.g_concat_norm = g_concat_norm
         self.sv_connection = sv_connection
@@ -45,36 +44,36 @@ class PaiNNLayer(MessagePassingLayer):
             subnet_kwargs_by_lbl[lbl].setdefault(
                 'hidden_layers', ('log', default_n_layers[lbl])
             )
+        out_size_fact = lambda typ: 3 if typ in self.has_vector_feat else 1
         self.w = {
             typ: MLP(
                 self.edge_feat_dim[typ],
-                3 * self.embedding_dim,
+                out_size_fact(typ) * self.embedding_dim,
                 name=f'w_{typ}',
                 **subnet_kwargs_by_lbl['w'],
             )
             for typ in self.edge_types
         }
 
-        def vocab_size(typ):
-            if typ == 'ne':
-                return self.n_nuc
-            else:
-                return 1 if self.n_up == self.n_down else 2
-
         self.h = {
-            typ: hk.Embed(vocab_size(typ), 3 * self.embedding_dim, name=f'h_{typ}')
+            typ: hk.Embed(
+                self.n_nuc if typ == 'ne' else 1 if self.n_up == self.n_down else 2,
+                out_size_fact(typ) * self.embedding_dim,
+                name=f'h_{typ}',
+            )
             if self.first_layer
             else MLP(
                 self.embedding_dim,
-                3 * self.embedding_dim,
+                out_size_fact(typ) * self.embedding_dim,
                 name=f'h_{typ}',
                 **subnet_kwargs_by_lbl['h'],
             )
             for typ in self.edge_types
         }
+        g_input_size = (2 if g_concat_norm else 1) * self.embedding_dim
         self.g = (
             MLP(
-                2 * self.embedding_dim if g_concat_norm else self.embedding_dim,
+                g_input_size,
                 3 * self.embedding_dim,
                 name='g',
                 **subnet_kwargs_by_lbl['g'],
@@ -82,8 +81,8 @@ class PaiNNLayer(MessagePassingLayer):
             if shared_g
             else {
                 typ: MLP(
-                    2 * self.embedding_dim,
-                    3 * self.embedding_dim,
+                    g_input_size,
+                    out_size_fact(typ) * self.embedding_dim,
                     name=f'g_{typ}',
                     **subnet_kwargs_by_lbl['g'],
                 )
@@ -101,17 +100,25 @@ class PaiNNLayer(MessagePassingLayer):
                         name=f'{lbl}_{typ}',
                         w_init=lambda shape, dtype: jnp.eye(shape[0], dtype=dtype),
                     )
-                    for typ in self.edge_types
+                    for typ in self.has_vector_feat
                 },
             )
 
     @classmethod
     @property
     def subnet_labels(cls):
-        return ('w', 'h', 'g')
+        return {'w', 'h', 'g'}
 
     def get_update_edges_fn(self):
         return None
+
+    def create_z(self, typ, phi_w, edge, n_node, send_node, recv_node):
+        z = {'s': recv_node['s'] + ops.segment_sum(phi_w['s'], edge.receivers, n_node)}
+        if typ in self.has_vector_feat:
+            vv = phi_w['vv'][..., None] * send_node['v'][edge.senders]
+            vs = phi_w['vs'][..., None] * edge.features['vector'][..., None, :]
+            z['v'] = recv_node['v'] + ops.segment_sum(vv + vs, edge.receivers, n_node)
+        return z
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes_fn(nodes, edges):
@@ -138,44 +145,47 @@ class PaiNNLayer(MessagePassingLayer):
                         ['s', 'vv', 'vs'], jnp.split(we * hx[typ], 3, axis=-1)
                     )
                 }
+                if typ in self.has_vector_feat
+                else {'s': we * hx[typ]}
                 for typ, we in we.items()
             }
-            z = {}
-            for typ, fws in phi_w.items():
-                z[typ] = {}
-                n_nodes, sender_nodes, receiver_nodes, _ = node_map[typ]
-                z[typ]['s'] = receiver_nodes['s'] + ops.segment_sum(
-                    fws['s'], edges[typ].receivers, n_nodes
+
+            z = {
+                typ: self.create_z(
+                    typ,
+                    phi_w,
+                    edges[typ],
+                    *node_map[typ][:3],
                 )
-                vv = fws['vv'][..., None] * sender_nodes['v'][edges[typ].senders]
-                vs = fws['vs'][..., None] * edges[typ].features['vector'][..., None, :]
-                z[typ]['v'] = receiver_nodes['v'] + ops.segment_sum(
-                    vv + vs, edges[typ].receivers, n_nodes
-                )
+                for typ, phi_w in phi_w.items()
+            }
             return z
 
         return aggregate_edges_for_nodes_fn
 
+    def combine_vectors(self, z):
+        def linear_comb(W, v):
+            lin_comb = jnp.swapaxes(W(jnp.swapaxes(v, -1, -2)), -1, -2)
+            return lin_comb
+
+        def lin_comb_all_typs(W, z):
+            lin_comb_dict = {
+                typ: linear_comb(W[typ], z[typ]['v']) for typ in self.has_vector_feat
+            }
+            return lin_comb_dict
+
+        return lin_comb_all_typs(self.V, z), lin_comb_all_typs(self.U, z)
+
     def get_update_nodes_fn(self):
         def update_nodes_fn(nodes, z):
-            def linear_comb(W, v):
-                lin_comb = jnp.swapaxes(W(jnp.swapaxes(v, -1, -2)), -1, -2)
-                return lin_comb
-
-            Vv = {
-                typ: linear_comb(self.V[typ], z_edge['v']) for typ, z_edge in z.items()
-            }
-            Uv = {
-                typ: linear_comb(self.U[typ], z_edge['v']) for typ, z_edge in z.items()
-            }
-
+            Vv, Uv = self.combine_vectors(z)
             gs = {
                 typ: self.g[typ](
                     jnp.concatenate(
                         [z_edge['s'], norm(Vv[typ], safe=self.safe)],
                         axis=-1,
                     )
-                    if self.g_concat_norm
+                    if self.g_concat_norm and typ in self.has_vector_feat
                     else z_edge['s']
                 )
                 for typ, z_edge in z.items()
@@ -183,29 +193,35 @@ class PaiNNLayer(MessagePassingLayer):
             a = {
                 typ: {
                     a_lbl: aa
-                    for a_lbl, aa in zip(
-                        ['ss', 'vv', 'sv'], jnp.split(g_edge, 3, axis=-1)
-                    )
+                    for a_lbl, aa in zip(['ss', 'vv', 'sv'], jnp.split(g, 3, axis=-1))
                 }
-                for typ, g_edge in gs.items()
+                if typ in self.has_vector_feat
+                else {'ss': g}
+                for typ, g in gs.items()
             }
 
             delta_s = sum(
                 a[typ]['ss']
                 + (
                     a[typ]['sv'] * jnp.einsum('pei,pei->pe', Uv[typ], Vv[typ])
-                    if self.sv_connection
+                    if self.sv_connection and typ in self.has_vector_feat
                     else 0
                 )
                 for typ in self.edge_types
             )
-            delta_v = sum(a[typ]['vv'][..., None] * Uv[typ] for typ in self.edge_types)
 
-            s_update = jnp.tanh(delta_s)
-            v_norm = norm(delta_v, safe=self.safe)
-            v_update = jnp.tanh(v_norm)[..., None] * delta_v / v_norm[..., None]
+            updated_s = jnp.tanh(delta_s)
+            if self.has_vector_feat:
+                delta_v = sum(
+                    a[typ]['vv'][..., None] * Uv[typ] for typ in self.has_vector_feat
+                )
+                v_norm = norm(delta_v, safe=self.safe)
+                updated_v = jnp.tanh(v_norm)[..., None] * delta_v / v_norm[..., None]
+            else:
+                updated_v = nodes.electrons['v']
+
             updated_nodes = nodes._replace(
-                electrons={'s': s_update, 'v': v_update},
+                electrons={'s': updated_s, 'v': updated_v},
             )
             return updated_nodes
 
@@ -223,6 +239,7 @@ class PaiNN(GraphNeuralNetwork):
         edge_feat_kwargs=None,
         edge_feat_kwargs_by_typ=None,
         concat_vectors=True,
+        has_vector_feat=None,
         **gnn_kwargs,
     ):
         assert embedding_dim % 4 == 0
@@ -251,6 +268,7 @@ class PaiNN(GraphNeuralNetwork):
             'spin_idxs': spin_idxs,
             'nuc_idxs': nuc_idxs,
             'safe': edge_feat_kwargs['safe'],
+            'has_vector_feat': set(has_vector_feat or self.edge_types),
         }
         super().__init__(
             mol,
@@ -287,7 +305,7 @@ class PaiNN(GraphNeuralNetwork):
     @classmethod
     @property
     def edge_types(cls):
-        return ('same', 'anti', 'ne')
+        return {'same', 'anti', 'ne'}
 
     def init_state(self, shape, dtype):
         zeros = jnp.zeros(shape, dtype)
