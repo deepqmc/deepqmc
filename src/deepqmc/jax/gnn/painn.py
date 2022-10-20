@@ -21,6 +21,7 @@ class PaiNNLayer(MessagePassingLayer):
         n_layers_h=2,
         n_layers_g=2,
         g_concat_norm=True,
+        sv_connection=True,
         subnet_kwargs=None,
         subnet_kwargs_by_lbl=None,
     ):
@@ -28,6 +29,7 @@ class PaiNNLayer(MessagePassingLayer):
         self.shared_h = shared_h
         self.shared_g = shared_g
         self.g_concat_norm = g_concat_norm
+        self.sv_connection = sv_connection
         default_n_layers = {'w': n_layers_w, 'h': n_layers_h, 'g': n_layers_g}
 
         subnet_kwargs = subnet_kwargs or {}
@@ -190,7 +192,11 @@ class PaiNNLayer(MessagePassingLayer):
 
             delta_s = sum(
                 a[typ]['ss']
-                + a[typ]['sv'] * jnp.einsum('pei,pei->pe', Uv[typ], Vv[typ])
+                + (
+                    a[typ]['sv'] * jnp.einsum('pei,pei->pe', Uv[typ], Vv[typ])
+                    if self.sv_connection
+                    else 0
+                )
                 for typ in self.edge_types
             )
             delta_v = sum(a[typ]['vv'][..., None] * Uv[typ] for typ in self.edge_types)
