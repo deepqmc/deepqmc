@@ -21,6 +21,7 @@ class PaiNNLayer(MessagePassingLayer):
         n_layers_g=2,
         g_concat_norm=True,
         sv_connection=True,
+        vs_connection=True,
         subnet_kwargs=None,
         subnet_kwargs_by_lbl=None,
     ):
@@ -29,6 +30,7 @@ class PaiNNLayer(MessagePassingLayer):
         self.shared_g = shared_g
         self.g_concat_norm = g_concat_norm
         self.sv_connection = sv_connection
+        self.vs_connection = vs_connection
         default_n_layers = {'w': n_layers_w, 'h': n_layers_h, 'g': n_layers_g}
 
         subnet_kwargs = subnet_kwargs or {}
@@ -115,9 +117,12 @@ class PaiNNLayer(MessagePassingLayer):
     def create_z(self, typ, phi_w, edge, n_node, send_node, recv_node):
         z = {'s': recv_node['s'] + ops.segment_sum(phi_w['s'], edge.receivers, n_node)}
         if typ in self.has_vector_feat:
-            vv = phi_w['vv'][..., None] * send_node['v'][edge.senders]
-            vs = phi_w['vs'][..., None] * edge.features['vector'][..., None, :]
-            z['v'] = recv_node['v'] + ops.segment_sum(vv + vs, edge.receivers, n_node)
+            v_update = phi_w['vv'][..., None] * send_node['v'][edge.senders]
+            if self.vs_connection:
+                v_update += (
+                    phi_w['vs'][..., None] * edge.features['vector'][..., None, :]
+                )
+            z['v'] = recv_node['v'] + ops.segment_sum(v_update, edge.receivers, n_node)
         return z
 
     def get_aggregate_edges_for_nodes_fn(self):
