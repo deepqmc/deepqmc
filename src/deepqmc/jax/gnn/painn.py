@@ -4,7 +4,7 @@ from jax import nn, ops
 
 from ..hkext import MLP
 from ..utils import norm
-from .edge_features import EdgeFeatures
+from .edge_features import PauliNetEdgeFeatures
 from .gnn import GraphNeuralNetwork, MessagePassingLayer
 from .graph import GraphNodes, difference_callback
 
@@ -290,7 +290,7 @@ class PaiNN(GraphNeuralNetwork):
             share_with_layers=share,
         )
         self.edge_features = {
-            typ: EdgeFeatures(**kwargs)
+            typ: PauliNetEdgeFeatures(**kwargs)
             for typ, kwargs in edge_feat_kwargs_by_typ.items()
         }
         self.concat_vectors = concat_vectors
