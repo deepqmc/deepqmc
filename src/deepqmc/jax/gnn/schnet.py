@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from jax import ops
 
 from ..hkext import MLP
-from .edge_features import EdgeFeatures
+from .edge_features import PauliNetEdgeFeatures
 from .gnn import GraphNeuralNetwork, MessagePassingLayer
 from .graph import GraphNodes, difference_callback
 
@@ -272,7 +272,7 @@ class SchNet(GraphNeuralNetwork):
             share_with_layers=share,
         )
         self.edge_features = {
-            typ: EdgeFeatures(**kwargs)
+            typ: PauliNetEdgeFeatures(**kwargs)
             for typ, kwargs in edge_feat_kwargs_by_typ.items()
         }
 
