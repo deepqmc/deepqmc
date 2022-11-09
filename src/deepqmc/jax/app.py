@@ -9,8 +9,6 @@ from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import OmegaConf
 from tqdm.auto import tqdm
 
-from .sampling import chain
-
 __all__ = ()
 log = logging.getLogger(__name__)
 
@@ -27,6 +25,7 @@ def instantiate_ansatz(hamil, ansatz):
 
 def train_from_factories(hamil, ansatz, sampler, **kwargs):
     from .train import train
+    from .sampling import chain
 
     ansatz = instantiate_ansatz(hamil, ansatz)
     sampler = chain(*sampler[:-1], sampler[-1](hamil))
