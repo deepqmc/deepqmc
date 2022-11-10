@@ -245,7 +245,7 @@ class PaiNN(GraphNeuralNetwork):
         mol,
         embedding_dim,
         *,
-        cutoff=10.0,
+        cutoff=20.0,
         n_interactions=3,
         edge_feat_kwargs=None,
         edge_feat_kwargs_by_typ=None,
