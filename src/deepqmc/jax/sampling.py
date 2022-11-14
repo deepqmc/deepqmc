@@ -192,17 +192,25 @@ class ResampledSampler(Sampler):
 
     This sampler cannot be used as the last element of a sampler chain.
     The resampling is performed by accumulating weights on each MCMC walker
-    in each step. At every :data:`frequency` :math:`+1` step new walker
+    in each step. Based on a fixed resampling frequency :data:`frequency` and/or a
+    threshold :data:`treshold` on the normalized effective sample size the walker
     positions are sampled according to the multinomial distribution defined by
-    these weights, and the weigths are resetted to one.
+    these weights, and the weights are reset to one. Either :data:`frequency` or
+    :data:`treshold` have to be specified.
+
 
     Args:
-        frequency (int): :data:`frequency` :math:`+1` MCMC steps are performed
-            between resamplings.
+        frequency (int): optional, if specified the walkers are resampled every
+            :data:`frequency` MCMC steps.
+        treshold (float): optional, if specified the walkers are resampled if
+            the effective sample size normalized with the batch size is below
+            :data:`treshold`.
     """
 
-    def __init__(self, frequency):
+    def __init__(self, frequency=None, treshold=None):
+        assert frequency is not None or treshold is not None
         self.frequency = frequency
+        self.treshold = treshold
 
     def init(self, *args):
         state = super().init(*args)
@@ -236,7 +244,8 @@ class ResampledSampler(Sampler):
         ess = jnp.sum(weight) ** 2 / jnp.sum(weight**2)
         stats['sampling/effective sample size'] = ess
         state = jax.lax.cond(
-            state['step'] > self.frequency,
+            (self.frequency is not None and state['step'] >= self.frequency)
+            | (self.treshold is not None and ess / len(weight) < self.treshold),
             self.resample_walkers,
             lambda rng, state: state,
             rng_re,
