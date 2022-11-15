@@ -20,7 +20,7 @@ class IdentityEnvelope(Envelope):
 
 
 class PolynomialEnvelope(Envelope):
-    def __init__(self, r_cut: int, n0: int, n1: int):
+    def __init__(self, r_cut: float, n0: int, n1: int):
         super().__init__(r_cut)
         self.envelope = e3nn.poly_envelope(n0, n1, r_cut)
 
