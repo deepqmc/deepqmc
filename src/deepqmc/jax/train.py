@@ -10,17 +10,17 @@ from pathlib import Path
 import h5py
 import jax
 import jax.numpy as jnp
+import kfac_jax
 import optax
 import tensorboard.summary
 from tqdm.auto import tqdm, trange
 from uncertainties import ufloat
 
-import kfac_jax
-
 from .ewm import ewm
 from .fit import fit_wf, init_fit
 from .log import H5LogTable, update_tensorboard_writer
 from .physics import pairwise_self_distance
+from .pretrain import pretrain
 from .sampling import equilibrate
 from .utils import InverseSchedule
 from .wf.base import state_callback
@@ -55,6 +55,8 @@ def train(  # noqa: C901
     seed,
     init_step=0,
     max_restarts=3,
+    pretrain_steps=None,
+    pretrain_baseline_kwargs=None,
     **kwargs,
 ):
     r"""Train or evaluate a JAX wave function model.
@@ -88,10 +90,14 @@ def train(  # noqa: C901
         steps (int): optional, number of optimization steps.
         sample_size (int): the number of samples considered in a batch
         seed (int): the seed used for PRNG.
-        max_restarts (int): optional, the maximum number of times the training is
-                retried before a :class:`NaNError` is raised.
         init_step (int): optional, initial step index, useful if
-            calculation is restarted from checkpoint saved on disk.
+        calculation is restarted from checkpoint saved on disk.
+        max_restarts (int): optional, the maximum number of times the training is
+            retried before a :class:`NaNError` is raised.
+        pretrain_steps (int): optional, the number of pretraining steps wrt. to the
+            Baseline wave function obtained with pyscf.
+        pretrain_baseline_kwargs (dict): optional, arguments passed to the baseline
+            wave function.
         kwargs (dict): optional, extra arguments passed to the :func:`~.fit.fit_wf`
             function.
     """
@@ -133,6 +139,26 @@ def train(  # noqa: C901
                 operator.add, jax.tree_map(lambda x: x.size, params)
             )
             log.info(f'Number of model parameters: {num_params}')
+            if pretrain_steps and mode == 'train':
+                log.info('Pretraining wrt. HF wave function')
+                pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
+                for step, params, loss, pretrain_stats in pretrain(  # noqa: B007
+                    rng,
+                    hamil,
+                    ansatz,
+                    opt,
+                    sampler,
+                    steps=pbar,
+                    sample_size=sample_size,
+                    baseline_kwargs=pretrain_baseline_kwargs,
+                ):
+                    pbar.set_postfix(MSE=f'{loss.item():0.5e}')
+                    pretrain_stats = {
+                        'pretraining/MSE': loss.item(),
+                        **pretrain_stats,
+                    }
+                    if workdir:
+                        update_tensorboard_writer(writer, step, pretrain_stats)
             log.info('Equilibrating sampler...')
             pbar = tqdm(count(), desc='equilibrate', disable=None)
             for _, smpl_state, smpl_stats in equilibrate(  # noqa: B007
@@ -151,6 +177,8 @@ def train(  # noqa: C901
                 #     update_tensorboard_writer(writer, step, stats)
             pbar.close()
             train_state = smpl_state, params, None
+            if workdir and mode == 'train':
+                chkpts.dump(train_state)
             log.info(f'Start {mode}')
         pbar = trange(
             init_step, steps, initial=init_step, total=steps, desc=mode, disable=None

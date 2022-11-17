@@ -160,7 +160,7 @@ class PauliNet(WaveFunction):
             fs_mult, fs_add = fs[:, : fs.shape[1] // 2], fs[:, fs.shape[1] // 2 :]
         return self.backflow_op(xs, fs_mult, fs_add, dists_nuc)
 
-    def __call__(self, rs):
+    def __call__(self, rs, return_mos=False):
         n_elec = rs.shape[-2]
         n_nuc = len(self.mol.coords)
         diffs_nuc = pairwise_diffs(rs.reshape(-1, 3), self.mol.coords)
@@ -194,7 +194,8 @@ class PauliNet(WaveFunction):
                 )
             det_up = self._backflow_op(det_up, fs[0], dists_nuc[..., :n_up, :])
             det_down = self._backflow_op(det_down, fs[1], dists_nuc[..., n_up:, :])
-
+        if return_mos:
+            return det_up, det_down
         sign_up, det_up = eval_log_slater(det_up)
         sign_down, det_down = eval_log_slater(det_down)
         xs = det_up + det_down
