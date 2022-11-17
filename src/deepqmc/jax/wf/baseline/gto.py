@@ -1,7 +1,7 @@
 import haiku as hk
 import jax.numpy as jnp
 
-from ...jaxext import factorial2
+from ...utils import factorial2
 
 __all__ = ['GTOBasis']
 
