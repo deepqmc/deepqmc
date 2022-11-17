@@ -168,7 +168,7 @@ class PauliNet(WaveFunction):
         dists_elec = pairwise_self_distance(rs, full=True)
         aos = self.basis(diffs_nuc)
         xs = self.mo_coeff(aos)
-        xs = xs.reshape(-1, 1, n_elec, xs.shape[-1])
+        xs = jnp.expand_dims(xs, axis=-3)
         J, fs = self.omni(rs) if self.omni else (None, None)
         if fs is not None and self.backflow_type == 'orbital':
             xs = self._backflow_op(xs, fs, dists_nuc)
