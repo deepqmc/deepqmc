@@ -295,7 +295,7 @@ class PaiNN(GraphNeuralNetwork):
         }
         self.concat_vectors = concat_vectors
 
-    def initial_embeddings(self):
+    def node_factory(self):
         Y = hk.Embed(self.n_nuc, self.embedding_dim, name='NuclearEmbedding')
         X = hk.Embed(
             1 if self.n_up == self.n_down else 2,
