@@ -18,7 +18,11 @@ log = logging.getLogger(__name__)
 def instantiate_ansatz(hamil, ansatz):
     import haiku as hk
 
-    return hk.without_apply_rng(hk.transform_with_state(lambda r: ansatz(hamil)(r)))
+    return hk.without_apply_rng(
+        hk.transform_with_state(
+            lambda r, return_mos=False: ansatz(hamil)(r, return_mos)
+        )
+    )
 
 
 def train_from_factories(hamil, ansatz, sampler, **kwargs):
