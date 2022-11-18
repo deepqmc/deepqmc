@@ -1,9 +1,11 @@
 from functools import partial
+from typing import Sequence
 
 import haiku as hk
 import jax.numpy as jnp
 
 from .graph import Graph, GraphUpdate, MolecularGraphEdgeBuilder
+from .utils import NodeEdgeMapping
 
 
 class MessagePassingLayer(hk.Module):
@@ -22,6 +24,21 @@ class MessagePassingLayer(hk.Module):
             setattr(self, k, v)
         self.first_layer = ilayer == 0
         self.last_layer = ilayer == self.n_interactions - 1
+        self.edge_types = tuple(
+            typ
+            for typ in self.edge_types
+            if not self.last_layer or typ not in {'nn', 'en'}
+        )
+        self.mapping = NodeEdgeMapping(
+            self.edge_types,
+            node_data={
+                'n_nodes': {'nuclei': self.n_nuc, 'electrons': self.n_up + self.n_down},
+                'n_node_types': {
+                    'nuclei': self.n_nuc,
+                    'electrons': 1 if self.n_up == self.n_down else 2,
+                },
+            },
+        )
         self.update_graph = GraphUpdate(
             update_nodes_fn=self.get_update_nodes_fn(),
             update_edges_fn=self.get_update_edges_fn(),
@@ -120,7 +137,11 @@ class GraphNeuralNetwork(hk.Module):
             self.layer_factory(
                 i,
                 share_with_layers,
-                **(layer_kwargs or {}),
+                **(
+                    layer_kwargs[i]
+                    if isinstance(layer_kwargs, Sequence)
+                    else (layer_kwargs or {})
+                ),
             )
             for i in range(n_interactions)
         ]
@@ -130,8 +151,9 @@ class GraphNeuralNetwork(hk.Module):
         r"""Initialize the haiku state that communicates the sizes of edge lists."""
         raise NotImplementedError
 
-    def initial_embeddings(self):
-        r"""Return the initial embeddings as a :class:`GraphNodes` instance."""
+    def node_factory(self):
+        r"""Return the initial node representations as a :class:`GraphNodes` instance.
+        """
         raise NotImplementedError
 
     def edge_feature_callback(
@@ -190,6 +212,10 @@ class GraphNeuralNetwork(hk.Module):
         r"""Return the class of the interaction layer to be used."""
         return MessagePassingLayer
 
+    def process_final_embedding(self, final_embedding):
+        r"""Process final embedding produced by last layer."""
+        return final_embedding.electrons['embedding']
+
     def __call__(self, r):
         r"""
         Execute the graph neural network.
@@ -207,15 +233,12 @@ class GraphNeuralNetwork(hk.Module):
             dtype=jnp.int32,
             init=self.init_state,
         )
+        graph_nodes = self.node_factory()
         graph_edges, occupancies = self.edge_factory(r, occupancies)
         hk.set_state('occupancies', occupancies)
-        graph_nodes = self.initial_embeddings()
-        graph = Graph(
-            graph_nodes,
-            graph_edges,
-        )
+        graph = Graph(graph_nodes, graph_edges)
 
         for layer in self.layers:
             graph = layer(graph)
 
-        return graph.nodes.electrons
+        return self.process_final_embedding(graph.nodes)

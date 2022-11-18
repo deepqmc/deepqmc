@@ -65,9 +65,9 @@ class SchNetLayer(MessagePassingLayer):
         subnet_kwargs_by_lbl = subnet_kwargs_by_lbl or {}
         for lbl in self.subnet_labels:
             subnet_kwargs_by_lbl.setdefault(lbl, {})
-            subnet_kwargs_by_lbl[lbl].setdefault('bias', lbl != 'w')
             for k, v in subnet_kwargs.items():
                 subnet_kwargs_by_lbl[lbl].setdefault(k, v)
+            subnet_kwargs_by_lbl[lbl].setdefault('bias', lbl != 'w')
             subnet_kwargs_by_lbl[lbl].setdefault(
                 'hidden_layers', ('log', default_n_layers[lbl])
             )
@@ -149,27 +149,33 @@ class SchNetLayer(MessagePassingLayer):
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes(nodes, edges):
-            n_elec = nodes.electrons.shape[-2]
+            spin_idxs = self.mapping.node_data_of('electrons', nodes)['node_types']
 
             if self.deep_w:
                 we = {typ: edge.features for typ, edge in edges.items()}
             else:
                 we = {typ: self.w[typ](edges[typ].features) for typ in self.edge_types}
             if self.shared_h:
-                hx = self.h(self.spin_idxs if self.use_embed_h else nodes.electrons)
+                hx = self.h(
+                    spin_idxs if self.use_embed_h else nodes.electrons['embedding']
+                )
                 hx = {typ: hx[edges[typ].senders] for typ in self.edge_types[:2]}
             else:
                 hx = {
                     typ: self.h[typ](
-                        self.spin_idxs if self.use_embed_h else nodes.electrons
+                        spin_idxs if self.use_embed_h else nodes.electrons['embedding']
                     )[edges[typ].senders]
                     for typ in self.edge_types[:2]
                 }
-            wh = {typ: we[typ] * hx[typ] for typ in self.edge_types[:2]}
-            wh['ne'] = we['ne'] * nodes.nuclei[edges['ne'].senders]
+            wh = {
+                typ: we[typ] * hx[typ] for typ in self.mapping.with_sender('electrons')
+            }
+            wh['ne'] = we['ne'] * nodes.nuclei['embedding'][edges['ne'].senders]
             z = {
                 typ: ops.segment_sum(
-                    data=wh[typ], segment_ids=edges[typ].receivers, num_segments=n_elec
+                    data=wh[typ],
+                    segment_ids=edges[typ].receivers,
+                    num_segments=self.mapping.receiver_data_of(typ, 'n_nodes'),
                 )
                 for typ in self.edge_types
             }
@@ -183,10 +189,13 @@ class SchNetLayer(MessagePassingLayer):
                 if self.sum_z:
                     zs = jnp.stack(list(z.values()), axis=-1)
                     fz = self.f(zs).squeeze(axis=-1)
-                    updated = self.g(fz) + (nodes.electrons if self.residual else 0)
+                    updated = self.g(fz) + (
+                        nodes.electrons['embedding'] if self.residual else 0
+                    )
                 else:
                     zs = jnp.concatenate(
-                        [nodes.electrons, z['same'] + z['anti'], z['ne']], axis=-1
+                        [nodes.electrons['embedding'], z['same'] + z['anti'], z['ne']],
+                        axis=-1,
                     )
                     updated = self.g(zs)
             else:
@@ -194,11 +203,13 @@ class SchNetLayer(MessagePassingLayer):
                     [self.g[typ](z[typ]) for typ in self.edge_types], axis=-1
                 )
                 if self.residual:
-                    gs = jnp.concatenate([nodes.electrons[..., None], gs], axis=-1)
+                    gs = jnp.concatenate(
+                        [nodes.electrons['embedding'][..., None], gs], axis=-1
+                    )
                 updated = self.f(gs).squeeze(axis=-1)
-            updated_nodes = nodes._replace(electrons=updated)
+            nodes.electrons['embedding'] = updated
 
-            return updated_nodes
+            return nodes
 
         return update_nodes
 
@@ -211,7 +222,7 @@ class SchNet(GraphNeuralNetwork):
 
     Args:
         mol (~jax.Molecule): the molecule on which the graph is defined.
-        embedding_dim (int): the lenght of the electron embedding vectors.
+        embedding_dim (int): the length of the electron embedding vectors.
         cutoff (float, a.u.): the distance cutoff beyond which interactions
             are discarded.
         n_interactions (int): number of message passing interactions.
@@ -276,21 +287,26 @@ class SchNet(GraphNeuralNetwork):
             for typ, kwargs in edge_feat_kwargs_by_typ.items()
         }
 
-    def initial_embeddings(self):
+    def node_factory(self):
+        n_elec_types = self.layers[0].mapping.node_data_of('electrons', 'n_node_types')
         if self.fix_init_emb:
 
             def X(idxs):
-                return jnp.eye(1 if self.n_up == self.n_down else 2)[idxs]
+                return jnp.eye(n_elec_types)[idxs]
 
         else:
-            X = hk.Embed(
-                1 if self.n_up == self.n_down else 2,
-                self.embedding_dim,
-                name='ElectronicEmbedding',
-            )
+            X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
 
+        elec_types = jnp.array(
+            (self.n_up + self.n_down) * [0]
+            if n_elec_types == 1
+            else self.n_up * [0] + self.n_down * [1]
+        )
         Y = hk.Embed(self.n_nuc, self.kernel_dim, name='NuclearEmbedding')
-        return GraphNodes(Y(jnp.arange(self.n_nuc)), X(self.spin_idxs))
+        return GraphNodes(
+            {'embedding': Y(jnp.arange(self.n_nuc))},
+            {'embedding': X(elec_types), 'node_types': elec_types},
+        )
 
     def init_state(self, shape, dtype):
         zeros = jnp.zeros(shape, dtype)
