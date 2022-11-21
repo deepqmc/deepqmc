@@ -7,4 +7,4 @@ factories:
 - _target_: deepqmc.jax.gnn.edge_features.DistancePowersBasis
   _partial_: true
   powers: [1]
-n_rbfs: [15, 1]
+n_rbfs: [31, 1]

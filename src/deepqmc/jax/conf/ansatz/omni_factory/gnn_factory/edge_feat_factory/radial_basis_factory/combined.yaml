@@ -17,4 +17,4 @@ factories:
     _partial_: true
     n0: 0
     n1: 2
-n_rbfs: [15, 1]
+n_rbfs: [31, 1]
