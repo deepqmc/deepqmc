@@ -31,8 +31,8 @@ log = logging.getLogger(__name__)
 
 
 OPT_KWARGS = {
-    'adam': {'lr': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
-    'adamw': {'lr': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
+    'adam': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
+    'adamw': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
     'kfac': {
         'learning_rate_schedule': InverseSchedule(0.01, 5000),
         'damping_schedule': InverseSchedule(0.001, 5000),
@@ -148,12 +148,15 @@ def train(  # noqa: C901
             log.info(f'Number of model parameters: {num_params}')
             if pretrain_steps and mode == 'train':
                 log.info('Pretraining wrt. HF wave function')
+                opt_kwargs = kwargs.pop('opt_kwargs', OPT_KWARGS)['adamw']
+                opt_pretrain = optax.adamw(**opt_kwargs)
+                # TODO: always use adam until slow compilation with kfac is solved
                 pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
                 for step, params, loss, pretrain_stats in pretrain(  # noqa: B007
                     rng,
                     hamil,
                     ansatz,
-                    opt,
+                    opt_pretrain,
                     sampler,
                     steps=pbar,
                     sample_size=sample_size,
