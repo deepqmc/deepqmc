@@ -1,6 +1,5 @@
 import haiku as hk
 import jax.numpy as jnp
-from pyscf import gto
 
 from ...physics import pairwise_diffs
 from ...types import Psi
@@ -50,17 +49,9 @@ class Baseline(WaveFunction):
         return Psi(jnp.sign(psi), jnp.log(jnp.abs(psi)))
 
     @classmethod
-    def from_mol(cls, mol, basis='6-31G', cas=None):
-        mol_pyscf = gto.M(
-            atom=mol.as_pyscf(),
-            unit='bohr',
-            basis=basis,
-            charge=mol.charge,
-            spin=mol.spin,
-            cart=True,
-        )
+    def from_mol(cls, mol, basis='6-31G', cas=None, **kwargs):
+        mol_pyscf, (mf, mc) = pyscf_from_mol(mol, basis, cas, **kwargs)
         centers, shells = GTOBasis.from_pyscf(mol_pyscf)
-        mf, mc = pyscf_from_mol(mol, basis, cas)
         mo_coeff = jnp.asarray(mc.mo_coeff if mc else mf.mo_coeff)
         ao_overlap = jnp.asarray(mf.mol.intor('int1e_ovlp_cart'))
         mo_coeff *= jnp.sqrt(jnp.diag(ao_overlap))[:, None]
