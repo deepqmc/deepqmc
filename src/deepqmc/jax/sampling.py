@@ -323,6 +323,7 @@ def equilibrate(
     *,
     block_size,
     n_blocks=5,
+    max_steps=None,
 ):
     criterion = jax.jit(criterion)
 
@@ -340,5 +341,7 @@ def equilibrate(
         if len(buffer) < buffer_size:
             continue
         b1, b2 = buffer[:block_size], buffer[-block_size:]
-        if abs(mean(b1) - mean(b2)) < min(stdev(b1), stdev(b2)):
+        if abs(mean(b1) - mean(b2)) < min(stdev(b1), stdev(b2)) or (
+            max_steps and max_steps <= step
+        ):
             break
