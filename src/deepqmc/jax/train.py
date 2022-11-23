@@ -114,7 +114,7 @@ def train(  # noqa: C901
         )
     if workdir:
         workdir = f'{workdir}/{mode}'
-        chkpts = CheckpointStore(workdir)
+        chkpts = CheckpointStore(workdir, **kwargs.pop('chkpts_kwargs', {}))
         writer = tensorboard.summary.Writer(workdir)
         log.debug('Setting up HDF5 file...')
         h5file = h5py.File(f'{workdir}/result.h5', 'a', libver='v110')
@@ -262,7 +262,8 @@ class CheckpointStore:
             or self.chkpts
             and (
                 self.step < self.min_interval + self.chkpts[-1].step
-                or loss > self.threshold * self.chkpts[-1].loss
+                or self.threshold
+                and loss > self.threshold * self.chkpts[-1].loss
             )
         ):
             return
