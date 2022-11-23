@@ -131,6 +131,7 @@ def train(  # noqa: C901
                     'evaluate': 'Start evaluate',
                 }[mode]
             )
+            kwargs.pop('max_eq_steps', None)
         else:
             params, smpl_state = init_fit(
                 rng, hamil, ansatz, sampler, sample_size, state_callback
@@ -170,6 +171,7 @@ def train(  # noqa: C901
                 pbar,
                 state_callback,
                 block_size=10,
+                max_steps=kwargs.pop('max_eq_steps', None),
             ):
                 pbar.set_postfix(tau=f'{smpl_state["tau"].item():5.3f}')
                 # TODO
