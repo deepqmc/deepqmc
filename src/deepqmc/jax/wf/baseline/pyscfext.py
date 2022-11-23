@@ -8,7 +8,7 @@ from pyscf.scf import RHF
 log = logging.getLogger(__name__)
 
 
-def pyscf_from_mol(mol, basis, cas=None):
+def pyscf_from_mol(mol, basis, cas=None, **kwargs):
     mol = gto.M(
         atom=mol.as_pyscf(),
         unit='bohr',
@@ -17,6 +17,7 @@ def pyscf_from_mol(mol, basis, cas=None):
         spin=mol.spin,
         cart=True,
         parse_arg=False,
+        **kwargs,
     )
     log.info('Running HF...')
     mf = RHF(mol)
@@ -25,7 +26,7 @@ def pyscf_from_mol(mol, basis, cas=None):
         log.info('Running MCSCF...')
         mc = CASSCF(mf, *cas)
         mc.kernel()
-    return mf, mc if cas else None
+    return mol, (mf, mc if cas else None)
 
 
 def confs_from_mc(mc, tol=0):
