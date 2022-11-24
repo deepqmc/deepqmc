@@ -105,8 +105,10 @@ class Molecule:
 
         The available names are in :attr:`Molecule.all_names`.
         """
-        if name in _SYSTEMS:
+        if name in cls.all_names:
             system = deepcopy(_SYSTEMS[name])
             system.update(kwargs)
+        else:
+            raise ValueError(f'Unknown molecule name: {name}')
         coords = system.pop('coords')
         return cls(coords, **system)
