@@ -138,7 +138,7 @@ class SchNetLayer(MessagePassingLayer):
         return ('w', 'h', 'g')
 
     def get_update_edges_fn(self):
-        def update_edges(nodes, edges):
+        def update_edges(edges):
             updated_edges = {
                 typ: edge._replace(features=self.w[typ](edge.features))
                 for typ, edge in edges.items()
