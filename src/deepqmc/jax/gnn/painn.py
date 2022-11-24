@@ -271,23 +271,25 @@ class PaiNN(GraphNeuralNetwork):
             edge_feat_kwargs_by_typ.setdefault(typ, {})
             for k, v in edge_feat_kwargs.items():
                 edge_feat_kwargs_by_typ[typ].setdefault(k, v)
-        share = {
-            'edge_feat_dim': {
-                typ: edge_feat_kwargs_by_typ[typ]['feature_dim']
-                for typ in self.edge_types
-            },
-            'spin_idxs': spin_idxs,
-            'nuc_idxs': nuc_idxs,
-            'safe': edge_feat_kwargs['safe'],
-            'has_vector_feat': set(has_vector_feat or self.edge_types),
-        }
+        self.safe = edge_feat_kwargs['safe']
+        self.spin_idxs = spin_idxs
+        self.nuc_idxs = nuc_idxs
         super().__init__(
             mol,
             _embedding_dim,
             {typ: edge_feat_kwargs_by_typ[typ]['cutoff'] for typ in self.edge_types},
             n_interactions,
             **gnn_kwargs,
-            share_with_layers=share,
+            layer_attrs={
+                'edge_feat_dim': {
+                    typ: edge_feat_kwargs_by_typ[typ]['feature_dim']
+                    for typ in self.edge_types
+                },
+                'spin_idxs': spin_idxs,
+                'nuc_idxs': nuc_idxs,
+                'safe': self.safe,
+                'has_vector_feat': set(has_vector_feat or self.edge_types),
+            },
         )
         self.edge_features = {
             typ: PauliNetEdgeFeatures(**kwargs)

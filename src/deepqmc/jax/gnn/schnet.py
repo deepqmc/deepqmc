@@ -36,8 +36,6 @@ class SchNetLayer(MessagePassingLayer):
 
     def __init__(
         self,
-        ilayer,
-        shared,
         *,
         shared_h=False,
         shared_g=False,
@@ -49,8 +47,9 @@ class SchNetLayer(MessagePassingLayer):
         residual=True,
         sum_z=False,
         deep_w=False,
+        **layer_attrs,
     ):
-        super().__init__(ilayer, shared)
+        super().__init__(**layer_attrs)
         self.shared_h = shared_h
         self.shared_g = shared_g
         assert shared_g or not sum_z
@@ -252,9 +251,6 @@ class SchNet(GraphNeuralNetwork):
         **gnn_kwargs,
     ):
         n_nuc, n_up, n_down = mol.n_particles
-        spin_idxs = jnp.array(
-            (n_up + n_down) * [0] if n_up == n_down else n_up * [0] + n_down * [1]
-        )
         edge_feat_kwargs = edge_feat_kwargs or {}
         edge_feat_kwargs.setdefault('feature_dim', 32)
         edge_feat_kwargs.setdefault('cutoff', cutoff)
@@ -265,23 +261,23 @@ class SchNet(GraphNeuralNetwork):
             edge_feat_kwargs_by_typ.setdefault(typ, {})
             for k, v in edge_feat_kwargs.items():
                 edge_feat_kwargs_by_typ[typ].setdefault(k, v)
-        share = {
-            'edge_feat_dim': {
-                typ: edge_feat_kwargs_by_typ[typ]['feature_dim']
-                for typ in self.edge_types
-            },
-            'kernel_dim': kernel_dim,
-            'fix_init_emb': fix_init_emb,
-            'spin_idxs': spin_idxs,
-        }
         super().__init__(
             mol,
             embedding_dim,
             {typ: edge_feat_kwargs_by_typ[typ]['cutoff'] for typ in self.edge_types},
             n_interactions,
             **gnn_kwargs,
-            share_with_layers=share,
+            layer_attrs={
+                'edge_feat_dim': {
+                    typ: edge_feat_kwargs_by_typ[typ]['feature_dim']
+                    for typ in self.edge_types
+                },
+                'kernel_dim': kernel_dim,
+                'fix_init_emb': fix_init_emb,
+            },
         )
+        self.kernel_dim = kernel_dim
+        self.fix_init_emb = fix_init_emb
         self.edge_features = {
             typ: PauliNetEdgeFeatures(**kwargs)
             for typ, kwargs in edge_feat_kwargs_by_typ.items()

@@ -18,24 +18,34 @@ class MessagePassingLayer(hk.Module):
             layers and the :class:`GraphNeuralNetwork` instance.
     """
 
-    def __init__(self, ilayer, shared):
+    def __init__(
+        self,
+        ilayer,
+        n_nuc,
+        n_up,
+        n_down,
+        embedding_dim,
+        n_interactions,
+        edge_types,
+        **layer_attrs,
+    ):
         super().__init__()
-        for k, v in shared.items():
-            setattr(self, k, v)
+        self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
+        self.embedding_dim = embedding_dim
         self.first_layer = ilayer == 0
-        self.last_layer = ilayer == self.n_interactions - 1
+        self.last_layer = ilayer == n_interactions - 1
         self.edge_types = tuple(
-            typ
-            for typ in self.edge_types
-            if not self.last_layer or typ not in {'nn', 'en'}
+            typ for typ in edge_types if not self.last_layer or typ not in {'nn', 'en'}
         )
+        for name, attr in layer_attrs.items():
+            setattr(self, name, attr)
         self.mapping = NodeEdgeMapping(
             self.edge_types,
             node_data={
-                'n_nodes': {'nuclei': self.n_nuc, 'electrons': self.n_up + self.n_down},
+                'n_nodes': {'nuclei': n_nuc, 'electrons': n_up + n_down},
                 'n_node_types': {
-                    'nuclei': self.n_nuc,
-                    'electrons': 1 if self.n_up == self.n_down else 2,
+                    'nuclei': n_nuc,
+                    'electrons': 1 if n_up == n_down else 2,
                 },
             },
         )
@@ -113,9 +123,10 @@ class GraphNeuralNetwork(hk.Module):
         embedding_dim,
         cutoff,
         n_interactions,
+        layer_factories=None,
         layer_kwargs=None,
         ghost_coords=None,
-        share_with_layers=None,
+        layer_attrs=None,
     ):
         super().__init__()
         n_nuc, n_up, n_down = mol.n_particles
@@ -124,19 +135,21 @@ class GraphNeuralNetwork(hk.Module):
         if ghost_coords is not None:
             self.coords = jnp.concatenate([self.coords, jnp.asarray(ghost_coords)])
             n_nuc = len(self.coords)
-        share_with_layers = share_with_layers or {}
-        share_with_layers.setdefault('embedding_dim', embedding_dim)
-        share_with_layers.setdefault('n_nuc', n_nuc)
-        share_with_layers.setdefault('n_up', n_up)
-        share_with_layers.setdefault('n_down', n_down)
-        for k, v in share_with_layers.items():
-            setattr(self, k, v)
-        share_with_layers.setdefault('edge_types', self.edge_types)
-        share_with_layers.setdefault('n_interactions', n_interactions)
+        layer_factories = layer_factories or [
+            self.layer_factory for _ in range(n_interactions)
+        ]
+        if len(layer_factories) != n_interactions:
+            raise ValueError(
+                f'expected as many layer factories ({len(layer_factories)} '
+                f'as n_interactions ({n_interactions}))'
+            )
+        self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
+        self.embedding_dim = embedding_dim
+        layer_factories = self.layer_factories(
+            n_interactions, layer_factories, layer_attrs
+        )
         self.layers = [
-            self.layer_factory(
-                i,
-                share_with_layers,
+            layer_factories[i](
                 **(
                     layer_kwargs[i]
                     if isinstance(layer_kwargs, Sequence)
@@ -145,7 +158,45 @@ class GraphNeuralNetwork(hk.Module):
             )
             for i in range(n_interactions)
         ]
-        self.n_up, self.n_down = n_up, n_down
+
+    @classmethod
+    @property
+    def layer_class(cls):
+        r"""Return the class of the interaction layer to be used."""
+        return MessagePassingLayer
+
+    def layer_factories(
+        self, n_interactions=None, layer_factories=None, layer_attrs=None
+    ):
+        if not n_interactions and not layer_factories:
+            raise ValueError(
+                'either n_interactions or layer_factories have to be provided'
+            )
+
+        layer_factories = layer_factories or self.layer_class
+        if not isinstance(layer_factories, Sequence):
+            layer_factories = [layer_factories for _ in range(n_interactions)]
+        n_interactions = n_interactions or len(layer_factories)
+        layer_attrs = layer_attrs or {}
+        if not isinstance(layer_attrs, Sequence):
+            layer_attrs = [layer_attrs for _ in range(n_interactions)]
+
+        layer_factories = [
+            partial(
+                factory,
+                ilayer=i,
+                n_nuc=self.n_nuc,
+                n_up=self.n_up,
+                n_down=self.n_down,
+                embedding_dim=self.embedding_dim,
+                edge_types=self.edge_types,
+                n_interactions=n_interactions,
+                **attr,
+            )
+            for i, (factory, attr) in enumerate(zip(layer_factories, layer_attrs))
+        ]
+
+        return layer_factories
 
     def init_state(self, shape, dtype):
         r"""Initialize the haiku state that communicates the sizes of edge lists."""
@@ -205,12 +256,6 @@ class GraphNeuralNetwork(hk.Module):
             },
         )
         return edge_factory(r, occupancies)
-
-    @classmethod
-    @property
-    def layer_factory(cls):
-        r"""Return the class of the interaction layer to be used."""
-        return MessagePassingLayer
 
     def process_final_embedding(self, final_embedding):
         r"""Process final embedding produced by last layer."""
