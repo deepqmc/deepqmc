@@ -375,7 +375,7 @@ def GraphUpdate(
         nodes, edges = graph
 
         if update_edges_fn:
-            edges = update_edges_fn(nodes, edges)
+            edges = update_edges_fn(edges)
 
         if update_nodes_fn:
             aggregated_edges = aggregate_edges_for_nodes_fn(nodes, edges)
