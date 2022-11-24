@@ -41,6 +41,12 @@ OPT_KWARGS = {
 }
 
 
+class NanError(Exception):
+    def __init__(self, train_state):
+        super().__init__()
+        self.train_state = train_state
+
+
 def train(  # noqa: C901
     hamil,
     ansatz,
@@ -187,6 +193,7 @@ def train(  # noqa: C901
         )
         best_ene = None
         for _ in range(max_restarts):
+            nan = False
             for step, train_state, E_loc, stats in fit_wf(  # noqa: B007
                 rng,
                 hamil,
@@ -206,6 +213,7 @@ def train(  # noqa: C901
                     pbar = trange(
                         step, steps, initial=step, total=steps, desc=mode, disable=None
                     )
+                    nan = True
                     break
                 ewm_state = ewm(stats['E_loc/mean'], ewm_state)
                 stats = {
@@ -227,7 +235,9 @@ def train(  # noqa: C901
                     table.row['sign_psi'] = train_state.sampler['psi'].sign
                     table.row['log_psi'] = train_state.sampler['psi'].log
                     update_tensorboard_writer(writer, step, stats)
-            return train_state
+            if not nan:
+                return train_state
+        raise NanError(train_state)
     finally:
         if pbar:
             pbar.close()
