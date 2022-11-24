@@ -143,12 +143,8 @@ class PauliNet(WaveFunction):
         self.backflow_transform = backflow_transform
         self.backflow_op = backflow_op or BackflowOp()
 
-        if omni_factory is None:
-            omni_factory = partial(
-                OmniNet,
-                **(omni_kwargs or {}),
-            )
-        self.omni = omni_factory(hamil.mol, *backflow_spec)
+        omni_factory = omni_factory or OmniNet
+        self.omni = omni_factory(hamil.mol, *backflow_spec, **(omni_kwargs or {}))
         self.full_determinant = full_determinant
 
     def _backflow_op(self, xs, fs, dists_nuc):
