@@ -38,6 +38,7 @@ class Backflow(hk.Module):
         *,
         n_layers=3,
         name='Backflow',
+        param_scaling=1.0,
         **kwargs,
     ):
         kwargs.setdefault('activation', ssp)
@@ -47,13 +48,23 @@ class Backflow(hk.Module):
         self.multi_head = multi_head
         if multi_head:
             self.nets = [
-                MLP(embedding_dim, n_orbitals, **kwargs) for _ in range(n_backflows)
+                MLP(
+                    embedding_dim,
+                    n_orbitals,
+                    w_init=hk.initializers.VarianceScaling(param_scaling),
+                    **kwargs,
+                )
+                for _ in range(n_backflows)
             ]
         else:
             self.n_orbitals = n_orbitals
             hidden_layers = kwargs.pop('hidden_layers')
             self.net = MLP(
-                embedding_dim, n_backflows * n_orbitals, hidden_layers, **kwargs
+                embedding_dim,
+                n_backflows * n_orbitals,
+                hidden_layers,
+                w_init=hk.initializers.VarianceScaling(param_scaling),
+                **kwargs,
             )
 
     def __call__(self, xs):

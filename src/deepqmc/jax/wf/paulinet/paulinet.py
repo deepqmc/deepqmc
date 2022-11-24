@@ -1,5 +1,3 @@
-from functools import partial
-
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -101,6 +99,7 @@ class PauliNet(WaveFunction):
         backflow_transform='mult',
         omni_factory=None,
         omni_kwargs=None,
+        mo_scaling: float = 1.0,
     ):
         super().__init__(hamil.mol)
         n_up, n_down = self.n_up, self.n_down
@@ -113,11 +112,15 @@ class PauliNet(WaveFunction):
             if confs is None
             else confs
         )
-        n_orbitals = max(sum(confs, [])) + 1
+        self.n_orbitals = max(sum(confs, [])) + 1
         self.confs = jnp.array(confs)
         self.basis = basis or ExponentialEnvelopes.from_mol(hamil.mol)
         self.mo_coeff = hk.Linear(
-            n_orbitals, with_bias=False, w_init=jnp.ones, name='mo_coeff'
+            self.n_orbitals,
+            with_bias=False,
+            w_init=lambda s, d: hk.initializers.VarianceScaling(mo_scaling)(s, d)
+            + jnp.ones(s),
+            name='mo_coeff',
         )
         self.conf_coeff = hk.Linear(
             1, with_bias=False, w_init=jnp.ones, name='conf_coeff'
@@ -131,7 +134,7 @@ class PauliNet(WaveFunction):
         self.full_determinant = full_determinant
 
         backflow_spec = {
-            'orbital': [n_orbitals, backflow_channels],
+            'orbital': [self.n_orbitals, backflow_channels],
             'det': [
                 n_up + n_down if full_determinant else (n_up, n_down),
                 len(self.confs) * backflow_channels,
