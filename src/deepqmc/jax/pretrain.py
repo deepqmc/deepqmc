@@ -63,7 +63,6 @@ def pretrain(  # noqa: C901
             return wf_state, params, opt_state, loss
 
     else:
-
         raise NotImplementedError
 
     init_r = hamil.init_sample(rng, sample_size)
@@ -92,4 +91,4 @@ def pretrain(  # noqa: C901
             if not overflow:
                 params, opt_state = params_new, opt_state_new
                 break
-        yield step, params, loss, {}
+        yield step, params, loss

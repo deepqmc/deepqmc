@@ -61,9 +61,12 @@ def train(  # noqa: C901
     seed,
     init_step=0,
     max_restarts=3,
+    max_eq_steps=1000,
     pretrain_steps=None,
-    pretrain_baseline_kwargs=None,
-    **kwargs,
+    pretrain_kwargs=None,
+    opt_kwargs=None,
+    fit_kwargs=None,
+    chkpts_kwargs=None,
 ):
     r"""Train or evaluate a JAX wave function model.
 
@@ -100,19 +103,22 @@ def train(  # noqa: C901
         calculation is restarted from checkpoint saved on disk.
         max_restarts (int): optional, the maximum number of times the training is
             retried before a :class:`NaNError` is raised.
+        max_eq_steps (int): optional, maximum number of equilibration steps if not
+            detected earlier.
         pretrain_steps (int): optional, the number of pretraining steps wrt. to the
             Baseline wave function obtained with pyscf.
-        pretrain_baseline_kwargs (dict): optional, arguments passed to the baseline
-            wave function.
-        kwargs (dict): optional, extra arguments passed to the :func:`~.fit.fit_wf`
+        pretrain_kwargs (dict): optional, extra arguments for pretraining.
+        opt_kwargs (dict): optional, extra arguments passed to the optimizer.
+        fit_kwargs (dict): optional, extra arguments passed to the :func:`~.fit.fit_wf`
             function.
+        chkpts_kwargs (dict): optional, extra arguments for checkpointing.
     """
 
     ewm_state = ewm()
     rng = jax.random.PRNGKey(seed)
     mode = 'evaluate' if opt is None else 'train'
     if isinstance(opt, str):
-        opt_kwargs = kwargs.pop('opt_kwargs', OPT_KWARGS)[opt]
+        opt_kwargs = OPT_KWARGS.get(opt, {}) | (opt_kwargs or {})
         opt = (
             partial(kfac_jax.Optimizer, **opt_kwargs)
             if opt == 'kfac'
@@ -120,7 +126,7 @@ def train(  # noqa: C901
         )
     if workdir:
         workdir = f'{workdir}/{mode}'
-        chkpts = CheckpointStore(workdir, **kwargs.pop('chkpts_kwargs', {}))
+        chkpts = CheckpointStore(workdir, **(chkpts_kwargs or {}))
         writer = tensorboard.summary.Writer(workdir)
         log.debug('Setting up HDF5 file...')
         h5file = h5py.File(f'{workdir}/result.h5', 'a', libver='v110')
@@ -137,7 +143,6 @@ def train(  # noqa: C901
                     'evaluate': 'Start evaluate',
                 }[mode]
             )
-            kwargs.pop('max_eq_steps', None)
         else:
             params, smpl_state = init_fit(
                 rng, hamil, ansatz, sampler, sample_size, state_callback
@@ -148,11 +153,19 @@ def train(  # noqa: C901
             log.info(f'Number of model parameters: {num_params}')
             if pretrain_steps and mode == 'train':
                 log.info('Pretraining wrt. HF wave function')
-                opt_kwargs = kwargs.pop('opt_kwargs', OPT_KWARGS)['adamw']
-                opt_pretrain = optax.adamw(**opt_kwargs)
-                # TODO: always use adam until slow compilation with kfac is solved
+                pretrain_kwargs = pretrain_kwargs or {}
+                opt_pretrain = pretrain_kwargs.pop('opt', 'adamw')
+                opt_pretrain_kwargs = OPT_KWARGS.get(
+                    opt_pretrain, {}
+                ) | pretrain_kwargs.pop('opt_kwargs', {})
+                if isinstance(opt_pretrain, str):
+                    if opt_pretrain == 'kfac':
+                        raise NotImplementedError
+                    opt_pretrain = getattr(optax, opt_pretrain)
+                opt_pretrain = opt_pretrain(**opt_pretrain_kwargs)
+
                 pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
-                for step, params, loss, pretrain_stats in pretrain(  # noqa: B007
+                for step, params, loss in pretrain(  # noqa: B007
                     rng,
                     hamil,
                     ansatz,
@@ -160,12 +173,11 @@ def train(  # noqa: C901
                     sampler,
                     steps=pbar,
                     sample_size=sample_size,
-                    baseline_kwargs=pretrain_baseline_kwargs,
+                    baseline_kwargs=pretrain_kwargs.pop('baseline_kwargs', {}),
                 ):
                     pbar.set_postfix(MSE=f'{loss.item():0.5e}')
                     pretrain_stats = {
                         'pretraining/MSE': loss.item(),
-                        **pretrain_stats,
                     }
                     if workdir:
                         update_tensorboard_writer(writer, step, pretrain_stats)
@@ -180,7 +192,7 @@ def train(  # noqa: C901
                 pbar,
                 state_callback,
                 block_size=10,
-                max_steps=kwargs.pop('max_eq_steps', None),
+                max_steps=max_eq_steps,
             ):
                 pbar.set_postfix(tau=f'{smpl_state["tau"].item():5.3f}')
                 # TODO
@@ -207,7 +219,7 @@ def train(  # noqa: C901
                 pbar,
                 state_callback,
                 train_state,
-                **kwargs,
+                **(fit_kwargs or {}),
             ):
                 if jnp.isnan(train_state.sampler['psi'].log).any():
                     log.warn('Restarting due to a NaN...')
