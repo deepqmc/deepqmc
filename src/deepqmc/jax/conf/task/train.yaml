@@ -6,5 +6,4 @@ ansatz: ${ansatz}
 opt: kfac
 steps: 1000
 sample_size: 1000
-clip_width: 1.0
 seed: 0
