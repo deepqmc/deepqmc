@@ -53,7 +53,7 @@ def fit_wf(  # noqa: C901
     state_callback=None,
     train_state=None,
     *,
-    clip_width,
+    clip_width=1.0,
     exclude_width=jnp.inf,
     clip_quantile=0.95,
 ):

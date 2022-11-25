@@ -5,10 +5,8 @@ from functools import partial
 import haiku as hk
 import jax
 import jax.numpy as jnp
-import kfac_jax
 import optax
 
-from .kfacext import GRAPH_PATTERNS
 from .wf.base import state_callback
 from .wf.baseline import Baseline
 
@@ -47,12 +45,11 @@ def pretrain(  # noqa: C901
                 jnp.concatenate((det_up.flatten(), det_down.flatten()), axis=-1)
                 for det_up, det_down in (dets, dets_target)
             )
-            kfac_jax.register_squared_error_loss(mos)
             loss = ((mos - mos_target) ** 2).mean()
             return loss, wf_state
 
         loss, wf_state = jax.vmap(_loss_fn, (None, 0, 0))(params, wf_state, r)
-        return jnp.mean(loss), (None, wf_state)
+        return jnp.mean(loss), wf_state
 
     loss_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
@@ -60,49 +57,14 @@ def pretrain(  # noqa: C901
 
         @jax.jit
         def _step(rng, wf_state, params, opt_state, r):
-            (loss, (_, wf_state)), grads = loss_and_grad_fn(params, wf_state, r)
+            (loss, wf_state), grads = loss_and_grad_fn(params, wf_state, r)
             updates, opt_state = opt.update(grads, opt_state, params)
             params = optax.apply_updates(params, updates)
             return wf_state, params, opt_state, loss
 
-        def init_opt(rng, wf_state, params, r):
-            opt_state = opt.init(params)
-            return opt_state
-
     else:
 
-        def _step(rng, wf_state, params, opt_state, r):
-            params, opt_state, _, opt_stats = opt.step(
-                params,
-                opt_state,
-                rng,
-                func_state=wf_state,
-                batch=r,
-                momentum=0,
-            )
-            return opt_stats['aux'], params, opt_state, opt_stats['loss']
-
-        def init_opt(rng, wf_state, params, r):
-            opt_state = opt.init(
-                params,
-                rng,
-                r,
-                wf_state,
-            )
-            return opt_state
-
-        opt = opt(
-            value_and_grad_func=loss_and_grad_fn,
-            l2_reg=0.0,
-            value_func_has_aux=True,
-            value_func_has_state=True,
-            auto_register_kwargs={'graph_patterns': GRAPH_PATTERNS},
-            include_norms_in_stats=True,
-            estimation_mode='fisher_exact',
-            num_burnin_steps=0,
-            min_damping=5e-4,
-            inverse_update_period=1,
-        )
+        raise NotImplementedError
 
     init_r = hamil.init_sample(rng, sample_size)
     params, wf_state = jax.vmap(ansatz.init, (None, 0, None), (None, 0))(
@@ -113,7 +75,7 @@ def pretrain(  # noqa: C901
     )
     baseline = partial(ansatz_baseline.apply, params_baseline)
     smpl_state = sampler.init(rng, baseline, {}, sample_size, state_callback)
-    opt_state = init_opt(rng, wf_state, params, init_r)
+    opt_state = opt.init(params)
 
     @jax.jit
     def sample_wf(state, rng):
