@@ -249,6 +249,7 @@ def train(  # noqa: C901
                     table.row['E_ewm'] = ewm_state.mean
                     table.row['sign_psi'] = train_state.sampler['psi'].sign
                     table.row['log_psi'] = train_state.sampler['psi'].log
+                    h5file.flush()
                     update_tensorboard_writer(writer, step, stats)
             if not nan:
                 return train_state
