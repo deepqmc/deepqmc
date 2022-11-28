@@ -16,7 +16,7 @@ import tensorboard.summary
 from tqdm.auto import tqdm, trange
 from uncertainties import ufloat
 
-from .ewm import ewm
+from .ewm import init_ewm
 from .fit import fit_wf, init_fit
 from .log import H5LogTable, update_tensorboard_writer
 from .physics import pairwise_self_distance
@@ -114,7 +114,7 @@ def train(  # noqa: C901
         chkpts_kwargs (dict): optional, extra arguments for checkpointing.
     """
 
-    ewm_state = ewm()
+    ewm_state, update_ewm = init_ewm()
     rng = jax.random.PRNGKey(seed)
     mode = 'evaluate' if opt is None else 'train'
     if isinstance(opt, str):
@@ -230,7 +230,8 @@ def train(  # noqa: C901
                     )
                     nan = True
                     break
-                ewm_state = ewm(stats['E_loc/mean'], ewm_state)
+                #  ewm_state = update_ewm(stats['E_loc/mean'], ewm_state)
+                ewm_state = update_ewm(E_loc, ewm_state)
                 stats = {
                     'energy/ewm': ewm_state.mean,
                     'energy/ewm_error': jnp.sqrt(ewm_state.sqerr),
