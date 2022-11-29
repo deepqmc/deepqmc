@@ -1,6 +1,0 @@
-_target_: deepqmc.Molecule
-unit: angstrom
-coords: [[-2.13534, 0.0, 0.0], [2.13534, 0.0, 0.0]]
-charges: [7, 7]
-charge: 0
-spin: 0
