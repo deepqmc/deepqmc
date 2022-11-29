@@ -1,2 +1,2 @@
-_target_: deepqmc.jax.gnn.edge_features.IdentityEnvelope
+_target_: deepqmc.gnn.edge_features.IdentityEnvelope
 _partial_: true

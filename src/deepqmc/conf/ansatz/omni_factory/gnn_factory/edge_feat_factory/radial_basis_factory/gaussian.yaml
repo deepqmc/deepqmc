@@ -1,3 +1,3 @@
-_target_: deepqmc.jax.gnn.edge_features.GaussianBasis
+_target_: deepqmc.gnn.edge_features.GaussianBasis
 _partial_: true
 offset: true
