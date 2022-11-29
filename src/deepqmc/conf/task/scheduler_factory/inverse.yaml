@@ -1,3 +1,0 @@
-_target_: deepqmc.train.InverseLR
-_partial_: true
-decay_rate: 200
