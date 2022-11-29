@@ -1,4 +1,4 @@
-_target_: deepqmc.jax.hamil.qho.QHOHamiltonian
+_target_: deepqmc.hamil.qho.QHOHamiltonian
 dim: 3
 mass: 1.0
 nu: 1.0

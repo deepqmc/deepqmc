@@ -1,4 +1,4 @@
-_target_: deepqmc.jax.gnn.edge_features.PolynomialEnvelope
+_target_: deepqmc.gnn.edge_features.PolynomialEnvelope
 _partial_: true
 n0: 0
 n1: 2

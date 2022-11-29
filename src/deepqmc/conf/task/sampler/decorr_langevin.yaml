@@ -1,5 +1,5 @@
-- _target_: deepqmc.jax.sampling.DecorrSampler
+- _target_: deepqmc.sampling.DecorrSampler
   length: 10
-- _target_: deepqmc.jax.sampling.LangevinSampler
+- _target_: deepqmc.sampling.LangevinSampler
   _partial_: true
   tau: 1.0

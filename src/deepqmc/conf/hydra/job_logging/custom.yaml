@@ -7,4 +7,4 @@ formatters:
     style: '{'
 handlers:
   console:
-    stream: ext://deepqmc.jax.app.tqdmout
+    stream: ext://deepqmc.app.tqdmout

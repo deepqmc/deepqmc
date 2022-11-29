@@ -1,6 +1,6 @@
 defaults:
   - sampler: decorr_metropolis
-_target_: deepqmc.jax.app.train_from_factories
+_target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
 ansatz: ${ansatz}
 opt: kfac

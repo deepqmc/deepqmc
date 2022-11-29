@@ -1,2 +1,2 @@
-_target_: deepqmc.jax.wf.paulinet.omni.OmniNet
+_target_: deepqmc.wf.paulinet.omni.OmniNet
 _partial_: true
