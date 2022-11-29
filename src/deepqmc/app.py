@@ -24,8 +24,8 @@ def instantiate_ansatz(hamil, ansatz):
 
 
 def train_from_factories(hamil, ansatz, sampler, **kwargs):
-    from .train import train
     from .sampling import chain
+    from .train import train
 
     ansatz = instantiate_ansatz(hamil, ansatz)
     sampler = chain(*sampler[:-1], sampler[-1](hamil))
