@@ -24,4 +24,5 @@ setup(
         'tqdm',
         'uncertainties',
     ],
+    entry_points={'console_scripts': ['deepqmc=deepqmc.app:cli']},
 )
