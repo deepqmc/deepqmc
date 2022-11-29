@@ -14,3 +14,4 @@ hydra:
     - file://conf
 task:
   workdir: ???
+device: cuda

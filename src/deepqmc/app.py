@@ -5,6 +5,7 @@ from pathlib import Path
 
 import hydra
 import hydra.errors
+import jax
 from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import OmegaConf
 from tqdm.auto import tqdm
@@ -83,6 +84,7 @@ def maybe_log_code_version():
 
 
 def main(cfg):
+    jax.config.update('jax_platform_name', cfg.device)
     log.info('Entering application')
     cfg.task.workdir = str(Path.cwd())
     log.info(f'Will work in {cfg.task.workdir}')
