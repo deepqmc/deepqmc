@@ -16,3 +16,4 @@ hydra:
     subdir: ${hydra.job.override_dirname}
 task:
   workdir: ???
+device: cuda
