@@ -42,6 +42,11 @@ OPT_KWARGS = {
 
 
 class NanError(Exception):
+    def __init__(self):
+        super().__init__()
+
+
+class TrainingCrash(Exception):
     def __init__(self, train_state):
         super().__init__()
         self.train_state = train_state
@@ -208,53 +213,62 @@ def train(  # noqa: C901
         )
         best_ene = None
         for _ in range(max_restarts):
-            nan = False
-            for step, train_state, E_loc, stats in fit_wf(  # noqa: B007
-                rng,
-                hamil,
-                ansatz,
-                opt,
-                sampler,
-                sample_size,
-                pbar,
-                state_callback,
-                train_state,
-                **(fit_kwargs or {}),
-            ):
-                if jnp.isnan(train_state.sampler['psi'].log).any():
-                    log.warn('Restarting due to a NaN...')
-                    step, train_state = chkpts.last
-                    pbar.close()
-                    pbar = trange(
-                        step, steps, initial=step, total=steps, desc=mode, disable=None
-                    )
-                    nan = True
-                    break
-                #  ewm_state = update_ewm(stats['E_loc/mean'], ewm_state)
-                ewm_state = update_ewm(E_loc, ewm_state)
-                stats = {
-                    'energy/ewm': ewm_state.mean,
-                    'energy/ewm_error': jnp.sqrt(ewm_state.sqerr),
-                    **stats,
-                }
-                ene = ufloat(stats['energy/ewm'], stats['energy/ewm_error'])
-                if ene.s:
-                    pbar.set_postfix(E=f'{ene:S}')
-                    if best_ene is None or ene.n < best_ene.n - 3 * ene.s:
-                        best_ene = ene
-                        log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
-                if workdir:
-                    if mode == 'train':
-                        chkpts.update(stats['E_loc/std'], train_state)
-                    table.row['E_loc'] = E_loc
-                    table.row['E_ewm'] = ewm_state.mean
-                    table.row['sign_psi'] = train_state.sampler['psi'].sign
-                    table.row['log_psi'] = train_state.sampler['psi'].log
-                    h5file.flush()
-                    update_tensorboard_writer(writer, step, stats)
-            if not nan:
+            try:
+                for step, train_state, E_loc, stats in fit_wf(  # noqa: B007
+                    rng,
+                    hamil,
+                    ansatz,
+                    opt,
+                    sampler,
+                    sample_size,
+                    pbar,
+                    state_callback,
+                    train_state,
+                    **(fit_kwargs or {}),
+                ):
+                    if jnp.isnan(train_state.sampler['psi'].log).any():
+                        log.warn('Restarting due to a NaN...')
+                        step, train_state = chkpts.last
+                        pbar.close()
+                        pbar = trange(
+                            step,
+                            steps,
+                            initial=step,
+                            total=steps,
+                            desc=mode,
+                            disable=None,
+                        )
+                        raise NanError()
+                    ewm_state = update_ewm(stats['E_loc/mean'], ewm_state)
+                    stats = {
+                        'energy/ewm': ewm_state.mean,
+                        'energy/ewm_error': jnp.sqrt(ewm_state.sqerr),
+                        **stats,
+                    }
+                    ene = ufloat(stats['energy/ewm'], stats['energy/ewm_error'])
+                    if ene.s:
+                        pbar.set_postfix(E=f'{ene:S}')
+                        if best_ene is None or ene.n < best_ene.n - 3 * ene.s:
+                            best_ene = ene
+                            log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
+                    if workdir:
+                        if mode == 'train':
+                            chkpts.update(stats['E_loc/std'], train_state)
+                        table.row['E_loc'] = E_loc
+                        table.row['E_ewm'] = ewm_state.mean
+                        table.row['sign_psi'] = train_state.sampler['psi'].sign
+                        table.row['log_psi'] = train_state.sampler['psi'].log
+                        h5file.flush()
+                        update_tensorboard_writer(writer, step, stats)
                 return train_state
-        raise NanError(train_state)
+            except NanError():
+                continue
+        step, train_state = chkpts.last
+        log.warn(
+            'The training has crashed before all training steps were completed'
+            f' {step}/{steps}.'
+        )
+        raise TrainingCrash(train_state)
     finally:
         if pbar:
             pbar.close()
