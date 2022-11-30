@@ -1,6 +1,7 @@
 import logging
 import pickle
 import sys
+import warnings
 from pathlib import Path
 
 import hydra
@@ -9,6 +10,12 @@ import jax
 from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import OmegaConf
 from tqdm.auto import tqdm
+
+warnings.filterwarnings(
+    'ignore',
+    'provider=hydra.searchpath in main, path=conf is not available.',
+    UserWarning,
+)
 
 __all__ = ()
 log = logging.getLogger(__name__)
@@ -86,6 +93,7 @@ def maybe_log_code_version():
 def main(cfg):
     jax.config.update('jax_platform_name', cfg.device)
     log.info('Entering application')
+    log.info(f'Running on {cfg.device.upper()}')
     cfg.task.workdir = str(Path.cwd())
     log.info(f'Will work in {cfg.task.workdir}')
     maybe_log_code_version()
