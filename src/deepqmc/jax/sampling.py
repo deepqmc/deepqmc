@@ -51,7 +51,7 @@ class MetropolisSampler(Sampler):
 
     WALKER_STATE = ['r', 'psi', 'age']
 
-    def __init__(self, hamil, *, tau, target_acceptance=0.57, max_age=None):
+    def __init__(self, hamil, *, tau=1.0, target_acceptance=0.57, max_age=None):
         self.hamil = hamil
         self.initial_tau = tau
         self.target_acceptance = target_acceptance
