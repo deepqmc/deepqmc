@@ -187,7 +187,11 @@ def train(  # noqa: C901
                     if workdir:
                         update_tensorboard_writer(writer, step, pretrain_stats)
             log.info('Equilibrating sampler...')
-            pbar = tqdm(count(), desc='equilibrate', disable=None)
+            pbar = tqdm(
+                count() if max_eq_steps is None else range(max_eq_steps),
+                desc='equilibrate',
+                disable=None,
+            )
             for _, smpl_state, smpl_stats in equilibrate(  # noqa: B007
                 rng,
                 partial(ansatz.apply, params),
@@ -197,7 +201,6 @@ def train(  # noqa: C901
                 pbar,
                 state_callback,
                 block_size=10,
-                max_steps=max_eq_steps,
             ):
                 pbar.set_postfix(tau=f'{smpl_state["tau"].item():5.3f}')
                 # TODO
