@@ -25,4 +25,6 @@ setup(
         'uncertainties',
     ],
     entry_points={'console_scripts': ['deepqmc=deepqmc.app:cli']},
+    extras=['dev'],
+    extras_require={'dev': ['pytest', 'black', 'flake8', 'isort']},
 )
