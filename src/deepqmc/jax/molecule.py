@@ -1,3 +1,4 @@
+import os
 from copy import deepcopy
 from dataclasses import dataclass
 from importlib import resources
@@ -5,13 +6,23 @@ from itertools import count
 from typing import ClassVar
 
 import jax.numpy as jnp
-import toml
+import yaml
 
 angstrom = 1 / 0.52917721092
 
 __all__ = ['Molecule']
 
-_SYSTEMS = toml.loads(resources.read_text('deepqmc.data', 'systems.toml'))
+
+def parse_molecules():
+    path = resources.files('deepqmc.jax').joinpath('conf/hamil/mol')
+    data = {}
+    for f in os.listdir(path):
+        with open(path.joinpath(f), "r") as stream:
+            data[f.strip('.yaml')] = yaml.safe_load(stream)
+    return data
+
+
+_SYSTEMS = parse_molecules()
 
 
 @dataclass(frozen=True, init=False)
