@@ -24,7 +24,7 @@ setup(
         'tqdm',
         'uncertainties',
     ],
-    entry_points={'console_scripts': ['deepqmc=deepqmc.app:cli']},
+    scripts=['bin/deepqmc'],
     extras=['dev'],
     extras_require={
         'dev': ['black', 'flake8', 'isort', 'pytest', 'pytest-regressions']
