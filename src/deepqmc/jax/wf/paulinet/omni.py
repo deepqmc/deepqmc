@@ -86,7 +86,6 @@ class OmniNet(hk.Module):
         gnn_factory=None,
         jastrow_factory=None,
         backflow_factory=None,
-        rs_backflow_factory=None,
         *,
         embedding_dim=128,
         occupancy=10,
@@ -95,13 +94,11 @@ class OmniNet(hk.Module):
         jastrow_kwargs=None,
         backflow=True,
         backflow_kwargs=None,
-        rs_backflow=False,
-        rs_backflow_kwargs=None,
         subnet_kwargs=None,
     ):
         super().__init__()
         self.n_up = mol.n_up
-        if jastrow or backflow or rs_backflow:
+        if jastrow or backflow:
             if gnn_factory is None:
                 gnn_factory = SchNet
             self.gnn = gnn_factory(
@@ -112,9 +109,12 @@ class OmniNet(hk.Module):
         else:
             self.gnn = None
 
-        if jastrow_factory is None:
-            jastrow_factory = partial(Jastrow, **(jastrow_kwargs or {}))
-        self.jastrow = jastrow_factory(embedding_dim) if jastrow else None
+        if jastrow:
+            if jastrow_factory is None:
+                jastrow_factory = partial(Jastrow, **(jastrow_kwargs or {}))
+            self.jastrow = jastrow_factory(embedding_dim)
+        else:
+            self.jastrow = None
 
         if backflow:
             if backflow_factory is None:
