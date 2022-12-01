@@ -1,24 +1,20 @@
 import logging
 import pickle
 import sys
-import warnings
 from pathlib import Path
 
-import hydra
-import hydra.errors
 import jax
 from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import OmegaConf
 from tqdm.auto import tqdm
 
-warnings.filterwarnings(
-    'ignore',
-    'provider=hydra.searchpath in main, path=conf is not available.',
-    UserWarning,
-)
-
 __all__ = ()
 log = logging.getLogger(__name__)
+
+
+def move_to(device):
+    jax.config.update('jax_platform_name', device)
+    log.info(f'Running on {device.upper()}')
 
 
 def instantiate_ansatz(hamil, ansatz):
@@ -31,18 +27,21 @@ def instantiate_ansatz(hamil, ansatz):
     )
 
 
-def train_from_factories(hamil, ansatz, sampler, **kwargs):
+def train_from_factories(hamil, ansatz, sampler, device, **kwargs):
     from .sampling import chain
     from .train import train
 
+    move_to(device)
     ansatz = instantiate_ansatz(hamil, ansatz)
     sampler = chain(*sampler[:-1], sampler[-1](hamil))
     return train(hamil, ansatz, sampler=sampler, **kwargs)
 
 
-def train_from_checkpoint(workdir, restdir, evaluate, chkpt='LAST', **kwargs):
+def train_from_checkpoint(workdir, restdir, evaluate, device, chkpt='LAST', **kwargs):
+    move_to(device)
     restdir = Path(to_absolute_path(get_original_cwd())) / restdir
-    assert restdir.is_dir()
+    if not restdir.is_dir():
+        raise ValueError(f'restdir "{restdir}" is not a directory')
     cfg, step, train_state = task_from_workdir(restdir, chkpt)
     cfg.task.workdir = workdir
     if evaluate:
@@ -70,58 +69,12 @@ def task_from_workdir(workdir, chkpt, device=None):
     return cfg, step, train_state
 
 
-def maybe_log_code_version():
-    if log.isEnabledFor(logging.DEBUG):
-        import subprocess
-
-        def git_command(command):
-            return (
-                subprocess.check_output(
-                    ['git'] + command, cwd=Path(__file__).resolve().parent
-                )
-                .strip()
-                .decode()
-            )
-
-        sha = git_command(['rev-parse', '--short', 'HEAD'])
-        diff = git_command(['diff'])
-        log.debug(f'Running with code version: {sha}')
-        if diff:
-            log.debug(f'With uncommitted changes:\n{diff}')
-
-
-def main(cfg):
-    jax.config.update('jax_platform_name', cfg.device)
-    log.info('Entering application')
-    log.info(f'Running on {cfg.device.upper()}')
-    cfg.task.workdir = str(Path.cwd())
-    log.info(f'Will work in {cfg.task.workdir}')
-    maybe_log_code_version()
-    call(cfg.task, _convert_='all')
-
-
-@hydra.main(config_path='conf', config_name='config', version_base=None)
-def cli(cfg):
-    try:
-        main(cfg)
-    except hydra.errors.InstantiationException as e:
-        raise e.__cause__ from None
-    except KeyboardInterrupt:
-        log.warning('Interrupted!')
-
-
 class TqdmStream:
-    def write(self, msg: str) -> int:
+    @staticmethod
+    def write(msg: str) -> int:
         try:
             tqdm.write(msg, end='')
         except BrokenPipeError:
             sys.stderr.write(msg)
             return 0
         return len(msg)
-
-
-tqdmout = TqdmStream()
-
-
-if __name__ == '__main__':
-    cli()
