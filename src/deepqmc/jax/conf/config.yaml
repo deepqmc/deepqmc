@@ -5,6 +5,7 @@ defaults:
   - ansatz: paulinet
   - hamil: qc
   - override hydra/job_logging: custom
+  - override hydra/help: custom
 hydra:
   job:
     name: deepqmc
