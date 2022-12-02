@@ -1,4 +1,4 @@
-from .base import WaveFunction
+from .base import WaveFunction, state_callback
 from .paulinet import PauliNet
 
-__all__ = ['WaveFunction', 'PauliNet']
+__all__ = ['PauliNet', 'state_callback', 'WaveFunction']

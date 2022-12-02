@@ -2,10 +2,8 @@ import haiku as hk
 import jax
 import pytest
 
-from deepqmc.hamil import MolecularHamiltonian
-from deepqmc.molecule import Molecule
-from deepqmc.wf import PauliNet
-from deepqmc.wf.base import state_callback
+from deepqmc import MolecularHamiltonian, Molecule
+from deepqmc.wf import PauliNet, state_callback
 
 
 @pytest.fixture(scope='session')
