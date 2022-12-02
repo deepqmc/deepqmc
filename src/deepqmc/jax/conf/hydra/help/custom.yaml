@@ -1,0 +1,36 @@
+app_name: DeepQMC
+
+header: == Welcome to ${hydra.help.app_name} ==
+
+footer: |-
+  Use --hydra-help to view Hydra specific help
+
+template: |-
+ 
+  ${hydra.help.header}
+
+   Usage: deepqmc.app task.[task] [ARGS] 
+
+   The ${hydra.help.app_name} command line interface is powered by Hydra (https://hydra.cc). 
+  
+    Available tasks: 
+
+     - train:      Trains the ansatz with variational Monte Carlo.
+     - evaluate:   Evaluates the total energy of an ansatz via Monte Carlo sampling.
+     - restrart:   Restarts/continues the training from a stored training checkpoint.
+
+       Further tasks can be defined in the hydra config files (deepqmc/src/deepqmc/conf).
+
+    Examplairy usage:
+    
+     - train:     deepqmc.app hydra.run.dir=workdir hamil.mol.name=LiH task.steps=5000
+     - evaluate:  deepqmc.app task=evaluate task.restdir=workdir task.steps=500
+     - restart:   deepqmc.app task=restart task.restdir=workdir task.steps=10000
+
+       Hyperparameters can be specified according to the standard Hydra syntax
+    
+       - deepqmc.app task.sample_size=2000 ansatz.omni_factory.jastrow=false
+  
+   For further information visit the ${hydra.help.app_name} documentation at (https://deepqmc.github.io/).
+
+   ${hydra.help.footer}
