@@ -211,7 +211,3 @@ def fit_wf(  # noqa: C901
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
         *train_state, E_loc, stats = train_step(rng, *train_state)
         yield step, TrainState(*train_state), E_loc, stats
-
-
-def InverseLR(lr, decay_rate):
-    return lambda n: lr / (1 + n / decay_rate)
