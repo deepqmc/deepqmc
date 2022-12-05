@@ -4,7 +4,7 @@ import jax.numpy as jnp
 import kfac_jax
 from jax import vmap
 
-__all__ = ['GRAPH_PATTERNS']
+__all__ = ['make_graph_patterns']
 
 log = logging.getLogger(__name__)
 
@@ -118,21 +118,24 @@ def make_dense_pattern(
     )
 
 
-custom_patterns = []
-for n_extra_dims in range(2, 0, -1):
-    for with_bias in (True, False):
-        custom_patterns.append(
-            make_dense_pattern(
-                with_bias, extra_dims=tuple(8 + i for i in range(n_extra_dims))
+def make_graph_patterns():
+    r"""Create deepqmc graph patterns for the KFAC optimizer."""
+    custom_patterns = []
+    for n_extra_dims in range(2, 0, -1):
+        for with_bias in (True, False):
+            custom_patterns.append(
+                make_dense_pattern(
+                    with_bias, extra_dims=tuple(8 + i for i in range(n_extra_dims))
+                )
             )
-        )
-        kfac_jax.set_default_tag_to_block_ctor(
-            f'repeated{n_extra_dims}_dense_tag', RepeatedDenseBlock
-        )
+            kfac_jax.set_default_tag_to_block_ctor(
+                f'repeated{n_extra_dims}_dense_tag', RepeatedDenseBlock
+            )
 
-kfac_jax.set_default_tag_to_block_ctor('dense_tag', DenseBlock)
+    kfac_jax.set_default_tag_to_block_ctor('dense_tag', DenseBlock)
 
-GRAPH_PATTERNS = (
-    *(custom_patterns),
-    *kfac_jax.tag_graph_matcher.DEFAULT_GRAPH_PATTERNS,
-)
+    graph_patterns = (
+        *(custom_patterns),
+        *kfac_jax.tag_graph_matcher.DEFAULT_GRAPH_PATTERNS,
+    )
+    return graph_patterns

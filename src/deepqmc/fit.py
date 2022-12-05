@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import kfac_jax
 import optax
 
-from .kfacext import GRAPH_PATTERNS
+from .kfacext import make_graph_patterns
 from .utils import check_overflow, exp_normalize_mean, masked_mean, tree_norm
 
 __all__ = ()
@@ -167,7 +167,7 @@ def fit_wf(  # noqa: C901
             l2_reg=0.0,
             value_func_has_aux=True,
             value_func_has_state=True,
-            auto_register_kwargs={'graph_patterns': GRAPH_PATTERNS},
+            auto_register_kwargs={'graph_patterns': make_graph_patterns()},
             include_norms_in_stats=True,
             estimation_mode='fisher_exact',
             num_burnin_steps=0,
