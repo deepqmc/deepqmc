@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [3.7, 3.8, 3.9]
+        python-version: [3.9, '3.10']
     runs-on: ubuntu-latest
     steps:
       - name: Set environment variables
@@ -33,7 +33,7 @@ jobs:
           venv/bin/pip install -U pip wheel
           echo $PWD/venv/bin >>$GITHUB_PATH
       - name: Install
-        run: pip install -e .[wf,train,cli,test,app]
+        run: pip install -e .[test] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
       - name: Test
         run: coverage run -m pytest
       - name: Upload to Codecov
