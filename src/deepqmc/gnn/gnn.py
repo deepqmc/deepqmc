@@ -203,8 +203,7 @@ class GraphNeuralNetwork(hk.Module):
         raise NotImplementedError
 
     def node_factory(self):
-        r"""Return the initial node representations as a :class:`GraphNodes` instance.
-        """
+        r"""Return the initial node representation as a :class:`GraphNodes` instance."""
         raise NotImplementedError
 
     def edge_feature_callback(

@@ -1,7 +1,15 @@
-import haiku as hk
+class ElectronicAsymptotic:
+    r"""Calculate a multiplicative factor, that ensures correct electronic cusps.
 
+    Computes the factor:
+    :math:`-\frac{\text{cusp}}{\sum_{i<j}\alpha * (1 + \alpha r_{ij})}`, where
+    :math:`r_{ij}` are the electron-electron distances.
 
-class ElectronicAsymptotic(hk.Module):
+    Args:
+        cusp (float): the cusp parameter in the above equation.
+        alpha (float): default 1, the :math:`\alpha` parameter in the above equation.
+    """
+
     def __init__(self, *, cusp, alpha=1.0):
         super().__init__()
         self.cusp = cusp

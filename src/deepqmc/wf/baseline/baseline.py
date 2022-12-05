@@ -17,6 +17,8 @@ def eval_log_slater(xs):
 
 
 class Baseline(WaveFunction):
+    r"""Represent an (MC-)SCF wave function, used as baseline."""
+
     def __init__(self, mol, centers, shells, mo_coeff, confs, conf_coeff):
         super().__init__(mol)
         self.basis = GTOBasis(centers, shells)
@@ -50,6 +52,13 @@ class Baseline(WaveFunction):
 
     @classmethod
     def from_mol(cls, mol, basis='6-31G', cas=None, **kwargs):
+        r"""Create input to the constructor from a :class:`~deepqmc.Molecule`.
+
+        Args:
+            mol (~deepqmc.Molecule): the molecule to consider.
+            basis (str): the name of a Gaussian basis set.
+            cas (Tuple[int,int]): optional the active space specification for CAS-SCF.
+        """
         mol_pyscf, (mf, mc) = pyscf_from_mol(mol, basis, cas, **kwargs)
         centers, shells = GTOBasis.from_pyscf(mol_pyscf)
         mo_coeff = jnp.asarray(mc.mo_coeff if mc else mf.mo_coeff)

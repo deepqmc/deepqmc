@@ -9,6 +9,16 @@ log = logging.getLogger(__name__)
 
 
 def pyscf_from_mol(mol, basis, cas=None, **kwargs):
+    r"""Create a pyscf molecule and perform an SCF calculation on it.
+
+    Args:
+        mol (~deepqmc.Molecule): the molecule on which to perform the SCF calculation.
+        basis (str): the name of the Gaussian basis set to use.
+        cas (Tuple[int,int]): optional, the active space definition for CAS.
+
+    Returns:
+        tuple: the pyscf molecule and the SCF calculation object.
+    """
     mol = gto.M(
         atom=mol.as_pyscf(),
         unit='bohr',
@@ -30,6 +40,16 @@ def pyscf_from_mol(mol, basis, cas=None, **kwargs):
 
 
 def confs_from_mc(mc, tol=0):
+    r"""Retrieve the electronic configurations contributing to a pyscf CAS-SCF solution.
+
+    Args:
+        mc: a pyscf MC-SCF object.
+        tol (float): default 0, the CI weight threshold.
+
+    Returns:
+        list: the list of configurations in deepqmc format,
+        with weight larger than :data:`tol`.
+    """
     conf_coeff, *confs = zip(
         *mc.fcisolver.large_ci(mc.ci, mc.ncas, mc.nelecas, tol=tol, return_strs=False)
     )

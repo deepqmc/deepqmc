@@ -82,8 +82,8 @@ def train(  # noqa: C901
     only sampled.
 
     Args:
-        hamil (~jax.hamil.Hamiltonian): the Hamiltonian of the physical system.
-        ansatz (~jax.wf.WaveFunction): the wave function ansatz.
+        hamil (~deepqmc.hamil.Hamiltonian): the Hamiltonian of the physical system.
+        ansatz (~deepqmc.wf.WaveFunction): the wave function Ansatz.
         opt (``kfac_jax`` or ``optax`` optimizers, :class:`str` or :data:`None`):
             the optimizer. Possible values are:
 
@@ -97,10 +97,10 @@ def train(  # noqa: C901
             - :data:`None`: no optimizer is used, e.g. the evaluation of the Ansatz
                 is performed.
 
-        sampler (~jax.sampling.Sampler): a sampler instance
+        sampler (~deepqmc.sampling.Sampler): a sampler instance
         workdir (str): optional, path, where results and checkpoints should be saved.
         state_callback (Callable): optional, a function processing the :class:`haiku`
-            state of the wave function ansatz.
+            state of the wave function Ansatz.
         steps (int): optional, number of optimization steps.
         sample_size (int): the number of samples considered in a batch
         seed (int): the seed used for PRNG.

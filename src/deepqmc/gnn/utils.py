@@ -2,6 +2,7 @@ from typing import Optional
 
 
 def dict_or_namedtuple_get(data, key):
+    r"""Get item from dict or namedtuple."""
     try:
         v = getattr(data, key)
     except AttributeError:
@@ -10,6 +11,7 @@ def dict_or_namedtuple_get(data, key):
 
 
 def get_dict_or_namedtuple_keys(container):
+    r"""Get keys/fields of a dict/namedtuple."""
     try:
         keys = container._fields
     except AttributeError:
@@ -18,14 +20,26 @@ def get_dict_or_namedtuple_keys(container):
 
 
 def is_node(node_or_edge):
+    r"""Determine whether the input string represents a node."""
     return node_or_edge in {'nuclei', 'electrons'}
 
 
 def is_edge(node_or_edge):
+    r"""Determine whether the input string represents an edge."""
     return node_or_edge in {'nn', 'ne', 'en', 'same', 'anti'}
 
 
 class NodeEdgeMapping:
+    r"""A utility mapping between the various node and edge types.
+
+    For example it is often useful determine the sender/receiver node type of a given
+    edge, or generate all the edge types with a given sender/receiver node.
+
+    Args:
+        edges (Sequence[str]): all the edge types present in the graph
+        node_data (dict): optional, data to store for the node types
+    """
+
     def __init__(self, edges, node_data: Optional[dict] = None):
         self.edges = edges
         self.nodes = {self.receiver_of(edge) for edge in edges}

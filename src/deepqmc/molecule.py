@@ -14,10 +14,10 @@ __all__ = ['Molecule']
 
 
 def parse_molecules():
-    path = resources.files('deepqmc.jax').joinpath('conf/hamil/mol')
+    path = resources.files('deepqmc').joinpath('conf/hamil/mol')
     data = {}
     for f in os.listdir(path):
-        with open(path.joinpath(f), "r") as stream:
+        with open(path.joinpath(f), 'r') as stream:
             data[f.strip('.yaml')] = yaml.safe_load(stream)
     return data
 

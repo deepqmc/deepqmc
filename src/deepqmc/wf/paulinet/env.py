@@ -3,6 +3,8 @@ import jax.numpy as jnp
 
 
 class ExponentialEnvelopes(hk.Module):
+    r"""Create exponential envelopes centered on the nuclei."""
+
     def __init__(self, shells):
         super().__init__()
         center_idx, zetas = zip(*shells)
@@ -16,6 +18,7 @@ class ExponentialEnvelopes(hk.Module):
 
     @classmethod
     def from_mol(cls, mol):
+        r"""Create the input of the constructor from a :class:`~deepqmc.Molecule`."""
         shells = []
         for i, (z, n_shell) in enumerate(zip(mol.charges, mol.n_shells)):
             for k in range(n_shell):

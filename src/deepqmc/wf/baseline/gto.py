@@ -37,6 +37,8 @@ class GTOShell(hk.Module):
 
 
 class GTOBasis(hk.Module):
+    r"""Represent a GTO basis of a molecule."""
+
     def __init__(self, centers, shells):
         super().__init__()
         self.centers = jnp.asarray(centers)
@@ -52,6 +54,11 @@ class GTOBasis(hk.Module):
 
     @classmethod
     def from_pyscf(cls, mol):
+        r"""Create the input of the constructor from a :class:`~deepqmc.Molecule`.
+
+        Args:
+            mol (~deepqmc.Molecule): the molecule to consider.
+        """
         assert mol.cart
         centers = mol.atom_coords()
         shells = []

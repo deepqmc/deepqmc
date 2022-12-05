@@ -3,6 +3,8 @@ import jax.numpy as jnp
 
 from .utils import triu_flat
 
+__all__ = ()
+
 
 def pairwise_distance(coords1, coords2):
     return jnp.linalg.norm(coords1[..., :, None, :] - coords2[..., None, :, :], axis=-1)

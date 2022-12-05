@@ -7,6 +7,13 @@ from jax.tree_util import tree_reduce
 
 
 class Envelope:
+    r"""
+    Base class for the radial envelopes.
+
+    Args:
+        r_cut (float): the cutoff distance.
+    """
+
     def __init__(self, r_cut):
         self.r_cut = r_cut
 
@@ -15,11 +22,29 @@ class Envelope:
 
 
 class IdentityEnvelope(Envelope):
+    r"""
+    The identity envelope.
+
+    The value of the envelope is one below the cutoff distance and zero above it.
+
+    Args:
+        r_cut (float): the cutoff distance.
+    """
+
     def __call__(self, r):
         return jnp.where(r > self.r_cut, jnp.zeros_like(r), jnp.ones_like(r))
 
 
 class PolynomialEnvelope(Envelope):
+    r"""
+    A polynomial envelope with custom derivative properties at zero and the cutoff.
+
+    Args:
+        r_cut (float): the cutoff distance.
+        n0 (int): the first :data:`n0` derivatives will be zero at the origin.
+        n1 (int): the first :data:`n1` derivatives will be zero at the cutoff.
+    """
+
     def __init__(self, r_cut: float, n0: int, n1: int):
         super().__init__(r_cut)
         self.envelope = e3nn.poly_envelope(n0, n1, r_cut)
@@ -33,10 +58,10 @@ class RadialBasis:
     Base class for the radial bases.
 
     Args:
-        n_rbf (int): the number of basis functions
-        r_cut (float): the cutoff radius for the envelope
-        envelope_factory (Callable): optional, creates the distance envelope
-        kwargs: (dict): optional, kwargs for the envelope function
+        n_rbf (int): the number of basis functions.
+        r_cut (float): the cutoff radius for the envelope.
+        envelope_factory (Callable): optional, creates the distance envelope.
+        kwargs: (dict): optional, kwargs for the envelope function.
     """
 
     def __init__(
@@ -61,6 +86,16 @@ class RadialBasis:
 
 
 class BesselBasis(RadialBasis):
+    r"""
+    Bessel function radial basis.
+
+    Args:
+        n_rbf (int): the number of basis functions.
+        r_cut (float): the cutoff radius for the envelope.
+        envelope_factory (Callable): optional, creates the distance envelope.
+        kwargs: (dict): optional, kwargs for the envelope function.
+    """
+
     def __call__(self, r):
         return self.apply_envelope(
             r,
@@ -69,6 +104,18 @@ class BesselBasis(RadialBasis):
 
 
 class DistancePowersBasis(RadialBasis):
+    r"""A distance basis composed of integer powers of the distance.
+
+    Args:
+        n_rbf (int): the number of Gaussian basis functions.
+        r_cut (float): the cutoff radius for the radial bases.
+        powers (List[int]): the powers to which the distance is raised.
+        eps (float): default 0.01, the numerical epsilon used for negative powers.
+        envelope_factory (Callable): optional, a function returning an instance of
+            :class:`~deepqmc.gnn.edge_features.Envelope`.
+        envelope_kwargs: (dict): optional, kwargs for the envelope factory.
+    """
+
     def __init__(
         self,
         n_rbf,
@@ -102,6 +149,18 @@ class DistancePowersBasis(RadialBasis):
 
 
 class GaussianBasis(RadialBasis):
+    r"""Gaussian distance basis.
+
+    Args:
+        n_rbf (int): the number of Gaussian basis functions.
+        r_cut (float): the cutoff radius for the radial bases.
+        offset (bool): default :data:`False`, whether to offset the first Gaussian
+            from zero.
+        envelope_factory (Callable): optional, a function returning an instance of
+            :class:`~deepqmc.gnn.edge_features.Envelope`.
+        envelope_kwargs: (dict): optional, kwargs for the envelope factory.
+    """
+
     def __init__(
         self,
         n_rbf,
@@ -129,10 +188,11 @@ class GaussianBasis(RadialBasis):
 
 class CombinedRadialBases(RadialBasis):
     r"""
-    Class combining multiple radial bases. The total number of basis functions
+    Class combining multiple radial bases.
+
+    The total number of basis functions
     :math:`n_{rbf}` has to match the sum of the numbers of basis functions of
     the constituents.
-
 
     Args:
         n_rbf (int): the total number of basis functions
@@ -173,9 +233,7 @@ class CombinedRadialBases(RadialBasis):
 
 class EdgeFeatures:
     r"""
-    Class combining the radial and angular bases to obtain edge features from
-    difference vectors.
-
+    Class combining the radial and angular bases to obtain edge features.
 
     Args:
         n_rbf (int): the number of radial basis functions
@@ -236,6 +294,8 @@ class EdgeFeatures:
 
 
 class PauliNetEdgeFeatures(EdgeFeatures):
+    r"""Utility class to retain the old edge feature interface."""
+
     def __init__(
         self,
         feature_dim,
