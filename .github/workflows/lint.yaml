@@ -13,7 +13,7 @@ jobs:
         with:
           python-version: 3.x
       - name: Install dependencies
-        run: pip install flake8 flake8-bugbear flake8-comprehensions flake8-quotes pep8-naming
+        run: pip install 'flake8<6.0.0' flake8-bugbear flake8-comprehensions flake8-quotes pep8-naming
       - uses: actions/checkout@v2
       - run: flake8
   black:
