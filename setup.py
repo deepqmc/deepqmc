@@ -15,7 +15,16 @@ requires = {
         'uncertainties',
     ],
     'test': {'pytest', 'pytest-regressions'},
-    'format': {'black', 'flake8', 'isort', 'pydocstyle'},
+    'format': {
+        'black',
+        'flake8<6.0.0',  # flake8 6.0.0 is currently incompatible with flake8-quotes
+        'flake8-bugbear',
+        'flake8-comprehensions',
+        'flake8-quotes',
+        'isort',
+        'pep8-naming',
+        'pydocstyle',
+    },
 }
 
 setup(
