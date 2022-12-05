@@ -3,16 +3,15 @@ app_name: DeepQMC
 header: == Welcome to ${hydra.help.app_name} ==
 
 footer: |-
-  Use --hydra-help to view Hydra specific help
+  The ${hydra.help.app_name} command line interface is powered by Hydra (https://hydra.cc).
+  Use --hydra-help to view Hydra specific help.
 
 template: |-
  
   ${hydra.help.header}
 
-   Usage: deepqmc.app task.[task] [ARGS] 
+   Usage: deepqmc [task={task_name}] [ARGS] 
 
-   The ${hydra.help.app_name} command line interface is powered by Hydra (https://hydra.cc). 
-  
     Available tasks: 
 
      - train:      Trains the ansatz with variational Monte Carlo.
@@ -20,19 +19,19 @@ template: |-
      - restart:    Restarts/continues the training from a stored training checkpoint.
      - defaults:   Collects the default hyperparameters for the main DeepQMC functions.
 
-       Further tasks can be defined in the hydra config files (deepqmc/src/deepqmc/conf).
+       Further tasks can be defined in the hydra config files (deepqmc/src/deepqmc/conf/task).
 
-    Examplairy usage:
+    Example usage:
     
-     - train:     deepqmc.app hydra.run.dir=workdir hamil.mol.name=LiH task.steps=5000
-     - evaluate:  deepqmc.app task=evaluate task.restdir=workdir task.steps=500
-     - restart:   deepqmc.app task=restart task.restdir=workdir task.steps=10000
+     - train:     deepqmc hydra.run.dir=workdir hamil.mol.name=LiH task.steps=5000
+     - evaluate:  deepqmc task=evaluate task.restdir=workdir +task.steps=500
+     - restart:   deepqmc task=restart task.restdir=workdir +task.steps=10000
      - defaults:  deepqmc.app task=defaults
 
-       Hyperparameters can be specified according to the standard Hydra syntax
+       Hyperparameters can be specified according to the standard Hydra syntax:
     
        - deepqmc.app task.sample_size=2000 ansatz.omni_factory.jastrow=false
   
    For further information visit the ${hydra.help.app_name} documentation at (https://deepqmc.github.io/).
 
-   ${hydra.help.footer}
+  ${hydra.help.footer}
