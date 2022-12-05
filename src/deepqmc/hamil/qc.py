@@ -40,10 +40,10 @@ class MolecularHamiltonian(Hamiltonian):
         are usually very crude, a subsequent, thorough equilibration is needed.
 
         Args:
-            rng (jax.random.PRNGKey): key used for PRNG
-            n (int): the number of configurations to generate
+            rng (jax.random.PRNGKey): key used for PRNG.
+            n (int): the number of configurations to generate.
             elec_std (float): optional, a factor for scaling the spread of
-                electrons around the nuclei
+                electrons around the nuclei.
         """
         rng_remainder, rng_normal = random.split(rng)
         charges = self.mol.charges - self.mol.charge / len(self.mol.charges)

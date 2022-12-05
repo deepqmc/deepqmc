@@ -9,6 +9,18 @@ from ...utils import unflatten
 
 
 class Jastrow(hk.Module):
+    r"""The deep Jastrow factor.
+
+    Args:
+        embedding_dim (int): the length of the electron embedding vectors.
+        n_layers (int): the number of Jastrow MLP layers.
+        sum_first (bool): if :data:`True`, the electronic embeddings are summed before
+            feeding them to the MLP. Otherwise the MLP is applyied separately on each
+            electron embedding, and the outputs are summed, yielding a (quasi)
+            mean-field Jastrow factor.
+        name (str): the name of this haiku module.
+    """
+
     def __init__(
         self, embedding_dim, *, n_layers=3, sum_first=True, name='Jastrow', **kwargs
     ):
@@ -29,6 +41,21 @@ class Jastrow(hk.Module):
 
 
 class Backflow(hk.Module):
+    r"""The deep backflow factor.
+
+    Args:
+        embedding_dim (int): the length of the electron embedding vectors.
+        n_orbitals (int): the number of orbitals to compute backflow factors for.
+        n_backflow (int): the number of independent backflow factors for each orbital.
+        multi_head (bool): if :data:`True`, create separate MLPs for the
+            :data:`n_backflow` many backflows, otherwise use a single larger MLP
+            for all.
+        n_layers (int): the number of layers in the MLP(s).
+        name (str): the name of this haiku module.
+        param_scaling (float): a scaling factor to apply during the initialization of
+            the MLP parameters.
+    """
+
     def __init__(
         self,
         embedding_dim,
@@ -78,6 +105,32 @@ class Backflow(hk.Module):
 
 
 class OmniNet(hk.Module):
+    r"""Combine the GNN, the Jastrow and backflow MLPs.
+
+    A GNN is used to create embedding vectors for each electron, which are then fed
+    into the Jastrow and/or backflow MLPs to produce the Jastrow--backflow part of
+    deep QMC Ansatzes.
+
+    Args:
+        mol (~deepqmc.Molecule): the molecule to consider.
+        n_orbitals (int): the number of orbitals to compute backflow factors for.
+        n_backflow (int): the number of independent backflow factors for each orbital.
+        gnn_factory (Callable): optional, a function that returns a GNN instance.
+        jastrow_factory (Callable): optional a function that returns a :class:`Jastrow`
+            instance.
+        backflow_factory (Callable): optional a function that returns a
+            :class:`Backflow` instance.
+        embedding_dim (int): the length of the electron embedding vectors.
+        gnn_kwargs (dict): optional, additional keyword arguments passed to
+            :data:`gnn_factory`.
+        jastrow (bool): whether a Jastrow factor is computed.
+        jastrow_kwargs (dict): optional, additional keyword arguments passed to
+            :data:`jastrow_factory`.
+        backflow (bool): whether backflow factors are computed.
+        backflow_kwargs (dict): optional, additional keyword arguments passed to
+            :data:`backflow_factory`.
+    """
+
     def __init__(
         self,
         mol,
@@ -88,13 +141,11 @@ class OmniNet(hk.Module):
         backflow_factory=None,
         *,
         embedding_dim=128,
-        occupancy=10,
         gnn_kwargs=None,
         jastrow=True,
         jastrow_kwargs=None,
         backflow=True,
         backflow_kwargs=None,
-        subnet_kwargs=None,
     ):
         super().__init__()
         self.n_up = mol.n_up

@@ -1,7 +1,7 @@
 from setuptools import find_packages, setup
 
 requires = {
-    'install': {
+    'install': [
         'dm-haiku',
         'e3nn-jax',
         'h5py',
@@ -13,9 +13,9 @@ requires = {
         'toml',
         'tqdm',
         'uncertainties',
-    },
+    ],
     'test': {'pytest', 'pytest-regressions'},
-    'format': {'black', 'flake8', 'isort'},
+    'format': {'black', 'flake8', 'isort', 'pydocstyle'},
 }
 
 setup(

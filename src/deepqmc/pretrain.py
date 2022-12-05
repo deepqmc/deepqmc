@@ -23,6 +23,21 @@ def pretrain(  # noqa: C901
     sample_size,
     baseline_kwargs=None,
 ):
+    r"""Perform pretraining of the Ansatz to (MC-)SCF orbitals.
+
+    Args:
+        rng (~deepqmc.types.RNGSeed): key used for PRNG.
+        hamil (~deepqmc.hamil.Hamiltonian): the Hamiltonian of the physical system.
+        ansatz (~deepqmc.wf.WaveFunction): the wave function Ansatz.
+        opt (``optax`` optimizer): the optimizer to use.
+        sampler (~deepqmc.sampling.Sampler): the sampler instance to use.
+        state_callback (Callable): optional, a function processing the :class:`haiku`
+            state of the wave function Ansatz.
+        steps: an iterable yielding the step numbers for the pretraining.
+        sample_size (int): the number of samples to use in a batch.
+        baseline_kwargs (dict): optional, additional keyword arguments passed to the
+            baseline wave function.
+    """
     baseline_init = Baseline.from_mol(hamil.mol, **(baseline_kwargs or {}))
 
     @hk.without_apply_rng

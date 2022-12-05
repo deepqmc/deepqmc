@@ -8,6 +8,8 @@ __all__ = ['QHOHamiltonian']
 
 
 class QHOHamiltonian(Hamiltonian):
+    r"""Hamiltonian for the quantum harmonic oscillator."""
+
     def __init__(self, dim, mass, nu):
         self.dim = (dim,)
         self.mass = mass

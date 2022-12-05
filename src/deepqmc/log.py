@@ -3,6 +3,8 @@ import numpy as np
 
 
 class H5LogTable:
+    r"""An interface for writing results to HDF5 files."""
+
     def __init__(self, group):
         self._group = group
 
@@ -42,5 +44,12 @@ class H5LogTable:
 
 
 def update_tensorboard_writer(writer, step, stats):
+    r"""Update a tensorboard writer with a dictionary of scalar entries.
+
+    Args:
+        writer: the tensorboard writer.
+        step (int): the step at which to add the new entries.
+        stats (dict): a dictionary containing the scalar entries to add.
+    """
     for k, v in stats.items():
         writer.add_scalar(k, v, step)
