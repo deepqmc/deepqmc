@@ -39,7 +39,7 @@ setup(
     packages=find_packages(where='src'),
     package_dir={'': 'src'},
     install_requires=requires['install'],
-    scripts=['bin/deepqmc'],
+    entry_points= {'console_scripts': ['deepqmc = deepqmc.app:cli',]},
     extras=['dev', 'test'],
     extras_require={
         'test': requires['test'],
