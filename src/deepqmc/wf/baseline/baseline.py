@@ -51,7 +51,7 @@ class Baseline(WaveFunction):
         return Psi(jnp.sign(psi), jnp.log(jnp.abs(psi)))
 
     @classmethod
-    def from_mol(cls, mol, basis='6-31G', cas=None, **kwargs):
+    def from_mol(cls, mol, *, basis='6-31G', cas=None, **kwargs):
         r"""Create input to the constructor from a :class:`~deepqmc.Molecule`.
 
         Args:

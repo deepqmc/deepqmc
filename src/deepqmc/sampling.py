@@ -172,7 +172,7 @@ class DecorrSampler(Sampler):
             that is, :data:`length` :math:`-1` decorrelating steps are inserted.
     """
 
-    def __init__(self, length):
+    def __init__(self, *, length):
         self.length = length
 
     def sample(self, rng, state, wf):
@@ -207,7 +207,7 @@ class ResampledSampler(Sampler):
             :data:`treshold`.
     """
 
-    def __init__(self, frequency=None, treshold=None):
+    def __init__(self, *, frequency=None, treshold=None):
         assert frequency is not None or treshold is not None
         self.frequency = frequency
         self.treshold = treshold
