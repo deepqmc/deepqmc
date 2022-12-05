@@ -1,11 +1,13 @@
+import inspect
 import logging
 import pickle
 import sys
-from pathlib import Path
 import warnings
+from pathlib import Path
 
-import jax
 import hydra
+import jax
+import yaml
 from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import OmegaConf
 from tqdm.auto import tqdm
@@ -119,3 +121,97 @@ def cli(cfg):
         raise e.__cause__ from None
     except KeyboardInterrupt:
         log.warning('Interrupted!')
+
+
+def _get_subkwargs(func, name=None, mapping=None):
+    target = mapping.get((func, name), False) if mapping is not None else func
+    if not target:
+        return {}
+    target, override = target if isinstance(target, tuple) else (target, [])
+    if isinstance(target, dict):
+        sub_kwargs = {
+            k: collect_kwarg_defaults(v) if callable(v) else v
+            for k, v in target.items()
+        }
+    else:
+        sub_kwargs = collect_kwarg_defaults(target)
+    for x in override:
+        if isinstance(x, tuple):
+            key, val = x
+            sub_kwargs[key] = val
+        else:
+            del sub_kwargs[x]
+    return sub_kwargs
+
+
+def collect_kwarg_defaults(func):
+    from .fit import fit_wf
+    from .gnn import SchNet
+    from .pretrain import pretrain
+    from .train import OPT_KWARGS, CheckpointStore, train
+    from .wf import PauliNet
+    from .wf.baseline import Baseline
+    from .wf.paulinet.omni import Backflow, Jastrow, OmniNet
+
+    DEEPQMC_DEFAULTS = {
+        (train, 'pretrain_kwargs'): pretrain,
+        (train, 'opt_kwargs'): OPT_KWARGS,
+        (train, 'fit_kwargs'): fit_wf,
+        (train, 'chkpts_kwargs'): CheckpointStore,
+        (pretrain, 'baseline_kwargs'): Baseline.from_mol,
+        (PauliNet.__init__, 'omni_kwargs'): OmniNet,
+        (OmniNet.__init__, 'gnn_kwargs'): SchNet,
+        (OmniNet.__init__, 'jastrow_kwargs'): Jastrow,
+        (OmniNet.__init__, 'backflow_kwargs'): Backflow,
+    }
+    kwargs = {}
+    func = func.__init__ if inspect.isclass(func) else func
+    for p in inspect.signature(func).parameters.values():
+        if p.kind != inspect.Parameter.KEYWORD_ONLY:
+            continue
+
+        if '_kwargs' in p.name:
+            if DEEPQMC_DEFAULTS.get((func, p.name), False):
+                sub_kwargs = _get_subkwargs(func, p.name, DEEPQMC_DEFAULTS)
+                kwargs[p.name] = sub_kwargs
+
+        else:
+            if p.default is None:
+                kwargs[p.name] = None
+            elif p.default == inspect._empty:
+                kwargs[p.name] = '???'
+            else:
+                try:
+                    kwargs[p.name] = p.default
+                except ValueError:
+                    raise
+    return kwargs
+
+
+def collect_deepqmc_kwarg_defaults(workdir, device, return_yaml=False):
+    import deepqmc
+    import deepqmc.wf
+
+    listed = [
+        'MolecularHamiltonian',
+        'Molecule',
+        'train',
+        'MetropolisSampler',
+        'DecorrSampler',
+        'ResampledSampler',
+        'PauliNet',
+    ]
+    members = dict(inspect.getmembers(deepqmc.wf)) | dict(inspect.getmembers(deepqmc))
+    funcs = {func: members[func] for func in listed}
+    kwargs = {
+        name: collect_kwarg_defaults(func)
+        for (name, func) in funcs.items()
+        if collect_kwarg_defaults(func)
+    }
+    log.info(
+        'DeepQMC'
+        f' defaults:\n{yaml.dump(kwargs, default_flow_style=False, sort_keys=False)}'
+    )
+    if return_yaml:
+        with open('defaults.yaml', 'w') as outfile:
+            yaml.dump(kwargs, outfile, default_flow_style=False, sort_keys=False)

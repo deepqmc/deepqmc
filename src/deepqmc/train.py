@@ -59,12 +59,12 @@ def train(  # noqa: C901
     sampler,
     workdir=None,
     train_state=None,
+    init_step=0,
     state_callback=state_callback,
     *,
     steps,
     sample_size,
     seed,
-    init_step=0,
     max_restarts=3,
     max_eq_steps=1000,
     pretrain_steps=None,
@@ -96,16 +96,17 @@ def train(  # noqa: C901
                 passed in :data:`opt_kwargs`.
             - :data:`None`: no optimizer is used, e.g. the evaluation of the Ansatz
                 is performed.
-
         sampler (~deepqmc.sampling.Sampler): a sampler instance
         workdir (str): optional, path, where results and checkpoints should be saved.
+        train_state (~deepqmc.fit.TrainState): optional, training checkpoint to
+            restore training or run evaluation.
+        init_step (int): optional, initial step index, useful if
+            calculation is restarted from checkpoint saved on disk.
         state_callback (Callable): optional, a function processing the :class:`haiku`
             state of the wave function Ansatz.
         steps (int): optional, number of optimization steps.
         sample_size (int): the number of samples considered in a batch
         seed (int): the seed used for PRNG.
-        init_step (int): optional, initial step index, useful if
-        calculation is restarted from checkpoint saved on disk.
         max_restarts (int): optional, the maximum number of times the training is
             retried before a :class:`NaNError` is raised.
         max_eq_steps (int): optional, maximum number of equilibration steps if not
@@ -287,7 +288,7 @@ Checkpoint = namedtuple('Checkpoint', 'step loss path')
 class CheckpointStore:
     PATTERN = 'chkpt-{}.pt'
 
-    def __init__(self, workdir, size=3, min_interval=100, threshold=0.95):
+    def __init__(self, workdir, *, size=3, min_interval=100, threshold=0.95):
         self.workdir = Path(workdir)
         for p in self.workdir.glob(self.PATTERN.format('*')):
             p.unlink()
