@@ -44,7 +44,7 @@ class Helpers:
     @staticmethod
     def hamil(mol=None):
         mol = mol or Helpers.mol()
-        return MolecularHamiltonian(mol)
+        return MolecularHamiltonian(mol=mol)
 
     @staticmethod
     def rs(hamil=None, n=1):
