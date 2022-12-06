@@ -19,7 +19,7 @@ To get all available molecules use::
     >>> Molecule.all_names
     {'B', 'B2', 'Be', ..., bicyclobutane'}
 
-Molecule can be also crated from scratch by specifying the nuclear coordinates and charges, as well as the total charge and spin multiplicity::
+A :class:`~deepqmc.Molecule` can be also created from scratch by specifying the nuclear coordinates and charges, as well as the total charge and spin multiplicity::
 
     mol = Molecule(  # LiH
         coords=[[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]],
@@ -32,13 +32,13 @@ Molecule can be also crated from scratch by specifying the nuclear coordinates a
 Create the molecular Hamiltonian
 --------------------------------
 
-From the molecule the :class:`~deepqmc.MolecularHamiltonian` is constructed::
+From the molecule the :class:`~deepqmc.hamil.MolecularHamiltonian` is constructed::
         
     from deepqmc import MolecularHamiltonian
 
-    H = MolecularHamiltonian(mol)
+    H = MolecularHamiltonian(mol=mol)
 
-The Hamiltonian provides the local energy function for the evaluation of the energy expectation value, as well as an educated guess for initial electron configurations to start of the sampling.
+The Hamiltonian provides the local energy function for the evaluation of the energy expectation value, as well as an educated guess for initial electron configurations to start the sampling.
 
 Create a wave function ansatz
 -----------------------------
@@ -53,29 +53,29 @@ The PauliNet wavefunction ansatz is available in the :mod:`deepqmc.wf` subpackag
     def net(rs,return_mos=False):
         return PauliNet(H)(rs,return_mos=return_mos)
 
-The hyperparameters and their physical meaning are described in the :ref:`api` reference.
+The hyperparameters and their physical meaning are described in the :ref:`api <api>` reference.
 
-Instanciate a sampler
+Instantiate a sampler
 ---------------------
 
-The variational Monte Carlo method requires sampling the propability density associated with the square of the wave function. A :class:`~deepqmc.sampling.Sampler` can be instanciated from a :class:`~deepqmc.wf.WaveFunction`::
+The variational Monte Carlo method requires sampling the propability density associated with the square of the wave function. A :class:`~deepqmc.sampling.Sampler` can be instantiated from a :class:`~deepqmc.wf.WaveFunction`::
 
     from deepqmc.sampling import chain, MetropolisSampler, DecorrSampler
 
-    sampler = chain(DecorrSampler(20),MetropolisSampler(H))
+    sampler = chain(DecorrSampler(length=20),MetropolisSampler(H))
 
 Different samplers can be chained together via the :func:`~deepqmc.sampling.chain` command.
 
 Optimize the ansatz
 -------------------
 
-The high-level :func:`~deepqmc.train` function is used to train the deep neural networks in the ansatz. The train function takes a :class:`~deepqmc.MolecularHamiltonian`, a :class:`~deepqmc.wf.WaveFunction` and a :class:`~deepqmc.sampling.Sampler`. Further necessairy arguments are an optimizer (``opt``), the number of training steps (``steps``), the number of walkers for the sampling and batch size training (``sample_size``) and a seed (``seed``)::
+The high-level :func:`~deepqmc.train` function is used to train the deep neural networks in the ansatz. The train function takes a :class:`~deepqmc.hamil.MolecularHamiltonian`, a :class:`~deepqmc.wf.WaveFunction` and a :class:`~deepqmc.sampling.Sampler`. Further necessary arguments are an optimizer (``opt``), the number of training steps (``steps``), the number of samples used in a training batch (``sample_size``), and a seed (``seed``)::
 
     >>> from deepqmc import train
     >>> train(H, net, 'kfac', sampler, steps=10000, sample_size=2000, seed=42)
     training:   0%|▋       | 102/10000 [01:00<23:01, 7.16it/s, E=-8.042(10)]
 
-If the argument ``pretrain_steps`` is set, the ansatz is pretrained with respect to a Hartree-Fock or CASSCF baseline obtained with :mod:`pyscf`. For more details as well as further training hyperparameters consult the :ref:`api` reference.
+If the argument ``pretrain_steps`` is set, the ansatz is pretrained with respect to a Hartree-Fock or CASSCF baseline obtained with :mod:`pyscf`. For more details as well as further training hyperparameters consult the :ref:`api <api>` reference.
 
 Logging
 -------
@@ -102,11 +102,11 @@ Furthermore the training run is logged to the ``workdir``. The ``train`` directo
 Get the energy
 --------------
 
-The rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the training run. A rigorous estimation with a statistical sampling error can be obtained when sampling the energy expectation value of the trained wavefunction without further optimization, for which the final training checkpoint is passed to the :func:`~deepqmc.train` function, but the optimizer is specifying to be None::
+The rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the training run. A rigorous estimation with a statistical sampling error can be obtained when sampling the energy expectation value of the trained wavefunction without further optimization, for which the final training checkpoint is passed to the :func:`~deepqmc.train` function, but the optimizer is specified to be ``None``:
 
     >>> import jax.numpy as jnp
     >>> train_state = jnp.load('workdir/train/chkpt-10000.pt',allow_pickle=True)
     >>> train(H, net, None, sampler, train_state=train_state, steps=500, sample_size=2000, seed=42)
     evaluating: 100%|█████████| 500/500 [01:20<00:00,  6.20it/s, E=-8.07000(19)]
 
-The evaluation generates the same type of logs as the training, but writes to ``workdir\evaluate`` instead. The final energy can be read from the progress bar, the Tensorboard event file or computed from the local enregies in the hdf5 file respectively.
+The evaluation generates the same type of logs as the training, but writes to ``workdir/evaluate`` instead. The final energy can be read from the progress bar, the Tensorboard event file or computed from the local enregies in the hdf5 file respectively.

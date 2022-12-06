@@ -192,24 +192,24 @@ class ResampledSampler(Sampler):
 
     This sampler cannot be used as the last element of a sampler chain.
     The resampling is performed by accumulating weights on each MCMC walker
-    in each step. Based on a fixed resampling frequency :data:`frequency` and/or a
+    in each step. Based on a fixed resampling period :data:`period` and/or a
     threshold :data:`treshold` on the normalized effective sample size the walker
     positions are sampled according to the multinomial distribution defined by
-    these weights, and the weights are reset to one. Either :data:`frequency` or
+    these weights, and the weights are reset to one. Either :data:`period` or
     :data:`treshold` have to be specified.
 
 
     Args:
-        frequency (int): optional, if specified the walkers are resampled every
-            :data:`frequency` MCMC steps.
+        period (int): optional, if specified the walkers are resampled every
+            :data:`period` MCMC steps.
         treshold (float): optional, if specified the walkers are resampled if
             the effective sample size normalized with the batch size is below
             :data:`treshold`.
     """
 
-    def __init__(self, *, frequency=None, treshold=None):
-        assert frequency is not None or treshold is not None
-        self.frequency = frequency
+    def __init__(self, *, period=None, treshold=None):
+        assert period is not None or treshold is not None
+        self.period = period
         self.treshold = treshold
 
     def init(self, *args):
@@ -244,7 +244,7 @@ class ResampledSampler(Sampler):
         ess = jnp.sum(weight) ** 2 / jnp.sum(weight**2)
         stats['sampling/effective sample size'] = ess
         state = jax.lax.cond(
-            (self.frequency is not None and state['step'] >= self.frequency)
+            (self.period is not None and state['step'] >= self.period)
             | (self.treshold is not None and ess / len(weight) < self.treshold),
             self.resample_walkers,
             lambda rng, state: state,
@@ -259,9 +259,9 @@ def chain(*samplers):
     Combine multiple sampler types, to create advanced sampling schemes.
 
     For example :data:`chain(DecorrSampler(10),MetropolisSampler(hamil, tau=1.))`
-    will create a :class:`MetropoliSampler`, where the samples are taken from
-    every 10th MCMC step. The last element of the sampler chain has to be either
-    a :class:`MetropolisSampler` or a :class:`LangevinSampler`.
+    will create a :class:`MetropolisSampler`, where the samples
+    are taken from every 10th MCMC step. The last element of the sampler chain has
+    to be either a :class:`MetropolisSampler` or a :class:`LangevinSampler`.
 
     Args:
         samplers (~jax.sampling.Sampler): one or more sampler instances to combine.
