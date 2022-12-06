@@ -13,13 +13,8 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: 3.x
-      - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python -
-          $HOME/.local/share/pypoetry/venv/bin/pip install -U poetry-dynamic-versioning
-          echo $HOME/.local/bin >>$GITHUB_PATH
       - name: Install dependencies
-        run: pip install "sphinx<3" "Jinja2<3.1" sphinxcontrib-katex toml "docutils<0.18"
+        run: pip install sphinx Jinja2 sphinxcontrib-katex toml docutils pydata-sphinx-theme
       - uses: actions/checkout@v2
       - name: Build
         run: sphinx-build -W -E doc doc/build

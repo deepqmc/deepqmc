@@ -72,6 +72,8 @@ autodoc_mock_imports = [
     'haiku',
     'optax',
     'e3nn_jax',
+    'yaml',
+    'tensorboard',
 ]
 toc_object_entries = False
 todo_include_todos = True

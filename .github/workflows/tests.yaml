@@ -33,7 +33,9 @@ jobs:
           venv/bin/pip install -U pip wheel
           echo $PWD/venv/bin >>$GITHUB_PATH
       - name: Install
-        run: pip install -e .[test] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+        run: pip install -e .[dev] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+      - name: Install Coverage
+        run: pip install coverage
       - name: Test
         run: coverage run -m pytest
       - name: Upload to Codecov
