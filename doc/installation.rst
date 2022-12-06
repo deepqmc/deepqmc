@@ -1,5 +1,7 @@
 .. _installation:
 
+:tocdepth: 2
+
 Installation
 ============
 
@@ -11,26 +13,32 @@ DeepQMC is compatible with Python 3.7 and higher.
 Dependencies
 ------------
 
+
 These packages will be installed automatically when installing DeepQMC.
 
-- `NumPy <https://numpy.org>`_ is an essential library for numerical computation in Python.
-- `PyTorch <https://pytorch.org>`_ is one of the most popular Python frameworks for deep learning.
-- `TOML <https://github.com/uiri/toml>`_ implements the `TOML <https://en.wikipedia.org/wiki/TOML>`__ configuration file format in Python.
+- `JAX <https://github.com/google/jax>`_ is a popular Python framework that combines NumPy, Autograd and XLA to give highly efficient precompiled code with GPU and TPU support.
+- `Haiku <https://github.com/deepmind/dm-haiku>`_ is a neural network libary for JAX that enables object oriented programming of models in the purely functional jax environment.
 - `uncertainties <http://uncertainties-python-package.readthedocs.io>`_ helps with propagation of uncertainties in calculations.
+- `TQDM <https://github.com/tqdm/tqdm>`_ provides progress bars.
+- `kfac <https://github.com/deepmind/kfac-jax>`_ is a jax implementation of the KFAC second order optimizer
+- `optax <https://github.com/deepmind/optax>`_ provides optimizers and loss functions for jax.
+- `e3nn <https://github.com/e3nn/e3nn-jax>`_ provides functionality for E(3) equivariant neural networks.
+- `h5py <https://www.h5py.org>`_ handles IO for `HDF5 <http://hdfgroup.org>`_ files.
+- `Tensorboard <https://www.tensorflow.org/tensorboard>`_ is a practical tool for monitoring training of neural networks.
+- `hydra <https://hydra.cc/>`_ helps with constructing command-line interfaces.
+- `PySCF <http://pyscf.org>`_ implements quantum chemistry methods in Python. This is used to obtain the baseline for pretraining.
 
 Optional dependencies
 ~~~~~~~~~~~~~~~~~~~~~
 
-The following dependencies are required only by non-essential parts of DeepQMC and their installation must be requested explicitly, as documented below.
+The following dependencies are used for developement and their installation must be requested explicitly, as documented below.
 
-- `SciPy <https://www.scipy.org>`_ provides essential numerical algorithms.
-- `PySCF <http://pyscf.org>`_ implements quantum chemistry methods in Python. This is used to obtain the HF orbitals.
-- `Tensorboard <https://www.tensorflow.org/tensorboard>`_ is a practical tool for monitoring training of neural networks.
-- `Pillow <https://pillow.readthedocs.io/>`_ is used by Tensorboard to store pictures in the event files.
-- `TQDM <https://github.com/tqdm/tqdm>`_ provides progress bars.
-- `h5py <https://www.h5py.org>`_ handles IO for `HDF5 <http://hdfgroup.org>`_ files.
-- `Click <https://click.palletsprojects.com>`_ helps with constructing command-line interfaces.
-- `TOML Kit <https://github.com/sdispater/tomlkit>`_ supports advanced TOML file manipulations.
+- `black <https://github.com/psf/black>`_ formats code according to PEP 8 standard.
+- `flake8 <https://github.com/PyCQA/flake8>`_ implement style guidelines.
+- `isort <https://github.com/PyCQA/isort>`_ helps to keep consitent order of imports.
+- `pytest <https://docs.pytest.org/en/7.2.x>`_ for testing the code.
+- `pydocstyle <https://github.com/PyCQA/pydocstyle>`_  check compliance with Python docstring conventions.
+- `Coverage.py <https://github.com/nedbat/coveragepy>`_  measures code coverage for testig.
 
 Virtual environments
 --------------------
@@ -53,17 +61,13 @@ Within the activated virtual environment, DeepQMC can be installed with::
 
 To install all optional dependencies, use::
 
-    $ pip install -U deepqmc[wf,train,cli]
+    $ pip install -U deepqmc[dev]
 
 Developing
 ----------
 
-To install DeepQMC from a local Git repository, use `Poetry <https://python-poetry.org>`_::
+To install DeepQMC from a local Git repository run::
 
     $ git clone https://github.com/deepqmc/deepqmc
     $ cd deepqmc
-    $ poetry install -E all
-
-In addition to all the optional dependencies above, this also installs `pytest <https://docs.pytest.org/>`_ and `Coverage.py <https://coverage.readthedocs.io>`_.
-
-For a proper versioning support while developing install the `Dynamic versioning plugin <https://github.com/mtkennerly/poetry-dynamic-versioning>`_ for Poetry.
+    $ pip install -e .[dev]
