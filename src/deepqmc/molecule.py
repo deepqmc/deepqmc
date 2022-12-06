@@ -54,7 +54,7 @@ class Molecule:
     n_down: int
     n_shells: tuple
 
-    def __init__(self, coords, charges, charge, spin, unit='bohr', data=None):
+    def __init__(self, *, coords, charges, charge, spin, unit='bohr', data=None):
         def set_attr(**kwargs):
             for k, v in kwargs.items():
                 object.__setattr__(self, k, v)

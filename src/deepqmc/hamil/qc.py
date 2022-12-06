@@ -26,7 +26,7 @@ class MolecularHamiltonian(Hamiltonian):
         mol (~jax.Molecule): the molecule to consider
     """
 
-    def __init__(self, mol):
+    def __init__(self, *, mol):
         self.mol = mol
 
     def init_sample(self, rng, n, elec_std=1.0):
