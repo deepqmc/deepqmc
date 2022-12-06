@@ -58,7 +58,7 @@ repository = 'https://github.com/deepqmc/deepqmc'
 documentation = 'https://deepqmc.github.io'
 
 [project.scripts]
-cli = 'bin.deepqmc:cli'
+deepqmc = 'deepqmc.app:cli'
 
 [tool.black]
 target-version = ['py37']
