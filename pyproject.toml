@@ -1,4 +1,66 @@
+[build-system]
+requires = ['setuptools>=61', 'wheel']
+build-backend = 'setuptools.build_meta'
+
+[project]
+name = 'deepqmc'
+version = '1.0.0'
+description = 'Deep-learning quantum Monte Carlo for electrons in real space'
+authors = [
+    {name = "Jan Hermann", email = "jan.hermann@fu-berlin.de"},
+    {name = "Zeno Schätzle", email = "zenoone@physik.fu-berlin.de"},
+    {name = "Péter Bernát Szabó", email = "peter.bernat.szabo@fu-berlin.de"},
+]
+readme = 'README.md'
+license = {text = 'MIT'}
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'Environment :: Console',
+    'Environment :: GPU :: NVIDIA CUDA',
+    'Intended Audience :: Science/Research',
+    'Operating System :: MacOS :: MacOS X',
+    'Operating System :: POSIX :: Linux',
+    'Topic :: Scientific/Engineering :: Artificial Intelligence',
+    'Topic :: Scientific/Engineering :: Chemistry',
+    'Topic :: Scientific/Engineering :: Physics',
+]
+dependencies = [
+    'dm-haiku',
+    'e3nn-jax',
+    'h5py',
+    'hydra-core',
+    'jax[cuda]',
+    'jaxtyping',
+    'kfac-jax',
+    'pyscf',
+    'tensorboard',
+    'yaml',
+    'tqdm',
+    'uncertainties',
+]
+
+[project.optional-dependencies]
+dev = [
+    'pytest',
+    'pytest-regressions',
+    'black',
+    'flake8<6.0.0',  # flake8 6.0.0 is currently incompatible with flake8-quotes
+    'flake8-bugbear',
+    'flake8-comprehensions',
+    'flake8-quotes',
+    'isort',
+    'pep8-naming',
+    'pydocstyle',
+]
+
+[project.urls]
+repository = 'https://github.com/deepqmc/deepqmc'
+documentation = 'https://deepqmc.github.io'
+
+[project.scripts]
+cli = 'bin.deepqmc:cli'
+
 [tool.black]
-target-version = ["py37"]
+target-version = ['py37']
 skip-string-normalization = true
 preview = true
