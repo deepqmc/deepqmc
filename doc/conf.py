@@ -7,16 +7,11 @@ import toml
 
 sys.path.insert(0, os.path.abspath('../src'))
 with open('../pyproject.toml') as f:
-    metadata = toml.load(f)['tool']['poetry']
-
+    metadata = toml.load(f)['project']
 project = 'DeepQMC'
-author = ' '.join(metadata['authors'][0].split()[:-1])
-release = version = (
-    subprocess.run(['poetry', 'version'], capture_output=True, cwd='..')
-    .stdout.decode()
-    .split()[1]
-)
-description = metadata['description']
+author = ''# ' '.join(metadata['authors'][0].split()[:-1])
+release = version = '1.0.0'
+description = ''#metadata['description']
 year_range = (2019, datetime.date.today().year)
 year_str = (
     str(year_range[0])
@@ -24,8 +19,6 @@ year_str = (
     else f'{year_range[0]}-{year_range[1]}'
 )
 copyright = f'{year_str}, Frank Noé and collaborators'
-
-master_doc = 'index'
 extensions = [
     'sphinx.ext.githubpages',
     'sphinx.ext.autodoc',
@@ -35,28 +28,31 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon',
     'sphinxcontrib.katex',
+    'sphinx.ext.autosectionlabel',
 ]
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
-    'torch': ('https://pytorch.org/docs/stable', None),
+    'jax': ('https://jax.readthedocs.io/en/latest', None),
+    'haiku': ('https://dm-haiku.readthedocs.io/en/latest', None),
     'pyscf': ('http://pyscf.org', None),
 }
 exclude_patterns = ['build', '.DS_Store']
-
-html_theme = 'alabaster'
+autosectionlabel_prefix_document = True
+html_theme = "pydata_sphinx_theme"
 html_theme_options = {
-    'description': description,
-    'github_button': True,
-    'github_user': 'deepqmc',
-    'github_repo': 'deepqmc',
-    'badge_branch': 'master',
-    'codecov_button': True,
-    'fixed_sidebar': True,
-    'page_width': '60em',
+    "show_toc_level": 1,
+    "secondary_sidebar_items": [],
+    "footer_items": ["copyright", "sphinx-version", "theme-version", "sourcelink"],
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/deepqmc/deepqmc",  # required
+            "icon": "fa-brands fa-github",
+            "type": "fontawesome",
+        }
+    ],
 }
-html_sidebars = {
-    '**': ['about.html', 'navigation.html', 'relations.html', 'searchbox.html']
-}
+html_sidebars = {'**': ["page-toc",]}
 html_static_path = ['_static']
 
 autodoc_default_options = {'members': True}
@@ -66,14 +62,16 @@ autodoc_mock_imports = [
     'numpy',
     'pyscf',
     'scipy',
-    'torch',
     'tqdm',
     'uncertainties',
     'jax',
     'kfac_jax',
     'haiku',
     'optax',
+    'e3nn_jax',
 ]
+toc_object_entries = False
 todo_include_todos = True
 napoleon_numpy_docstring = False
 napoleon_use_ivar = True
+

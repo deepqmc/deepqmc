@@ -2,17 +2,18 @@
 Welcome to DeepQMC
 ==================
 
-Welcome to the DeepQMC documentation. Start with :ref:`installation` and then go through the :ref:`tutorial`, which walks you through the basic use of the package. Detailed technical reference can be found in the :ref:`api` section. Finally most of the functionality is accessible via the :ref:`cli`.
+Welcome to the DeepQMC documentation. Start with :ref:`installation <installation>` and then go through the :ref:`tutorial <tutorial>`, which walks you through the basic use of the package. Detailed technical reference can be found in the :ref:`api <api>` section. Finally most of the functionality is accessible via the :ref:`cli <cli>`.
 
-DeepQMC depends heavily on `PyTorch <https://pytorch.org>`_, the documentation for which can be found here:
+DeepQMC is based on `JAX <https://github.com/google/jax>`_ and `Haiku <https://github.com/deepmind/dm-haiku>`_, the documentation for which can be found here:
 
-- `PyTorch documentation <https://pytorch.org/docs/stable/index.html>`_
+- `JAX documentation <https://jax.readthedocs.io/en/latest>`_
+- `Haiku documentation <https://dm-haiku.readthedocs.io/en/latest>`_
 
 User guide
 ==========
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
 
     installation
     tutorial
@@ -22,9 +23,9 @@ API reference
 =============
 
 .. toctree::
+    :maxdepth: 2
 
     api
-    jax-api
 
 .. toctree::
     :hidden:
