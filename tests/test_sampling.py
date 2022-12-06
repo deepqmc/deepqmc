@@ -32,8 +32,12 @@ def wf(helpers, request):
     [
         (partial(MetropolisSampler, tau=0.1),),
         (partial(LangevinSampler, tau=0.1),),
-        (DecorrSampler(20), partial(MetropolisSampler, tau=0.1, max_age=20)),
-        (ResampledSampler(3), DecorrSampler(20), partial(MetropolisSampler, tau=0.1)),
+        (DecorrSampler(length=20), partial(MetropolisSampler, tau=0.1, max_age=20)),
+        (
+            ResampledSampler(period=3),
+            DecorrSampler(length=20),
+            partial(MetropolisSampler, tau=0.1),
+        ),
     ],
     ids=['Metropolis', 'Langevin', 'DecorrMetropolis', 'ResampledDecorrMetropolis'],
 )
