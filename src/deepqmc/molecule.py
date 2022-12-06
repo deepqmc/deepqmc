@@ -122,4 +122,4 @@ class Molecule:
         else:
             raise ValueError(f'Unknown molecule name: {name}')
         coords = system.pop('coords')
-        return cls(coords, **system)
+        return cls(coords=coords, **system)

@@ -265,7 +265,7 @@ def train(  # noqa: C901
                         h5file.flush()
                         update_tensorboard_writer(writer, step, stats)
                 return train_state
-            except NanError():
+            except NanError:
                 continue
         step, train_state = chkpts.last
         log.warn(
