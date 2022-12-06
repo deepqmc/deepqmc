@@ -9,6 +9,13 @@ GraphEdges = namedtuple('GraphEdges', 'senders receivers features')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
 
+__all__ = [
+    'GraphEdgeBuilder',
+    'MolecularGraphEdgeBuilder',
+    'GraphUpdate',
+    'difference_callback',
+]
+
 
 def all_graph_edges(pos_sender, pos_receiver):
     r"""Create all graph edges.

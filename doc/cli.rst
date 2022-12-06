@@ -5,7 +5,7 @@ Command-line interface
 
 This section describes the `hydra <https://hydra.cc/>`_ based command-line interface (CLI) to DeepQMC. The tutorial exemplifies a basic training and evaluation through the command line. For more advanced functionality such as multiruns or interaction with slurm see the `hydra docs <https://hydra.cc/docs/intro/>`_.
 
-The CLI provides a simple access to the functionalities of the deepqmc package. The main tasks comprise ``train``, ``restart`` and ``evaluate``, which are thin wrappers around the :ref:`train<api:Training and evaluation>` function.
+The CLI provides simple access to the functionalities of the :class:`deepqmc` package. The main tasks comprise ``train``, ``restart`` and ``evaluate``, which are thin wrappers around the :ref:`train<api:Training and evaluation>` function.
 
 	Available tasks:
 
@@ -14,13 +14,13 @@ The CLI provides a simple access to the functionalities of the deepqmc package. 
 	- ``restart``:    Restarts/continues the training from a stored training checkpoint.
 	- ``defaults``:   Collects the default hyperparameters for the main DeepQMC functions.
 
-The train function creates a directory which contains the logs as well as the hyperparameters for the training (``.hydra``). For ``restart`` and ``evalaute`` the restdir of the former training run has to be provided. Specifying arguments when executing the command will overwrite the configuration stored in the restdir. This enables changing certain parameters, such as the number of training / evaluation steps, but can result in errors if the requested hyperparameters conflict with the recovered train state. 
+The train function creates a directory which contains the logs as well as the hyperparameters for the training (``.hydra``). For ``restart`` and ``evaluate`` the restdir of the former training run has to be provided. Specifying arguments when executing the command will overwrite the configuration stored in the restdir. This enables changing certain parameters, such as the number of training / evaluation steps, but can result in errors if the requested hyperparameters conflict with the recovered train state. 
 
 Example
 -------
 
 
-A training can be run by via::
+A training can be run via::
 
     $ deepqmc hydra.run.dir=workdir hamil.mol.name=LiH
 
@@ -46,7 +46,7 @@ This again generates a Tensorboard event file and a ``sample.h5`` file holding t
 Hyperparameters
 ---------------
 
-A list of the most relevant hyperparameters and their default values can be obtained the ``defaults`` command. The defaults are automatically colleceted from the main deepqmc components and logged in YAML format. For convenience, they are reproduced here:
+A list of the most relevant hyperparameters and their default values can be obtained with the ``task=defaults`` argument. The defaults are automatically colleceted from the main deepqmc components and logged in YAML format. For convenience, they are reproduced here:
 
 .. literalinclude:: defaults.yaml
    :language: yaml

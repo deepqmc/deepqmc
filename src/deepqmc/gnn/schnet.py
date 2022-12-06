@@ -12,7 +12,7 @@ class SchNetLayer(MessagePassingLayer):
     r"""
     The message passing layer of :class:`SchNet`.
 
-    Derived from :class:`~deepqmc.jax.gnn.gnn.MessagePassingLayer`.
+    Derived from :class:`~deepqmc.gnn.gnn.MessagePassingLayer`.
 
     Args:
         ilayer (int): the index of the current layer in the list of all layers
@@ -215,10 +215,9 @@ class SchNetLayer(MessagePassingLayer):
 
 class SchNet(GraphNeuralNetwork):
     r"""
-    The SchNet GNN architecture [SchuettJCP18]_ adapted for graphs of nuclei
-    and electrons.
+    The SchNet architecture [SchuettJCP18]_ adapted for graphs of nuclei and electrons.
 
-    Derived from :class:`~deepqmc.jax.gnn.gnn.GraphNeuralNetwork`.
+    Derived from :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork`.
 
     Args:
         mol (~jax.Molecule): the molecule on which the graph is defined.
