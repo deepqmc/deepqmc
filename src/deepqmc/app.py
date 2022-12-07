@@ -6,7 +6,6 @@ import warnings
 from pathlib import Path
 
 import hydra
-import jax
 import yaml
 from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import OmegaConf
@@ -104,6 +103,8 @@ def maybe_log_code_version():
 
 
 def main(cfg):
+    import jax
+
     log.info('Entering application')
     jax.config.update('jax_platform_name', cfg.device)
     log.info(f'Running on {cfg.device.upper()}')
