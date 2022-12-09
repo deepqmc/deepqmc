@@ -31,7 +31,7 @@ def instantiate_ansatz(hamil, ansatz):
     )
 
 
-def train_from_factories(hamil, ansatz, sampler, device, **kwargs):
+def train_from_factories(hamil, ansatz, sampler, **kwargs):
     from .sampling import chain
     from .train import train
 
@@ -40,7 +40,7 @@ def train_from_factories(hamil, ansatz, sampler, device, **kwargs):
     return train(hamil, ansatz, sampler=sampler, **kwargs)
 
 
-def train_from_checkpoint(workdir, restdir, evaluate, device, chkpt='LAST', **kwargs):
+def train_from_checkpoint(workdir, restdir, evaluate, chkpt='LAST', **kwargs):
     restdir = Path(to_absolute_path(get_original_cwd())) / restdir
     if not restdir.is_dir():
         raise ValueError(f'restdir "{restdir}" is not a directory')
@@ -53,7 +53,7 @@ def train_from_checkpoint(workdir, restdir, evaluate, device, chkpt='LAST', **kw
     call(cfg.task, _convert_='all', train_state=train_state, **kwargs)
 
 
-def task_from_workdir(workdir, chkpt, device=None):
+def task_from_workdir(workdir, chkpt):
     from .train import CheckpointStore
 
     workdir = Path(workdir)
@@ -111,7 +111,7 @@ def main(cfg):
     cfg.task.workdir = str(Path.cwd())
     log.info(f'Will work in {cfg.task.workdir}')
     maybe_log_code_version()
-    call(cfg.task, device=cfg.device, _convert_='all')
+    call(cfg.task, _convert_='all')
 
 
 @hydra.main(config_path='conf', config_name='config', version_base=None)
@@ -189,7 +189,7 @@ def collect_kwarg_defaults(func):
     return kwargs
 
 
-def collect_deepqmc_kwarg_defaults(workdir, device, return_yaml=False):
+def collect_deepqmc_kwarg_defaults(workdir, return_yaml=False):
     import deepqmc
     import deepqmc.wf
 
