@@ -210,14 +210,19 @@ def train(  # noqa: C901
             pbar.close()
             train_state = smpl_state, params, None
             if workdir and mode == 'train':
-                chkpts.dump(train_state)
+                chkpts.dump(init_step, train_state)
             log.info(f'Start {mode}')
-        pbar = trange(
-            init_step, steps, initial=init_step, total=steps, desc=mode, disable=None
-        )
         best_ene = None
-        for _ in range(max_restarts):
+        for attempt in range(max_restarts):
             try:
+                pbar = trange(
+                    init_step,
+                    steps,
+                    initial=init_step,
+                    total=steps,
+                    desc=mode,
+                    disable=None,
+                )
                 for step, train_state, E_loc, stats in fit_wf(  # noqa: B007
                     rng,
                     hamil,
@@ -257,7 +262,8 @@ def train(  # noqa: C901
                             log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
                     if workdir:
                         if mode == 'train':
-                            chkpts.update(stats['E_loc/std'], train_state)
+                            # the convention is that chkpt-i contains the step i-1 -> i
+                            chkpts.update(step + 1, train_state, stats['E_loc/std'])
                         table.row['E_loc'] = E_loc
                         table.row['E_ewm'] = ewm_state.mean
                         table.row['sign_psi'] = train_state.sampler['psi'].sign
@@ -266,8 +272,9 @@ def train(  # noqa: C901
                         update_tensorboard_writer(writer, step, stats)
                 return train_state
             except NanError:
-                continue
-        step, train_state = chkpts.last
+                if attempt < max_restarts:
+                    init_step, train_state = chkpts.last
+                    pbar.close()
         log.warn(
             'The training has crashed before all training steps were completed'
             f' {step}/{steps}.'
@@ -296,36 +303,26 @@ class CheckpointStore:
         self.min_interval = min_interval
         self.threshold = threshold
         self.chkpts = []
-        self.step = 0
         self.buffer = None
 
-    def update(self, loss, state):
-        self.step += 1
-        self.buffer = deepcopy(state)
-        if (
-            self.step < self.min_interval
-            or self.chkpts
-            and (
-                self.step < self.min_interval + self.chkpts[-1].step
-                or self.threshold
-                and loss > self.threshold * self.chkpts[-1].loss
-            )
+    def update(self, step, state, loss=jnp.inf):
+        self.buffer = (step, loss, deepcopy(state))
+        if step > self.min_interval + (self.chkpts[-1].step if self.chkpts else 0) and (
+            loss <= self.threshold * (self.chkpts[-1].loss if self.chkpts else jnp.inf)
         ):
-            return
-        path = self.dump(state)
-        self.chkpts.append(Checkpoint(self.step, loss, path))
+            self.dump(step, state, loss)
+
+    def dump(self, step, state, loss=jnp.inf):
+        path = self.workdir / self.PATTERN.format(step)
+        with path.open('wb') as f:
+            pickle.dump((step, state), f)
+        self.chkpts.append(Checkpoint(step, loss, path))
         while len(self.chkpts) > self.size:
             self.chkpts.pop(0).path.unlink()
 
-    def dump(self, state):
-        path = self.workdir / self.PATTERN.format(self.step)
-        with path.open('wb') as f:
-            pickle.dump((self.step, state), f)
-        return path
-
     def close(self):
         if self.buffer is not None:
-            self.dump(self.buffer)
+            self.dump(*self.buffer)
 
     @property
     def last(self):
