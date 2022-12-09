@@ -12,7 +12,7 @@ This implementation uses the `JAX library <https://github.com/google/jax>`_, the
 - `JAX documentation <https://jax.readthedocs.io/en/latest>`_
 
 .. automodule:: deepqmc
-   :exclude-members: train, MolecularHamiltonian
+   :exclude-members: train, MolecularHamiltonian, DecorrSampler, MetropolisSampler, ResampledSampler
 
 .. automodule:: deepqmc.hamil
 
