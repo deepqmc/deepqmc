@@ -150,7 +150,7 @@ def train(  # noqa: C901
                 }[mode]
             )
         else:
-            params, smpl_state = init_fit(
+            params, _ = init_fit(
                 rng, hamil, ansatz, sampler, sample_size, state_callback
             )
             num_params = jax.tree_util.tree_reduce(
@@ -187,6 +187,9 @@ def train(  # noqa: C901
                     }
                     if workdir:
                         update_tensorboard_writer(writer, step, pretrain_stats)
+            smpl_state = sampler.init(
+                rng, partial(ansatz.apply, params), {}, sample_size, state_callback
+            )
             log.info('Equilibrating sampler...')
             pbar = tqdm(
                 count() if max_eq_steps is None else range(max_eq_steps),
