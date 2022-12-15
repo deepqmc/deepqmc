@@ -17,13 +17,13 @@ from tqdm.auto import tqdm, trange
 from uncertainties import ufloat
 
 from .ewm import init_ewm
-from .fit import fit_wf, init_fit
+from .fit import fit_wf
 from .log import H5LogTable, update_tensorboard_writer
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
 from .sampling import equilibrate
 from .utils import InverseSchedule
-from .wf.base import state_callback
+from .wf.base import init_wf, state_callback
 
 __all__ = ['train']
 
@@ -150,9 +150,7 @@ def train(  # noqa: C901
                 }[mode]
             )
         else:
-            params, _ = init_fit(
-                rng, hamil, ansatz, sampler, sample_size, state_callback
-            )
+            params, _ = init_wf(rng, hamil, ansatz, sample_size, state_callback)
             num_params = jax.tree_util.tree_reduce(
                 operator.add, jax.tree_map(lambda x: x.size, params)
             )
