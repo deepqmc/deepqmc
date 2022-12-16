@@ -37,7 +37,7 @@ def median_log_squeeze(x, width, quantile):
 def init_fit(rng, hamil, ansatz, sampler, sample_size, state_callback):
     params, wf_state = init_wf(rng, hamil, ansatz, sample_size, state_callback)
     smpl_state = sampler.init(
-        rng, partial(ansatz.apply, params), wf_state, sample_size, state_callback
+        rng, partial(ansatz.apply, params), sample_size, state_callback
     )
     return params, smpl_state
 

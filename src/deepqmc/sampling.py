@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 class Sampler:
     r"""Base class for all QMC samplers."""
 
-    def init(self, rng, wf, wf_state, n, state_callback=None):
+    def init(self, rng, wf, n, state_callback=None, wf_state=None):
         raise NotImplementedError
 
     def sample(self, rng, state, wf):
@@ -62,12 +62,12 @@ class MetropolisSampler(Sampler):
         state = {**state, 'psi': psi, 'wf': wf_state}
         return state
 
-    def init(self, rng, wf, wf_state, n, state_callback=None):
+    def init(self, rng, wf, n, state_callback=None, wf_state=None):
         state = {
             'r': self.hamil.init_sample(rng, n),
             'age': jnp.zeros(n, jnp.int32),
             'tau': jnp.array(self.initial_tau),
-            'wf': wf_state,
+            'wf': wf_state or {},
         }
 
         @partial(check_overflow, state_callback)
@@ -212,8 +212,8 @@ class ResampledSampler(Sampler):
         self.period = period
         self.treshold = treshold
 
-    def init(self, *args):
-        state = super().init(*args)
+    def init(self, *args, **kwargs):
+        state = super().init(*args, **kwargs)
         state = {
             **state,
             'step': jnp.array(0),

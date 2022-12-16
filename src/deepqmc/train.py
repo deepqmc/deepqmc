@@ -186,7 +186,7 @@ def train(  # noqa: C901
                     if workdir:
                         update_tensorboard_writer(writer, step, pretrain_stats)
             smpl_state = sampler.init(
-                rng, partial(ansatz.apply, params), {}, sample_size, state_callback
+                rng, partial(ansatz.apply, params), sample_size, state_callback
             )
             log.info('Equilibrating sampler...')
             pbar = tqdm(
