@@ -198,13 +198,15 @@ def fit_wf(  # noqa: C901
     if train_state:
         smpl_state, params, opt_state = train_state
     else:
+        rng, rng_init_fit = jax.random.split(rng)
         params, smpl_state = init_fit(
-            rng, hamil, ansatz, sampler, sample_size, state_callback
+            rng_init_fit, hamil, ansatz, sampler, sample_size, state_callback
         )
         opt_state = None
     if opt is not None and opt_state is None:
+        rng, rng_opt = jax.random.split(rng)
         opt_state = init_opt(
-            rng, smpl_state['wf'], params, (smpl_state['r'], jnp.ones(sample_size))
+            rng_opt, smpl_state['wf'], params, (smpl_state['r'], jnp.ones(sample_size))
         )
     train_state = smpl_state, params, opt_state
 

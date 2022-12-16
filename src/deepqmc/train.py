@@ -150,13 +150,15 @@ def train(  # noqa: C901
                 }[mode]
             )
         else:
-            params = init_wf_params(rng, hamil, ansatz)
+            rng, rng_init, rng_eq = jax.random.split(rng, 3)
+            params = init_wf_params(rng_init, hamil, ansatz)
             num_params = jax.tree_util.tree_reduce(
                 operator.add, jax.tree_map(lambda x: x.size, params)
             )
             log.info(f'Number of model parameters: {num_params}')
             if pretrain_steps and mode == 'train':
                 log.info('Pretraining wrt. HF wave function')
+                rng, rng_pretrain = jax.random.split(rng)
                 pretrain_kwargs = pretrain_kwargs or {}
                 opt_pretrain = pretrain_kwargs.pop('opt', 'adamw')
                 opt_pretrain_kwargs = OPT_KWARGS.get(
@@ -170,7 +172,7 @@ def train(  # noqa: C901
 
                 pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
                 for step, params, loss in pretrain(  # noqa: B007
-                    rng,
+                    rng_pretrain,
                     hamil,
                     ansatz,
                     opt_pretrain,
@@ -195,7 +197,7 @@ def train(  # noqa: C901
                 disable=None,
             )
             for _, smpl_state, smpl_stats in equilibrate(  # noqa: B007
-                rng,
+                rng_eq,
                 partial(ansatz.apply, params),
                 sampler,
                 smpl_state,
