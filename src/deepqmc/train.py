@@ -23,7 +23,7 @@ from .physics import pairwise_self_distance
 from .pretrain import pretrain
 from .sampling import equilibrate
 from .utils import InverseSchedule
-from .wf.base import init_wf, state_callback
+from .wf.base import init_wf_params, state_callback
 
 __all__ = ['train']
 
@@ -150,7 +150,7 @@ def train(  # noqa: C901
                 }[mode]
             )
         else:
-            params, _ = init_wf(rng, hamil, ansatz, sample_size, state_callback)
+            params = init_wf_params(rng, hamil, ansatz)
             num_params = jax.tree_util.tree_reduce(
                 operator.add, jax.tree_map(lambda x: x.size, params)
             )

@@ -6,11 +6,11 @@ from jax.tree_util import tree_map, tree_reduce
 __all__ = ['state_callback']
 
 
-def init_wf(rng, hamil, ansatz, sample_size, state_callback):
-    r = hamil.init_sample(rng, sample_size)
-    params, wf_state = jax.vmap(ansatz.init, (None, 0), (None, 0))(rng, r)
-    wf_state, _ = state_callback(wf_state)
-    return params, wf_state
+def init_wf_params(rng, hamil, ansatz):
+    rng_hamil, rng_params = jax.random.split(rng)
+    r = hamil.init_sample(rng_hamil, 1)[0]
+    params, _ = ansatz.init(rng_params, r)
+    return params
 
 
 class WaveFunction(hk.Module):
