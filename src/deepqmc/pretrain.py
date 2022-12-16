@@ -88,7 +88,7 @@ def pretrain(  # noqa: C901
         rng, init_r, False
     )
     baseline = partial(ansatz_baseline.apply, params_baseline)
-    smpl_state = sampler.init(rng, baseline, sample_size, state_callback)
+    smpl_state = sampler.init(rng, baseline, {}, sample_size)
     opt_state = opt.init(params)
 
     @jax.jit
