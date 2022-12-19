@@ -50,7 +50,10 @@ class TestSampling:
         smpl_state = sampler.init(
             helpers.rng(), self.wf, self.wf_state, self.SAMPLE_SIZE, state_callback
         )
-        ndarrays_regression.check(helpers.flatten_pytree(smpl_state))
+        ndarrays_regression.check(
+            helpers.flatten_pytree(smpl_state),
+            default_tolerance={'rtol': 1e-5, 'atol': 1e-5},
+        )
 
     def test_sampler_sample(self, helpers, samplers, ndarrays_regression):
         sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
@@ -61,5 +64,6 @@ class TestSampling:
         for step in range(4):
             smpl_state, _, stats = sample(helpers.rng(step), smpl_state, self.wf)
         ndarrays_regression.check(
-            helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats})
+            helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
+            default_tolerance={'rtol': 1e-5, 'atol': 1e-5},
         )
