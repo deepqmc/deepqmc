@@ -17,13 +17,13 @@ from tqdm.auto import tqdm, trange
 from uncertainties import ufloat
 
 from .ewm import init_ewm
-from .fit import fit_wf, init_fit
+from .fit import fit_wf
 from .log import H5LogTable, update_tensorboard_writer
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
 from .sampling import equilibrate
 from .utils import InverseSchedule
-from .wf.base import state_callback
+from .wf.base import init_wf_params, state_callback
 
 __all__ = ['train']
 
@@ -150,9 +150,7 @@ def train(  # noqa: C901
                 }[mode]
             )
         else:
-            params, smpl_state = init_fit(
-                rng, hamil, ansatz, sampler, sample_size, state_callback
-            )
+            params = init_wf_params(rng, hamil, ansatz)
             num_params = jax.tree_util.tree_reduce(
                 operator.add, jax.tree_map(lambda x: x.size, params)
             )
@@ -187,6 +185,9 @@ def train(  # noqa: C901
                     }
                     if workdir:
                         update_tensorboard_writer(writer, step, pretrain_stats)
+            smpl_state = sampler.init(
+                rng, partial(ansatz.apply, params), sample_size, state_callback
+            )
             log.info('Equilibrating sampler...')
             pbar = tqdm(
                 count() if max_eq_steps is None else range(max_eq_steps),

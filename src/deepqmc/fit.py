@@ -10,6 +10,7 @@ import optax
 
 from .kfacext import make_graph_patterns
 from .utils import check_overflow, exp_normalize_mean, masked_mean, tree_norm
+from .wf.base import init_wf_params
 
 __all__ = ()
 log = logging.getLogger(__name__)
@@ -34,10 +35,9 @@ def median_log_squeeze(x, width, quantile):
 
 
 def init_fit(rng, hamil, ansatz, sampler, sample_size, state_callback):
-    r = hamil.init_sample(rng, sample_size)
-    params, wf_state = jax.vmap(ansatz.init, (None, 0), (None, 0))(rng, r)
+    params = init_wf_params(rng, hamil, ansatz)
     smpl_state = sampler.init(
-        rng, partial(ansatz.apply, params), wf_state, sample_size, state_callback
+        rng, partial(ansatz.apply, params), sample_size, state_callback
     )
     return params, smpl_state
 
