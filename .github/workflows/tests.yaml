@@ -35,7 +35,7 @@ jobs:
       - name: Install
         run: pip install -e .[dev] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
       - name: Install Coverage
-        run: pip install coverage
+        run: pip install 'coverage<7.0.0'
       - name: Test
         run: coverage run -m pytest
       - name: Upload to Codecov
