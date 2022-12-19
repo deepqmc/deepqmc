@@ -48,7 +48,7 @@ class TestSampling:
     def test_sampler_init(self, helpers, samplers, ndarrays_regression):
         sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.wf_state, self.SAMPLE_SIZE, state_callback
+            helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback, self.wf_state
         )
         ndarrays_regression.check(
             helpers.flatten_pytree(smpl_state),
@@ -58,7 +58,7 @@ class TestSampling:
     def test_sampler_sample(self, helpers, samplers, ndarrays_regression):
         sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.wf_state, self.SAMPLE_SIZE, state_callback
+            helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback, self.wf_state
         )
         sample = check_overflow(state_callback, sampler.sample)
         for step in range(4):
