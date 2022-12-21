@@ -10,6 +10,15 @@ Checkpoint = namedtuple('Checkpoint', 'step loss path')
 
 
 class CheckpointStore:
+    r"""Stores training checkpoints in the working directory.
+
+    Args:
+        workdir (str): path where checkpoints are stored.
+        size (int): maximum number of checkpoints stored at any time.
+        min_interval (str): minimum number of steps between two checkpoints.
+        threshold (float): treshold for decrease in criterion for new checkpoint.
+    """
+
     PATTERN = 'chkpt-{}.pt'
 
     def __init__(self, workdir, *, size=3, min_interval=100, threshold=0.95):
