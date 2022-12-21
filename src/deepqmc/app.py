@@ -62,7 +62,7 @@ def task_from_workdir(workdir, chkpt):
     if chkpt == 'LAST':
         chkpts = list(workdir.glob(CheckpointStore.PATTERN.format('*')))
         if not chkpts:
-            chkpts = (workdir / 'train').glob(CheckpointStore.PATTERN.format('*'))
+            chkpts = (workdir / 'training').glob(CheckpointStore.PATTERN.format('*'))
         chkpt = sorted(chkpts)[-1]
     else:
         chkpt = workdir / chkpt

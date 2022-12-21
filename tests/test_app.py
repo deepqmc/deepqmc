@@ -16,8 +16,8 @@ class TestApp:
         )
         files = os.listdir(tmpdir)
         assert 'deepqmc.log' in files
-        assert 'train' in files
-        train_files = os.listdir(tmpdir / 'train')
+        assert 'training' in files
+        train_files = os.listdir(tmpdir / 'training')
         assert 'result.h5' in train_files
         assert any(f.startswith('events.out.tfevents.') for f in train_files)
-        assert 'Start train' in result.stdout.decode()
+        assert 'Start training' in result.stdout.decode()

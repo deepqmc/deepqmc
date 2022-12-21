@@ -27,9 +27,9 @@ A training can be run via::
 
 This creates several files in the working directory, including:
 
-- ``train/events.out.tfevents.*`` - Tensorboard event file
-- ``train/result.h5`` - HDF5 file with the training trajectory
-- ``train/state-*.pt`` - Checkpoint files with the saved state of the ansatz at particular steps
+- ``training/events.out.tfevents.*`` - Tensorboard event file
+- ``training/result.h5`` - HDF5 file with the training trajectory
+- ``training/state-*.pt`` - Checkpoint files with the saved state of the ansatz at particular steps
 
 The training can be continued or recoverd from a training checkpoint::
 
@@ -39,7 +39,7 @@ The evaluation of the energy of a trained wavefunction ansatz is obtained via::
 
     $ deepqmc task=evaluate task.restdir=workdir
 
-This again generates a Tensorboard event file and a ``sample.h5`` file holding the sampled local energies.
+This again generates a Tensorboard event file ``evalutaion\events.out.tfevents.*`` and an HDF5 file ``evalutaion\result.h5`` file holding the sampled local energies.
 
 .. _hyperparameters:
 

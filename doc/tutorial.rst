@@ -93,10 +93,10 @@ The terminal output shows only how far has the training progressed and the curre
 
 This launches a Tensorboard server which can be accessed via a web browser at the printed URL.
 
-Furthermore the training run is logged to the ``workdir``. The ``train`` directory contains training checkpoints as well as an hdf5 file ``result.h5`` that holds the local energies throughout the training, an exponential moving average of the training energy and the values of the wave function at every iteration::
+Furthermore the training run is logged to the ``workdir``. The ``training`` directory contains training checkpoints as well as an hdf5 file ``result.h5`` that holds the local energies throughout the training, an exponential moving average of the training energy and the values of the wave function at every iteration::
 
     >>> import h5py
-    >>> with h5py.File('workdir/train/result.h5') as f: print(f.keys())
+    >>> with h5py.File('workdir/training/result.h5') as f: print(f.keys())
     <KeysViewHDF5 ['E_ewm', 'E_loc', 'log_psi', 'sign_psi']>
 
 Get the energy
@@ -105,8 +105,8 @@ Get the energy
 The rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the training run. A rigorous estimation with a statistical sampling error can be obtained when sampling the energy expectation value of the trained wavefunction without further optimization, for which the final training checkpoint is passed to the :func:`~deepqmc.train` function, but the optimizer is specified to be ``None``:
 
     >>> import jax.numpy as jnp
-    >>> train_state = jnp.load('workdir/train/chkpt-10000.pt',allow_pickle=True)
+    >>> train_state = jnp.load('workdir/training/chkpt-10000.pt',allow_pickle=True)
     >>> train(H, net, None, sampler, train_state=train_state, steps=500, sample_size=2000, seed=42)
     evaluating: 100%|█████████| 500/500 [01:20<00:00,  6.20it/s, E=-8.07000(19)]
 
-The evaluation generates the same type of logs as the training, but writes to ``workdir/evaluate`` instead. The final energy can be read from the progress bar, the Tensorboard event file or computed from the local enregies in the hdf5 file respectively.
+The evaluation generates the same type of logs as the training, but writes to ``workdir/evaluation`` instead. The final energy can be read from the progress bar, the Tensorboard event file or computed from the local enregies in the hdf5 file respectively.

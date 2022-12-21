@@ -118,7 +118,7 @@ def train(  # noqa: C901
 
     ewm_state, update_ewm = init_ewm()
     rng = jax.random.PRNGKey(seed)
-    mode = 'evaluate' if opt is None else 'train'
+    mode = 'evaluation' if opt is None else 'training'
     if isinstance(opt, str):
         opt_kwargs = OPT_KWARGS.get(opt, {}) | (opt_kwargs or {})
         opt = (
@@ -141,8 +141,8 @@ def train(  # noqa: C901
         if train_state:
             log.info(
                 {
-                    'train': f'Restart training from step {init_step}',
-                    'evaluate': 'Start evaluate',
+                    'training': f'Restart training from step {init_step}',
+                    'evaluation': 'Start evaluation',
                 }[mode]
             )
         else:
@@ -152,8 +152,8 @@ def train(  # noqa: C901
                 operator.add, jax.tree_map(lambda x: x.size, params)
             )
             log.info(f'Number of model parameters: {num_params}')
-            if pretrain_steps and mode == 'train':
-                log.info('Pretraining wrt. HF wave function')
+            if pretrain_steps and mode == 'training':
+                log.info('Pretraining wrt. baseline wave function')
                 rng, rng_pretrain = jax.random.split(rng)
                 pretrain_kwargs = pretrain_kwargs or {}
                 opt_pretrain = pretrain_kwargs.pop('opt', 'adamw')
@@ -208,7 +208,7 @@ def train(  # noqa: C901
                 #     update_tensorboard_writer(writer, step, stats)
             pbar.close()
             train_state = smpl_state, params, None
-            if workdir and mode == 'train':
+            if workdir and mode == 'training':
                 chkpts.dump(init_step, train_state)
             log.info(f'Start {mode}')
         best_ene = None
@@ -260,7 +260,7 @@ def train(  # noqa: C901
                             best_ene = ene
                             log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
                     if workdir:
-                        if mode == 'train':
+                        if mode == 'training':
                             # the convention is that chkpt-i contains the step i-1 -> i
                             chkpts.update(step + 1, train_state, stats['E_loc/std'])
                         table.row['E_loc'] = E_loc
