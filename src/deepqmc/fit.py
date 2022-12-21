@@ -1,4 +1,3 @@
-import logging
 from collections import namedtuple
 from functools import partial
 
@@ -13,7 +12,6 @@ from .utils import check_overflow, exp_normalize_mean, masked_mean, tree_norm
 from .wf.base import init_wf_params
 
 __all__ = ()
-log = logging.getLogger(__name__)
 
 TrainState = namedtuple('TrainState', 'sampler params opt')
 
