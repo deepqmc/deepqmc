@@ -163,7 +163,7 @@ def train(  # noqa: C901
                         raise NotImplementedError
                     opt_pretrain = getattr(optax, opt_pretrain)
                 opt_pretrain = opt_pretrain(**opt_pretrain_kwargs)
-
+                ewm_state, update_ewm = init_ewm(decay_alpha=1)
                 pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
                 for step, params, loss in pretrain(  # noqa: B007
                     rng_pretrain,
@@ -175,12 +175,14 @@ def train(  # noqa: C901
                     sample_size=sample_size,
                     baseline_kwargs=pretrain_kwargs.pop('baseline_kwargs', {}),
                 ):
-                    pbar.set_postfix(MSE=f'{loss.item():0.5e}')
-                    pretrain_stats = {
-                        'pretraining/MSE': loss.item(),
-                    }
+                    ewm_state = update_ewm(loss.item(), ewm_state)
+                    pbar.set_postfix(MSE=f'{ewm_state.mean:0.2e}')
+                    pretrain_stats = {'MSE': loss.item(), 'MSE/ewm': ewm_state.mean}
                     if workdir:
-                        update_tensorboard_writer(writer, step, pretrain_stats)
+                        update_tensorboard_writer(
+                            writer, step, pretrain_stats, prefix='pretraining'
+                        )
+                log.info(f'Pretraining completed with MSE = {ewm_state.mean:0.2e}')
             smpl_state = sampler.init(
                 rng, partial(ansatz.apply, params), sample_size, state_callback
             )
@@ -190,7 +192,7 @@ def train(  # noqa: C901
                 desc='equilibrate',
                 disable=None,
             )
-            for _, smpl_state, smpl_stats in equilibrate(  # noqa: B007
+            for step, smpl_state, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
                 partial(ansatz.apply, params),
                 sampler,
@@ -201,9 +203,10 @@ def train(  # noqa: C901
                 block_size=10,
             ):
                 pbar.set_postfix(tau=f'{smpl_state["tau"].item():5.3f}')
-                # TODO
-                # if workdir:
-                #     update_tensorboard_writer(writer, step, stats)
+                if workdir:
+                    update_tensorboard_writer(
+                        writer, step, smpl_stats, prefix='equilibration'
+                    )
             pbar.close()
             train_state = smpl_state, params, None
             if workdir and mode == 'training':
@@ -244,7 +247,7 @@ def train(  # noqa: C901
                     ene = ufloat(stats['energy/ewm'], stats['energy/ewm_error'])
                     if ene.s:
                         pbar.set_postfix(E=f'{ene:S}')
-                        if best_ene is None or ene.n < best_ene.n - 3 * ene.s:
+                        if best_ene is None or ene.s < 0.5 * best_ene.s:
                             best_ene = ene
                             log.info(f'Progress: {step + 1}/{steps}, energy = {ene:S}')
                     if workdir:
@@ -257,6 +260,7 @@ def train(  # noqa: C901
                         table.row['log_psi'] = train_state.sampler['psi'].log
                         h5file.flush()
                         update_tensorboard_writer(writer, step, stats)
+                log.info(f'The {mode} has been completed!')
                 return train_state
             except NanError:
                 pbar.close()
@@ -264,8 +268,7 @@ def train(  # noqa: C901
                 if attempt < max_restarts:
                     init_step, train_state = chkpts.last
         log.warn(
-            'The training has crashed before all training steps were completed'
-            f' {step}/{steps}.'
+            f'The {mode} has crashed before all steps were completed ({step}/{steps})!'
         )
         raise TrainingCrash(train_state)
     finally:
