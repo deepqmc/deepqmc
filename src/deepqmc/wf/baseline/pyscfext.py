@@ -27,15 +27,18 @@ def pyscf_from_mol(mol, basis, cas=None, **kwargs):
         spin=mol.spin,
         cart=True,
         parse_arg=False,
+        verbose=0,
         **kwargs,
     )
     log.info('Running HF...')
     mf = RHF(mol)
     mf.kernel()
+    log.info(f'HF energy: {mf.e_tot}')
     if cas:
         log.info('Running MCSCF...')
         mc = CASSCF(mf, *cas)
         mc.kernel()
+        log.info(f'MCSCF energy: {mc.e_tot}')
     return mol, (mf, mc if cas else None)
 
 
