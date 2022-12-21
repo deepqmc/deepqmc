@@ -25,7 +25,6 @@ __all__ = ['train']
 
 log = logging.getLogger(__name__)
 
-
 OPT_KWARGS = {
     'adam': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
     'adamw': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
@@ -116,7 +115,6 @@ def train(  # noqa: C901
         chkpts_kwargs (dict): optional, extra arguments for checkpointing.
     """
 
-    ewm_state, update_ewm = init_ewm()
     rng = jax.random.PRNGKey(seed)
     mode = 'evaluation' if opt is None else 'training'
     if isinstance(opt, str):
@@ -212,6 +210,7 @@ def train(  # noqa: C901
                 chkpts.dump(init_step, train_state)
             log.info(f'Start {mode}')
         best_ene = None
+        ewm_state, update_ewm = init_ewm()
         for attempt in range(max_restarts):
             try:
                 pbar = trange(
@@ -235,17 +234,6 @@ def train(  # noqa: C901
                     **(fit_kwargs or {}),
                 ):
                     if jnp.isnan(train_state.sampler['psi'].log).any():
-                        log.warn('Restarting due to a NaN...')
-                        step, train_state = chkpts.last
-                        pbar.close()
-                        pbar = trange(
-                            step,
-                            steps,
-                            initial=step,
-                            total=steps,
-                            desc=mode,
-                            disable=None,
-                        )
                         raise NanError()
                     ewm_state = update_ewm(stats['E_loc/mean'], ewm_state)
                     stats = {
@@ -271,9 +259,10 @@ def train(  # noqa: C901
                         update_tensorboard_writer(writer, step, stats)
                 return train_state
             except NanError:
+                pbar.close()
+                log.warn('Restarting due to a NaN...')
                 if attempt < max_restarts:
                     init_step, train_state = chkpts.last
-                    pbar.close()
         log.warn(
             'The training has crashed before all training steps were completed'
             f' {step}/{steps}.'
