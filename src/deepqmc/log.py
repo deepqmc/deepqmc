@@ -98,7 +98,7 @@ class H5LogTable:
         return Appender()
 
 
-def update_tensorboard_writer(writer, step, stats):
+def update_tensorboard_writer(writer, step, stats, prefix=None):
     r"""Update a tensorboard writer with a dictionary of scalar entries.
 
     Args:
@@ -107,4 +107,4 @@ def update_tensorboard_writer(writer, step, stats):
         stats (dict): a dictionary containing the scalar entries to add.
     """
     for k, v in stats.items():
-        writer.add_scalar(k, v, step)
+        writer.add_scalar(f'{prefix}/{k}' if prefix else k, v, step)
