@@ -1,11 +1,7 @@
 import logging
 import operator
-import pickle
-from collections import namedtuple
-from copy import deepcopy
 from functools import partial
 from itertools import count
-from pathlib import Path
 
 import h5py
 import jax
@@ -18,7 +14,7 @@ from uncertainties import ufloat
 
 from .ewm import init_ewm
 from .fit import fit_wf
-from .log import H5LogTable, update_tensorboard_writer
+from .log import CheckpointStore, H5LogTable, update_tensorboard_writer
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
 from .sampling import equilibrate
@@ -290,45 +286,3 @@ def train(  # noqa: C901
             chkpts.close()
             writer.close()
             h5file.close()
-
-
-Checkpoint = namedtuple('Checkpoint', 'step loss path')
-
-
-class CheckpointStore:
-    PATTERN = 'chkpt-{}.pt'
-
-    def __init__(self, workdir, *, size=3, min_interval=100, threshold=0.95):
-        self.workdir = Path(workdir)
-        for p in self.workdir.glob(self.PATTERN.format('*')):
-            p.unlink()
-        self.size = size
-        self.min_interval = min_interval
-        self.threshold = threshold
-        self.chkpts = []
-        self.buffer = None
-
-    def update(self, step, state, loss=jnp.inf):
-        self.buffer = (step, loss, deepcopy(state))
-        if step > self.min_interval + (self.chkpts[-1].step if self.chkpts else 0) and (
-            loss <= self.threshold * (self.chkpts[-1].loss if self.chkpts else jnp.inf)
-        ):
-            self.dump(step, state, loss)
-
-    def dump(self, step, state, loss=jnp.inf):
-        path = self.workdir / self.PATTERN.format(step)
-        with path.open('wb') as f:
-            pickle.dump((step, state), f)
-        self.chkpts.append(Checkpoint(step, loss, path))
-        while len(self.chkpts) > self.size:
-            self.chkpts.pop(0).path.unlink()
-
-    def close(self):
-        if self.buffer is not None:
-            self.dump(*self.buffer)
-
-    @property
-    def last(self):
-        chkpt = self.chkpts[-1]
-        with chkpt.path.open('rb') as f:
-            return pickle.load(f)
