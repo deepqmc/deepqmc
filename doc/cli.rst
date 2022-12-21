@@ -39,7 +39,7 @@ The evaluation of the energy of a trained wavefunction ansatz is obtained via::
 
     $ deepqmc task=evaluate task.restdir=workdir
 
-This again generates a Tensorboard event file ``evalutaion\events.out.tfevents.*`` and an HDF5 file ``evalutaion\result.h5`` file holding the sampled local energies.
+This again generates a Tensorboard event file ``evaluation\events.out.tfevents.*`` and an HDF5 file ``evaluation\result.h5`` file holding the sampled local energies.
 
 .. _hyperparameters:
 
