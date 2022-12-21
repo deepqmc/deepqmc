@@ -19,6 +19,11 @@ warnings.filterwarnings(
     'provider=hydra.searchpath in main, path=conf is not available.',
     UserWarning,
 )
+warnings.filterwarnings(
+    'ignore',
+    'Some donated buffers were not usable:',
+    UserWarning,
+)
 
 
 def instantiate_ansatz(hamil, ansatz):
@@ -105,6 +110,9 @@ def maybe_log_code_version():
 def main(cfg):
     import jax
 
+    log.setLevel(cfg.logging.deepqmc)
+    logging.getLogger('jax').setLevel(cfg.logging.jax)
+    logging.getLogger('absl').setLevel(cfg.logging.kfac)
     log.info('Entering application')
     jax.config.update('jax_platform_name', cfg.device)
     log.info(f'Running on {cfg.device.upper()}')
