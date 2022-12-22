@@ -4,7 +4,14 @@ from pathlib import Path
 
 
 class TestApp:
-    ARGS = ['deepqmc', 'device=cpu', 'task.steps=0', '+task.max_eq_steps=0']
+    ARGS = [
+        'deepqmc',
+        'hamil.mol.name=H2',
+        'device=cpu',
+        'task.steps=1',
+        '+task.max_eq_steps=1',
+        '+task.pretrain_steps=1',
+    ]
 
     def test_train(self, tmpdir):
         tmpdir = Path(tmpdir)
@@ -20,4 +27,7 @@ class TestApp:
         train_files = os.listdir(tmpdir / 'training')
         assert 'result.h5' in train_files
         assert any(f.startswith('events.out.tfevents.') for f in train_files)
+        assert 'Pretraining completed' in result.stdout.decode()
+        assert 'Equilibrating sampler...' in result.stdout.decode()
         assert 'Start training' in result.stdout.decode()
+        assert 'The training has been completed!' in result.stdout.decode()
