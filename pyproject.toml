@@ -63,6 +63,12 @@ documentation = 'https://deepqmc.github.io'
 [project.scripts]
 deepqmc = 'deepqmc.app:cli'
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml"]
+
 [tool.black]
 target-version = ['py37']
 skip-string-normalization = true
