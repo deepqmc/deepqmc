@@ -62,6 +62,9 @@ class MetropolisSampler(Sampler):
         state = {**state, 'psi': psi, 'wf': wf_state}
         return state
 
+    def update(self, state, wf):
+        return self._update(state, wf)
+
     def init(self, rng, wf, n, state_callback=None, wf_state=None):
         state = {
             'r': self.hamil.init_sample(rng, n),
@@ -212,6 +215,13 @@ class ResampledSampler(Sampler):
         self.period = period
         self.treshold = treshold
 
+    def update(self, state, wf):
+        state['log_weight'] -= 2 * state['psi'].log
+        state = self._update(state, wf)
+        state['log_weight'] += 2 * state['psi'].log
+        state['log_weight'] -= state['log_weight'].max()
+        return state
+
     def init(self, *args, **kwargs):
         state = super().init(*args, **kwargs)
         state = {
@@ -235,10 +245,6 @@ class ResampledSampler(Sampler):
     def sample(self, rng, state, wf):
         rng_re, rng_smpl = jax.random.split(rng)
         state, _, stats = super().sample(rng_smpl, state, wf)
-        state['log_weight'] -= 2 * state['psi'].log
-        state = self._update(state, wf)
-        state['log_weight'] += 2 * state['psi'].log
-        state['log_weight'] -= state['log_weight'].max()
         state['step'] += 1
         weight = jnp.exp(state['log_weight'])
         ess = jnp.sum(weight) ** 2 / jnp.sum(weight**2)

@@ -178,6 +178,10 @@ def fit_wf(  # noqa: C901
     def sample_wf(state, rng, params):
         return sampler.sample(rng, state, partial(ansatz.apply, params))
 
+    @jax.jit
+    def update_sampler(state, params):
+        return sampler.update(state, partial(ansatz.apply, params))
+
     def train_step(rng, smpl_state, params, opt_state):
         rng_sample, rng_kfac = jax.random.split(rng)
         smpl_state, r, smpl_stats = sample_wf(smpl_state, rng_sample, params)
@@ -187,6 +191,8 @@ def fit_wf(  # noqa: C901
         params, opt_state, E_loc, stats = _step(
             rng_kfac, smpl_state['wf'], params, opt_state, (r, weight)
         )
+        if opt is not None:
+            smpl_state = update_sampler(smpl_state, params)
         stats = {
             **smpl_stats,
             **stats,
