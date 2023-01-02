@@ -192,6 +192,7 @@ def fit_wf(  # noqa: C901
             rng_kfac, smpl_state['wf'], params, opt_state, (r, weight)
         )
         if opt is not None:
+            # WF was changed in _step, update psi values stored in smpl_state
             smpl_state = update_sampler(smpl_state, params)
         stats = {
             **smpl_stats,
