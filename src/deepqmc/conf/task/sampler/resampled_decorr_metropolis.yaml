@@ -1,5 +1,5 @@
 - _target_: deepqmc.sampling.ResampledSampler
-  frequency: 5
+  treshold: 0.95
 - _target_: deepqmc.sampling.DecorrSampler
   length: 20
 - _target_: deepqmc.sampling.MetropolisSampler
