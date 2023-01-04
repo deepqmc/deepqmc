@@ -17,3 +17,7 @@ hydra:
 task:
   workdir: ???
 device: cuda
+logging:
+  deepqmc: 20
+  jax: 40
+  kfac: 40
