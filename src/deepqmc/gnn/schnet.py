@@ -141,7 +141,7 @@ class SchNetLayer(MessagePassingLayer):
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes(nodes, edges):
-            spin_idxs = self.mapping.node_data_of('electrons', nodes)['node_types']
+            spin_idxs = self.mapping.node_data_of('electrons', 'node_types')
 
             if self.deep_w:
                 we = {typ: edge.features for typ, edge in edges.items()}
@@ -268,18 +268,12 @@ class SchNet(GraphNeuralNetwork):
         }
 
     def node_factory(self):
-        n_elec_types = self.layers[0].mapping.node_data_of('electrons', 'n_node_types')
+        n_elec_types = self.node_data['n_node_types']['electrons']
         X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
-
-        elec_types = jnp.array(
-            (self.n_up + self.n_down) * [0]
-            if n_elec_types == 1
-            else self.n_up * [0] + self.n_down * [1]
-        )
         Y = hk.Embed(self.n_nuc, self.embedding_dim, name='NuclearEmbedding')
         return GraphNodes(
-            {'embedding': Y(jnp.arange(self.n_nuc))},
-            {'embedding': X(elec_types), 'node_types': elec_types},
+            {'embedding': Y(self.node_data['node_types']['nuclei'] - n_elec_types)},
+            {'embedding': X(self.node_data['node_types']['electrons'])},
         )
 
     def init_state(self, shape, dtype):

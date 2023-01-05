@@ -27,6 +27,7 @@ class MessagePassingLayer(hk.Module):
         embedding_dim,
         n_interactions,
         edge_types,
+        node_data,
         **layer_attrs,
     ):
         super().__init__()
@@ -39,16 +40,7 @@ class MessagePassingLayer(hk.Module):
         )
         for name, attr in layer_attrs.items():
             setattr(self, name, attr)
-        self.mapping = NodeEdgeMapping(
-            self.edge_types,
-            node_data={
-                'n_nodes': {'nuclei': n_nuc, 'electrons': n_up + n_down},
-                'n_node_types': {
-                    'nuclei': n_nuc,
-                    'electrons': 1 if n_up == n_down else 2,
-                },
-            },
-        )
+        self.mapping = NodeEdgeMapping(self.edge_types, node_data=node_data)
         self.update_graph = GraphUpdate(
             update_nodes_fn=self.get_update_nodes_fn(),
             update_edges_fn=self.get_update_edges_fn(),
@@ -135,6 +127,17 @@ class GraphNeuralNetwork(hk.Module):
         if ghost_coords is not None:
             self.coords = jnp.concatenate([self.coords, jnp.asarray(ghost_coords)])
             n_nuc = len(self.coords)
+        self.node_data = {
+            'n_nodes': {'nuclei': n_nuc, 'electrons': n_up + n_down},
+            'n_node_types': {
+                'nuclei': n_nuc,
+                'electrons': 1 if n_up == n_down else 2,
+            },
+            'node_types': {
+                'nuclei': jnp.arange(n_nuc) + (1 if n_up == n_down else 2),
+                'electrons': jnp.array(n_up * [0] + n_down * [int(n_up != n_down)]),
+            },
+        }
         layer_factories = layer_factories or [
             self.layer_factory for _ in range(n_interactions)
         ]
@@ -191,6 +194,7 @@ class GraphNeuralNetwork(hk.Module):
                 embedding_dim=self.embedding_dim,
                 edge_types=self.edge_types,
                 n_interactions=n_interactions,
+                node_data=self.node_data,
                 **attr,
             )
             for i, (factory, attr) in enumerate(zip(layer_factories, layer_attrs))
