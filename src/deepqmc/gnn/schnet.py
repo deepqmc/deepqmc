@@ -83,17 +83,14 @@ class SchNetLayer(MessagePassingLayer):
             for typ in self.edge_types
         }
 
-        self.use_embed_h = self.first_layer and not self.fix_init_emb
-
         def h_factory(typ=None):
             name = 'h' if shared_h else f'h_{typ}'
             n_spin = 1 if self.n_up == self.n_down else 2
-            from_fixed_emb = self.first_layer and self.fix_init_emb
             return (
                 hk.Embed(n_spin, self.embedding_dim, name=name)
-                if self.use_embed_h
+                if self.first_layer
                 else MLP(
-                    n_spin if from_fixed_emb else self.embedding_dim,
+                    self.embedding_dim,
                     self.embedding_dim,
                     name=name,
                     **subnet_kwargs_by_lbl['h'],
@@ -152,13 +149,13 @@ class SchNetLayer(MessagePassingLayer):
                 we = {typ: self.w[typ](edges[typ].features) for typ in self.edge_types}
             if self.shared_h:
                 hx = self.h(
-                    spin_idxs if self.use_embed_h else nodes.electrons['embedding']
+                    spin_idxs if self.first_layer else nodes.electrons['embedding']
                 )
                 hx = {typ: hx[edges[typ].senders] for typ in self.edge_types[:2]}
             else:
                 hx = {
                     typ: self.h[typ](
-                        spin_idxs if self.use_embed_h else nodes.electrons['embedding']
+                        spin_idxs if self.first_layer else nodes.electrons['embedding']
                     )[edges[typ].senders]
                     for typ in self.edge_types[:2]
                 }
@@ -226,8 +223,6 @@ class SchNet(GraphNeuralNetwork):
         edge_feat_kwargs_by_typ (dict): extra arguments passed to
             :class:`~jax.gnn.edge_features.EdgeFeatures`, specified
             indepenedently for different edge types.
-        fix_init_emb (bool): whether to use a fixed initial embedding for the
-            electrons or to use :class:`hk.Embed`.
         gnn_kwargs (dict): extra arguments passed to the
             :class:`~deepqmc.jax.gnn.gnn.GraphNeuralNetwork` base class.
     """
@@ -241,7 +236,6 @@ class SchNet(GraphNeuralNetwork):
         n_interactions=3,
         edge_feat_kwargs=None,
         edge_feat_kwargs_by_typ=None,
-        fix_init_emb=False,
         **gnn_kwargs,
     ):
         n_nuc, n_up, n_down = mol.n_particles
@@ -266,10 +260,8 @@ class SchNet(GraphNeuralNetwork):
                     typ: edge_feat_kwargs_by_typ[typ]['feature_dim']
                     for typ in self.edge_types
                 },
-                'fix_init_emb': fix_init_emb,
             },
         )
-        self.fix_init_emb = fix_init_emb
         self.edge_features = {
             typ: PauliNetEdgeFeatures(**kwargs)
             for typ, kwargs in edge_feat_kwargs_by_typ.items()
@@ -277,13 +269,7 @@ class SchNet(GraphNeuralNetwork):
 
     def node_factory(self):
         n_elec_types = self.layers[0].mapping.node_data_of('electrons', 'n_node_types')
-        if self.fix_init_emb:
-
-            def X(idxs):
-                return jnp.eye(n_elec_types)[idxs]
-
-        else:
-            X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
+        X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
 
         elec_types = jnp.array(
             (self.n_up + self.n_down) * [0]
