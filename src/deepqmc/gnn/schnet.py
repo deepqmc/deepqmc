@@ -85,16 +85,11 @@ class SchNetLayer(MessagePassingLayer):
 
         def h_factory(typ=None):
             name = 'h' if shared_h else f'h_{typ}'
-            n_spin = 1 if self.n_up == self.n_down else 2
-            return (
-                hk.Embed(n_spin, self.embedding_dim, name=name)
-                if self.first_layer
-                else MLP(
-                    self.embedding_dim,
-                    self.embedding_dim,
-                    name=name,
-                    **subnet_kwargs_by_lbl['h'],
-                )
+            return MLP(
+                self.embedding_dim,
+                self.embedding_dim,
+                name=name,
+                **subnet_kwargs_by_lbl['h'],
             )
 
         self.h = (
@@ -141,21 +136,23 @@ class SchNetLayer(MessagePassingLayer):
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes(nodes, edges):
-            spin_idxs = self.mapping.node_data_of('electrons', 'node_types')
-
             if self.deep_w:
                 we = {typ: edge.features for typ, edge in edges.items()}
             else:
                 we = {typ: self.w[typ](edges[typ].features) for typ in self.edge_types}
             if self.shared_h:
-                hx = self.h(
-                    spin_idxs if self.first_layer else nodes.electrons['embedding']
+                hx = (
+                    nodes.electrons
+                    if self.first_layer
+                    else self.h(nodes.electrons['embedding'])
                 )
                 hx = {typ: hx[edges[typ].senders] for typ in self.edge_types[:2]}
             else:
                 hx = {
-                    typ: self.h[typ](
-                        spin_idxs if self.first_layer else nodes.electrons['embedding']
+                    typ: (
+                        nodes.electrons['embedding']
+                        if self.first_layer
+                        else self.h[typ](nodes.electrons['embedding'])
                     )[edges[typ].senders]
                     for typ in self.edge_types[:2]
                 }
