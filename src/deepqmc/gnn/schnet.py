@@ -75,8 +75,8 @@ class SchNetLayer(MessagePassingLayer):
             typ: MLP(
                 self.edge_feat_dim[typ]
                 if not deep_w or self.first_layer
-                else self.kernel_dim,
-                self.kernel_dim,
+                else self.embedding_dim,
+                self.embedding_dim,
                 name=f'w_{typ}',
                 **subnet_kwargs_by_lbl['w'],
             )
@@ -90,11 +90,11 @@ class SchNetLayer(MessagePassingLayer):
             n_spin = 1 if self.n_up == self.n_down else 2
             from_fixed_emb = self.first_layer and self.fix_init_emb
             return (
-                hk.Embed(n_spin, self.kernel_dim, name=name)
+                hk.Embed(n_spin, self.embedding_dim, name=name)
                 if self.use_embed_h
                 else MLP(
                     n_spin if from_fixed_emb else self.embedding_dim,
-                    self.kernel_dim,
+                    self.embedding_dim,
                     name=name,
                     **subnet_kwargs_by_lbl['h'],
                 )
@@ -107,7 +107,7 @@ class SchNetLayer(MessagePassingLayer):
         )
         self.g = (
             MLP(
-                self.kernel_dim,
+                self.embedding_dim,
                 self.embedding_dim,
                 name='g',
                 **subnet_kwargs_by_lbl['g'],
@@ -115,12 +115,8 @@ class SchNetLayer(MessagePassingLayer):
             if shared_g
             else {
                 typ: MLP(
-                    self.kernel_dim
-                    + (
-                        self.embedding_dim + self.kernel_dim
-                        if shared_g and not sum_z
-                        else 0
-                    ),
+                    self.embedding_dim
+                    + (2 * self.embedding_dim if shared_g and not sum_z else 0),
                     self.embedding_dim,
                     name=f'g_{typ}',
                     **subnet_kwargs_by_lbl['g'],
@@ -230,7 +226,6 @@ class SchNet(GraphNeuralNetwork):
         edge_feat_kwargs_by_typ (dict): extra arguments passed to
             :class:`~jax.gnn.edge_features.EdgeFeatures`, specified
             indepenedently for different edge types.
-        kernel_dim (int): size of the kernel vectors.
         fix_init_emb (bool): whether to use a fixed initial embedding for the
             electrons or to use :class:`hk.Embed`.
         gnn_kwargs (dict): extra arguments passed to the
@@ -246,7 +241,6 @@ class SchNet(GraphNeuralNetwork):
         n_interactions=3,
         edge_feat_kwargs=None,
         edge_feat_kwargs_by_typ=None,
-        kernel_dim=64,
         fix_init_emb=False,
         **gnn_kwargs,
     ):
@@ -272,11 +266,9 @@ class SchNet(GraphNeuralNetwork):
                     typ: edge_feat_kwargs_by_typ[typ]['feature_dim']
                     for typ in self.edge_types
                 },
-                'kernel_dim': kernel_dim,
                 'fix_init_emb': fix_init_emb,
             },
         )
-        self.kernel_dim = kernel_dim
         self.fix_init_emb = fix_init_emb
         self.edge_features = {
             typ: PauliNetEdgeFeatures(**kwargs)
@@ -298,7 +290,7 @@ class SchNet(GraphNeuralNetwork):
             if n_elec_types == 1
             else self.n_up * [0] + self.n_down * [1]
         )
-        Y = hk.Embed(self.n_nuc, self.kernel_dim, name='NuclearEmbedding')
+        Y = hk.Embed(self.n_nuc, self.embedding_dim, name='NuclearEmbedding')
         return GraphNodes(
             {'embedding': Y(jnp.arange(self.n_nuc))},
             {'embedding': X(elec_types), 'node_types': elec_types},
