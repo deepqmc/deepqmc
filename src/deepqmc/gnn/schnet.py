@@ -141,25 +141,21 @@ class SchNetLayer(MessagePassingLayer):
             else:
                 we = {typ: self.w[typ](edges[typ].features) for typ in self.edge_types}
             if self.shared_h:
-                hx = (
-                    nodes.electrons
-                    if self.first_layer
-                    else self.h(nodes.electrons['embedding'])
-                )
+                hx = nodes.electrons if self.first_layer else self.h(nodes.electrons)
                 hx = {typ: hx[edges[typ].senders] for typ in self.edge_types[:2]}
             else:
                 hx = {
                     typ: (
-                        nodes.electrons['embedding']
+                        nodes.electrons
                         if self.first_layer
-                        else self.h[typ](nodes.electrons['embedding'])
+                        else self.h[typ](nodes.electrons)
                     )[edges[typ].senders]
                     for typ in self.edge_types[:2]
                 }
             wh = {
                 typ: we[typ] * hx[typ] for typ in self.mapping.with_sender('electrons')
             }
-            wh['ne'] = we['ne'] * nodes.nuclei['embedding'][edges['ne'].senders]
+            wh['ne'] = we['ne'] * nodes.nuclei[edges['ne'].senders]
             z = {
                 typ: ops.segment_sum(
                     data=wh[typ],
@@ -178,12 +174,10 @@ class SchNetLayer(MessagePassingLayer):
                 if self.sum_z:
                     zs = jnp.stack(list(z.values()), axis=-1)
                     fz = self.f(zs).squeeze(axis=-1)
-                    updated = self.g(fz) + (
-                        nodes.electrons['embedding'] if self.residual else 0
-                    )
+                    updated = self.g(fz) + (nodes.electrons if self.residual else 0)
                 else:
                     zs = jnp.concatenate(
-                        [nodes.electrons['embedding'], z['same'] + z['anti'], z['ne']],
+                        [nodes.electrons, z['same'] + z['anti'], z['ne']],
                         axis=-1,
                     )
                     updated = self.g(zs)
@@ -192,11 +186,9 @@ class SchNetLayer(MessagePassingLayer):
                     [self.g[typ](z[typ]) for typ in self.edge_types], axis=-1
                 )
                 if self.residual:
-                    gs = jnp.concatenate(
-                        [nodes.electrons['embedding'][..., None], gs], axis=-1
-                    )
+                    gs = jnp.concatenate([nodes.electrons[..., None], gs], axis=-1)
                 updated = self.f(gs).squeeze(axis=-1)
-            nodes.electrons['embedding'] = updated
+            nodes = GraphNodes(nodes.nuclei, updated)
 
             return nodes
 
@@ -269,8 +261,8 @@ class SchNet(GraphNeuralNetwork):
         X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
         Y = hk.Embed(self.n_nuc, self.embedding_dim, name='NuclearEmbedding')
         return GraphNodes(
-            {'embedding': Y(self.node_data['node_types']['nuclei'] - n_elec_types)},
-            {'embedding': X(self.node_data['node_types']['electrons'])},
+            Y(self.node_data['node_types']['nuclei'] - n_elec_types),
+            X(self.node_data['node_types']['electrons']),
         )
 
     def init_state(self, shape, dtype):

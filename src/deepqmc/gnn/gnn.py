@@ -262,7 +262,7 @@ class GraphNeuralNetwork(hk.Module):
 
     def process_final_embedding(self, final_embedding):
         r"""Process final embedding produced by last layer."""
-        return final_embedding.electrons['embedding']
+        return final_embedding.electrons
 
     def __call__(self, r):
         r"""
