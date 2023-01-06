@@ -24,6 +24,11 @@ warnings.filterwarnings(
     'Some donated buffers were not usable:',
     UserWarning,
 )
+warnings.filterwarnings(
+    'ignore',
+    'Explicitly requested dtype',
+    UserWarning,
+)
 
 
 def instantiate_ansatz(hamil, ansatz):
