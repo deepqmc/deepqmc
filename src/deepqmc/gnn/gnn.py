@@ -96,7 +96,7 @@ class GraphNeuralNetwork(hk.Module):
     Base class for all graph neural networks on molecules.
 
     Args:
-        mol (:class:`deepqmc.jax.Molecule`): the molecule on which the GNN
+        mol (:class:`deepqmc.Molecule`): the molecule on which the GNN
             is defined
         embedding_dim (int): the size of the electron embeddings to be returned.
         cutoff (float): cutoff distance above which graph edges are discarded.
@@ -105,8 +105,8 @@ class GraphNeuralNetwork(hk.Module):
         ghost_coords (float, [N, 3]): optional, coordinates of ghost atoms.
             These will be included as nuclear nodes in the graph. Useful for
             breaking undesired spatial symmetries.
-        share_with_layers (dict): optional, attribute names and values to share
-            with the interaction layers.
+        atom_type_embeddings (bool): whether identical embeddings are used for
+            nuclei of the same atom type.
     """
 
     def __init__(
@@ -250,7 +250,7 @@ class GraphNeuralNetwork(hk.Module):
         r"""
         Return a tuple containing the names of the edge types used in the GNN.
 
-        See :class:`~deepqmc.jax.gnn.graph.MolecularGraphEdgeBuilder` for possible
+        See :class:`~deepqmc.gnn.graph.MolecularGraphEdgeBuilder` for possible
         edge types.
         """
         raise NotImplementedError

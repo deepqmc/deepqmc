@@ -27,9 +27,9 @@ class SchNetLayer(MessagePassingLayer):
         n_layers_g (int): optional, the number of layers in the :data:`g`
             subnetwork.
         subnet_kwargs (dict): optional, extra arguments passed to the
-            :class:`~jax.hkext.MLP` constructor of the subnetworks.
+            :class:`~deepqmc.hkext.MLP` constructor of the subnetworks.
         subnet_kwargs_by_lbl (dict): optional, extra arguments passed to the
-            :class:`~jax.hkext.MLP` constructor of the subnetworks. Arguments
+            :class:`~deepqmc.hkext.MLP` constructor of the subnetworks. Arguments
             can be specified independently for each subnet
             (:data:`w`, :data:`h` or :data:`g`).
     """
@@ -202,18 +202,18 @@ class SchNet(GraphNeuralNetwork):
     Derived from :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork`.
 
     Args:
-        mol (~jax.Molecule): the molecule on which the graph is defined.
+        mol (~deepqmc.Molecule): the molecule on which the graph is defined.
         embedding_dim (int): the length of the electron embedding vectors.
         cutoff (float, a.u.): the distance cutoff beyond which interactions
             are discarded.
         n_interactions (int): number of message passing interactions.
         edge_feat_kwargs (dict): extra arguments passed to
-            :class:`~jax.gnn.edge_features.EdgeFeatures`.
+            :class:`~deepqmc.gnn.edge_features.EdgeFeatures`.
         edge_feat_kwargs_by_typ (dict): extra arguments passed to
-            :class:`~jax.gnn.edge_features.EdgeFeatures`, specified
+            :class:`~deepqmc.gnn.edge_features.EdgeFeatures`, specified
             indepenedently for different edge types.
         gnn_kwargs (dict): extra arguments passed to the
-            :class:`~deepqmc.jax.gnn.gnn.GraphNeuralNetwork` base class.
+            :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork` base class.
     """
 
     def __init__(

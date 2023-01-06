@@ -88,7 +88,7 @@ def prune_graph_edges(
             returns some data (features) computed for the edges.
 
     Returns:
-        ~jax.types.GraphEdges: object containing the indeces of the edge
+        ~deepqmc.types.GraphEdges: object containing the indeces of the edge
         sending and edge receiving nodes, along with the features associated
         with the edges.
     """
