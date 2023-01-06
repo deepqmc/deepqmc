@@ -50,6 +50,7 @@ class Molecule:
 
     # Derived properties
     n_nuc: int
+    n_atom_types: int
     n_up: int
     n_down: int
     n_shells: tuple
@@ -73,6 +74,7 @@ class Molecule:
         assert not (n_elec + spin) % 2
         set_attr(
             n_nuc=len(charges),
+            n_atom_types=len(jnp.unique(jnp.asarray(charges))),
             n_up=(n_elec + spin) // 2,
             n_down=(n_elec - spin) // 2,
         )
@@ -108,7 +110,7 @@ class Molecule:
     @property
     def n_particles(self):
         r"""Return the number of nuclei, spin-up, and spin-down electrons."""
-        return len(self), self.n_up, self.n_down
+        return self.n_nuc, self.n_up, self.n_down
 
     @classmethod
     def from_name(cls, name, **kwargs):

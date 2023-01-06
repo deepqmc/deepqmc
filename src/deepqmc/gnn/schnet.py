@@ -258,8 +258,9 @@ class SchNet(GraphNeuralNetwork):
 
     def node_factory(self):
         n_elec_types = self.node_data['n_node_types']['electrons']
+        n_nuc_types = self.node_data['n_node_types']['nuclei']
         X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
-        Y = hk.Embed(self.n_nuc, self.embedding_dim, name='NuclearEmbedding')
+        Y = hk.Embed(n_nuc_types, self.embedding_dim, name='NuclearEmbedding')
         return GraphNodes(
             Y(self.node_data['node_types']['nuclei'] - n_elec_types),
             X(self.node_data['node_types']['electrons']),

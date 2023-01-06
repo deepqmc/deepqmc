@@ -118,23 +118,38 @@ class GraphNeuralNetwork(hk.Module):
         layer_factories=None,
         layer_kwargs=None,
         ghost_coords=None,
+        atom_type_embeddings=False,
         layer_attrs=None,
     ):
         super().__init__()
         n_nuc, n_up, n_down = mol.n_particles
-        self.coords = mol.coords
-        self.cutoff = cutoff
+        n_atom_types = mol.n_atom_types
+        charges = mol.charges
+        coords = mol.coords
         if ghost_coords is not None:
-            self.coords = jnp.concatenate([self.coords, jnp.asarray(ghost_coords)])
-            n_nuc = len(self.coords)
+            coords = jnp.concatenate([coords, jnp.asarray(ghost_coords)])
+            charges = jnp.concatenate([charges, jnp.zeros(len(ghost_coords))])
+            n_nuc = len(coords)
+            n_atom_types += 1
+        self.coords = coords
+        self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
+        self.cutoff = cutoff
+        self.embedding_dim = embedding_dim
         self.node_data = {
             'n_nodes': {'nuclei': n_nuc, 'electrons': n_up + n_down},
             'n_node_types': {
-                'nuclei': n_nuc,
+                'nuclei': n_atom_types if atom_type_embeddings else n_nuc,
                 'electrons': 1 if n_up == n_down else 2,
             },
             'node_types': {
-                'nuclei': jnp.arange(n_nuc) + (1 if n_up == n_down else 2),
+                'nuclei': (
+                    (
+                        jnp.unique(charges, size=n_nuc, return_inverse=True)[-1]
+                        if atom_type_embeddings
+                        else jnp.arange(n_nuc)
+                    )
+                    + (1 if n_up == n_down else 2)
+                ),
                 'electrons': jnp.array(n_up * [0] + n_down * [int(n_up != n_down)]),
             },
         }
@@ -146,8 +161,6 @@ class GraphNeuralNetwork(hk.Module):
                 f'expected as many layer factories ({len(layer_factories)} '
                 f'as n_interactions ({n_interactions}))'
             )
-        self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
-        self.embedding_dim = embedding_dim
         layer_factories = self.layer_factories(
             n_interactions, layer_factories, layer_attrs
         )
