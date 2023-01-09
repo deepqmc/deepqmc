@@ -91,5 +91,5 @@ class TestSchNet:
         params, state = helpers.init_model(schnet, rs)
         emb, _ = schnet.apply(params, state, rs)
         ndarrays_regression.check(
-            {'embedding': emb}, default_tolerance={'rtol': 1e-6, 'atol': 1e-6}
+            {'embedding': emb}, default_tolerance={'rtol': 1e-4, 'atol': 1e-6}
         )

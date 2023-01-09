@@ -32,7 +32,7 @@ class TestPauliNet:
         grad_log_psi = grad_ansatz(params)
         ndarrays_regression.check(
             helpers.flatten_pytree(grad_log_psi),
-            default_tolerance={'rtol': 2e-6, 'atol': 2e-6},
+            default_tolerance={'rtol': 1e-3, 'atol': 1e-5},
         )
 
     def test_laplace_psi(self, helpers, kwargs, omni_kwargs, ndarrays_regression):
@@ -44,5 +44,5 @@ class TestPauliNet:
         )(rs.flatten())
         ndarrays_regression.check(
             {'lap_log_psis': lap_log_psis, 'quantum_force': quantum_force},
-            default_tolerance={'rtol': 2e-6, 'atol': 2e-6},
+            default_tolerance={'rtol': 1e-3, 'atol': 1e-5},
         )

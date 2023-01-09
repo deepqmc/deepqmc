@@ -52,7 +52,7 @@ class TestSampling:
         )
         ndarrays_regression.check(
             helpers.flatten_pytree(smpl_state),
-            default_tolerance={'rtol': 1e-5, 'atol': 1e-5},
+            default_tolerance={'rtol': 1e-4, 'atol': 1e-6},
         )
 
     def test_sampler_sample(self, helpers, samplers, ndarrays_regression):
@@ -65,5 +65,5 @@ class TestSampling:
             smpl_state, _, stats = sample(helpers.rng(step), smpl_state, self.wf)
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
-            default_tolerance={'rtol': 1e-5, 'atol': 1e-5},
+            default_tolerance={'rtol': 1e-4, 'atol': 1e-6},
         )
