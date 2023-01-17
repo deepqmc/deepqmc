@@ -1,12 +1,16 @@
+from functools import partial
+
 import jax.numpy as jnp
-from jax import random
+from jax import random, vmap
 
 from ..physics import (
     electronic_potential,
     laplacian,
     nuclear_energy,
     nuclear_potential,
+    pairwise_distance,
 )
+from ..utils import argmax_random_choice
 from .base import Hamiltonian
 
 __all__ = ['MolecularHamiltonian']
@@ -45,24 +49,69 @@ class MolecularHamiltonian(Hamiltonian):
             elec_std (float): optional, a factor for scaling the spread of
                 electrons around the nuclei.
         """
-        rng_remainder, rng_normal = random.split(rng)
+
+        rng_remainder, rng_normal, rng_spin = random.split(rng, 3)
         charges = self.mol.charges - self.mol.charge / len(self.mol.charges)
         base = jnp.floor(charges).astype(jnp.int32)
         prob = charges - base
+        electrons_of_atom = jnp.tile(base[None], (n, 1))
         n_remainder = int(self.mol.charges.sum() - self.mol.charge - base.sum())
-        idxs = jnp.tile(
-            jnp.concatenate(
-                [i_atom * jnp.ones(b, jnp.int32) for i_atom, b in enumerate(base)]
-            )[None],
-            (n, 1),
-        )
         if n_remainder > 0:
             extra = random.categorical(rng_remainder, prob, shape=(n, n_remainder))
-            idxs = jnp.concatenate([idxs, extra], axis=-1)
+            n_extra = vmap(partial(jnp.bincount, length=base.shape[-1]))(extra)
+            electrons_of_atom += n_extra
+        idxs = []
+        rng_spin = random.split(rng_spin, len(electrons_of_atom))
+        for rng_spin, elec_of_atom in zip(rng_spin, electrons_of_atom):
+            up, down = self.distribute_spins(rng_spin, elec_of_atom)
+            idxs.append(
+                jnp.concatenate(
+                    [
+                        i_atom * jnp.ones(n_up, jnp.int32)
+                        for i_atom, n_up in enumerate(up)
+                    ]
+                    + [
+                        i_atom * jnp.ones(n_down, jnp.int32)
+                        for i_atom, n_down in enumerate(down)
+                    ]
+                )
+            )
+        idxs = jnp.stack(idxs)
         centers = self.mol.coords[idxs]
         std = elec_std * jnp.sqrt(self.mol.charges)[idxs][..., None]
         rs = centers + std * random.normal(rng_normal, centers.shape)
         return rs
+
+    def distribute_spins(self, rng, elec_of_atom):
+        up, down = jnp.zeros_like(elec_of_atom), jnp.zeros_like(elec_of_atom)
+        # try to distribute electron pairs evenly across atoms
+        for i in range(jnp.max(elec_of_atom)):
+            mask = elec_of_atom >= 2 * (i + 1)
+            if mask.sum() <= self.mol.n_down - down.sum():
+                up = up.at[mask].add(1)
+                down = down.at[mask].add(1)
+
+        # distribute remaining electrons such that opposite spin electrons
+        # end up close in an attempt to mimic covalent bonds
+        nearest_neighbor_indices = jnp.argsort(
+            pairwise_distance(self.mol.coords, self.mol.coords)
+        )
+        center = None
+        i = 0
+        while (elec_of_atom - up - down).sum():
+            if center is None:
+                center = argmax_random_choice(rng, elec_of_atom - up - down)
+            else:
+                ordered = nearest_neighbor_indices[center]
+                center = ordered[(elec_of_atom - up - down)[ordered] > 0][0]
+            if i % 2 and self.mol.n_down - down.sum() > 0:
+                down = down.at[center].add(1)
+            else:
+                up = up.at[center].add(1)
+            i += 1
+        assert up.sum() == self.mol.n_up
+        assert down.sum() == self.mol.n_down
+        return up, down
 
     def local_energy(self, wf, return_grad=False):
         def loc_ene(state, r, mol=self.mol):
