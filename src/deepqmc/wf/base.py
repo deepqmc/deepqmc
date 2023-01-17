@@ -1,6 +1,5 @@
 import haiku as hk
 import jax
-import jax.numpy as jnp
 from jax.tree_util import tree_map, tree_reduce
 
 __all__ = ['state_callback']
@@ -68,15 +67,6 @@ def state_callback(state, batch_dim=True):
     key = list(keys)[0]
 
     occupancies = state[key]['occupancies']
-    underflow = tree_map(
-        lambda x: jnp.any(jnp.logical_and(x < x.shape[-1], x != 0)), occupancies
-    )
-    underflow = tree_reduce(lambda x, y: x or y, underflow)
-    if underflow:
-        raise ValueError(
-            'some graph edges were dropped due to the distance cutoff, '
-            'increase the cutoff distance'
-        )
     if batch_dim:
         # Aggregate within batch
         max_occupancy = tree_map(lambda x: jax.numpy.max(x, axis=0), occupancies)
