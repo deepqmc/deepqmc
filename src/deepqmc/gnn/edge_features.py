@@ -165,7 +165,7 @@ class GaussianBasis(RadialBasis):
         self,
         n_rbf,
         r_cut,
-        offset: bool = False,
+        offset: bool = True,
         *,
         envelope_factory: Optional = None,
         envelope_kwargs: Optional[dict] = None,
