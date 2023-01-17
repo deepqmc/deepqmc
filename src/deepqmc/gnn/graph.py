@@ -125,7 +125,9 @@ def prune_graph_edges(
     receiver_idx = jnp.reshape(idx, (-1,))
 
     distances = dist(pos_sender[sender_idx], pos_receiver[receiver_idx])
-    mask = (distances < cutoff) & (receiver_idx < N_receiver)
+    mask = receiver_idx < N_receiver
+    if cutoff is not None:
+        mask &= distances < cutoff
     cumsum = jnp.cumsum(mask)
     occupancy = cumsum[-1]
 

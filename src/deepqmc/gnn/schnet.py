@@ -1,3 +1,5 @@
+from typing import Mapping
+
 import haiku as hk
 import jax.numpy as jnp
 from jax import ops
@@ -221,7 +223,8 @@ class SchNet(GraphNeuralNetwork):
         mol,
         embedding_dim,
         *,
-        cutoff=30.0,
+        cutoff=None,
+        distance_basis_radius=30.0,
         n_interactions=3,
         edge_feat_kwargs=None,
         edge_feat_kwargs_by_typ=None,
@@ -230,7 +233,7 @@ class SchNet(GraphNeuralNetwork):
         n_nuc, n_up, n_down = mol.n_particles
         edge_feat_kwargs = edge_feat_kwargs or {}
         edge_feat_kwargs.setdefault('feature_dim', 32)
-        edge_feat_kwargs.setdefault('cutoff', cutoff)
+        edge_feat_kwargs.setdefault('cutoff', distance_basis_radius)
         edge_feat_kwargs.setdefault('powers', [1])
         edge_feat_kwargs.setdefault('difference', True)
         edge_feat_kwargs_by_typ = edge_feat_kwargs_by_typ or {}
@@ -238,10 +241,17 @@ class SchNet(GraphNeuralNetwork):
             edge_feat_kwargs_by_typ.setdefault(typ, {})
             for k, v in edge_feat_kwargs.items():
                 edge_feat_kwargs_by_typ[typ].setdefault(k, v)
+        if not isinstance(cutoff, Mapping):
+            cutoff = {typ: cutoff for typ in self.edge_types}
+        for typ in self.edge_types:
+            assert (
+                cutoff[typ] is None
+                or edge_feat_kwargs_by_typ[typ]['cutoff'] <= cutoff[typ]
+            )
         super().__init__(
             mol,
             embedding_dim,
-            {typ: edge_feat_kwargs_by_typ[typ]['cutoff'] for typ in self.edge_types},
+            cutoff,
             n_interactions,
             **gnn_kwargs,
             layer_attrs={
