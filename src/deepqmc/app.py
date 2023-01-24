@@ -53,7 +53,7 @@ def train_from_factories(hamil, ansatz, sampler, **kwargs):
 def train_from_checkpoint(workdir, restdir, evaluate, chkpt='LAST', **kwargs):
     restdir = Path(to_absolute_path(get_original_cwd())) / restdir
     if not restdir.is_dir():
-        raise ValueError(f'restdir "{restdir}" is not a directory')
+        raise ValueError(f'restdir {restdir!r} is not a directory')
     cfg, step, train_state = task_from_workdir(restdir, chkpt)
     cfg.task.workdir = workdir
     if evaluate:
