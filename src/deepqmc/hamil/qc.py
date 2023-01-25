@@ -27,7 +27,7 @@ class MolecularHamiltonian(Hamiltonian):
     :math:`E=V_\text{nuc-nuc} + V_\text{el-el} + V_\text{nuc-el} + E_\text{kin}`.
 
     Args:
-        mol (~jax.Molecule): the molecule to consider
+        mol (~deepqmc.Molecule): the molecule to consider
     """
 
     def __init__(self, *, mol):
