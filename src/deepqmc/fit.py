@@ -32,6 +32,12 @@ def median_log_squeeze(x, width, quantile):
     )
 
 
+def median_log_squeeze_and_mask(x, clip_width=1.0, quantile=0.95, exclude_width=jnp.inf):
+    clipped_x, sigma = median_log_squeeze(x, clip_width, quantile)
+    gradient_mask = sigma < exclude_width
+    return clipped_x, gradient_mask
+
+
 def init_fit(rng, hamil, ansatz, sampler, sample_size, state_callback):
     params = init_wf_params(rng, hamil, ansatz)
     smpl_state = sampler.init(
@@ -51,10 +57,14 @@ def fit_wf(  # noqa: C901
     state_callback=None,
     train_state=None,
     *,
-    clip_width=1.0,
-    exclude_width=jnp.inf,
-    clip_quantile=0.95,
+    clip_mask_fn=None,
+    clip_mask_kwargs=None,
 ):
+    if clip_mask_fn is None:
+        clip_mask_fn = median_log_squeeze_and_mask
+    if clip_mask_kwargs is None:
+        clip_mask_kwargs = {}
+
     @partial(jax.custom_jvp, nondiff_argnums=(1, 2))
     def loss_fn(params, state, batch):
         r, weight = batch
@@ -82,7 +92,11 @@ def fit_wf(  # noqa: C901
         loss, other = loss_fn(params, state, batch)
         # other is (state, aux) as per kfac-jax's convention
         _, (E_loc, _) = other
-        E_loc_s, sigma = median_log_squeeze(E_loc, clip_width, clip_quantile)
+        E_loc_s, gradient_mask = clip_mask_fn(E_loc, **clip_mask_kwargs)
+        assert E_loc_s.shape == E_loc.shape, \
+            f"Error with clipping function: shape of E_loc {E_loc.shape} must equal shape of clipped E_loc {E_loc_s.shape}."
+        assert gradient_mask.shape == E_loc.shape, \
+            f"Error with masking function: shape of E_loc {E_loc.shape} must equal shape of mask {gradient_mask.shape}."
 
         def log_likelihood(params):  # log(psi(theta))
             wf = lambda state, r: ansatz.apply(params, state, r)[0]
@@ -91,7 +105,7 @@ def fit_wf(  # noqa: C901
         log_psi, log_psi_tangent = jax.jvp(log_likelihood, primals, tangents)
         kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
         loss_tangent = (E_loc_s - jnp.mean(E_loc_s)) * log_psi_tangent * weight
-        loss_tangent = masked_mean(loss_tangent, sigma < exclude_width)
+        loss_tangent = masked_mean(loss_tangent, gradient_mask)
         return (loss, other), (loss_tangent, other)
         # jax.custom_jvp has actually no official support for auxiliary output.
         # the second other in the tangent output should be in fact other_tangent.
