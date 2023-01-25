@@ -124,7 +124,13 @@ class MolecularHamiltonian(Hamiltonian):
             Vs_el = electronic_potential(r)
             Es_loc = Es_kin + Vs_nuc + Vs_el + Es_nuc
             result = (Es_loc, quantum_force) if return_grad else Es_loc
-            stats = {'hamil/V_el': Vs_el, 'hamil/E_kin': Es_kin, 'hamil/V_nuc': Vs_nuc}
+            stats = {
+                'hamil/V_el': Vs_el,
+                'hamil/E_kin': Es_kin,
+                'hamil/V_nuc': Vs_nuc,
+                'hamil/lap': lap_log_psis,
+                'hamil/quantum_force': (quantum_force ** 2).sum(axis=-1)
+            }
             return result, stats
 
         return loc_ene
