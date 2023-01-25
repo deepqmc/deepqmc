@@ -129,7 +129,7 @@ class MolecularHamiltonian(Hamiltonian):
                 'hamil/E_kin': Es_kin,
                 'hamil/V_nuc': Vs_nuc,
                 'hamil/lap': lap_log_psis,
-                'hamil/quantum_force': (quantum_force ** 2).sum(axis=-1)
+                'hamil/quantum_force': (quantum_force**2).sum(axis=-1),
             }
             return result, stats
 
