@@ -33,10 +33,7 @@ def median_log_squeeze(x, width, quantile):
 
 
 def median_log_squeeze_and_mask(
-    x,
-    clip_width=1.0,
-    quantile=0.95,
-    exclude_width=jnp.inf
+    x, clip_width=1.0, quantile=0.95, exclude_width=jnp.inf
 ):
     clipped_x, sigma = median_log_squeeze(x, clip_width, quantile)
     gradient_mask = sigma < exclude_width
@@ -98,12 +95,14 @@ def fit_wf(  # noqa: C901
         # other is (state, aux) as per kfac-jax's convention
         _, (E_loc, _) = other
         E_loc_s, gradient_mask = clip_mask_fn(E_loc, **clip_mask_kwargs)
-        assert E_loc_s.shape == E_loc.shape, \
-            f'Error with clipping function: shape of E_loc {E_loc.shape} ' \
+        assert E_loc_s.shape == E_loc.shape, (
+            f'Error with clipping function: shape of E_loc {E_loc.shape} '
             f'must equal shape of clipped E_loc {E_loc_s.shape}.'
-        assert gradient_mask.shape == E_loc.shape, \
-            f'Error with masking function: shape of E_loc {E_loc.shape} ' \
+        )
+        assert gradient_mask.shape == E_loc.shape, (
+            f'Error with masking function: shape of E_loc {E_loc.shape} '
             f'must equal shape of mask {gradient_mask.shape}.'
+        )
 
         def log_likelihood(params):  # log(psi(theta))
             wf = lambda state, r: ansatz.apply(params, state, r)[0]
