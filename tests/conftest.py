@@ -38,13 +38,13 @@ class Helpers:
         return dict(items)
 
     @staticmethod
-    def mol(name='LiH'):
-        return Molecule.from_name(name)
+    def mol(name='LiH', pp_type=None):
+        return Molecule.from_name(name, pp_type=pp_type)
 
     @staticmethod
-    def hamil(mol=None):
+    def hamil(mol=None, **kwargs):
         mol = mol or Helpers.mol()
-        return MolecularHamiltonian(mol=mol)
+        return MolecularHamiltonian(mol=mol, **kwargs)
 
     @staticmethod
     def rs(hamil=None, n=1):
@@ -73,7 +73,7 @@ class Helpers:
     def create_paulinet(hamil=None, rs=None, init_model_kwargs=None, **kwargs):
         hamil = hamil or Helpers.hamil()
         return_rs = rs is None
-        rs = rs or Helpers.rs()
+        rs = rs or Helpers.rs(hamil)
         paulinet = Helpers.transform_model(PauliNet, hamil, **kwargs)
         params, state = Helpers.init_model(paulinet, rs, **(init_model_kwargs or {}))
         ret = (params, state, paulinet)
