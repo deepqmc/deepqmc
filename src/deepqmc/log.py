@@ -100,6 +100,8 @@ class H5LogTable:
 
 
 class TensorboardMetricLogger:
+    r"""An interface for writing metrics to Tensorboard."""
+
     def __init__(self, workdir):
         self.writer = tensorboard.summary.Writer(workdir)
 
