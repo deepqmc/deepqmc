@@ -5,6 +5,7 @@ from pathlib import Path
 
 import jax.numpy as jnp
 import numpy as np
+import tensorboard.summary
 
 Checkpoint = namedtuple('Checkpoint', 'step loss path')
 
@@ -98,13 +99,20 @@ class H5LogTable:
         return Appender()
 
 
-def update_tensorboard_writer(writer, step, stats, prefix=None):
-    r"""Update a tensorboard writer with a dictionary of scalar entries.
+class TensorboardMetricLogger:
 
-    Args:
-        writer: the tensorboard writer.
-        step (int): the step at which to add the new entries.
-        stats (dict): a dictionary containing the scalar entries to add.
-    """
-    for k, v in stats.items():
-        writer.add_scalar(f'{prefix}/{k}' if prefix else k, v, step)
+    def __init__(self, workdir):
+        self.writer = tensorboard.summary.Writer(workdir)
+
+    def update(self, step, stats, prefix=None):
+        r"""Update tensorboard writer with a dictionary of scalar entries.
+
+        Args:
+            step (int): the step at which to add the new entries.
+            stats (dict): a dictionary containing the scalar entries to add.
+        """
+        for k, v in stats.items():
+            self.writer.add_scalar(f'{prefix}/{k}' if prefix else k, v, step)
+            
+    def close(self):
+        self.writer.close()
