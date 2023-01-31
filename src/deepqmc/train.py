@@ -8,13 +8,12 @@ import jax
 import jax.numpy as jnp
 import kfac_jax
 import optax
-import tensorboard.summary
 from tqdm.auto import tqdm, trange
 from uncertainties import ufloat
 
 from .ewm import init_ewm
 from .fit import fit_wf
-from .log import CheckpointStore, H5LogTable, update_tensorboard_writer
+from .log import CheckpointStore, H5LogTable, TensorboardMetricLogger
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
 from .sampling import equilibrate
@@ -67,6 +66,7 @@ def train(  # noqa: C901
     opt_kwargs=None,
     fit_kwargs=None,
     chkpts_kwargs=None,
+    metric_logger=None,
 ):
     r"""Train or evaluate a JAX wave function model.
 
@@ -113,6 +113,9 @@ def train(  # noqa: C901
         fit_kwargs (dict): optional, extra arguments passed to the :func:`~.fit.fit_wf`
             function.
         chkpts_kwargs (dict): optional, extra arguments for checkpointing.
+        metric_logger: optional, an object that consumes metric logging information.
+            If not specified, the default `~.log.TensorboardMetricLogger` is used
+            to create tensorboard logs.
     """
 
     rng = jax.random.PRNGKey(seed)
@@ -127,7 +130,8 @@ def train(  # noqa: C901
     if workdir:
         workdir = f'{workdir}/{mode}'
         chkpts = CheckpointStore(workdir, **(chkpts_kwargs or {}))
-        writer = tensorboard.summary.Writer(workdir)
+        if metric_logger is None and workdir:
+            metric_logger = TensorboardMetricLogger(workdir)
         log.debug('Setting up HDF5 file...')
         h5file = h5py.File(f'{workdir}/result.h5', 'a', libver='v110')
         h5file.swmr_mode = True
@@ -178,9 +182,9 @@ def train(  # noqa: C901
                     ewm_state = update_ewm(loss.item(), ewm_state)
                     pbar.set_postfix(MSE=f'{ewm_state.mean:0.2e}')
                     pretrain_stats = {'MSE': loss.item(), 'MSE/ewm': ewm_state.mean}
-                    if workdir:
-                        update_tensorboard_writer(
-                            writer, step, pretrain_stats, prefix='pretraining'
+                    if metric_logger:
+                        metric_logger.update(
+                            step, pretrain_stats, prefix='pretraining'
                         )
                 log.info(f'Pretraining completed with MSE = {ewm_state.mean:0.2e}')
             smpl_state = sampler.init(
@@ -203,9 +207,9 @@ def train(  # noqa: C901
                 block_size=10,
             ):
                 pbar.set_postfix(tau=f'{smpl_state["tau"].item():5.3f}')
-                if workdir:
-                    update_tensorboard_writer(
-                        writer, step, smpl_stats, prefix='equilibration'
+                if metric_logger:
+                    metric_logger.update(
+                        step, smpl_stats, prefix='equilibration'
                     )
             pbar.close()
             train_state = smpl_state, params, None
@@ -259,7 +263,8 @@ def train(  # noqa: C901
                         table.row['sign_psi'] = train_state.sampler['psi'].sign
                         table.row['log_psi'] = train_state.sampler['psi'].log
                         h5file.flush()
-                        update_tensorboard_writer(writer, step, stats)
+                        if metric_logger:
+                            metric_logger.update(step, stats)
                 log.info(f'The {mode} has been completed!')
                 return train_state
             except NanError:
@@ -276,5 +281,5 @@ def train(  # noqa: C901
             pbar.close()
         if workdir:
             chkpts.close()
-            writer.close()
+            metric_logger.close()
             h5file.close()
