@@ -183,9 +183,7 @@ def train(  # noqa: C901
                     pbar.set_postfix(MSE=f'{ewm_state.mean:0.2e}')
                     pretrain_stats = {'MSE': loss.item(), 'MSE/ewm': ewm_state.mean}
                     if metric_logger:
-                        metric_logger.update(
-                            step, pretrain_stats, prefix='pretraining'
-                        )
+                        metric_logger.update(step, pretrain_stats, prefix='pretraining')
                 log.info(f'Pretraining completed with MSE = {ewm_state.mean:0.2e}')
             smpl_state = sampler.init(
                 rng, partial(ansatz.apply, params), sample_size, state_callback
@@ -208,9 +206,7 @@ def train(  # noqa: C901
             ):
                 pbar.set_postfix(tau=f'{smpl_state["tau"].item():5.3f}')
                 if metric_logger:
-                    metric_logger.update(
-                        step, smpl_stats, prefix='equilibration'
-                    )
+                    metric_logger.update(step, smpl_stats, prefix='equilibration')
             pbar.close()
             train_state = smpl_state, params, None
             if workdir and mode == 'training':

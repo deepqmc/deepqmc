@@ -100,7 +100,6 @@ class H5LogTable:
 
 
 class TensorboardMetricLogger:
-
     def __init__(self, workdir):
         self.writer = tensorboard.summary.Writer(workdir)
 
@@ -113,6 +112,6 @@ class TensorboardMetricLogger:
         """
         for k, v in stats.items():
             self.writer.add_scalar(f'{prefix}/{k}' if prefix else k, v, step)
-            
+
     def close(self):
         self.writer.close()
