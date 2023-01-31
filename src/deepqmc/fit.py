@@ -62,11 +62,6 @@ def fit_wf(  # noqa: C901
     clip_mask_fn=None,
     clip_mask_kwargs=None,
 ):
-    if clip_mask_fn is None:
-        clip_mask_fn = median_log_squeeze_and_mask
-    if clip_mask_kwargs is None:
-        clip_mask_kwargs = {}
-
     @partial(jax.custom_jvp, nondiff_argnums=(1, 2))
     def loss_fn(params, state, batch):
         r, weight = batch
@@ -94,7 +89,9 @@ def fit_wf(  # noqa: C901
         loss, other = loss_fn(params, state, batch)
         # other is (state, aux) as per kfac-jax's convention
         _, (E_loc, _) = other
-        E_loc_s, gradient_mask = clip_mask_fn(E_loc, **clip_mask_kwargs)
+        E_loc_s, gradient_mask = (clip_mask_fn or median_log_squeeze_and_mask)(
+            E_loc, **(clip_mask_kwargs or {})
+        )
         assert E_loc_s.shape == E_loc.shape, (
             f'Error with clipping function: shape of E_loc {E_loc.shape} '
             f'must equal shape of clipped E_loc {E_loc_s.shape}.'
