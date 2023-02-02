@@ -128,7 +128,14 @@ class MetropolisSampler(Sampler):
         return state, self.phys_conf(state['r']), stats
 
     def phys_conf(self, r, **kwargs):
-        return PhysicalConfiguration(jnp.tile(self.R[None], (len(r), 1, 1)), r)
+        if r.ndim == 2:
+            return PhysicalConfiguration(self.R, r, jnp.array(0))
+        n_smpl = len(r)
+        return PhysicalConfiguration(
+            jnp.tile(self.R[None], (n_smpl, 1, 1)),
+            r,
+            jnp.zeros(n_smpl, dtype=jnp.int32),
+        )
 
 
 class LangevinSampler(MetropolisSampler):
@@ -144,7 +151,7 @@ class LangevinSampler(MetropolisSampler):
         @jax.vmap
         @partial(jax.value_and_grad, argnums=1, has_aux=True)
         def wf_and_force(state, r):
-            psi, state = wf(state, PhysicalConfiguration(self.R, r))
+            psi, state = wf(state, self.phys_conf(r))
             return psi.log, (psi, state)
 
         (_, (psi, wf_state)), force = wf_and_force(state['wf'], state['r'])

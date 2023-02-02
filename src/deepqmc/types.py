@@ -1,12 +1,12 @@
 from collections import namedtuple
 
 import jax.numpy as jnp
-from jax_dataclasses import pytree_dataclass
+import jax_dataclasses as jdc
 
 Psi = namedtuple('Psi', 'sign log')
 
 
-@pytree_dataclass
+@jdc.pytree_dataclass
 class PhysicalConfiguration:
     r"""Represent input physical configurations of electrons and nuclei.
 
@@ -17,9 +17,11 @@ class PhysicalConfiguration:
 
     R: jnp.ndarray
     r: jnp.ndarray
+    config_idx: jnp.ndarray
 
     def __getitem__(self, idx):
         return self.__class__(
             self.R.__getitem__(idx),
             self.r.__getitem__(idx),
+            self.config_idx.__getitem__(idx),
         )

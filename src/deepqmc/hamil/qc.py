@@ -94,7 +94,7 @@ class MolecularHamiltonian(Hamiltonian):
         centers = Rs[jnp.broadcast_to(jnp.arange(n)[:, None], idxs.shape), idxs]
         std = elec_std * jnp.sqrt(self.mol.charges)[idxs][..., None]
         rs = centers + std * random.normal(rng_normal, centers.shape)
-        return PhysicalConfiguration(Rs, rs)
+        return PhysicalConfiguration(Rs, rs, jnp.zeros(n, dtype=jnp.int32))
 
     def distribute_spins(self, rng, R, elec_of_atom):
         up, down = jnp.zeros_like(elec_of_atom), jnp.zeros_like(elec_of_atom)

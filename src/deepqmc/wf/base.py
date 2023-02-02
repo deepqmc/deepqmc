@@ -14,6 +14,7 @@ def init_wf_params(rng, hamil, ansatz):
         jax.random.normal(
             rng_r, (hamil.mol.charges.sum().astype(int) - hamil.mol.charge, 3)
         ),
+        jax.numpy.array(0),
     )
     params, _ = ansatz.init(rng_params, phys_conf)
     return params

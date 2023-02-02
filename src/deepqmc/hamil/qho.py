@@ -31,7 +31,9 @@ class QHOHamiltonian(Hamiltonian):
 
     def init_sample(self, rng, Rs, n):
         return PhysicalConfiguration(
-            jnp.zeros((n, *self.dim)), jax.random.normal(rng, (n, *self.dim))
+            jnp.zeros((n, *self.dim)),
+            jax.random.normal(rng, (n, *self.dim)),
+            jnp.zeros(n, dtype=jnp.int32),
         )
 
     def stats(self, r):
