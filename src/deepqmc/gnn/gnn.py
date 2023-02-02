@@ -143,13 +143,10 @@ class GraphNeuralNetwork(hk.Module):
             },
             'node_types': {
                 'nuclei': (
-                    (
-                        jnp.unique(charges, size=n_nuc, return_inverse=True)[-1]
-                        if atom_type_embeddings
-                        else jnp.arange(n_nuc)
-                    )
-                    + (1 if n_up == n_down else 2)
-                ),
+                    jnp.unique(charges, size=n_nuc, return_inverse=True)[-1]
+                    if atom_type_embeddings
+                    else jnp.arange(n_nuc)
+                ) + (1 if n_up == n_down else 2),
                 'electrons': jnp.array(n_up * [0] + n_down * [int(n_up != n_down)]),
             },
         }

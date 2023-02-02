@@ -12,9 +12,9 @@ from deepqmc.physics import laplacian
         ({'backflow_channels': 2}, {}),
         ({'confs': [[0, 1, 0, 1], [0, 2, 0, 2]]}, {}),
     ],
-    ids=lambda x: ','.join(f'{k}={v}' for k, v in x.items())
-    if isinstance(x, dict)
-    else x,
+    ids=lambda x: (
+        ','.join(f'{k}={v}' for k, v in x.items()) if isinstance(x, dict) else x
+    ),
 )
 class TestPauliNet:
     def test_psi(self, helpers, kwargs, omni_kwargs, ndarrays_regression):
