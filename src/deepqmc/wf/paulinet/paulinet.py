@@ -159,16 +159,17 @@ class PauliNet(WaveFunction):
             fs_mult, fs_add = fs[:, : fs.shape[1] // 2], fs[:, fs.shape[1] // 2 :]
         return self.backflow_op(xs, fs_mult, fs_add, dists_nuc)
 
-    def __call__(self, rs, return_mos=False):
-        n_elec = rs.shape[-2]
-        n_nuc = len(self.mol.coords)
-        diffs_nuc = pairwise_diffs(rs.reshape(-1, 3), self.mol.coords)
-        dists_nuc = jnp.sqrt(diffs_nuc[..., -1]).reshape(-1, n_elec, n_nuc)
-        dists_elec = pairwise_self_distance(rs, full=True)
+    def __call__(self, phys_conf, return_mos=False):
+        n_elec = phys_conf.r.shape[-2]
+        diffs_nuc = pairwise_diffs(phys_conf.r, phys_conf.R)
+        dists_nuc = jnp.sqrt(diffs_nuc[..., -1]).reshape(
+            -1, n_elec, self.mol.n_particles[0]
+        )
+        dists_elec = pairwise_self_distance(phys_conf.r, full=True)
         aos = self.basis(diffs_nuc)
         xs = self.mo_coeff(aos)
         xs = jnp.expand_dims(xs, axis=-3)
-        J, fs = self.omni(rs) if self.omni else (None, None)
+        J, fs = self.omni(phys_conf) if self.omni else (None, None)
         if fs is not None and self.backflow_type == 'orbital':
             xs = self._backflow_op(xs, fs, dists_nuc)
         n_up = self.n_up

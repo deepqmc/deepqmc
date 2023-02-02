@@ -24,7 +24,6 @@ class TestMolecule:
                 'charge': mol.charge,
                 'spin': mol.spin,
                 'charges': mol.charges,
-                'coords': mol.coords,
                 'n_nuc': mol.n_nuc,
                 'n_up': mol.n_up,
                 'n_down': mol.n_down,

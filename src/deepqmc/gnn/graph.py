@@ -247,7 +247,7 @@ def concatenate_edges(edges_and_occs):
 
 
 def MolecularGraphEdgeBuilder(
-    n_nuc, n_up, n_down, nuc_coords, edge_types, kwargs_by_edge_type=None
+    n_nuc, n_up, n_down, edge_types, kwargs_by_edge_type=None
 ):
     r"""
     Create a function that builds many types of molecular edges.
@@ -256,7 +256,6 @@ def MolecularGraphEdgeBuilder(
         n_nuc (int): number of nuclei.
         n_up (int): number of spin-up electrons.
         n_down (int): number of spin-down electrons.
-        nuc_coords (float, (:math:`N_\text{nuc}`, 3)): coordinates of nuclei.
         edge_types (List[str]): list of edge type names to build. Possible names are:
 
                 - ``'nn'``: nuclei->nuclei edges
@@ -317,7 +316,8 @@ def MolecularGraphEdgeBuilder(
         for builder_type in builder_mapping[edge_type]
     }
 
-    def build_same(r, occs):
+    def build_same(phys_conf, occs):
+        r = phys_conf.r
         return concatenate_edges(
             [
                 builders['uu'](r[:n_up], r[:n_up], occs['same'][0]),
@@ -325,7 +325,8 @@ def MolecularGraphEdgeBuilder(
             ]
         )
 
-    def build_anti(r, occs):
+    def build_anti(phys_conf, occs):
+        r = phys_conf.r
         return concatenate_edges(
             [
                 builders['ud'](r[:n_up], r[n_up:], occs['anti'][0]),
@@ -334,26 +335,27 @@ def MolecularGraphEdgeBuilder(
         )
 
     build_rules = {
-        'nn': lambda r, occs: builders['nn'](nuc_coords, nuc_coords, occs['nn']),
-        'ne': lambda r, occs: builders['ne'](nuc_coords, r, occs['ne']),
-        'en': lambda r, occs: builders['en'](r, nuc_coords, occs['en']),
+        'nn': lambda pc, occs: builders['nn'](pc.R, pc.R, occs['nn']),
+        'ne': lambda pc, occs: builders['ne'](pc.R, pc.r, occs['ne']),
+        'en': lambda pc, occs: builders['en'](pc.r, pc.R, occs['en']),
         'same': build_same,
         'anti': build_anti,
     }
 
-    def build(r, occupancies):
+    def build(phys_conf, occupancies):
         r"""
         Build many types of molecular graph edges.
 
         Args:
-            r (float (:math:`N_\text{elec}`, 3)): electron coordinates.
+            phys_conf (~deepqmc.types.PhysicalConfiguration): the physical
+                configuration of the molecule.
             occupancies (dict): mapping of edge type names to arrays where the occupancy
                 of the given edge type is stored.
         """
-        assert r.shape[0] == n_up + n_down
+        assert phys_conf.r.shape[0] == n_up + n_down
 
         edges_and_occs = {
-            edge_type: build_rules[edge_type](r, occupancies)
+            edge_type: build_rules[edge_type](phys_conf, occupancies)
             for edge_type in edge_types
         }
         edges = {k: edge_and_occ[0] for k, edge_and_occ in edges_and_occs.items()}

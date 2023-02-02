@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from jax import lax
 
 from .physics import pairwise_diffs, pairwise_self_distance
+from .types import PhysicalConfiguration
 from .utils import check_overflow, multinomial_resampling, split_dict
 
 __all__ = [
@@ -51,14 +52,15 @@ class MetropolisSampler(Sampler):
 
     WALKER_STATE = ['r', 'psi', 'age']
 
-    def __init__(self, hamil, *, tau=1.0, target_acceptance=0.57, max_age=None):
+    def __init__(self, hamil, R, *, tau=1.0, target_acceptance=0.57, max_age=None):
         self.hamil = hamil
+        self.R = jnp.asarray(R, dtype=jnp.float32)
         self.initial_tau = tau
         self.target_acceptance = target_acceptance
         self.max_age = max_age
 
     def _update(self, state, wf):
-        psi, wf_state = jax.vmap(wf)(state['wf'], state['r'])
+        psi, wf_state = jax.vmap(wf)(state['wf'], self.phys_conf(state['r']))
         state = {**state, 'psi': psi, 'wf': wf_state}
         return state
 
@@ -67,7 +69,7 @@ class MetropolisSampler(Sampler):
 
     def init(self, rng, wf, n, state_callback=None, wf_state=None):
         state = {
-            'r': self.hamil.init_sample(rng, n),
+            'r': self.hamil.init_sample(rng, self.R, n).r,
             'age': jnp.zeros(n, jnp.int32),
             'tau': jnp.array(self.initial_tau),
             'wf': wf_state or {},
@@ -123,7 +125,10 @@ class MetropolisSampler(Sampler):
             'sampling/log_psi/std': jnp.std(state['psi'].log),
             'sampling/dists/mean': jnp.mean(pairwise_self_distance(state['r'])),
         }
-        return state, state['r'], stats
+        return state, self.phys_conf(state['r']), stats
+
+    def phys_conf(self, r, **kwargs):
+        return PhysicalConfiguration(jnp.tile(self.R[None], (len(r), 1, 1)), r)
 
 
 class LangevinSampler(MetropolisSampler):
@@ -139,11 +144,13 @@ class LangevinSampler(MetropolisSampler):
         @jax.vmap
         @partial(jax.value_and_grad, argnums=1, has_aux=True)
         def wf_and_force(state, r):
-            psi, state = wf(state, r)
+            psi, state = wf(state, PhysicalConfiguration(self.R, r))
             return psi.log, (psi, state)
 
         (_, (psi, wf_state)), force = wf_and_force(state['wf'], state['r'])
-        force = clean_force(force, state['r'], self.hamil.mol, tau=state['tau'])
+        force = clean_force(
+            force, self.phys_conf(state['r']), self.hamil.mol, tau=state['tau']
+        )
         state = {**state, 'psi': psi, 'force': force, 'wf': wf_state}
         return state
 
@@ -186,7 +193,7 @@ class DecorrSampler(Sampler):
             jax.random.split(rng, self.length),
         )
         stats = {k: v[-1] for k, v in stats.items()}
-        return state, state['r'], stats
+        return state, self.phys_conf(state['r']), stats
 
 
 class ResampledSampler(Sampler):
@@ -300,15 +307,19 @@ def crossover_parameter(z, f, charge):
     return (1 + jnp.sum(f_unit * z_unit, axis=-1)) / 2 + Z2z2 / (10 * (4 + Z2z2))
 
 
-def clean_force(force, r, mol, *, tau):
-    z, idx = diffs_to_nearest_nuc(jnp.reshape(r, (-1, 3)), mol.coords)
+def clean_force(force, phys_conf, mol, *, tau):
+    z, idx = diffs_to_nearest_nuc(
+        jnp.reshape(phys_conf.r, (-1, 3)), phys_conf.R.reshape(-1, 3)
+    )
     a = crossover_parameter(z, jnp.reshape(force, (-1, 3)), mol.charges[idx])
-    z, a = jnp.reshape(z, (len(r), -1, 4)), jnp.reshape(a, (len(r), -1))
+    z, a = jnp.reshape(z, (len(phys_conf.r), -1, 4)), jnp.reshape(
+        a, (len(phys_conf.r), -1)
+    )
     av2tau = a * jnp.sum(force**2, axis=-1) * tau
     # av2tau can be small or zero, so the following expression must handle that
     factor = 2 / (jnp.sqrt(1 + 2 * av2tau) + 1)
     force = factor[..., None] * force
-    eps = jnp.finfo(r.dtype).eps
+    eps = jnp.finfo(phys_conf.r.dtype).eps
     norm_factor = jnp.minimum(
         1.0,
         jnp.sqrt(z[..., -1])
@@ -340,9 +351,9 @@ def equilibrate(
     buffer_size = block_size * n_blocks
     buffer = []
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        state, r, stats = sample_wf(rng, state)
+        state, phys_conf, stats = sample_wf(rng, state)
         yield step, state, stats
-        buffer = [*buffer[-buffer_size + 1 :], criterion(r).item()]
+        buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]
         if len(buffer) < buffer_size:
             continue
         b1, b2 = buffer[:block_size], buffer[-block_size:]

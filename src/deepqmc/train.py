@@ -199,7 +199,7 @@ def train(  # noqa: C901
                 partial(ansatz.apply, params),
                 sampler,
                 smpl_state,
-                lambda r: pairwise_self_distance(r).mean(),
+                lambda phys_conf: pairwise_self_distance(phys_conf.r).mean(),
                 pbar,
                 state_callback,
                 block_size=10,

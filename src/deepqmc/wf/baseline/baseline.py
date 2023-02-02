@@ -34,8 +34,8 @@ class Baseline(WaveFunction):
         )
         self.confs = confs
 
-    def __call__(self, r, return_mos=False):
-        diffs = pairwise_diffs(r, self.mol.coords)
+    def __call__(self, phys_conf, return_mos=False):
+        diffs = pairwise_diffs(phys_conf.r, phys_conf.R)
         aos = self.basis(diffs)
         mos = self.mo_coeff(aos)
         conf_up, conf_down = self.confs[..., : self.n_up], self.confs[..., self.n_up :]
@@ -51,7 +51,7 @@ class Baseline(WaveFunction):
         return Psi(jnp.sign(psi), jnp.log(jnp.abs(psi)))
 
     @classmethod
-    def from_mol(cls, mol, *, basis='6-31G', cas=None, **kwargs):
+    def from_mol(cls, mol, R, *, basis='6-31G', cas=None, **kwargs):
         r"""Create input to the constructor from a :class:`~deepqmc.Molecule`.
 
         Args:
@@ -59,7 +59,7 @@ class Baseline(WaveFunction):
             basis (str): the name of a Gaussian basis set.
             cas (Tuple[int,int]): optional the active space specification for CAS-SCF.
         """
-        mol_pyscf, (mf, mc) = pyscf_from_mol(mol, basis, cas, **kwargs)
+        mol_pyscf, (mf, mc) = pyscf_from_mol(mol, R, basis, cas, **kwargs)
         centers, shells = GTOBasis.from_pyscf(mol_pyscf)
         mo_coeff = jnp.asarray(mc.mo_coeff if mc else mf.mo_coeff)
         ao_overlap = jnp.asarray(mf.mol.intor('int1e_ovlp_cart'))

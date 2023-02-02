@@ -8,15 +8,16 @@ from deepqmc.physics import local_potential, nonlocal_potential
 class TestPhysics:
     def test_pseudo_potentials(self, helpers, name, pp_type, ndarrays_regression):
         mol = helpers.mol(name, pp_type)
-        params, state, paulinet, rs = helpers.create_paulinet(
-            hamil=helpers.hamil(mol, elec_std=0.45)
+        hamil = helpers.hamil(mol)
+        params, state, paulinet, phys_conf = helpers.create_paulinet(
+            hamil, R=helpers.R(name), phys_conf_kwargs={'elec_std': 0.45}
         )
-        wf = lambda state, r: paulinet.apply(params, state, r)[0]
+        wf = lambda state, phys_conf: paulinet.apply(params, state, phys_conf)[0]
         ndarrays_regression.check(
             {
-                'local_potential': local_potential(rs, mol),
+                'local_potential': local_potential(phys_conf, mol),
                 'nonlocal_potential': (
-                    nonlocal_potential(helpers.rng(), rs, mol, state, wf)
+                    nonlocal_potential(helpers.rng(), phys_conf, mol, state, wf)
                     if pp_type
                     else 0
                 ),

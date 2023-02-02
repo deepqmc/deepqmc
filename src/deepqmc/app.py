@@ -6,6 +6,7 @@ import warnings
 from pathlib import Path
 
 import hydra
+import jax
 import yaml
 from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import OmegaConf
@@ -31,22 +32,27 @@ warnings.filterwarnings(
 )
 
 
+def nuclear_configuration(coords, unit):
+    unit_factor = {'bohr': 1.0, 'angstrom': 1 / 0.52917721092}[unit]
+    return unit_factor * jax.numpy.asarray(coords)
+
+
 def instantiate_ansatz(hamil, ansatz):
     import haiku as hk
 
     return hk.without_apply_rng(
         hk.transform_with_state(
-            lambda r, return_mos=False: ansatz(hamil)(r, return_mos)
+            lambda phys_conf, return_mos=False: ansatz(hamil)(phys_conf, return_mos)
         )
     )
 
 
-def train_from_factories(hamil, ansatz, sampler, **kwargs):
+def train_from_factories(hamil, ansatz, sampler, nuc_config, **kwargs):
     from .sampling import chain
     from .train import train
 
     ansatz = instantiate_ansatz(hamil, ansatz)
-    sampler = chain(*sampler[:-1], sampler[-1](hamil))
+    sampler = chain(*sampler[:-1], sampler[-1](hamil, nuc_config))
     return train(hamil, ansatz, sampler=sampler, **kwargs)
 
 

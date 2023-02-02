@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 from scipy.special import legendre
 
+from .types import PhysicalConfiguration
 from .utils import rot_y, rot_z, sph2cart, triu_flat
 
 __all__ = ()
@@ -31,18 +32,19 @@ def pairwise_self_distance(coords, full=False):
     return dists
 
 
-def nuclear_energy(mol):
-    coords, charges = mol.coords, mol.ns_valence
-    coulombs = triu_flat(charges[:, None] * charges) / pairwise_self_distance(coords)
+def nuclear_energy(phys_conf, mol):
+    coulombs = triu_flat(mol.charges[:, None] * mol.charges) / pairwise_self_distance(
+        phys_conf.R
+    )
     return coulombs.sum()
 
 
-def electronic_potential(rs):
-    dists = pairwise_self_distance(rs)
+def electronic_potential(phys_conf):
+    dists = pairwise_self_distance(phys_conf.r)
     return (1 / dists).sum(axis=-1)
 
 
-def local_potential(rs, mol):
+def local_potential(phys_conf, mol):
     """Return the local or nuclear potential of the whole system.
 
     Evaluates either the classical nuclear potential V_nuc(r) = -Z/r or the local
@@ -51,7 +53,7 @@ def local_potential(rs, mol):
     contributions from all the electrons and nuclei.
     """
 
-    dists = pairwise_distance(rs, mol.coords)
+    dists = pairwise_distance(phys_conf.r, phys_conf.R)
     Z_eff = mol.charges - mol.ns_core  # effective charge of the nuclei
     effective_coulomb_potential = -(Z_eff / dists).sum(axis=(-1, -2))
     if not mol.any_pp:
@@ -100,18 +102,22 @@ UNIT_ICOSAHEDRON = sph2cart(get_unit_icosahedron_sph())
 QUADRATURE_THETAS = get_unit_icosahedron_sph()[:, 0]
 
 
-def get_quadrature_points(rng, nucleus_position, rs):
+def get_quadrature_points(rng, nucleus_position, phys_conf):
     """
-    Transform electron configuration 'rs' of size (N,3) into an array quadrature points.
+    Transform :data:`phys_conf` of size (N,3) into an array quadrature points.
 
-    Return array of size (N,12,N,3) that includes all the 12 quadrature point
+    Return a phys_conf of size (N,12,N,3) that includes all the 12 quadrature point
     configurations (i.e. reference electron position is shifted to another icosahedron
     vertex) corresponding to N different reference electron.
     """
 
-    norm = jnp.linalg.norm(rs - nucleus_position, axis=-1)
-    theta = jnp.arccos((rs - nucleus_position)[..., 2] / norm)
-    phi = jnp.arctan2((rs - nucleus_position)[..., 1], (rs - nucleus_position)[..., 0])
+    N = len(phys_conf.r)
+    norm = jnp.linalg.norm(phys_conf.r - nucleus_position, axis=-1)
+    theta = jnp.arccos((phys_conf.r - nucleus_position)[..., 2] / norm)
+    phi = jnp.arctan2(
+        (phys_conf.r - nucleus_position)[..., 1],
+        (phys_conf.r - nucleus_position)[..., 0],
+    )
     phi_random = jax.random.uniform(rng, phi.shape, minval=0, maxval=jnp.pi / 5)
 
     z_rot_random = jnp.moveaxis(rot_z(phi_random), -1, -3)
@@ -137,19 +143,20 @@ def get_quadrature_points(rng, nucleus_position, rs):
         norm, z_rot, y_rot, z_rot_random, UNIT_ICOSAHEDRON, nucleus_position
     )  # shape: (12,N,3)
     # we still need to pad the quadrature points with other electron's coordinates
-    quadrature_points_copied = jnp.tile(quadrature_points, (len(rs), 1, 1, 1))
-    rs_copied = jnp.tile(rs, (len(rs), 12, 1, 1))
+    quadrature_points_copied = jnp.tile(quadrature_points, (N, 1, 1, 1))
+    rs_copied = jnp.tile(phys_conf.r, (N, 12, 1, 1))
     criterion = jnp.moveaxis(
-        jnp.moveaxis(jnp.tile(jnp.eye(len(rs)), (12, 3, 1, 1)), -3, -1), -4, -3
+        jnp.moveaxis(jnp.tile(jnp.eye(N), (12, 3, 1, 1)), -3, -1), -4, -3
     )
     quadrature_rs = jnp.where(
         criterion, quadrature_points_copied, rs_copied
     )  # shape: (N,12,N,3)
+    return PhysicalConfiguration(
+        jnp.tile(phys_conf.R[None, None], (N, 12, 1, 1)), quadrature_rs
+    )
 
-    return quadrature_rs
 
-
-def nonlocal_potential(rng, rs, mol, state, wf):
+def nonlocal_potential(rng, phys_conf, mol, state, wf):
     r"""Calculate the non-local term of the pseudopotential.
 
     Formulas are based on data from [Burkatzki et al. 2007] or
@@ -161,15 +168,16 @@ def nonlocal_potential(rng, rs, mol, state, wf):
     replacing the remaining vmap with fori_loop over the 12 quadrature points.
 
     Args:
-        rs (float (:math:`N_\text{elec}`, 3)): electron coordinates.
+        phys_conf (:class:`deepqmc.types.PhysicalConfiguration`): electron and
+            nuclear coordinates.
         mol (:class:`deepqmc.Molecule`): a molecule that is used to load the
-            pseudopotential parameters and nuclear positions.
+            pseudopotential parameters.
         state (dic): wave function state.
         wf (deepqmc.wf.WaveFunction): the wave function ansatz.
     """
 
     # get value of the denominator (which is constant)
-    denominator_wf_sign, denominator_wf_exponent = wf(state, rs)
+    denominator_wf_sign, denominator_wf_exponent = wf(state, phys_conf)
 
     # vmap over 12 integration quadrature points
     wf_vmapped = jax.vmap(wf, in_axes=(None, 0), out_axes=(0))
@@ -190,14 +198,14 @@ def nonlocal_potential(rng, rs, mol, state, wf):
             axis=-1,
         )
 
-        quadrature_rs = get_quadrature_points(rng, mol.coords[nucleus_index], rs)
+        quadrature_phys_conf = get_quadrature_points(rng, phys_conf.R[nucleus_index], phys_conf)
 
         # (2l+1)/12 coefficient
         coefs = jnp.tile(
-            (jnp.arange(l_max_p1) * 2 + 1) / 12, (len(rs), 1)
+            (jnp.arange(l_max_p1) * 2 + 1) / 12, (len(phys_conf.r), 1)
         )  # shape: (N,l_max)
 
-        dists = pairwise_distance(rs, mol.coords[nucleus_index, None])
+        dists = pairwise_distance(phys_conf.r, phys_conf.R[nucleus_index, None])
         nl_pot_coefs = jnp.einsum(
             'kj,ikj->ikj',
             nl_params[:, 1, :],
@@ -207,13 +215,13 @@ def nonlocal_potential(rng, rs, mol, state, wf):
         def nl_potential_for_one_nucleus_and_one_electron(
             i,
             val,
-            quadrature_rs=quadrature_rs,
+            quadrature_phys_conf=quadrature_phys_conf,
             legendre_values=legendre_values,
             coefs=coefs,
             nl_pot_coefs=nl_pot_coefs,
         ):
             # numerator
-            sign, exponent = wf_vmapped(state, quadrature_rs[i])  # shape (12,)
+            sign, exponent = wf_vmapped(state, quadrature_phys_conf[i])  # shape (12,)
             wf_ratio = (
                 denominator_wf_sign * sign * jnp.exp(exponent - denominator_wf_exponent)
             )  # shape (12,)

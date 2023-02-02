@@ -6,7 +6,7 @@ from pathlib import Path
 class TestApp:
     ARGS = [
         'deepqmc',
-        'hamil.mol.name=H2',
+        'hamil/mol=H2',
         'device=cpu',
         'task.steps=1',
         '+task.max_eq_steps=1',

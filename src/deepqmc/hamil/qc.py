@@ -1,6 +1,7 @@
 from functools import partial
 
 import jax.numpy as jnp
+import jax_dataclasses as jdc
 from jax import random, vmap
 
 from ..physics import (
@@ -11,6 +12,7 @@ from ..physics import (
     nuclear_energy,
     pairwise_distance,
 )
+from ..types import PhysicalConfiguration
 from ..utils import argmax_random_choice
 from .base import Hamiltonian
 
@@ -37,7 +39,7 @@ class MolecularHamiltonian(Hamiltonian):
         self.mol = mol
         self.elec_std = elec_std
 
-    def init_sample(self, rng, n):
+    def init_sample(self, rng, Rs, n, elec_std=1.0):
         r"""
         Guess some initial electron positions.
 
@@ -49,9 +51,13 @@ class MolecularHamiltonian(Hamiltonian):
 
         Args:
             rng (jax.random.PRNGKey): key used for PRNG.
+            Rs (float, (:data:`n`, :math:`N_\text{nuc}`, 3)): nuclear coordinates,
+                it is broadcasted if batch dimension (:data:`n`) is omitted
             n (int): the number of configurations to generate.
                 electrons around the nuclei.
         """
+
+        Rs = jnp.tile(Rs[None], (n, 1, 1)) if Rs.ndim == 2 else Rs
         rng_remainder, rng_normal, rng_spin = random.split(rng, 3)
         valence_electrons = self.mol.ns_valence - self.mol.charge / self.mol.n_nuc
         base = jnp.floor(valence_electrons).astype(jnp.int32)
@@ -70,8 +76,8 @@ class MolecularHamiltonian(Hamiltonian):
             electrons_of_atom += n_extra
         idxs = []
         rng_spin = random.split(rng_spin, len(electrons_of_atom))
-        for rng_spin, elec_of_atom in zip(rng_spin, electrons_of_atom):
-            up, down = self.distribute_spins(rng_spin, elec_of_atom)
+        for rng_spin, elec_of_atom, R in zip(rng_spin, electrons_of_atom, Rs):
+            up, down = self.distribute_spins(rng_spin, R, elec_of_atom)
             idxs.append(
                 jnp.concatenate(
                     [
@@ -85,12 +91,12 @@ class MolecularHamiltonian(Hamiltonian):
                 )
             )
         idxs = jnp.stack(idxs)
-        centers = self.mol.coords[idxs]
-        std = self.elec_std * jnp.sqrt(self.mol.charges)[idxs][..., None]
+        centers = Rs[jnp.broadcast_to(jnp.arange(n)[:, None], idxs.shape), idxs]
+        std = elec_std * jnp.sqrt(self.mol.charges)[idxs][..., None]
         rs = centers + std * random.normal(rng_normal, centers.shape)
-        return rs
+        return PhysicalConfiguration(Rs, rs)
 
-    def distribute_spins(self, rng, elec_of_atom):
+    def distribute_spins(self, rng, R, elec_of_atom):
         up, down = jnp.zeros_like(elec_of_atom), jnp.zeros_like(elec_of_atom)
         # try to distribute electron pairs evenly across atoms
         for i in range(jnp.max(elec_of_atom)):
@@ -101,9 +107,7 @@ class MolecularHamiltonian(Hamiltonian):
 
         # distribute remaining electrons such that opposite spin electrons
         # end up close in an attempt to mimic covalent bonds
-        nearest_neighbor_indices = jnp.argsort(
-            pairwise_distance(self.mol.coords, self.mol.coords)
-        )
+        nearest_neighbor_indices = jnp.argsort(pairwise_distance(R, R))
         center = None
         i = 0
         while (elec_of_atom - up - down).sum():
@@ -122,14 +126,18 @@ class MolecularHamiltonian(Hamiltonian):
         return up, down
 
     def local_energy(self, wf, return_grad=False):
-        def loc_ene(rng, state, r, mol=self.mol):
-            lap_log_psis, quantum_force = laplacian(
-                lambda r: wf(state, r.reshape((-1, 3))).log
-            )(r.flatten())
+        def loc_ene(rng, state, phys_conf):
+            def wave_function(r):
+                pc = jdc.replace(phys_conf, r=r.reshape(-1, 3))
+                return wf(state, pc).log
+
+            lap_log_psis, quantum_force = laplacian(wave_function)(
+                phys_conf.r.flatten()
+            )
             Es_kin = -0.5 * (lap_log_psis + (quantum_force**2).sum(axis=-1))
-            Es_nuc = nuclear_energy(mol)
-            Vs_el = electronic_potential(r)
-            Vs_loc = local_potential(r, mol)
+            Es_nuc = nuclear_energy(phys_conf, self.mol)
+            Vs_el = electronic_potential(phys_conf)
+            Vs_loc = local_potential(phys_conf, self.mol)
             Es_loc = Es_kin + Vs_loc + Vs_el + Es_nuc
             stats = {
                 'hamil/V_el': Vs_el,
@@ -138,8 +146,8 @@ class MolecularHamiltonian(Hamiltonian):
                 'hamil/lap': lap_log_psis,
                 'hamil/quantum_force': (quantum_force**2).sum(axis=-1),
             }
-            if mol.any_pp:
-                Vs_nl = nonlocal_potential(rng, r, mol, state, wf)
+            if self.mol.any_pp:
+                Vs_nl = nonlocal_potential(rng, phys_conf.r, self.mol, state, wf)
                 Es_loc += Vs_nl
                 stats = {**stats, 'hamil/V_nl': Vs_nl}
 

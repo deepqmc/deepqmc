@@ -1,7 +1,9 @@
 import jax
 import jax.numpy as jnp
+import jax_dataclasses as jdc
 
 from ..physics import laplacian
+from ..types import PhysicalConfiguration
 from .base import Hamiltonian
 
 __all__ = ['QHOHamiltonian']
@@ -16,16 +18,21 @@ class QHOHamiltonian(Hamiltonian):
         self.nu = nu
 
     def local_energy(self, wf):
-        def loc_ene(rng, state, r):
-            pot = 1 / 2 * self.mass * self.nu**2 * jnp.sum(r**2)
-            lap_log, grad_log = laplacian(lambda x: wf(state, x).log)(r)
+        def loc_ene(rng, state, phys_conf):
+            def wave_function(r):
+                return wf(state, jdc.replace(phys_conf, r=r)).log
+
+            pot = 1 / 2 * self.mass * self.nu**2 * jnp.sum(phys_conf.r**2)
+            lap_log, grad_log = laplacian(wave_function)(phys_conf.r)
             kin = -1 / (2 * self.mass) * (lap_log + jnp.sum(grad_log**2))
             return kin + pot, {}
 
         return loc_ene
 
-    def init_sample(self, rng, n):
-        return jax.random.normal(rng, (n, *self.dim))
+    def init_sample(self, rng, Rs, n):
+        return PhysicalConfiguration(
+            jnp.zeros((n, *self.dim)), jax.random.normal(rng, (n, *self.dim))
+        )
 
     def stats(self, r):
         mean = jnp.mean(r, axis=0, keepdims=True)

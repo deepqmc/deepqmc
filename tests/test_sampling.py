@@ -20,7 +20,7 @@ def wf(helpers, request):
     hamil = helpers.hamil()
     paulinet = helpers.transform_model(PauliNet, hamil)
     params, state = vmap(paulinet.init, (None, 0), (None, 0))(
-        helpers.rng(), helpers.rs(n=request.cls.SAMPLE_SIZE)
+        helpers.rng(), helpers.phys_conf(n=request.cls.SAMPLE_SIZE)
     )
     request.cls.wf = partial(paulinet.apply, params)
     request.cls.wf_state = state
@@ -46,7 +46,7 @@ class TestSampling:
     SAMPLE_SIZE = 100
 
     def test_sampler_init(self, helpers, samplers, ndarrays_regression):
-        sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
+        sampler = chain(*samplers[:-1], samplers[-1](self.hamil, helpers.R()))
         smpl_state = sampler.init(
             helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback, self.wf_state
         )
@@ -56,7 +56,7 @@ class TestSampling:
         )
 
     def test_sampler_sample(self, helpers, samplers, ndarrays_regression):
-        sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
+        sampler = chain(*samplers[:-1], samplers[-1](self.hamil, helpers.R()))
         smpl_state = sampler.init(
             helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback, self.wf_state
         )

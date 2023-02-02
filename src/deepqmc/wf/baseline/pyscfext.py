@@ -10,7 +10,7 @@ from ...utils import pad_list_of_3D_arrays_to_one_array
 log = logging.getLogger(__name__)
 
 
-def pyscf_from_mol(mol, basis, cas=None, **kwargs):
+def pyscf_from_mol(mol, R, basis, cas=None, **kwargs):
     r"""Create a pyscf molecule and perform an SCF calculation on it.
 
     Args:
@@ -27,7 +27,7 @@ def pyscf_from_mol(mol, basis, cas=None, **kwargs):
             ' implemented for pretraining.'
         )
     mol = gto.M(
-        atom=mol.as_pyscf(),
+        atom=mol.as_pyscf(R),
         unit='bohr',
         basis=basis,
         charge=mol.charge,

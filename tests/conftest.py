@@ -42,17 +42,21 @@ class Helpers:
         return Molecule.from_name(name, pp_type=pp_type)
 
     @staticmethod
-    def hamil(mol=None, **kwargs):
+    def hamil(mol=None):
         mol = mol or Helpers.mol()
-        return MolecularHamiltonian(mol=mol, **kwargs)
+        return MolecularHamiltonian(mol=mol)
 
     @staticmethod
-    def rs(hamil=None, n=1):
+    def R(mol_name='LiH'):
+        return Molecule.default_coords_from_name(mol_name)
+
+    @staticmethod
+    def phys_conf(hamil=None, R=None, n=1, elec_std=1.0):
         hamil = hamil or Helpers.hamil()
-        rs = hamil.init_sample(Helpers.rng(), n)
-        if n == 1:
-            rs = rs[0]
-        return rs
+        if R is None:
+            R = Helpers.R()
+        phys_conf = hamil.init_sample(Helpers.rng(), R, n, elec_std)
+        return phys_conf[0] if n == 1 else phys_conf
 
     @staticmethod
     def transform_model(model, *model_args, **model_kwargs):
@@ -70,15 +74,24 @@ class Helpers:
         return params, state
 
     @staticmethod
-    def create_paulinet(hamil=None, rs=None, init_model_kwargs=None, **kwargs):
+    def create_paulinet(
+        hamil=None,
+        phys_conf=None,
+        R=None,
+        init_model_kwargs=None,
+        phys_conf_kwargs=None,
+        paulinet_kwargs=None,
+    ):
         hamil = hamil or Helpers.hamil()
-        return_rs = rs is None
-        rs = rs or Helpers.rs(hamil)
-        paulinet = Helpers.transform_model(PauliNet, hamil, **kwargs)
-        params, state = Helpers.init_model(paulinet, rs, **(init_model_kwargs or {}))
+        return_phys_conf = phys_conf is None
+        phys_conf = phys_conf or Helpers.phys_conf(hamil, R, **(phys_conf_kwargs or {}))
+        paulinet = Helpers.transform_model(PauliNet, hamil, **(paulinet_kwargs or {}))
+        params, state = Helpers.init_model(
+            paulinet, phys_conf, **(init_model_kwargs or {})
+        )
         ret = (params, state, paulinet)
-        if return_rs:
-            ret += (rs,)
+        if return_phys_conf:
+            ret += (phys_conf,)
         return ret
 
 

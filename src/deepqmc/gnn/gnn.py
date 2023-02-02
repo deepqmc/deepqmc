@@ -125,13 +125,11 @@ class GraphNeuralNetwork(hk.Module):
         n_nuc, n_up, n_down = mol.n_particles
         n_atom_types = mol.n_atom_types
         charges = mol.charges
-        coords = mol.coords
         if ghost_coords is not None:
-            coords = jnp.concatenate([coords, jnp.asarray(ghost_coords)])
             charges = jnp.concatenate([charges, jnp.zeros(len(ghost_coords))])
-            n_nuc = len(coords)
+            n_nuc += len(ghost_coords)
             n_atom_types += 1
-        self.coords = coords
+        self.ghost_coords = ghost_coords
         self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
         self.cutoff = cutoff
         self.embedding_dim = embedding_dim
@@ -252,13 +250,12 @@ class GraphNeuralNetwork(hk.Module):
         """
         raise NotImplementedError
 
-    def edge_factory(self, r, occupancies):
+    def edge_factory(self, phys_conf, occupancies):
         r"""Return a function that builds all the edges used in the GNN."""
         edge_factory = MolecularGraphEdgeBuilder(
             self.n_nuc,
             self.n_up,
             self.n_down,
-            self.coords,
             self.edge_types,
             kwargs_by_edge_type={
                 typ: {
@@ -268,18 +265,19 @@ class GraphNeuralNetwork(hk.Module):
                 for typ in self.edge_types
             },
         )
-        return edge_factory(r, occupancies)
+        return edge_factory(phys_conf, occupancies)
 
     def process_final_embedding(self, final_embedding):
         r"""Process final embedding produced by last layer."""
         return final_embedding.electrons
 
-    def __call__(self, r):
+    def __call__(self, phys_conf):
         r"""
         Execute the graph neural network.
 
         Args:
-            r (float, (:math:`N_\text{elec}`, 3)): electron coordinates.
+            phys_conf (PhysicalConfiguration): the physical configuration
+                of the molecule.
 
         Returns:
             float, (:math:`N_\text{elec}`, :data:`embedding_dim`):
@@ -291,8 +289,18 @@ class GraphNeuralNetwork(hk.Module):
             dtype=jnp.int32,
             init=self.init_state,
         )
+        if self.ghost_coords is not None:
+            phys_conf = phys_conf._replace(
+                R=jnp.concatenate(
+                    [
+                        phys_conf.R,
+                        jnp.tile(self.ghost_coords[None], (len(phys_conf.R), 1, 1)),
+                    ],
+                    axis=-2,
+                )
+            )
         graph_nodes = self.node_factory()
-        graph_edges, occupancies = self.edge_factory(r, occupancies)
+        graph_edges, occupancies = self.edge_factory(phys_conf, occupancies)
         hk.set_state('occupancies', occupancies)
         graph = Graph(graph_nodes, graph_edges)
 
