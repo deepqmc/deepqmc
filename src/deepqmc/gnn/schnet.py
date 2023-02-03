@@ -75,9 +75,11 @@ class SchNetLayer(MessagePassingLayer):
 
         self.w = {
             typ: MLP(
-                self.edge_feat_dim[typ]
-                if not deep_w or self.first_layer
-                else self.embedding_dim,
+                (
+                    self.edge_feat_dim[typ]
+                    if not deep_w or self.first_layer
+                    else self.embedding_dim
+                ),
                 self.embedding_dim,
                 name=f'w_{typ}',
                 **subnet_kwargs_by_lbl['w'],

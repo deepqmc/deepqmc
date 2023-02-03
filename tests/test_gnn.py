@@ -80,9 +80,9 @@ class TestSchNet:
             {'layer_kwargs': {'shared_g': True}},
             {'layer_kwargs': {'shared_h': True}},
         ],
-        ids=lambda x: ','.join(f'{k}={v}' for k, v in x.items())
-        if isinstance(x, dict)
-        else x,
+        ids=lambda x: (
+            ','.join(f'{k}={v}' for k, v in x.items()) if isinstance(x, dict) else x
+        ),
     )
     def test_embedding(self, helpers, ndarrays_regression, kwargs):
         mol = helpers.mol()

@@ -191,10 +191,12 @@ class OmniNet(hk.Module):
             None
             if not self.backflow
             else (
-                self.backflow['up'](embeddings[..., : self.n_up, :]),
-                self.backflow['down'](embeddings[..., self.n_up :, :]),
+                (
+                    self.backflow['up'](embeddings[..., : self.n_up, :]),
+                    self.backflow['down'](embeddings[..., self.n_up :, :]),
+                )
+                if isinstance(self.backflow, dict)
+                else self.backflow(embeddings)
             )
-            if isinstance(self.backflow, dict)
-            else self.backflow(embeddings)
         )
         return jastrow, backflow
