@@ -35,6 +35,7 @@ dependencies = [
     'hydra-core',
     'jax[cuda]',
     'jaxtyping',
+    'jax-dataclasses',
     'kfac-jax',
     'pyscf',
     'tensorboard',

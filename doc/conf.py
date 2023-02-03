@@ -68,6 +68,7 @@ autodoc_mock_imports = [
     'tqdm',
     'uncertainties',
     'jax',
+    'jax_dataclasses',
     'kfac_jax',
     'haiku',
     'optax',
