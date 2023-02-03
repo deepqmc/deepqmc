@@ -7,6 +7,7 @@ from deepqmc.sampling import (
     DecorrSampler,
     LangevinSampler,
     MetropolisSampler,
+    MulticonfigurationSampler,
     ResampledSampler,
     chain,
 )
@@ -63,6 +64,60 @@ class TestSampling:
         sample = check_overflow(state_callback, sampler.sample)
         for step in range(4):
             smpl_state, _, stats = sample(helpers.rng(step), smpl_state, self.wf)
+        ndarrays_regression.check(
+            helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
+            default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
+        )
+
+
+@pytest.mark.parametrize(
+    'samplers',
+    [
+        (partial(MetropolisSampler, tau=0.1),),
+        (partial(LangevinSampler, tau=0.1),),
+    ],
+    ids=['Metropolis', 'Langevin'],
+)
+@pytest.mark.usefixtures('wf')
+class TestMulticonfigurationSampling:
+    SAMPLE_SIZE = 100
+    N_CONFIG = 2
+
+    def test_multiconfiguration_sampler_init(
+        self, helpers, samplers, ndarrays_regression
+    ):
+        sampler = MulticonfigurationSampler(
+            [
+                chain(*samplers[:-1], samplers[-1](self.hamil, helpers.R()))
+                for _ in range(self.N_CONFIG)
+            ]
+        )
+        smpl_state = sampler.init(
+            helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback, self.wf_state
+        )
+        ndarrays_regression.check(
+            helpers.flatten_pytree(smpl_state),
+            default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
+        )
+
+    def test_multiconfiguration_sampler_sample(
+        self, helpers, samplers, ndarrays_regression
+    ):
+        sampler = MulticonfigurationSampler(
+            [
+                chain(*samplers[:-1], samplers[-1](self.hamil, helpers.R()))
+                for _ in range(self.N_CONFIG)
+            ]
+        )
+        smpl_state = sampler.init(
+            helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback, self.wf_state
+        )
+        sample = check_overflow(state_callback, sampler.sample)
+        select_idxs = sampler.select_idxs(self.SAMPLE_SIZE, smpl_state)
+        for step in range(4):
+            smpl_state, phys_conf, stats = sample(
+                helpers.rng(step), smpl_state, self.wf, select_idxs
+            )
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
             default_tolerance={'rtol': 5e-4, 'atol': 1e-6},

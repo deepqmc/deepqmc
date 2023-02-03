@@ -1,10 +1,12 @@
 import logging
 from functools import partial
 from statistics import mean, stdev
+from typing import Sequence
 
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import jax_dataclasses as jdc
 from jax import lax
 
 from .physics import pairwise_diffs, pairwise_self_distance
@@ -274,6 +276,113 @@ class ResampledSampler(Sampler):
         return state, state['r'], stats
 
 
+class MulticonfigurationSampler(Sampler):
+    def __init__(self, samplers, config_idx_factory=None):
+        self.samplers = samplers if isinstance(samplers, Sequence) else [samplers]
+
+        def default_idx_factory(sample_size, n_config, *args, **kwargs):
+            assert not (sample_size % n_config)
+            return n_config * [sample_size // n_config]
+
+        self.config_idx_factory = config_idx_factory or default_idx_factory
+
+    def init(self, rng, wf, n, state_callback=None, wf_state=None):
+        wfs = self.assign_wfs(wf)
+        states = [
+            sampler.init(rng, wf, n, state_callback, wf_state)
+            for wf, sampler in zip(wfs, self.samplers)
+        ]
+        return states
+
+    def sample(self, rng, state, wave_function, select_idxs):
+        phys_confs, stats = [], []
+        wfs = self.assign_wfs(wave_function)
+        for i, rng in zip(range(len(self.samplers)), hk.PRNGSequence(rng)):
+            state[i], phys_conf, stat = self.samplers[i].sample(rng, state[i], wfs[i])
+            phys_confs.append(phys_conf)
+            stats.append({'per_config': stat})
+
+        phys_conf = self.join_configs(phys_confs, select_idxs)
+        stats = self.join_configs(stats, None)
+        return state, phys_conf, stats
+
+    def assign_wfs(self, wf):
+        r"""Assign WF models to all configurations.
+
+        This allows for using different WFs for each configuration,
+        useful e.g. with HF baselines.
+        """
+        return wf if isinstance(wf, Sequence) else len(self.samplers) * [wf]
+
+    def update(self, states, wf):
+        wfs = self.assign_wfs(wf)
+        return [
+            sampler.update(state, wf)
+            for sampler, state, wf in zip(self.samplers, states, wfs)
+        ]
+
+    def get_state(self, key, states, select_idxs, default=None):
+        try:
+            data = [state[key] for state in states]
+        except KeyError:
+            return default
+        data = self.join_configs(data, select_idxs)
+        return data
+
+    def join_configs(self, data_per_config, select_idxs):
+        if all([isinstance(d, PhysicalConfiguration) for d in data_per_config]):
+            # phys_conf is special because we need to store which config the samples
+            # are coming from
+            data_per_config = [
+                jdc.replace(pc, config_idx=i * jnp.ones(len(pc), dtype=jnp.int32))
+                for i, pc in enumerate(data_per_config)
+            ]
+        if select_idxs is None:
+            # data is zero dimensional
+            return jax.tree_util.tree_map(
+                lambda *xs: jnp.concatenate([x[select_idxs] for x in xs]),
+                *data_per_config,
+            )
+        return jax.tree_util.tree_map(
+            lambda *xs: jnp.concatenate(xs)[select_idxs], *data_per_config
+        )
+
+    def phys_conf(self, states, select_idxs):
+        phys_confs = [
+            sampler.phys_conf(state['r'])
+            for sampler, state in zip(self.samplers, states)
+        ]
+        return self.join_configs(phys_confs, select_idxs)
+
+    def select_idxs(self, sample_size, states, *args, **kwargs):
+        n_smpl_per_config = self.config_idx_factory(
+            sample_size, len(self), *args, **kwargs
+        )
+        start_pos = 0
+        idxs = []
+        for state, n in zip(states, n_smpl_per_config):
+            idxs.append(start_pos + jnp.arange(n))
+            start_pos += len(state['r'])
+        return jnp.concatenate(idxs)
+
+    def config_idx(self, sample_size, *args, **kwargs):
+        n_smpl_per_config = self.config_idx_factory(
+            sample_size, len(self), *args, **kwargs
+        )
+        return jnp.concatenate(
+            [
+                i * jnp.ones(n_smpl, dtype=jnp.int32)
+                for i, n_smpl in enumerate(n_smpl_per_config)
+            ]
+        )
+
+    def nuclear_configurations(self):
+        yield from (sampler.R for sampler in self.samplers)
+
+    def __len__(self):
+        return len(self.samplers)
+
+
 def chain(*samplers):
     r"""
     Combine multiple sampler types, to create advanced sampling schemes.
@@ -343,6 +452,7 @@ def equilibrate(
     state,
     criterion,
     steps,
+    sample_size,
     state_callback=None,
     *,
     block_size,
@@ -352,13 +462,14 @@ def equilibrate(
 
     @partial(check_overflow, state_callback)
     @jax.jit
-    def sample_wf(rng, state):
-        return sampler.sample(rng, state, wf)
+    def sample_wf(rng, state, select_idxs):
+        return sampler.sample(rng, state, wf, select_idxs)
 
     buffer_size = block_size * n_blocks
     buffer = []
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        state, phys_conf, stats = sample_wf(rng, state)
+        select_idxs = sampler.select_idxs(sample_size, state)
+        state, phys_conf, stats = sample_wf(rng, state, select_idxs)
         yield step, state, stats
         buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]
         if len(buffer) < buffer_size:

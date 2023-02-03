@@ -1,3 +1,5 @@
+from typing import Sequence
+
 import haiku as hk
 import jax
 import pytest
@@ -23,7 +25,7 @@ class Helpers:
 
     @staticmethod
     def flatten_pytree(d, parent_key='', sep=':'):
-        if isinstance(d, tuple):
+        if isinstance(d, Sequence):
             try:
                 d = d._asdict()
             except AttributeError:
@@ -31,7 +33,7 @@ class Helpers:
         items = []
         for k, v in d.items():
             key = parent_key + sep + k if parent_key else k
-            if isinstance(v, dict) or isinstance(v, tuple):
+            if isinstance(v, dict) or isinstance(v, Sequence):
                 items.extend(Helpers.flatten_pytree(v, parent_key=key, sep=sep).items())
             else:
                 items.append((key, v))

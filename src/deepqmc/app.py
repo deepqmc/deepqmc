@@ -32,9 +32,11 @@ warnings.filterwarnings(
 )
 
 
-def nuclear_configuration(coords, unit):
+def nuclear_configurations(coords, unit):
     unit_factor = {'bohr': 1.0, 'angstrom': 1 / 0.52917721092}[unit]
-    return unit_factor * jax.numpy.asarray(coords)
+    coords = jax.numpy.asarray(coords)
+    coords = coords if coords.ndim == 3 else [coords]
+    return [unit_factor * jax.numpy.asarray(coord) for coord in coords]
 
 
 def instantiate_ansatz(hamil, ansatz):
@@ -47,12 +49,12 @@ def instantiate_ansatz(hamil, ansatz):
     )
 
 
-def train_from_factories(hamil, ansatz, sampler, nuc_config, **kwargs):
+def train_from_factories(hamil, ansatz, sampler, nuc_configs, **kwargs):
     from .sampling import chain
     from .train import train
 
     ansatz = instantiate_ansatz(hamil, ansatz)
-    sampler = chain(*sampler[:-1], sampler[-1](hamil, nuc_config))
+    sampler = [chain(*sampler[:-1], sampler[-1](hamil, R)) for R in nuc_configs]
     return train(hamil, ansatz, sampler=sampler, **kwargs)
 
 

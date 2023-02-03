@@ -111,7 +111,7 @@ def get_quadrature_points(rng, nucleus_position, phys_conf):
     vertex) corresponding to N different reference electron.
     """
 
-    N = len(phys_conf.r)
+    N = len(phys_conf)
     norm = jnp.linalg.norm(phys_conf.r - nucleus_position, axis=-1)
     theta = jnp.arccos((phys_conf.r - nucleus_position)[..., 2] / norm)
     phi = jnp.arctan2(
@@ -152,7 +152,9 @@ def get_quadrature_points(rng, nucleus_position, phys_conf):
         criterion, quadrature_points_copied, rs_copied
     )  # shape: (N,12,N,3)
     return PhysicalConfiguration(
-        jnp.tile(phys_conf.R[None, None], (N, 12, 1, 1)), quadrature_rs
+        jnp.tile(phys_conf.R[None, None], (N, 12, 1, 1)),
+        quadrature_rs,
+        jnp.broadcast_to(phys_conf.config_idx, (N, 12)),
     )
 
 

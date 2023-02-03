@@ -25,3 +25,6 @@ class PhysicalConfiguration:
             self.r.__getitem__(idx),
             self.config_idx.__getitem__(idx),
         )
+
+    def __len__(self):
+        return len(self.r)

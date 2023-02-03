@@ -1,5 +1,8 @@
+from typing import Sequence
+
 import jax
 import jax.numpy as jnp
+from jax import ops
 from jax.random import uniform
 from jax.scipy.special import gammaln
 
@@ -78,9 +81,21 @@ def check_overflow(state_callback, func):
                 rng, smpl_state_prev := smpl_state, *args, **kwargs
             )
             if state_callback:
-                wf_state, overflow = state_callback(smpl_state['wf'])
+                wf_state = (
+                    [st['wf'] for st in smpl_state]
+                    if isinstance(smpl_state, Sequence)
+                    else smpl_state['wf']
+                )
+                wf_state, overflow = state_callback(wf_state)
                 if overflow:
-                    smpl_state = {**smpl_state_prev, 'wf': wf_state}
+                    smpl_state = (
+                        [
+                            {**prev, 'wf': st}
+                            for prev, st in zip(smpl_state_prev, wf_state)
+                        ]
+                        if isinstance(smpl_state, Sequence)
+                        else {**smpl_state_prev, 'wf': wf_state}
+                    )
                     continue
             return smpl_state, *other
 
@@ -102,6 +117,35 @@ def InverseSchedule(init_value, decay_rate):
 def argmax_random_choice(rng, x):
     mask = x == x.max()
     return jax.random.choice(rng, jnp.arange(len(x))[mask])
+
+
+def segment_nanmean(data, segment_ids, num_segments=None):
+    mask = ~jnp.isnan(data)
+    data_zero = jnp.where(mask, data, 0)
+    nanmean = ops.segment_sum(data_zero, segment_ids, num_segments) / mask.sum()
+    return nanmean
+
+
+def segment_nanstd(data, segment_ids, num_segments=None):
+    mask = ~jnp.isnan(data)
+    nanmean = segment_nanmean(data, segment_ids, num_segments)
+    nanstd = jnp.where(mask, (nanmean[segment_ids] - data) ** 2, 0)
+    nanstd = jnp.sqrt(ops.segment_sum(nanstd, segment_ids, num_segments) / mask.sum())
+    return nanstd
+
+
+def per_config_stats(n_configs, data, config_idx, prefix):
+    mean = segment_nanmean(data, config_idx, n_configs)
+    std = segment_nanstd(data, config_idx, n_configs)
+    mask = ~jnp.isnan(data)
+    minimum = ops.segment_min(jnp.where(mask, data, jnp.inf), config_idx, n_configs)
+    maximum = ops.segment_max(jnp.where(mask, data, -jnp.inf), config_idx, n_configs)
+    return {
+        f'{prefix}/mean': mean,
+        f'{prefix}/std': std,
+        f'{prefix}/max': maximum,
+        f'{prefix}/min': minimum,
+    }
 
 
 @jax.vmap
