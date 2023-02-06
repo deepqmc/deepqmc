@@ -121,16 +121,22 @@ def argmax_random_choice(rng, x):
 
 def segment_nanmean(data, segment_ids, num_segments=None):
     mask = ~jnp.isnan(data)
+    counts = jnp.bincount(
+        jnp.where(mask, segment_ids, num_segments), length=num_segments
+    )
     data_zero = jnp.where(mask, data, 0)
-    nanmean = ops.segment_sum(data_zero, segment_ids, num_segments) / mask.sum()
+    nanmean = ops.segment_sum(data_zero, segment_ids, num_segments) / counts
     return nanmean
 
 
 def segment_nanstd(data, segment_ids, num_segments=None):
     mask = ~jnp.isnan(data)
+    counts = jnp.bincount(
+        jnp.where(mask, segment_ids, num_segments), length=num_segments
+    )
     nanmean = segment_nanmean(data, segment_ids, num_segments)
     nanstd = jnp.where(mask, (nanmean[segment_ids] - data) ** 2, 0)
-    nanstd = jnp.sqrt(ops.segment_sum(nanstd, segment_ids, num_segments) / mask.sum())
+    nanstd = jnp.sqrt(ops.segment_sum(nanstd, segment_ids, num_segments) / counts)
     return nanstd
 
 
