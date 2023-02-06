@@ -36,7 +36,7 @@ def nuclear_configurations(coords, unit):
     unit_factor = {'bohr': 1.0, 'angstrom': 1 / 0.52917721092}[unit]
     coords = jax.numpy.asarray(coords)
     coords = coords if coords.ndim == 3 else [coords]
-    return [unit_factor * jax.numpy.asarray(coord) for coord in coords]
+    return [unit_factor * coord for coord in coords]
 
 
 def instantiate_ansatz(hamil, ansatz):
