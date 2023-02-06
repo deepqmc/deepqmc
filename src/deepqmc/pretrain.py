@@ -114,7 +114,7 @@ def pretrain(  # noqa: C901
 
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
         rng, rng_sample = jax.random.split(rng)
-        select_idxs = sampler.select_idxs(sample_size, smpl_state)
+        select_idxs = sampler.select_idxs(sample_size, smpl_state, inverse=True)
         smpl_state, phys_config, smpl_stats = sample_wf(
             smpl_state, rng_sample, select_idxs
         )
