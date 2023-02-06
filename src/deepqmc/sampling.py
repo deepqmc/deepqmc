@@ -290,7 +290,7 @@ class MulticonfigurationSampler(Sampler):
         wfs = self.assign_wfs(wf)
         states = [
             sampler.init(rng, wf, n, state_callback, wf_state)
-            for wf, sampler in zip(wfs, self.samplers)
+            for rng, wf, sampler in zip(hk.PRNGSequence(rng), wfs, self.samplers)
         ]
         return states
 
