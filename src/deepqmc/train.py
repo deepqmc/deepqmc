@@ -93,7 +93,7 @@ def train(  # noqa: C901
                 passed in :data:`opt_kwargs`.
             - :data:`None`: no optimizer is used, e.g. the evaluation of the Ansatz
                 is performed.
-        samplers (~deepqmc.sampling.Sampler): a sampler instance
+        sampler (~deepqmc.sampling.Sampler): a sampler instance
         workdir (str): optional, path, where results and checkpoints should be saved.
         train_state (~deepqmc.fit.TrainState): optional, training checkpoint to
             restore training or run evaluation.
