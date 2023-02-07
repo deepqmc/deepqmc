@@ -33,7 +33,7 @@ dependencies = [
     'e3nn-jax',
     'h5py',
     'hydra-core',
-    'jax[cuda]<0.4.2',
+    'jax[cuda]',
     'jaxtyping',
     'kfac-jax',
     'pyscf',
