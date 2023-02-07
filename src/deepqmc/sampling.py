@@ -354,7 +354,7 @@ class MulticonfigurationSampler(Sampler):
         ]
         return self.join_configs(phys_confs, select_idxs)
 
-    def select_idxs(self, sample_size, states, *args, inverse=False, **kwargs):
+    def select_idxs(self, sample_size, states, *args, **kwargs):
         n_smpl_per_config = self.config_idx_factory(
             sample_size, len(self), *args, **kwargs
         )
@@ -362,7 +362,7 @@ class MulticonfigurationSampler(Sampler):
         idxs = []
         for state, n in zip(states, n_smpl_per_config):
             idxs.append(start_pos + jnp.arange(n))
-            start_pos += len(state['r']) + (n if inverse else 0)
+            start_pos += len(state['r'])
         return jnp.concatenate(idxs)
 
     def config_idx(self, sample_size, *args, **kwargs):
