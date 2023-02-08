@@ -318,9 +318,9 @@ def train(  # noqa: C901
                                 stats['per_config']['E_loc/std'].mean(),
                             )
                         for table, E, ewm_state, smpl_state in zip(
-                            tables, E_loc, ewm_states, train_state.sampler
+                            tables, per_config_energy, ewm_states, train_state.sampler
                         ):
-                            table.row['E_loc'] = E
+                            table.row['E_mean'] = E
                             table.row['E_ewm'] = ewm_state.mean
                             table.row['sign_psi'] = smpl_state['psi'].sign
                             table.row['log_psi'] = smpl_state['psi'].log
