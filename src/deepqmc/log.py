@@ -118,7 +118,8 @@ class TensorboardMetricLogger:
         per_config = stats.pop('per_config')
         for k, v in per_config.items():
             for i, writer in enumerate(self.per_config_writers):
-                writer.add_scalar(f'{prefix}/{k}' if prefix else k, v[i], step)
+                if not (jnp.isnan(v[i]) or jnp.isinf(v[i])):
+                    writer.add_scalar(f'{prefix}/{k}' if prefix else k, v[i], step)
         for k, v in stats.items():
             self.global_writer.add_scalar(f'{prefix}/{k}' if prefix else k, v, step)
 

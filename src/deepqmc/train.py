@@ -196,7 +196,7 @@ def train(  # noqa: C901
                         losses, config_idx, len(sampler)
                     )
                     ewm_states = [
-                        update_ewm(loss, ewm_state)
+                        ewm_state if jnp.isnan(loss) else update_ewm(loss, ewm_state)
                         for loss, ewm_state in zip(per_config_losses, ewm_states)
                     ]
                     mse_rep = '|'.join(
@@ -280,7 +280,7 @@ def train(  # noqa: C901
                     config_idx = sampler.config_idx(sample_size, step)
                     per_config_energy = segment_nanmean(E_loc, config_idx, len(sampler))
                     ewm_states = [
-                        update_ewm(ene, ewm_state)
+                        ewm_state if jnp.isnan(ene) else update_ewm(ene, ewm_state)
                         for ene, ewm_state in zip(per_config_energy, ewm_states)
                     ]
                     stats['per_config'] = {
@@ -321,7 +321,8 @@ def train(  # noqa: C901
                             tables, per_config_energy, ewm_states, train_state.sampler
                         ):
                             table.row['E_mean'] = E
-                            table.row['E_ewm'] = ewm_state.mean
+                            if ewm_state.mean is not None:
+                                table.row['E_ewm'] = ewm_state.mean
                             table.row['sign_psi'] = smpl_state['psi'].sign
                             table.row['log_psi'] = smpl_state['psi'].log
                         h5file.flush()
