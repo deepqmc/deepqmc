@@ -113,7 +113,7 @@ class TestMulticonfigurationSampling:
             helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback, self.wf_state
         )
         sample = check_overflow(state_callback, sampler.sample)
-        select_idxs = sampler.select_idxs(self.SAMPLE_SIZE, smpl_state)
+        select_idxs = sampler.select_idxs(self.SAMPLE_SIZE, smpl_state, 0)
         for step in range(4):
             smpl_state, phys_conf, stats = sample(
                 helpers.rng(step), smpl_state, self.wf, select_idxs

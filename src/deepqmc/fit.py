@@ -217,9 +217,9 @@ def fit_wf(  # noqa: C901
     def update_sampler(state, params):
         return sampler.update(state, partial(ansatz.apply, params))
 
-    def train_step(rng, smpl_state, params, opt_state):
+    def train_step(rng, step, smpl_state, params, opt_state):
         rng_sample, rng_kfac = jax.random.split(rng)
-        select_idxs = sampler.select_idxs(sample_size, smpl_state)
+        select_idxs = sampler.select_idxs(sample_size, smpl_state, step)
         smpl_state, phys_conf, smpl_stats = sample_wf(
             smpl_state, rng_sample, params, select_idxs
         )
@@ -254,7 +254,7 @@ def fit_wf(  # noqa: C901
         opt_state = None
     if opt is not None and opt_state is None:
         rng, rng_opt = jax.random.split(rng)
-        init_select_idxs = sampler.select_idxs(sample_size, smpl_state)
+        init_select_idxs = sampler.select_idxs(sample_size, smpl_state, 0)
         opt_state = init_opt(
             rng_opt,
             sampler.get_state('wf', smpl_state, init_select_idxs),
@@ -267,5 +267,5 @@ def fit_wf(  # noqa: C901
     train_state = smpl_state, params, opt_state
 
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        *train_state, E_loc, stats = train_step(rng, *train_state)
+        *train_state, E_loc, stats = train_step(rng, step, *train_state)
         yield step, TrainState(*train_state), E_loc, stats

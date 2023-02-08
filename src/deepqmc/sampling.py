@@ -468,7 +468,7 @@ def equilibrate(
     buffer_size = block_size * n_blocks
     buffer = []
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        select_idxs = sampler.select_idxs(sample_size, state)
+        select_idxs = sampler.select_idxs(sample_size, state, step)
         state, phys_conf, stats = sample_wf(rng, state, select_idxs)
         yield step, state, stats
         buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]

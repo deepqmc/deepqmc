@@ -191,7 +191,7 @@ def train(  # noqa: C901
                     sample_size=sample_size,
                     baseline_kwargs=pretrain_kwargs.pop('baseline_kwargs', {}),
                 ):
-                    config_idx = sampler.config_idx(sample_size)
+                    config_idx = sampler.config_idx(sample_size, step)
                     per_config_losses = segment_nanmean(
                         losses, config_idx, len(sampler)
                     )
@@ -273,11 +273,11 @@ def train(  # noqa: C901
                     psi = sampler.get_state(
                         'psi',
                         train_state.sampler,
-                        sampler.select_idxs(sample_size, train_state.sampler),
+                        sampler.select_idxs(sample_size, train_state.sampler, step),
                     )
                     if jnp.isnan(psi.log).any():
                         raise NanError()
-                    config_idx = sampler.config_idx(sample_size)
+                    config_idx = sampler.config_idx(sample_size, step)
                     per_config_energy = segment_nanmean(E_loc, config_idx, len(sampler))
                     ewm_states = [
                         update_ewm(ene, ewm_state)
