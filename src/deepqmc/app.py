@@ -32,9 +32,12 @@ warnings.filterwarnings(
 )
 
 
-def nuclear_configurations(coords, unit):
+def nuclear_configurations(data):
+    if 'coords' not in data.keys():
+        raise ValueError('No physical configuration provided.')
+    unit = data.get('unit', 'bohr')
     unit_factor = {'bohr': 1.0, 'angstrom': 1 / 0.52917721092}[unit]
-    coords = jax.numpy.asarray(coords)
+    coords = jax.numpy.asarray(data['coords'])
     coords = coords if coords.ndim == 3 else [coords]
     return [unit_factor * coord for coord in coords]
 

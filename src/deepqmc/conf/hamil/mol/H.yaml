@@ -1,5 +1,6 @@
-coords: [[0.0, 0.0, 0.0]]
 charges: [1]
 charge: 0
 spin: 1
-unit: angstrom
+data:
+  coords: [[0.0, 0.0, 0.0]]
+  unit: angstrom

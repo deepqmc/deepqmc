@@ -5,8 +5,7 @@ hamil: ${hamil}
 ansatz: ${ansatz}
 nuc_configs:
   _target_: deepqmc.app.nuclear_configurations
-  coords: ${hamil.mol.coords}
-  unit: ${hamil.mol.unit}
+  data: ${hamil.mol.data}
 opt: kfac
 steps: 1000
 sample_size: 1000

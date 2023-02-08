@@ -36,9 +36,6 @@ def parse_molecules():
     return data
 
 
-_SYSTEMS = parse_molecules()
-
-
 @dataclass(frozen=True, init=False)
 class Molecule:
     r"""Represents a molecule, defined by atomic numbers, charge and spin.
@@ -58,7 +55,7 @@ class Molecule:
             whether to use a pseudopotential for each nucleus
     """
 
-    all_names: ClassVar[set] = set(_SYSTEMS.keys())
+    systems: ClassVar[dict] = parse_molecules()
 
     charges: jnp.ndarray
     charge: int
@@ -99,8 +96,6 @@ class Molecule:
         charges,
         charge,
         spin,
-        coords=None,
-        unit=None,
         data=None,
         pp_type=None,
         pp_mask=None,
@@ -178,11 +173,9 @@ class Molecule:
 
         The available names are in :attr:`Molecule.all_names`.
         """
-        if name in cls.all_names:
-            system = deepcopy(_SYSTEMS[name])
+        if name in cls.systems.keys():
+            system = deepcopy(cls.systems[name])
             system.update(kwargs)
-            system.pop('coords')
-            system.pop('unit', None)
         else:
             raise ValueError(f'Unknown molecule name: {name}')
         return cls(**system, pp_type=pp_type, pp_mask=pp_mask)
@@ -190,12 +183,14 @@ class Molecule:
     @classmethod
     def default_coords_from_name(cls, name):
         """Return the nuclear coordinates stored in the config files."""
-        if name in cls.all_names:
-            system = deepcopy(_SYSTEMS[name])
+        if name in cls.systems.keys():
+            system = deepcopy(cls.systems[name])
+            if not system.get('data', False):
+                return ValueError(f'Molecule {name} does not have default coordinates.')
             unit_multiplier = {'bohr': 1.0, 'angstrom': angstrom}[
-                system.get('unit', 'bohr')
+                system['data'].get('unit', 'bohr')
             ]
-            coords = jnp.asarray(system['coords']) * unit_multiplier
+            coords = jnp.asarray(system['data']['coords']) * unit_multiplier
         else:
             raise ValueError(f'Unknown molecule name: {name}')
         return coords
