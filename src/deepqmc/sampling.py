@@ -54,24 +54,23 @@ class MetropolisSampler(Sampler):
 
     WALKER_STATE = ['r', 'psi', 'age']
 
-    def __init__(self, hamil, R, *, tau=1.0, target_acceptance=0.57, max_age=None):
+    def __init__(self, hamil, *, tau=1.0, target_acceptance=0.57, max_age=None):
         self.hamil = hamil
-        self.R = jnp.asarray(R, dtype=jnp.float32)
         self.initial_tau = tau
         self.target_acceptance = target_acceptance
         self.max_age = max_age
 
-    def _update(self, state, wf):
-        psi, wf_state = jax.vmap(wf)(state['wf'], self.phys_conf(state['r']))
+    def _update(self, state, wf, R):
+        psi, wf_state = jax.vmap(wf)(state['wf'], self.phys_conf(R, state['r']))
         state = {**state, 'psi': psi, 'wf': wf_state}
         return state
 
-    def update(self, state, wf):
-        return self._update(state, wf)
+    def update(self, state, wf, R):
+        return self._update(state, wf, R)
 
-    def init(self, rng, wf, n, state_callback=None, wf_state=None):
+    def init(self, rng, wf, n, R, state_callback=None, wf_state=None):
         state = {
-            'r': self.hamil.init_sample(rng, self.R, n).r,
+            'r': self.hamil.init_sample(rng, R, n).r,
             'age': jnp.zeros(n, jnp.int32),
             'tau': jnp.array(self.initial_tau),
             'wf': wf_state or {},
@@ -79,7 +78,7 @@ class MetropolisSampler(Sampler):
 
         @partial(check_overflow, state_callback)
         def update(rng, state, wf):
-            return (self._update(state, wf),)
+            return (self._update(state, wf, R),)
 
         (state,) = update(None, state, wf)
         return state
@@ -91,14 +90,14 @@ class MetropolisSampler(Sampler):
     def _acc_log_prob(self, state, prop):
         return 2 * (prop['psi'].log - state['psi'].log)
 
-    def sample(self, rng, state, wf):
+    def sample(self, rng, state, wf, R):
         rng_prop, rng_acc = jax.random.split(rng)
         prop = {
             'r': self._proposal(state, rng_prop),
             'age': jnp.zeros_like(state['age']),
             **{k: v for k, v in state.items() if k not in self.WALKER_STATE},
         }
-        prop = self._update(prop, wf)
+        prop = self._update(prop, wf, R)
         log_prob = self._acc_log_prob(state, prop)
         accepted = log_prob > jnp.log(jax.random.uniform(rng_acc, log_prob.shape))
         if self.max_age:
@@ -127,14 +126,14 @@ class MetropolisSampler(Sampler):
             'sampling/log_psi/std': jnp.std(state['psi'].log),
             'sampling/dists/mean': jnp.mean(pairwise_self_distance(state['r'])),
         }
-        return state, self.phys_conf(state['r']), stats
+        return state, self.phys_conf(R, state['r']), stats
 
-    def phys_conf(self, r, **kwargs):
+    def phys_conf(self, R, r, **kwargs):
         if r.ndim == 2:
-            return PhysicalConfiguration(self.R, r, jnp.array(0))
+            return PhysicalConfiguration(R, r, jnp.array(0))
         n_smpl = len(r)
         return PhysicalConfiguration(
-            jnp.tile(self.R[None], (n_smpl, 1, 1)),
+            jnp.tile(R[None], (n_smpl, 1, 1)),
             r,
             jnp.zeros(n_smpl, dtype=jnp.int32),
         )
@@ -149,16 +148,16 @@ class LangevinSampler(MetropolisSampler):
 
     WALKER_STATE = MetropolisSampler.WALKER_STATE + ['force']
 
-    def _update(self, state, wf):
+    def _update(self, state, wf, R):
         @jax.vmap
         @partial(jax.value_and_grad, argnums=1, has_aux=True)
         def wf_and_force(state, r):
-            psi, state = wf(state, self.phys_conf(r))
+            psi, state = wf(state, self.phys_conf(R, r))
             return psi.log, (psi, state)
 
         (_, (psi, wf_state)), force = wf_and_force(state['wf'], state['r'])
         force = clean_force(
-            force, self.phys_conf(state['r']), self.hamil.mol, tau=state['tau']
+            force, self.phys_conf(R, state['r']), self.hamil.mol, tau=state['tau']
         )
         state = {**state, 'psi': psi, 'force': force, 'wf': wf_state}
         return state
@@ -194,15 +193,15 @@ class DecorrSampler(Sampler):
     def __init__(self, *, length):
         self.length = length
 
-    def sample(self, rng, state, wf):
+    def sample(self, rng, state, wf, R):
         sample = super().sample  # lax cannot parse super()
         state, stats = lax.scan(
-            lambda state, rng: sample(rng, state, wf)[::2],
+            lambda state, rng: sample(rng, state, wf, R)[::2],
             state,
             jax.random.split(rng, self.length),
         )
         stats = {k: v[-1] for k, v in stats.items()}
-        return state, self.phys_conf(state['r']), stats
+        return state, self.phys_conf(R, state['r']), stats
 
 
 class ResampledSampler(Sampler):
@@ -231,9 +230,9 @@ class ResampledSampler(Sampler):
         self.period = period
         self.treshold = treshold
 
-    def update(self, state, wf):
+    def update(self, state, wf, R):
         state['log_weight'] -= 2 * state['psi'].log
-        state = self._update(state, wf)
+        state = self._update(state, wf, R)
         state['log_weight'] += 2 * state['psi'].log
         state['log_weight'] -= state['log_weight'].max()
         return state
@@ -258,9 +257,9 @@ class ResampledSampler(Sampler):
         }
         return state
 
-    def sample(self, rng, state, wf):
+    def sample(self, rng, state, wf, R):
         rng_re, rng_smpl = jax.random.split(rng)
-        state, _, stats = super().sample(rng_smpl, state, wf)
+        state, _, stats = super().sample(rng_smpl, state, wf, R)
         state['step'] += 1
         weight = jnp.exp(state['log_weight'])
         ess = jnp.sum(weight) ** 2 / jnp.sum(weight**2)
@@ -273,12 +272,13 @@ class ResampledSampler(Sampler):
             rng_re,
             state,
         )
-        return state, state['r'], stats
+        return state, self.phys_conf(R, state['r']), stats
 
 
 class MulticonfigurationSampler(Sampler):
-    def __init__(self, samplers, config_idx_factory=None):
-        self.samplers = samplers if isinstance(samplers, Sequence) else [samplers]
+    def __init__(self, sampler, configurations, config_idx_factory=None):
+        self.sampler = sampler
+        self.configurations = configurations
 
         class ConfigIdxFactory:
             @staticmethod
@@ -297,9 +297,9 @@ class MulticonfigurationSampler(Sampler):
         wfs = self.assign_wfs(wf)
         sample_sizes = self.config_idx_factory.max_per_config(n, len(self))
         states = [
-            sampler.init(rng, wf, sample_size, state_callback, wf_state)
-            for rng, wf, sampler, sample_size in zip(
-                hk.PRNGSequence(rng), wfs, self.samplers, sample_sizes
+            self.sampler.init(rng, wf, sample_size, R, state_callback, wf_state)
+            for rng, wf, sample_size, R in zip(
+                hk.PRNGSequence(rng), wfs, sample_sizes, self.configurations
             )
         ]
         return states
@@ -307,8 +307,10 @@ class MulticonfigurationSampler(Sampler):
     def sample(self, rng, state, wave_function, select_idxs):
         phys_confs, stats = [], []
         wfs = self.assign_wfs(wave_function)
-        for i, rng in zip(range(len(self.samplers)), hk.PRNGSequence(rng)):
-            state[i], phys_conf, stat = self.samplers[i].sample(rng, state[i], wfs[i])
+        for i, rng in zip(range(len(self)), hk.PRNGSequence(rng)):
+            state[i], phys_conf, stat = self.sampler.sample(
+                rng, state[i], wfs[i], self.configurations[i]
+            )
             phys_confs.append(phys_conf)
             stats.append({'per_config': stat})
 
@@ -322,13 +324,13 @@ class MulticonfigurationSampler(Sampler):
         This allows for using different WFs for each configuration,
         useful e.g. with HF baselines.
         """
-        return wf if isinstance(wf, Sequence) else len(self.samplers) * [wf]
+        return wf if isinstance(wf, Sequence) else len(self) * [wf]
 
     def update(self, states, wf):
         wfs = self.assign_wfs(wf)
         return [
-            sampler.update(state, wf)
-            for sampler, state, wf in zip(self.samplers, states, wfs)
+            self.sampler.update(state, wf, R)
+            for state, wf, R in zip(states, wfs, self.configurations)
         ]
 
     def get_state(self, key, states, select_idxs, default=None):
@@ -359,8 +361,8 @@ class MulticonfigurationSampler(Sampler):
 
     def phys_conf(self, states, select_idxs):
         phys_confs = [
-            sampler.phys_conf(state['r'])
-            for sampler, state in zip(self.samplers, states)
+            self.sampler.phys_conf(R, state['r'])
+            for state, R in zip(states, self.configurations)
         ]
         return self.join_configs(phys_confs, select_idxs)
 
@@ -398,10 +400,10 @@ class MulticonfigurationSampler(Sampler):
         )
 
     def nuclear_configurations(self):
-        yield from (sampler.R for sampler in self.samplers)
+        yield from self.configurations
 
     def __len__(self):
-        return len(self.samplers)
+        return len(self.configurations)
 
 
 def chain(*samplers):

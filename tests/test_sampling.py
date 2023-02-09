@@ -25,6 +25,7 @@ def wf(helpers, request):
     )
     request.cls.wf = partial(paulinet.apply, params)
     request.cls.hamil = hamil
+    request.cls.R = helpers.R()
 
 
 @pytest.mark.parametrize(
@@ -46,9 +47,9 @@ class TestSampling:
     SAMPLE_SIZE = 100
 
     def test_sampler_init(self, helpers, samplers, ndarrays_regression):
-        sampler = chain(*samplers[:-1], samplers[-1](self.hamil, helpers.R()))
+        sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback
+            helpers.rng(), self.wf, self.SAMPLE_SIZE, self.R, state_callback
         )
         ndarrays_regression.check(
             helpers.flatten_pytree(smpl_state),
@@ -56,13 +57,15 @@ class TestSampling:
         )
 
     def test_sampler_sample(self, helpers, samplers, ndarrays_regression):
-        sampler = chain(*samplers[:-1], samplers[-1](self.hamil, helpers.R()))
+        sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback
+            helpers.rng(), self.wf, self.SAMPLE_SIZE, self.R, state_callback
         )
         sample = check_overflow(state_callback, sampler.sample)
         for step in range(4):
-            smpl_state, _, stats = sample(helpers.rng(step), smpl_state, self.wf)
+            smpl_state, _, stats = sample(
+                helpers.rng(step), smpl_state, self.wf, self.R
+            )
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
             default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
@@ -86,10 +89,8 @@ class TestMulticonfigurationSampling:
         self, helpers, samplers, ndarrays_regression
     ):
         sampler = MulticonfigurationSampler(
-            [
-                chain(*samplers[:-1], samplers[-1](self.hamil, helpers.R()))
-                for _ in range(self.N_CONFIG)
-            ]
+            chain(*samplers[:-1], samplers[-1](self.hamil)),
+            [self.R for _ in range(self.N_CONFIG)],
         )
         smpl_state = sampler.init(
             helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback
@@ -103,10 +104,8 @@ class TestMulticonfigurationSampling:
         self, helpers, samplers, ndarrays_regression
     ):
         sampler = MulticonfigurationSampler(
-            [
-                chain(*samplers[:-1], samplers[-1](self.hamil, helpers.R()))
-                for _ in range(self.N_CONFIG)
-            ]
+            chain(*samplers[:-1], samplers[-1](self.hamil)),
+            [self.R for _ in range(self.N_CONFIG)],
         )
         smpl_state = sampler.init(
             helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback

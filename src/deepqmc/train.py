@@ -52,6 +52,7 @@ def train(  # noqa: C901
     ansatz,
     opt,
     sampler,
+    configurations,
     workdir=None,
     train_state=None,
     init_step=0,
@@ -94,6 +95,7 @@ def train(  # noqa: C901
             - :data:`None`: no optimizer is used, e.g. the evaluation of the Ansatz
                 is performed.
         sampler (~deepqmc.sampling.Sampler): a sampler instance
+        configurations: a sequence of nuclear coordinates
         workdir (str): optional, path, where results and checkpoints should be saved.
         train_state (~deepqmc.fit.TrainState): optional, training checkpoint to
             restore training or run evaluation.
@@ -124,7 +126,7 @@ def train(  # noqa: C901
 
     rng = jax.random.PRNGKey(seed)
     mode = 'evaluation' if opt is None else 'training'
-    sampler = MulticonfigurationSampler(sampler, config_idx_factory)
+    sampler = MulticonfigurationSampler(sampler, configurations, config_idx_factory)
     if isinstance(opt, str):
         opt_kwargs = OPT_KWARGS.get(opt, {}) | (opt_kwargs or {})
         opt = (

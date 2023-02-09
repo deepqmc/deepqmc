@@ -52,12 +52,12 @@ def instantiate_ansatz(hamil, ansatz):
     )
 
 
-def train_from_factories(hamil, ansatz, sampler, nuc_configs, **kwargs):
+def train_from_factories(hamil, ansatz, sampler, **kwargs):
     from .sampling import chain
     from .train import train
 
     ansatz = instantiate_ansatz(hamil, ansatz)
-    sampler = [chain(*sampler[:-1], sampler[-1](hamil, R)) for R in nuc_configs]
+    sampler = chain(*sampler[:-1], sampler[-1](hamil))
     return train(hamil, ansatz, sampler=sampler, **kwargs)
 
 

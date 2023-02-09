@@ -3,7 +3,7 @@ defaults:
 _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
 ansatz: ${ansatz}
-nuc_configs:
+configurations:
   _target_: deepqmc.app.nuclear_configurations
   data: ${hamil.mol.data}
 opt: kfac
