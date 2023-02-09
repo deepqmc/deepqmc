@@ -82,9 +82,10 @@ def fit_wf(  # noqa: C901
         stats = {
             **stats_fn(E_loc, phys_conf.config_idx, 'E_loc'),
             **{
-                k: v
+                k_hamil: stats_fn(
+                    v_hamil, phys_conf.config_idx, k_hamil, mean_only=True
+                )
                 for k_hamil, v_hamil in hamil_stats.items()
-                for k, v in stats_fn(v_hamil, phys_conf.config_idx, k_hamil).items()
             },
         }
         return loss, (None, (E_loc, stats))
