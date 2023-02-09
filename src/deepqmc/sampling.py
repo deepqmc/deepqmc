@@ -280,17 +280,27 @@ class MulticonfigurationSampler(Sampler):
     def __init__(self, samplers, config_idx_factory=None):
         self.samplers = samplers if isinstance(samplers, Sequence) else [samplers]
 
-        def default_idx_factory(sample_size, n_config, *args, **kwargs):
-            assert not (sample_size % n_config)
-            return n_config * [sample_size // n_config]
+        class ConfigIdxFactory:
+            @staticmethod
+            def max_per_config(sample_size, n_config):
+                assert not (sample_size % n_config)
+                return n_config * [sample_size // n_config]
 
-        self.config_idx_factory = config_idx_factory or default_idx_factory
+            @staticmethod
+            def n_per_config(sample_size, n_config, *args, **kwargs):
+                assert not (sample_size % n_config)
+                return n_config * [sample_size // n_config]
+
+        self.config_idx_factory = config_idx_factory or ConfigIdxFactory()
 
     def init(self, rng, wf, n, state_callback=None, wf_state=None):
         wfs = self.assign_wfs(wf)
+        sample_sizes = self.config_idx_factory.max_per_config(n, len(self))
         states = [
-            sampler.init(rng, wf, n, state_callback, wf_state)
-            for rng, wf, sampler in zip(hk.PRNGSequence(rng), wfs, self.samplers)
+            sampler.init(rng, wf, sample_size, state_callback, wf_state)
+            for rng, wf, sampler, sample_size in zip(
+                hk.PRNGSequence(rng), wfs, self.samplers, sample_sizes
+            )
         ]
         return states
 
@@ -354,20 +364,31 @@ class MulticonfigurationSampler(Sampler):
         ]
         return self.join_configs(phys_confs, select_idxs)
 
-    def select_idxs(self, sample_size, states, *args, **kwargs):
-        n_smpl_per_config = self.config_idx_factory(
+    def select_idxs(self, sample_size, *args, **kwargs):
+        n_smpl_per_config = self.config_idx_factory.n_per_config(
             sample_size, len(self), *args, **kwargs
         )
+        max_smpl_per_config = self.config_idx_factory.max_per_config(
+            sample_size, len(self)
+        )
+        assert all(n <= m for n, m in zip(n_smpl_per_config, max_smpl_per_config))
         start_pos = 0
         idxs = []
-        for state, n in zip(states, n_smpl_per_config):
+        for n, m in zip(n_smpl_per_config, max_smpl_per_config):
             idxs.append(start_pos + jnp.arange(n))
-            start_pos += len(state['r'])
+            start_pos += m
         return jnp.concatenate(idxs)
 
     def config_idx(self, sample_size, *args, **kwargs):
-        n_smpl_per_config = self.config_idx_factory(
+        n_smpl_per_config = self.config_idx_factory.n_per_config(
             sample_size, len(self), *args, **kwargs
+        )
+        assert all(
+            n <= m
+            for n, m in zip(
+                n_smpl_per_config,
+                self.config_idx_factory.max_per_config(sample_size, len(self)),
+            )
         )
         return jnp.concatenate(
             [
@@ -468,7 +489,7 @@ def equilibrate(
     buffer_size = block_size * n_blocks
     buffer = []
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        select_idxs = sampler.select_idxs(sample_size, state, step)
+        select_idxs = sampler.select_idxs(sample_size, step)
         state, phys_conf, stats = sample_wf(rng, state, select_idxs)
         yield step, state, stats
         buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]

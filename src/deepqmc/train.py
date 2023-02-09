@@ -273,7 +273,7 @@ def train(  # noqa: C901
                     psi = sampler.get_state(
                         'psi',
                         train_state.sampler,
-                        sampler.select_idxs(sample_size, train_state.sampler, step),
+                        sampler.select_idxs(sample_size, step),
                     )
                     if jnp.isnan(psi.log).any():
                         raise NanError()

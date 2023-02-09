@@ -220,7 +220,7 @@ def fit_wf(  # noqa: C901
 
     def train_step(rng, step, smpl_state, params, opt_state):
         rng_sample, rng_kfac = jax.random.split(rng)
-        select_idxs = sampler.select_idxs(sample_size, smpl_state, step)
+        select_idxs = sampler.select_idxs(sample_size, step)
         smpl_state, phys_conf, smpl_stats = sample_wf(
             smpl_state, rng_sample, params, select_idxs
         )
@@ -255,7 +255,7 @@ def fit_wf(  # noqa: C901
         opt_state = None
     if opt is not None and opt_state is None:
         rng, rng_opt = jax.random.split(rng)
-        init_select_idxs = sampler.select_idxs(sample_size, smpl_state, 0)
+        init_select_idxs = sampler.select_idxs(sample_size, 0)
         opt_state = init_opt(
             rng_opt,
             sampler.get_state('wf', smpl_state, init_select_idxs),
