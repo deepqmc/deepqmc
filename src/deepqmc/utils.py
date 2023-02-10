@@ -140,14 +140,14 @@ def segment_nanstd(data, segment_ids, num_segments=None):
     return nanstd
 
 
-def per_config_stats(n_configs, data, config_idx, prefix, mean_only=False):
-    mean = segment_nanmean(data, config_idx, n_configs)
+def per_mol_stats(n_mols, data, mol_idx, prefix, mean_only=False):
+    mean = segment_nanmean(data, mol_idx, n_mols)
     if mean_only:
         return mean
-    std = segment_nanstd(data, config_idx, n_configs)
+    std = segment_nanstd(data, mol_idx, n_mols)
     mask = ~jnp.isnan(data)
-    minimum = ops.segment_min(jnp.where(mask, data, jnp.inf), config_idx, n_configs)
-    maximum = ops.segment_max(jnp.where(mask, data, -jnp.inf), config_idx, n_configs)
+    minimum = ops.segment_min(jnp.where(mask, data, jnp.inf), mol_idx, n_mols)
+    maximum = ops.segment_max(jnp.where(mask, data, -jnp.inf), mol_idx, n_mols)
     return {
         f'{prefix}/mean': mean,
         f'{prefix}/std': std,

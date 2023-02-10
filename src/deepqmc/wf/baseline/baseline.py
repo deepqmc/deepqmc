@@ -1,3 +1,5 @@
+from typing import Sequence
+
 import haiku as hk
 import jax.numpy as jnp
 
@@ -34,10 +36,8 @@ class Baseline(WaveFunction):
     def __call__(self, phys_conf, return_mos=False):
         diffs = pairwise_diffs(phys_conf.r, phys_conf.R)
         aos = self.basis(diffs)
-        mos = jnp.einsum(
-            '...mo,...em->...eo', self.mo_coeffs[phys_conf.config_idx], aos
-        )
-        confs = self.confs[phys_conf.config_idx]
+        mos = jnp.einsum('...mo,...em->...eo', self.mo_coeffs[phys_conf.mol_idx], aos)
+        confs = self.confs[phys_conf.mol_idx]
         conf_up, conf_down = confs[..., : self.n_up], confs[..., self.n_up :]
         det_up = mos[..., : self.n_up, conf_up].swapaxes(-2, -3)
         det_down = mos[..., self.n_up :, conf_down].swapaxes(-2, -3)
@@ -47,23 +47,24 @@ class Baseline(WaveFunction):
         sign_down, det_down = eval_log_slater(det_down)
         dets = sign_up * sign_down * jnp.exp(det_up + det_down)
         psi = jnp.einsum(
-            '...id,...d->...i', self.conf_coeffs[phys_conf.config_idx], dets
+            '...id,...d->...i', self.conf_coeffs[phys_conf.mol_idx], dets
         ).squeeze(axis=-1)
         return Psi(jnp.sign(psi), jnp.log(jnp.abs(psi)))
 
     @classmethod
-    def from_mol(cls, mol, Rs, *, basis='6-31G', cas=None, **kwargs):
+    def from_mol(cls, mols, *, basis='6-31G', cas=None, **kwargs):
         r"""Create input to the constructor from a :class:`~deepqmc.Molecule`.
 
         Args:
-            mol (~deepqmc.Molecule): the molecule to consider.
+            mol (~deepqmc.Molecule): the molecule or a sequence of molecules to
+                consider.
             basis (str): the name of a Gaussian basis set.
             cas (Tuple[int,int]): optional the active space specification for CAS-SCF.
         """
-        Rs = [Rs] if isinstance(Rs, jnp.ndarray) and Rs.ndim == 2 else Rs
+        mols = mols if isinstance(mols, Sequence) else [mols]
         mo_coeffs, confs, conf_coeffs = [], [], []
-        for R in Rs:
-            mol_pyscf, (mf, mc) = pyscf_from_mol(mol, R, basis, cas, **kwargs)
+        for mol in mols:
+            mol_pyscf, (mf, mc) = pyscf_from_mol(mol, basis, cas, **kwargs)
             centers, shells = GTOBasis.from_pyscf(mol_pyscf)
             mo_coeff = jnp.asarray(mc.mo_coeff if mc else mf.mo_coeff)
             ao_overlap = jnp.asarray(mf.mol.intor('int1e_ovlp_cart'))

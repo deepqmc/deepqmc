@@ -1,9 +1,8 @@
+coords: [
+  [0.0, 0.0, 0.0],
+  [1.668, 0.0, 0.0],
+]
 charges: [21, 8]
 charge: 0
 spin: 1
-data:
-  coords: [
-    [0.0, 0.0, 0.0],
-    [1.668, 0.0, 0.0],
-  ]
-  unit: angstrom
+unit: angstrom

@@ -27,12 +27,14 @@ class TestHamil:
 
     def test_init_sample(self, helpers, hamil, hamil_kwargs, wf, ndarrays_regression):
         hamil = hamil(**hamil_kwargs)
-        phys_conf = hamil.init_sample(helpers.rng(), Helpers.R(), self.SAMPLE_SIZE)
+        phys_conf = hamil.init_sample(helpers.rng(), helpers.R(hamil), self.SAMPLE_SIZE)
         ndarrays_regression.check({'rs': phys_conf.r})
 
     def test_local_energy(self, helpers, hamil, hamil_kwargs, wf, ndarrays_regression):
         hamil = hamil(**hamil_kwargs)
-        phys_conf = hamil.init_sample(helpers.rng(), Helpers.R(), self.SAMPLE_SIZE)[0]
+        phys_conf = hamil.init_sample(
+            helpers.rng(), Helpers.R(hamil), self.SAMPLE_SIZE
+        )[0]
         wf = helpers.transform_model(wf, hamil)
         params, state = helpers.init_model(wf, phys_conf)
         E_loc, *_ = hamil.local_energy(

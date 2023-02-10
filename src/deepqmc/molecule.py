@@ -31,19 +31,23 @@ def parse_molecules():
     data = {}
     for f in os.listdir(path):
         with open(path.joinpath(f), 'r') as stream:
-            system = yaml.safe_load(stream)
-            data[f.strip('.yaml')] = system
+            data[f.strip('.yaml')] = yaml.safe_load(stream)
     return data
+
+
+_SYSTEMS = parse_molecules()
 
 
 @dataclass(frozen=True, init=False)
 class Molecule:
-    r"""Represents a molecule, defined by atomic numbers, charge and spin.
+    r"""Represents a molecule.
 
-    The :data:`charges` argument accepts anything that can be transformed to
+    The array-like arguments accept anything that can be transformed to
     :class:`jax.numpy.DeviceArray`.
 
     Args:
+        coords (float, (:math:`N_\text{nuc}`, 3), a.u.):
+            nuclear coordinates as rows
         charges (int, (:math:`N_\text{nuc}`)): atom charges
         charge (int): total charge of a molecule
         spin (int): total spin multiplicity
@@ -55,8 +59,9 @@ class Molecule:
             whether to use a pseudopotential for each nucleus
     """
 
-    systems: ClassVar[dict] = parse_molecules()
+    all_names: ClassVar[set] = set(_SYSTEMS.keys())
 
+    coords: jnp.ndarray
     charges: jnp.ndarray
     charge: int
     spin: int
@@ -93,9 +98,11 @@ class Molecule:
     def __init__(
         self,
         *,
+        coords,
         charges,
         charge,
         spin,
+        unit='bohr',
         data=None,
         pp_type=None,
         pp_mask=None,
@@ -111,7 +118,9 @@ class Molecule:
 
         assert len(pp_mask) == len(charges), "Incompatible shape of 'pp_mask' given!"
 
+        unit_multiplier = {'bohr': 1.0, 'angstrom': angstrom}[unit]
         set_attr(
+            coords=unit_multiplier * jnp.asarray(coords),
             charges=1.0 * jnp.asarray(charges),
             charge=charge,
             spin=spin,
@@ -147,11 +156,12 @@ class Molecule:
         return len(self.charges)
 
     def __iter__(self):
-        yield from self.charges
+        yield from zip(self.coords, self.charges)
 
     def __repr__(self):
         return (
             'Molecule(\n'
+            f'  coords=\n{self.coords},\n'
             f'  charges={self.charges},\n'
             f'  charge={self.charge},\n'
             f'  spin={self.spin}\n'
@@ -159,8 +169,8 @@ class Molecule:
             ')'
         )
 
-    def as_pyscf(self, R):
-        return [(int(charge), coord) for coord, charge in zip(R, self)]
+    def as_pyscf(self):
+        return [(int(charge), coord) for coord, charge in self]
 
     @property
     def n_particles(self):
@@ -173,24 +183,10 @@ class Molecule:
 
         The available names are in :attr:`Molecule.all_names`.
         """
-        if name in cls.systems.keys():
-            system = deepcopy(cls.systems[name])
+        if name in cls.all_names:
+            system = deepcopy(_SYSTEMS[name])
             system.update(kwargs)
         else:
             raise ValueError(f'Unknown molecule name: {name}')
-        return cls(**system, pp_type=pp_type, pp_mask=pp_mask)
-
-    @classmethod
-    def default_coords_from_name(cls, name):
-        """Return the nuclear coordinates stored in the config files."""
-        if name in cls.systems.keys():
-            system = deepcopy(cls.systems[name])
-            if not system.get('data', False):
-                return ValueError(f'Molecule {name} does not have default coordinates.')
-            unit_multiplier = {'bohr': 1.0, 'angstrom': angstrom}[
-                system['data'].get('unit', 'bohr')
-            ]
-            coords = jnp.asarray(system['data']['coords']) * unit_multiplier
-        else:
-            raise ValueError(f'Unknown molecule name: {name}')
-        return coords
+        coords = system.pop('coords')
+        return cls(coords=coords, **system, pp_type=pp_type, pp_mask=pp_mask)

@@ -49,15 +49,18 @@ class Helpers:
         return MolecularHamiltonian(mol=mol)
 
     @staticmethod
-    def R(mol_name='LiH'):
-        return Molecule.default_coords_from_name(mol_name)
+    def R(hamil=None):
+        hamil = hamil or Helpers.hamil()
+        try:
+            R = hamil.mol.coords
+        except AttributeError:
+            R = None
+        return R
 
     @staticmethod
-    def phys_conf(hamil=None, R=None, n=1, elec_std=1.0):
+    def phys_conf(hamil=None, n=1, elec_std=1.0):
         hamil = hamil or Helpers.hamil()
-        if R is None:
-            R = Helpers.R()
-        phys_conf = hamil.init_sample(Helpers.rng(), R, n, elec_std)
+        phys_conf = hamil.init_sample(Helpers.rng(), Helpers.R(hamil), n, elec_std)
         return phys_conf[0] if n == 1 else phys_conf
 
     @staticmethod
@@ -79,14 +82,13 @@ class Helpers:
     def create_paulinet(
         hamil=None,
         phys_conf=None,
-        R=None,
         init_model_kwargs=None,
         phys_conf_kwargs=None,
         paulinet_kwargs=None,
     ):
         hamil = hamil or Helpers.hamil()
         return_phys_conf = phys_conf is None
-        phys_conf = phys_conf or Helpers.phys_conf(hamil, R, **(phys_conf_kwargs or {}))
+        phys_conf = phys_conf or Helpers.phys_conf(hamil, **(phys_conf_kwargs or {}))
         paulinet = Helpers.transform_model(PauliNet, hamil, **(paulinet_kwargs or {}))
         params, state = Helpers.init_model(
             paulinet, phys_conf, **(init_model_kwargs or {})

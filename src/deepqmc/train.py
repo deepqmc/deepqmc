@@ -17,7 +17,7 @@ from .fit import fit_wf
 from .log import CheckpointStore, H5LogTable, TensorboardMetricLogger
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
-from .sampling import MulticonfigurationSampler, equilibrate
+from .sampling import MultimoleculeSampler, equilibrate
 from .utils import InverseSchedule, segment_nanmean
 from .wf.base import init_wf_params, state_callback
 
@@ -52,7 +52,7 @@ def train(  # noqa: C901
     ansatz,
     opt,
     sampler,
-    configurations,
+    mols,
     workdir=None,
     train_state=None,
     init_step=0,
@@ -69,7 +69,7 @@ def train(  # noqa: C901
     fit_kwargs=None,
     chkpts_kwargs=None,
     metric_logger=None,
-    config_idx_factory=None,
+    mol_idx_factory=None,
 ):
     r"""Train or evaluate a JAX wave function model.
 
@@ -95,7 +95,8 @@ def train(  # noqa: C901
             - :data:`None`: no optimizer is used, e.g. the evaluation of the Ansatz
                 is performed.
         sampler (~deepqmc.sampling.Sampler): a sampler instance
-        configurations: a sequence of nuclear coordinates
+        mols (~deepqmc.molecule.Molecule): a molecule or a sequence of molecules to
+            consider.
         workdir (str): optional, path, where results and checkpoints should be saved.
         train_state (~deepqmc.fit.TrainState): optional, training checkpoint to
             restore training or run evaluation.
@@ -120,13 +121,13 @@ def train(  # noqa: C901
         metric_logger: optional, an object that consumes metric logging information.
             If not specified, the default `~.log.TensorboardMetricLogger` is used
             to create tensorboard logs.
-        config_idx_factory (Callable): optional, callback for computing the indices
-            of the configurations from which samples are to be taken in a given step.
+        mol_idx_factory (Callable): optional, callback for computing the indices
+            of the molecule from which samples are to be taken in a given step.
     """
 
     rng = jax.random.PRNGKey(seed)
     mode = 'evaluation' if opt is None else 'training'
-    sampler = MulticonfigurationSampler(sampler, configurations, config_idx_factory)
+    sampler = MultimoleculeSampler(sampler, mols, mol_idx_factory)
     if isinstance(opt, str):
         opt_kwargs = OPT_KWARGS.get(opt, {}) | (opt_kwargs or {})
         opt = (
@@ -143,9 +144,9 @@ def train(  # noqa: C901
         h5file = h5py.File(f'{workdir}/result.h5', 'a', libver='v110')
         h5file.swmr_mode = True
         tables = []
-        for i, R in enumerate(sampler.nuclear_configurations()):
+        for i, mol in enumerate(sampler.mols):
             group = h5file.require_group(str(i))
-            group.attrs.create('geometry', R.tolist())
+            group.attrs.create('geometry', mol.coords.tolist())
             table = H5LogTable(group)
             table.resize(init_step)
             tables.append(table)
@@ -193,21 +194,19 @@ def train(  # noqa: C901
                     sample_size=sample_size,
                     baseline_kwargs=pretrain_kwargs.pop('baseline_kwargs', {}),
                 ):
-                    config_idx = sampler.config_idx(sample_size, step)
-                    per_config_losses = segment_nanmean(
-                        losses, config_idx, len(sampler)
-                    )
+                    mol_idx = sampler.mol_idx(sample_size, step)
+                    per_mol_losses = segment_nanmean(losses, mol_idx, len(sampler))
                     ewm_states = [
                         ewm_state if jnp.isnan(loss) else update_ewm(loss, ewm_state)
-                        for loss, ewm_state in zip(per_config_losses, ewm_states)
+                        for loss, ewm_state in zip(per_mol_losses, ewm_states)
                     ]
                     mse_rep = '|'.join(
                         f'{ewm_state.mean:0.2e}' for ewm_state in ewm_states
                     )
                     pbar.set_postfix(MSE=mse_rep)
                     pretrain_stats = {
-                        'per_config': {
-                            'MSE': per_config_losses,
+                        'per_mol': {
+                            'MSE': per_mol_losses,
                             'MSE/ewm': jnp.array(
                                 [ewm_state.mean for ewm_state in ewm_states]
                             ),
@@ -279,26 +278,26 @@ def train(  # noqa: C901
                     )
                     if jnp.isnan(psi.log).any():
                         raise NanError()
-                    config_idx = sampler.config_idx(sample_size, step)
-                    per_config_energy = segment_nanmean(E_loc, config_idx, len(sampler))
+                    mol_idx = sampler.mol_idx(sample_size, step)
+                    per_mol_energy = segment_nanmean(E_loc, mol_idx, len(sampler))
                     ewm_states = [
                         ewm_state if jnp.isnan(ene) else update_ewm(ene, ewm_state)
-                        for ene, ewm_state in zip(per_config_energy, ewm_states)
+                        for ene, ewm_state in zip(per_mol_energy, ewm_states)
                     ]
-                    stats['per_config'] = {
+                    stats['per_mol'] = {
                         'energy/ewm': jnp.array(
                             [ewm_state.mean for ewm_state in ewm_states]
                         ),
                         'energy/ewm_error': jnp.sqrt(
                             jnp.array([ewm_state.sqerr for ewm_state in ewm_states])
                         ),
-                        **stats['per_config'],
+                        **stats['per_mol'],
                     }
                     ene = [
                         ufloat(e, s)
                         for e, s in zip(
-                            stats['per_config']['energy/ewm'],
-                            stats['per_config']['energy/ewm_error'],
+                            stats['per_mol']['energy/ewm'],
+                            stats['per_mol']['energy/ewm_error'],
                         )
                     ]
                     if all(e.s for e in ene):
@@ -317,10 +316,10 @@ def train(  # noqa: C901
                             chkpts.update(
                                 step + 1,
                                 train_state,
-                                stats['per_config']['E_loc/std'].mean(),
+                                stats['per_mol']['E_loc/std'].mean(),
                             )
                         for table, E, ewm_state, smpl_state in zip(
-                            tables, per_config_energy, ewm_states, train_state.sampler
+                            tables, per_mol_energy, ewm_states, train_state.sampler
                         ):
                             table.row['E_mean'] = E
                             if ewm_state.mean is not None:

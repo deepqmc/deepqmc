@@ -6,7 +6,6 @@ import warnings
 from pathlib import Path
 
 import hydra
-import jax
 import yaml
 from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import OmegaConf
@@ -30,16 +29,6 @@ warnings.filterwarnings(
     'Explicitly requested dtype',
     UserWarning,
 )
-
-
-def nuclear_configurations(data):
-    if 'coords' not in data.keys():
-        raise ValueError('No physical configuration provided.')
-    unit = data.get('unit', 'bohr')
-    unit_factor = {'bohr': 1.0, 'angstrom': 1 / 0.52917721092}[unit]
-    coords = jax.numpy.asarray(data['coords'])
-    coords = coords if coords.ndim == 3 else [coords]
-    return [unit_factor * coord for coord in coords]
 
 
 def instantiate_ansatz(hamil, ansatz):

@@ -154,7 +154,7 @@ def get_quadrature_points(rng, nucleus_position, phys_conf):
     return PhysicalConfiguration(
         jnp.tile(phys_conf.R[None, None], (N, 12, 1, 1)),
         quadrature_rs,
-        jnp.broadcast_to(phys_conf.config_idx, (N, 12)),
+        jnp.broadcast_to(phys_conf.mol_idx, (N, 12)),
     )
 
 
@@ -200,7 +200,9 @@ def nonlocal_potential(rng, phys_conf, mol, state, wf):
             axis=-1,
         )
 
-        quadrature_phys_conf = get_quadrature_points(rng, phys_conf.R[nucleus_index], phys_conf)
+        quadrature_phys_conf = get_quadrature_points(
+            rng, phys_conf.R[nucleus_index], phys_conf
+        )
 
         # (2l+1)/12 coefficient
         coefs = jnp.tile(

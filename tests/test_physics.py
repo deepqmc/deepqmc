@@ -10,7 +10,7 @@ class TestPhysics:
         mol = helpers.mol(name, pp_type)
         hamil = helpers.hamil(mol)
         params, state, paulinet, phys_conf = helpers.create_paulinet(
-            hamil, R=helpers.R(name), phys_conf_kwargs={'elec_std': 0.45}
+            hamil, phys_conf_kwargs={'elec_std': 0.45}
         )
         wf = lambda state, phys_conf: paulinet.apply(params, state, phys_conf)[0]
         ndarrays_regression.check(

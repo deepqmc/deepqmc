@@ -38,18 +38,14 @@ def pretrain(  # noqa: C901
         baseline_kwargs (dict): optional, additional keyword arguments passed to the
             baseline wave function.
     """
-    baseline_init = Baseline.from_mol(
-        hamil.mol, sampler.nuclear_configurations(), **(baseline_kwargs or {})
-    )
+    baseline_init = Baseline.from_mol(sampler.mols, **(baseline_kwargs or {}))
 
     @hk.without_apply_rng
     @hk.transform_with_state
     def baseline(phys_config, return_mos=False):
         return Baseline(hamil.mol, *baseline_init)(phys_config, return_mos)
 
-    init_pc = hamil.init_sample(
-        rng, next(sampler.nuclear_configurations()), sample_size
-    )
+    init_pc = hamil.init_sample(rng, sampler.mols[0].coords, sample_size)
     params, wf_state = jax.vmap(ansatz.init, (None, 0, None), (None, 0))(
         rng, init_pc, False
     )

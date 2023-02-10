@@ -12,7 +12,8 @@ from .utils import (
     check_overflow,
     exp_normalize_mean,
     masked_mean,
-    per_config_stats,
+    per_mol_stats,
+    segment_nanmean,
     tree_norm,
 )
 from .wf.base import init_wf_params
@@ -68,7 +69,7 @@ def fit_wf(  # noqa: C901
     clip_mask_fn=None,
     clip_mask_kwargs=None,
 ):
-    stats_fn = partial(per_config_stats, len(sampler))
+    stats_fn = partial(per_mol_stats, len(sampler))
 
     @partial(jax.custom_jvp, nondiff_argnums=(1, 2, 3))
     def loss_fn(params, state, rng, batch):
@@ -80,11 +81,9 @@ def fit_wf(  # noqa: C901
         )
         loss = jnp.nanmean(E_loc * weight)
         stats = {
-            **stats_fn(E_loc, phys_conf.config_idx, 'E_loc'),
+            **stats_fn(E_loc, phys_conf.mol_idx, 'E_loc'),
             **{
-                k_hamil: stats_fn(
-                    v_hamil, phys_conf.config_idx, k_hamil, mean_only=True
-                )
+                k_hamil: stats_fn(v_hamil, phys_conf.mol_idx, k_hamil, mean_only=True)
                 for k_hamil, v_hamil in hamil_stats.items()
             },
         }
@@ -118,9 +117,10 @@ def fit_wf(  # noqa: C901
             wf = lambda state, phys_conf: ansatz.apply(params, state, phys_conf)[0]
             return jax.vmap(wf)(state, phys_conf).log
 
+        E_mean = segment_nanmean(E_loc_s, phys_conf.mol_idx, len(sampler))
         log_psi, log_psi_tangent = jax.jvp(log_likelihood, primals, tangents)
         kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
-        loss_tangent = (E_loc_s - jnp.mean(E_loc_s)) * log_psi_tangent * weight
+        loss_tangent = (E_loc_s - E_mean) * log_psi_tangent * weight
         loss_tangent = masked_mean(loss_tangent, gradient_mask)
         return (loss, other), (loss_tangent, other)
         # jax.custom_jvp has actually no official support for auxiliary output.
@@ -136,13 +136,13 @@ def fit_wf(  # noqa: C901
         def _step(_rng_opt, wf_state, params, _opt_state, batch):
             loss, (_, (E_loc, stats)) = loss_fn(params, wf_state, _rng_opt, batch)
 
-            return params, None, E_loc, {'per_config': stats}
+            return params, None, E_loc, {'per_mol': stats}
 
     elif isinstance(opt, optax.GradientTransformation):
 
         @jax.jit
         def _step(rng, wf_state, params, opt_state, batch):
-            (loss, (_, (E_loc, per_config_stats))), grads = energy_and_grad_fn(
+            (loss, (_, (E_loc, per_mol_stats))), grads = energy_and_grad_fn(
                 params, wf_state, rng, batch
             )
             updates, opt_state = opt.update(grads, opt_state, params)
@@ -154,7 +154,7 @@ def fit_wf(  # noqa: C901
                 'opt/param_norm': param_norm,
                 'opt/grad_norm': grad_norm,
                 'opt/update_norm': update_norm,
-                'per_config': per_config_stats,
+                'per_mol': per_mol_stats,
             }
             return params, opt_state, E_loc, stats
 
@@ -177,7 +177,7 @@ def fit_wf(  # noqa: C901
                 'opt/param_norm': opt_stats['param_norm'],
                 'opt/grad_norm': opt_stats['precon_grad_norm'],
                 'opt/update_norm': opt_stats['update_norm'],
-                'per_config': opt_stats['aux'][1],
+                'per_mol': opt_stats['aux'][1],
             }
             return (
                 params,
@@ -242,7 +242,7 @@ def fit_wf(  # noqa: C901
         if opt is not None:
             # WF was changed in _step, update psi values stored in smpl_state
             smpl_state = update_sampler(smpl_state, params)
-        stats['per_config'] = {**stats['per_config'], **smpl_stats['per_config']}
+        stats['per_mol'] = {**stats['per_mol'], **smpl_stats['per_mol']}
         return smpl_state, params, opt_state, E_loc, stats
 
     if train_state:

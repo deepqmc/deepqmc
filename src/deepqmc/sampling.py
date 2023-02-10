@@ -275,31 +275,33 @@ class ResampledSampler(Sampler):
         return state, self.phys_conf(R, state['r']), stats
 
 
-class MulticonfigurationSampler(Sampler):
-    def __init__(self, sampler, configurations, config_idx_factory=None):
+class MultimoleculeSampler(Sampler):
+    def __init__(self, sampler, mols, mol_idx_factory=None):
         self.sampler = sampler
-        self.configurations = configurations
+        self.mols = mols if isinstance(mols, Sequence) else [mols]
 
-        class ConfigIdxFactory:
+        class MolIdxFactory:
             @staticmethod
-            def max_per_config(sample_size, n_config):
-                assert not (sample_size % n_config)
-                return n_config * [sample_size // n_config]
+            def max_per_mol(sample_size, n_mol):
+                assert not (sample_size % n_mol)
+                return n_mol * [sample_size // n_mol]
 
             @staticmethod
-            def n_per_config(sample_size, n_config, *args, **kwargs):
-                assert not (sample_size % n_config)
-                return n_config * [sample_size // n_config]
+            def n_per_mol(sample_size, n_mol, *args, **kwargs):
+                assert not (sample_size % n_mol)
+                return n_mol * [sample_size // n_mol]
 
-        self.config_idx_factory = config_idx_factory or ConfigIdxFactory()
+        self.mol_idx_factory = mol_idx_factory or MolIdxFactory()
 
     def init(self, rng, wf, n, state_callback=None, wf_state=None):
         wfs = self.assign_wfs(wf)
-        sample_sizes = self.config_idx_factory.max_per_config(n, len(self))
+        sample_sizes = self.mol_idx_factory.max_per_mol(n, len(self))
         states = [
-            self.sampler.init(rng, wf, sample_size, R, state_callback, wf_state)
-            for rng, wf, sample_size, R in zip(
-                hk.PRNGSequence(rng), wfs, sample_sizes, self.configurations
+            self.sampler.init(
+                rng, wf, sample_size, mol.coords, state_callback, wf_state
+            )
+            for rng, wf, sample_size, mol in zip(
+                hk.PRNGSequence(rng), wfs, sample_sizes, self.mols
             )
         ]
         return states
@@ -309,19 +311,19 @@ class MulticonfigurationSampler(Sampler):
         wfs = self.assign_wfs(wave_function)
         for i, rng in zip(range(len(self)), hk.PRNGSequence(rng)):
             state[i], phys_conf, stat = self.sampler.sample(
-                rng, state[i], wfs[i], self.configurations[i]
+                rng, state[i], wfs[i], self.mols[i].coords
             )
             phys_confs.append(phys_conf)
-            stats.append({'per_config': stat})
+            stats.append({'per_mol': stat})
 
-        phys_conf = self.join_configs(phys_confs, select_idxs)
-        stats = self.join_configs(stats, None)
+        phys_conf = self.join_mols(phys_confs, select_idxs)
+        stats = self.join_mols(stats, None)
         return state, phys_conf, stats
 
     def assign_wfs(self, wf):
-        r"""Assign WF models to all configurations.
+        r"""Assign WF models to all molecules.
 
-        This allows for using different WFs for each configuration,
+        This allows for using different WFs for each molecule,
         useful e.g. with HF baselines.
         """
         return wf if isinstance(wf, Sequence) else len(self) * [wf]
@@ -329,8 +331,8 @@ class MulticonfigurationSampler(Sampler):
     def update(self, states, wf):
         wfs = self.assign_wfs(wf)
         return [
-            self.sampler.update(state, wf, R)
-            for state, wf, R in zip(states, wfs, self.configurations)
+            self.sampler.update(state, wf, mol.coords)
+            for state, wf, mol in zip(states, wfs, self.mols)
         ]
 
     def get_state(self, key, states, select_idxs, default=None):
@@ -338,72 +340,67 @@ class MulticonfigurationSampler(Sampler):
             data = [state[key] for state in states]
         except KeyError:
             return default
-        data = self.join_configs(data, select_idxs)
+        data = self.join_mols(data, select_idxs)
         return data
 
-    def join_configs(self, data_per_config, select_idxs):
-        if all([isinstance(d, PhysicalConfiguration) for d in data_per_config]):
-            # phys_conf is special because we need to store which config the samples
+    def join_mols(self, data_per_mol, select_idxs):
+        if all([isinstance(d, PhysicalConfiguration) for d in data_per_mol]):
+            # phys_conf is special because we need to store which molecule the samples
             # are coming from
-            data_per_config = [
-                jdc.replace(pc, config_idx=i * jnp.ones(len(pc), dtype=jnp.int32))
-                for i, pc in enumerate(data_per_config)
+            data_per_mol = [
+                jdc.replace(pc, mol_idx=i * jnp.ones(len(pc), dtype=jnp.int32))
+                for i, pc in enumerate(data_per_mol)
             ]
         if select_idxs is None:
             # data is zero dimensional
             return jax.tree_util.tree_map(
                 lambda *xs: jnp.concatenate([x[select_idxs] for x in xs]),
-                *data_per_config,
+                *data_per_mol,
             )
         return jax.tree_util.tree_map(
-            lambda *xs: jnp.concatenate(xs)[select_idxs], *data_per_config
+            lambda *xs: jnp.concatenate(xs)[select_idxs], *data_per_mol
         )
 
     def phys_conf(self, states, select_idxs):
         phys_confs = [
-            self.sampler.phys_conf(R, state['r'])
-            for state, R in zip(states, self.configurations)
+            self.sampler.phys_conf(mol.coords, state['r'])
+            for state, mol in zip(states, self.mols)
         ]
-        return self.join_configs(phys_confs, select_idxs)
+        return self.join_mols(phys_confs, select_idxs)
 
     def select_idxs(self, sample_size, *args, **kwargs):
-        n_smpl_per_config = self.config_idx_factory.n_per_config(
+        n_smpl_per_mol = self.mol_idx_factory.n_per_mol(
             sample_size, len(self), *args, **kwargs
         )
-        max_smpl_per_config = self.config_idx_factory.max_per_config(
-            sample_size, len(self)
-        )
-        assert all(n <= m for n, m in zip(n_smpl_per_config, max_smpl_per_config))
+        max_smpl_per_mol = self.mol_idx_factory.max_per_mol(sample_size, len(self))
+        assert all(n <= m for n, m in zip(n_smpl_per_mol, max_smpl_per_mol))
         start_pos = 0
         idxs = []
-        for n, m in zip(n_smpl_per_config, max_smpl_per_config):
+        for n, m in zip(n_smpl_per_mol, max_smpl_per_mol):
             idxs.append(start_pos + jnp.arange(n))
             start_pos += m
         return jnp.concatenate(idxs)
 
-    def config_idx(self, sample_size, *args, **kwargs):
-        n_smpl_per_config = self.config_idx_factory.n_per_config(
+    def mol_idx(self, sample_size, *args, **kwargs):
+        n_smpl_per_mol = self.mol_idx_factory.n_per_mol(
             sample_size, len(self), *args, **kwargs
         )
         assert all(
             n <= m
             for n, m in zip(
-                n_smpl_per_config,
-                self.config_idx_factory.max_per_config(sample_size, len(self)),
+                n_smpl_per_mol,
+                self.mol_idx_factory.max_per_mol(sample_size, len(self)),
             )
         )
         return jnp.concatenate(
             [
                 i * jnp.ones(n_smpl, dtype=jnp.int32)
-                for i, n_smpl in enumerate(n_smpl_per_config)
+                for i, n_smpl in enumerate(n_smpl_per_mol)
             ]
         )
 
-    def nuclear_configurations(self):
-        yield from self.configurations
-
     def __len__(self):
-        return len(self.configurations)
+        return len(self.mols)
 
 
 def chain(*samplers):
