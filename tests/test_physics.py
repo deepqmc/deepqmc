@@ -15,7 +15,9 @@ class TestPhysics:
         ndarrays_regression.check(
             {
                 'local_potential': local_potential(rs, mol),
-                'nonlocal_potential': nonlocal_potential(rs, mol, state, wf),
+                'nonlocal_potential': nonlocal_potential(
+                    helpers.rng(), rs, mol, state, wf
+                ),
             },
             default_tolerance={'rtol': 2e-2, 'atol': 1e-8},
         )

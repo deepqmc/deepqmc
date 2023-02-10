@@ -100,7 +100,7 @@ UNIT_ICOSAHEDRON = sph2cart(get_unit_icosahedron_sph())
 QUADRATURE_THETAS = get_unit_icosahedron_sph()[:, 0]
 
 
-def get_quadrature_points(nucleus_position, rs):
+def get_quadrature_points(rng, nucleus_position, rs):
     """
     Transform electron configuration 'rs' of size (N,3) into an array quadrature points.
 
@@ -112,26 +112,29 @@ def get_quadrature_points(nucleus_position, rs):
     norm = jnp.linalg.norm(rs - nucleus_position, axis=-1)
     theta = jnp.arccos((rs - nucleus_position)[..., 2] / norm)
     phi = jnp.arctan2((rs - nucleus_position)[..., 1], (rs - nucleus_position)[..., 0])
+    phi_random = jax.random.uniform(rng, phi.shape, minval=0, maxval=jnp.pi / 5)
+
+    z_rot_random = jnp.moveaxis(rot_z(phi_random), -1, -3)
 
     y_rot = jnp.moveaxis(rot_y(theta), -1, -3)  # shape: (3,3,num_e) -> (num_e,3,3)
 
     z_rot = jnp.moveaxis(rot_z(phi), -1, -3)  # shape: (3,3,num_e) -> (num_e,3,3)
 
     # auxiliary function applying the rotation and translation to be vmapped
-    def transform_coordinates(norm, z_rot, y_rot, r, nucleus_position):
-        return norm * (z_rot @ y_rot @ r) + nucleus_position
+    def transform_coordinates(norm, z_rot, y_rot, z_rot_random, r, nucleus_position):
+        return norm * (z_rot @ y_rot @ z_rot_random @ r) + nucleus_position
 
     # vmapping to include N different rotations corresponding to each electron position
     transform_coordinates = jax.vmap(
-        transform_coordinates, in_axes=(-1, -3, -3, None, None)
+        transform_coordinates, in_axes=(-1, -3, -3, -3, None, None)
     )
     # vmapping to be able to transform all 12 icosahedron points at the same time
     transform_coordinates = jax.vmap(
-        transform_coordinates, in_axes=(None, None, None, -2, None)
+        transform_coordinates, in_axes=(None, None, None, None, -2, None)
     )
 
     quadrature_points = transform_coordinates(
-        norm, z_rot, y_rot, UNIT_ICOSAHEDRON, nucleus_position
+        norm, z_rot, y_rot, z_rot_random, UNIT_ICOSAHEDRON, nucleus_position
     )  # shape: (12,N,3)
     # we still need to pad the quadrature points with other electron's coordinates
     quadrature_points_copied = jnp.tile(quadrature_points, (len(rs), 1, 1, 1))
@@ -146,7 +149,7 @@ def get_quadrature_points(nucleus_position, rs):
     return quadrature_rs
 
 
-def nonlocal_potential(rs, mol, state, wf):
+def nonlocal_potential(rng, rs, mol, state, wf):
     r"""Calculate the non-local term of the pseudopotential.
 
     Formulas are based on data from [Burkatzki et al. 2007] or
@@ -186,7 +189,7 @@ def nonlocal_potential(rs, mol, state, wf):
             axis=-1,
         )
 
-        quadrature_rs = get_quadrature_points(nucleus_index, rs)
+        quadrature_rs = get_quadrature_points(rng, nucleus_index, rs)
 
         # (2l+1)/12 coefficient
         coefs = jnp.tile(

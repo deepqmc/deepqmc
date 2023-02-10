@@ -16,7 +16,7 @@ class QHOHamiltonian(Hamiltonian):
         self.nu = nu
 
     def local_energy(self, wf):
-        def loc_ene(state, r):
+        def loc_ene(rng, state, r):
             pot = 1 / 2 * self.mass * self.nu**2 * jnp.sum(r**2)
             lap_log, grad_log = laplacian(lambda x: wf(state, x).log)(r)
             kin = -1 / (2 * self.mass) * (lap_log + jnp.sum(grad_log**2))

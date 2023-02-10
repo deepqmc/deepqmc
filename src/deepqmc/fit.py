@@ -62,11 +62,12 @@ def fit_wf(  # noqa: C901
     clip_mask_fn=None,
     clip_mask_kwargs=None,
 ):
-    @partial(jax.custom_jvp, nondiff_argnums=(1, 2))
-    def loss_fn(params, state, batch):
+    @partial(jax.custom_jvp, nondiff_argnums=(1, 2, 3))
+    def loss_fn(params, state, rng, batch):
         r, weight = batch
+        rng_batch = jax.random.split(rng, len(weight))
         wf = lambda state, r: ansatz.apply(params, state, r)[0]
-        E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(state, r)
+        E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(rng_batch, state, r)
         loss = jnp.nanmean(E_loc * weight)
         stats = {
             'E_loc/mean': jnp.nanmean(E_loc),
@@ -83,10 +84,10 @@ def fit_wf(  # noqa: C901
         #   actually use it (hence None)
 
     @loss_fn.defjvp
-    def loss_jvp(state, batch, primals, tangents):
+    def loss_jvp(state, rng, batch, primals, tangents):
         r, weight = batch
         (params,) = primals
-        loss, other = loss_fn(params, state, batch)
+        loss, other = loss_fn(params, state, rng, batch)
         # other is (state, aux) as per kfac-jax's convention
         _, (E_loc, _) = other
         E_loc_s, gradient_mask = (clip_mask_fn or median_log_squeeze_and_mask)(
@@ -121,7 +122,7 @@ def fit_wf(  # noqa: C901
 
         @jax.jit
         def _step(_rng_opt, wf_state, params, _opt_state, batch):
-            loss, (_, (E_loc, stats)) = loss_fn(params, wf_state, batch)
+            loss, (_, (E_loc, stats)) = loss_fn(params, wf_state, _rng_opt, batch)
 
             return params, None, E_loc, stats
 
@@ -130,7 +131,7 @@ def fit_wf(  # noqa: C901
         @jax.jit
         def _step(rng, wf_state, params, opt_state, batch):
             (loss, (_, (E_loc, loss_stats))), grads = energy_and_grad_fn(
-                params, wf_state, batch
+                params, wf_state, rng, batch
             )
             updates, opt_state = opt.update(grads, opt_state, params)
             param_norm, update_norm, grad_norm = map(
@@ -182,6 +183,7 @@ def fit_wf(  # noqa: C901
             l2_reg=0.0,
             value_func_has_aux=True,
             value_func_has_state=True,
+            value_func_has_rng=True,
             auto_register_kwargs={'graph_patterns': make_graph_patterns()},
             include_norms_in_stats=True,
             estimation_mode='fisher_exact',

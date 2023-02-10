@@ -36,6 +36,6 @@ class TestHamil:
         wf = helpers.transform_model(wf, hamil)
         params, state = helpers.init_model(wf, r)
         E_loc, *_ = hamil.local_energy(lambda state, r: wf.apply(params, state, r)[0])(
-            state, r
+            helpers.rng(), state, r
         )
         ndarrays_regression.check({'E_loc': E_loc})
