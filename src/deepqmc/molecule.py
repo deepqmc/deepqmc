@@ -87,9 +87,13 @@ class Molecule:
     # stores the parameters of local potential (loaded from [Burkatzki et al. 2007])
     pp_loc_params: jnp.ndarray
     # stores the parameters of non-local potential part
-    pp_nl_params: list
+    pp_nl_params: jnp.ndarray
+
+    # REDUNDANT AUXILIARY PROPERTIES:
     # True if at leas one nucleus uses pseudopotential
     any_pp: bool
+    # Indices of nuclei with pseudopotential
+    nuc_with_nl_pot: jnp.ndarray
 
     def __init__(
         self,
@@ -140,6 +144,7 @@ class Molecule:
             pp_loc_params=pp_loc_params,
             pp_nl_params=pp_nl_params,
             any_pp=any(self.pp_mask),
+            nuc_with_nl_pot=jnp.nonzero(self.pp_mask)[0],
         )
 
         shells = [get_shell(z) for z in self.charges]

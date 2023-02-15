@@ -5,6 +5,8 @@ from pyscf import gto
 from pyscf.mcscf import CASSCF
 from pyscf.scf import RHF
 
+from ...utils import pad_list_of_3D_arrays_to_one_array
+
 log = logging.getLogger(__name__)
 
 
@@ -86,8 +88,8 @@ def parse_pp_params(mol):
         tuple: a tuple containing a an array of integers indicating the numbers of core
             electrons replaced by pseudopotential, an array of local pseudopotential
             parameters (padded by zeros if each atom has a different shape of local
-            parameters), and a tuple containing an array of nonlocal pseudopotential
-            parameters for each atom.
+            parameters), and an array of nonlocal pseudopotential parameters (also
+            padded by zeros).
     """
 
     ns_core, pp_loc_params, pp_nl_params = [], [], []
@@ -106,14 +108,14 @@ def parse_pp_params(mol):
                     -1, -2
                 )
             else:
-                pp_nl_param = jnp.array([])
+                pp_nl_param = jnp.array([[[]]])
 
             max_number_of_same_type_terms.append(len(max(pp_loc_param, key=len)))
             n_core = data[0]
         else:
             n_core = 0
             pp_loc_param = [[], [], []]
-            pp_nl_param = jnp.asarray([])
+            pp_nl_param = jnp.asarray([[[]]])
         ns_core.append(n_core)
         pp_loc_params.append(pp_loc_param)
         pp_nl_params.append(pp_nl_param)
@@ -130,4 +132,7 @@ def parse_pp_params(mol):
         # shape (r^n term, coefficient (β) & exponent (α), no. of terms with the same n)
     pp_loc_params = jnp.array(pp_loc_param_padded)
 
-    return ns_core, pp_loc_params, pp_nl_params
+    # We also pad the non-local parameters with zeros
+    pp_nl_params = pad_list_of_3D_arrays_to_one_array(pp_nl_params)
+
+    return ns_core, pp_loc_params, jnp.array(pp_nl_params)

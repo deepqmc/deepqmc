@@ -174,11 +174,12 @@ def nonlocal_potential(rng, rs, mol, state, wf):
     # vmap over 12 integration quadrature points
     wf_vmapped = jax.vmap(wf, in_axes=(None, 0), out_axes=(0))
 
-    total_nl_potential = 0
-    for nucleus_index in range(mol.n_nuc):
-        nl_params = mol.pp_nl_params[nucleus_index]
-        if nl_params.size == 0:
-            continue  # in case of no non-local contribution from the given nucleus
+    pp_nl_params = jnp.array(mol.pp_nl_params)
+    nuc_with_nl_pot = mol.nuc_with_nl_pot  # filter out masked nuclei
+
+    def add_nl_potential_for_one_nucleus(i, val):
+        nucleus_index = nuc_with_nl_pot[i]
+        nl_params = pp_nl_params[nucleus_index]
         l_max_p1 = nl_params.shape[0]  # l_max_p1 = l_max + 1
 
         legendre_values = jnp.stack(
@@ -196,7 +197,7 @@ def nonlocal_potential(rng, rs, mol, state, wf):
             (jnp.arange(l_max_p1) * 2 + 1) / 12, (len(rs), 1)
         )  # shape: (N,l_max)
 
-        dists = pairwise_distance(rs, mol.coords[nucleus_index : nucleus_index + 1])
+        dists = pairwise_distance(rs, mol.coords[nucleus_index, None])
         nl_pot_coefs = jnp.einsum(
             'kj,ikj->ikj',
             nl_params[:, 1, :],
@@ -232,7 +233,11 @@ def nonlocal_potential(rng, rs, mol, state, wf):
             nl_potential_for_one_nucleus_and_one_electron,
             0.0,
         )
-        total_nl_potential += nl_potential_for_one_nucleus
+        return val + nl_potential_for_one_nucleus
+
+    total_nl_potential = jax.lax.fori_loop(
+        0, len(nuc_with_nl_pot), add_nl_potential_for_one_nucleus, 0.0
+    )
 
     return total_nl_potential
 

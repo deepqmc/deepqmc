@@ -136,3 +136,17 @@ def rot_z(phi):
             [jnp.zeros_like(phi), jnp.zeros_like(phi), jnp.ones_like(phi)],
         ]
     )
+
+
+def pad_list_of_3D_arrays_to_one_array(list_of_arrays):
+    shapes = [jnp.asarray(arr).shape for arr in list_of_arrays]
+    target_shape = jnp.max(jnp.array(shapes), axis=0)
+    padded_arrays = [
+        jnp.pad(
+            array,
+            [(0, target_shape[i] - array.shape[i]) for i in range(3)],
+            mode='constant',
+        )
+        for array in list_of_arrays
+    ]
+    return jnp.array(padded_arrays)
