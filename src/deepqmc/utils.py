@@ -102,3 +102,37 @@ def InverseSchedule(init_value, decay_rate):
 def argmax_random_choice(rng, x):
     mask = x == x.max()
     return jax.random.choice(rng, jnp.arange(len(x))[mask])
+
+
+@jax.vmap
+def sph2cart(sph, r=1):
+    # This function transforms from spherical to cartesian coordinates.
+    theta = sph[0]
+    phi = sph[1]
+    rsin_theta = r * jnp.sin(theta)
+    x = rsin_theta * jnp.cos(phi)
+    y = rsin_theta * jnp.sin(phi)
+    z = r * jnp.cos(theta)
+    return jnp.array([x, y, z])
+
+
+def rot_y(theta):
+    # returns the rotation matrix about y-axis by angle theta
+    return jnp.array(
+        [
+            [jnp.cos(theta), jnp.zeros_like(theta), jnp.sin(theta)],
+            [jnp.zeros_like(theta), jnp.ones_like(theta), jnp.zeros_like(theta)],
+            [-jnp.sin(theta), jnp.zeros_like(theta), jnp.cos(theta)],
+        ]
+    )
+
+
+def rot_z(phi):
+    # returns the rotation matrix about z-axis by angle phi
+    return jnp.array(
+        [
+            [jnp.cos(phi), -jnp.sin(phi), jnp.zeros_like(phi)],
+            [jnp.sin(phi), jnp.cos(phi), jnp.zeros_like(phi)],
+            [jnp.zeros_like(phi), jnp.zeros_like(phi), jnp.ones_like(phi)],
+        ]
+    )

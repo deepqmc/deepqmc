@@ -1,7 +1,8 @@
 import jax
 import jax.numpy as jnp
+from scipy.special import legendre
 
-from .utils import triu_flat
+from .utils import rot_y, rot_z, sph2cart, triu_flat
 
 __all__ = ()
 
@@ -31,19 +32,206 @@ def pairwise_self_distance(coords, full=False):
 
 
 def nuclear_energy(mol):
-    coords, charges = mol.coords, mol.charges
+    coords, charges = mol.coords, mol.ns_valence
     coulombs = triu_flat(charges[:, None] * charges) / pairwise_self_distance(coords)
     return coulombs.sum()
-
-
-def nuclear_potential(rs, mol):
-    dists = pairwise_distance(rs, mol.coords)
-    return -(mol.charges / dists).sum(axis=(-1, -2))
 
 
 def electronic_potential(rs):
     dists = pairwise_self_distance(rs)
     return (1 / dists).sum(axis=-1)
+
+
+def local_potential(rs, mol):
+    """Return the local or nuclear potential of the whole system.
+
+    Evaluates either the classical nuclear potential V_nuc(r) = -Z/r or the local
+    part of the potentials V_loc(r) from [Burkatzki et al. 2007] eq. (4) or
+    from [Annaberdiyev et al. 2018] eq. (3). Returns the sum of all the local potential
+    contributions from all the electrons and nuclei.
+    """
+
+    dists = pairwise_distance(rs, mol.coords)
+    Z_eff = mol.charges - mol.ns_core  # effective charge of the nuclei
+    effective_coulomb_potential = -(Z_eff / dists).sum(axis=(-1, -2))
+    if not mol.any_pp:
+        return effective_coulomb_potential
+
+    loc_params = mol.pp_loc_params
+    idxs = mol.pp_mask  # indices of atoms for whom we use pseudopotential
+
+    r_en = dists[:, idxs]  # electron-nucleus distances for all electrons and PP nuclei
+
+    coulomb_term = jnp.einsum(
+        'ij,ki->kji', loc_params[idxs, 0, 1, :], 1 / r_en
+    ) * jnp.exp(jnp.einsum('ij,ki->kji', -loc_params[idxs, 0, 0, :], r_en**2))
+    const_term = jnp.einsum(
+        'ij,kji->kji',
+        loc_params[idxs, 1, 1, :],
+        jnp.exp(jnp.einsum('ij,ki->kji', -loc_params[idxs, 1, 0, :], r_en**2)),
+    )
+    linear_term = jnp.einsum('ij,ki->kji', loc_params[idxs, 2, 1, :], r_en) * jnp.exp(
+        jnp.einsum('ij,ki->kji', -loc_params[idxs, 2, 0, :], r_en**2)
+    )
+
+    # Summation is carried over:
+    # - individual cores in the molecule (idxs dimension)
+    # - individual electrons (1st dimension of 'dists')
+    # - potentially over different coeffs for the term of the same type (ccECP case)
+    pseudopotential = (coulomb_term + const_term + linear_term).sum(axis=(-1, -2, -3))
+
+    return effective_coulomb_potential + pseudopotential
+
+
+@jax.jit
+def get_unit_icosahedron_sph():
+    # Basic definition of unit icosahedron vertices in spherical coordinates.
+    unit_icosahedron_sph = []
+    unit_icosahedron_sph.append([0, 0])
+    unit_icosahedron_sph.append([jnp.pi, 0])
+    for j in range(5):
+        unit_icosahedron_sph.append([jnp.arctan(2), jnp.pi / 5 * 2 * j])
+        unit_icosahedron_sph.append([jnp.pi - jnp.arctan(2), jnp.pi / 5 * (2 * j - 1)])
+    return jnp.array(unit_icosahedron_sph)
+
+
+# UNIT_ICOSAHEDRON is (12,3) array of unit icosahedron vertices
+UNIT_ICOSAHEDRON = sph2cart(get_unit_icosahedron_sph())
+QUADRATURE_THETAS = get_unit_icosahedron_sph()[:, 0]
+
+
+def get_quadrature_points(nucleus_position, rs):
+    """
+    Transform electron configuration 'rs' of size (N,3) into an array quadrature points.
+
+    Return array of size (N,12,N,3) that includes all the 12 quadrature point
+    configurations (i.e. reference electron position is shifted to another icosahedron
+    vertex) corresponding to N different reference electron.
+    """
+
+    norm = jnp.linalg.norm(rs - nucleus_position, axis=-1)
+    theta = jnp.arccos((rs - nucleus_position)[..., 2] / norm)
+    phi = jnp.arctan2((rs - nucleus_position)[..., 1], (rs - nucleus_position)[..., 0])
+
+    y_rot = jnp.moveaxis(rot_y(theta), -1, -3)  # shape: (3,3,num_e) -> (num_e,3,3)
+
+    z_rot = jnp.moveaxis(rot_z(phi), -1, -3)  # shape: (3,3,num_e) -> (num_e,3,3)
+
+    # auxiliary function applying the rotation and translation to be vmapped
+    def transform_coordinates(norm, z_rot, y_rot, r, nucleus_position):
+        return norm * (z_rot @ y_rot @ r) + nucleus_position
+
+    # vmapping to include N different rotations corresponding to each electron position
+    transform_coordinates = jax.vmap(
+        transform_coordinates, in_axes=(-1, -3, -3, None, None)
+    )
+    # vmapping to be able to transform all 12 icosahedron points at the same time
+    transform_coordinates = jax.vmap(
+        transform_coordinates, in_axes=(None, None, None, -2, None)
+    )
+
+    quadrature_points = transform_coordinates(
+        norm, z_rot, y_rot, UNIT_ICOSAHEDRON, nucleus_position
+    )  # shape: (12,N,3)
+    # we still need to pad the quadrature points with other electron's coordinates
+    quadrature_points_copied = jnp.tile(quadrature_points, (len(rs), 1, 1, 1))
+    rs_copied = jnp.tile(rs, (len(rs), 12, 1, 1))
+    criterion = jnp.moveaxis(
+        jnp.moveaxis(jnp.tile(jnp.eye(len(rs)), (12, 3, 1, 1)), -3, -1), -4, -3
+    )
+    quadrature_rs = jnp.where(
+        criterion, quadrature_points_copied, rs_copied
+    )  # shape: (N,12,N,3)
+
+    return quadrature_rs
+
+
+def nonlocal_potential(rs, mol, state, wf):
+    r"""Calculate the non-local term of the pseudopotential.
+
+    Formulas are based on data from [Burkatzki et al. 2007] or
+    [Annaberdiyev et al. 2018]. Numerical calculation of integrals is based
+    on [Li et al. 2022] where 12-point icosahedron quadrature is used.
+    The current implementation is using jax.lax.fori_loop instead of vmap over
+    the index of the rotated electron. This causes roughly 10% slowdown compared
+    to plain vmap, but avoids OOM issues. Further OOM errors could be resolved by
+    replacing the remaining vmap with fori_loop over the 12 quadrature points.
+
+    Args:
+        rs (float (:math:`N_\text{elec}`, 3)): electron coordinates.
+        mol (:class:`deepqmc.Molecule`): a molecule that is used to load the
+            pseudopotential parameters and nuclear positions.
+        state (dic): wave function state.
+        wf (deepqmc.wf.WaveFunction): the wave function ansatz.
+    """
+
+    # get value of the denominator (which is constant)
+    denominator_wf_sign, denominator_wf_exponent = wf(state, rs)
+
+    # vmap over 12 integration quadrature points
+    wf_vmapped = jax.vmap(wf, in_axes=(None, 0), out_axes=(0))
+
+    total_nl_potential = 0
+    for nucleus_index in range(mol.n_nuc):
+        nl_params = mol.pp_nl_params[nucleus_index]
+        if nl_params.size == 0:
+            continue  # in case of no non-local contribution from the given nucleus
+        l_max_p1 = nl_params.shape[0]  # l_max_p1 = l_max + 1
+
+        legendre_values = jnp.stack(
+            [
+                jnp.polyval(legendre(l).coef, jnp.cos(QUADRATURE_THETAS))
+                for l in range(l_max_p1)
+            ],
+            axis=-1,
+        )
+
+        quadrature_rs = get_quadrature_points(nucleus_index, rs)
+
+        # (2l+1)/12 coefficient
+        coefs = jnp.tile(
+            (jnp.arange(l_max_p1) * 2 + 1) / 12, (len(rs), 1)
+        )  # shape: (N,l_max)
+
+        dists = pairwise_distance(rs, mol.coords[nucleus_index : nucleus_index + 1])
+        nl_pot_coefs = jnp.einsum(
+            'kj,ikj->ikj',
+            nl_params[:, 1, :],
+            jnp.exp(-jnp.einsum('ij,kj->ikj', (dists**2), nl_params[:, 0, :])),
+        ).sum(axis=-1)
+
+        def nl_potential_for_one_nucleus_and_one_electron(
+            i,
+            val,
+            quadrature_rs=quadrature_rs,
+            legendre_values=legendre_values,
+            coefs=coefs,
+            nl_pot_coefs=nl_pot_coefs,
+        ):
+            # numerator
+            sign, exponent = wf_vmapped(state, quadrature_rs[i])  # shape (12,)
+            wf_ratio = (
+                denominator_wf_sign * sign * jnp.exp(exponent - denominator_wf_exponent)
+            )  # shape (12,)
+            wf_ratio_tile = wf_ratio[..., None] * legendre_values  # shape (12,l_max)
+            # sum over 12 "virtual" electron configurations
+            num_integral_one_e = jnp.sum(wf_ratio_tile, axis=-2)  # shape (1,)
+            coef = coefs[i]  # shape (l_max,)
+            nl_pot_coef = nl_pot_coefs[i]  # shape (1,)
+            nl_potential_one_e = jnp.sum(
+                nl_pot_coef * coef * num_integral_one_e, axis=(-1,)
+            )  # shape ()
+            return val + nl_potential_one_e
+
+        nl_potential_for_one_nucleus = jax.lax.fori_loop(
+            0,
+            mol.ns_valence.astype(int).sum(),
+            nl_potential_for_one_nucleus_and_one_electron,
+            0.0,
+        )
+        total_nl_potential += nl_potential_for_one_nucleus
+
+    return total_nl_potential
 
 
 def laplacian(f):

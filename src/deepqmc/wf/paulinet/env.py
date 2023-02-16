@@ -20,7 +20,9 @@ class ExponentialEnvelopes(hk.Module):
     def from_mol(cls, mol):
         r"""Create the input of the constructor from a :class:`~deepqmc.Molecule`."""
         shells = []
-        for i, (z, n_shell) in enumerate(zip(mol.charges, mol.n_shells)):
-            for k in range(n_shell):
+        for i, (z, n_shell, n_pp_shell) in enumerate(
+            zip(mol.charges, mol.n_shells, mol.n_pp_shells)
+        ):
+            for k in range(n_pp_shell, n_shell):
                 shells.append((i, z / (k + 1)))
         return cls(shells)

@@ -6,8 +6,9 @@ from jax import random, vmap
 from ..physics import (
     electronic_potential,
     laplacian,
+    local_potential,
+    nonlocal_potential,
     nuclear_energy,
-    nuclear_potential,
     pairwise_distance,
 )
 from ..utils import argmax_random_choice
@@ -28,12 +29,15 @@ class MolecularHamiltonian(Hamiltonian):
 
     Args:
         mol (~deepqmc.Molecule): the molecule to consider
+        elec_std (float): optional, a default value of the scaling factor
+        of the spread of electrons around the nuclei.
     """
 
-    def __init__(self, *, mol):
+    def __init__(self, *, mol, elec_std=1):
         self.mol = mol
+        self.elec_std = elec_std
 
-    def init_sample(self, rng, n, elec_std=1.0):
+    def init_sample(self, rng, n):
         r"""
         Guess some initial electron positions.
 
@@ -46,16 +50,20 @@ class MolecularHamiltonian(Hamiltonian):
         Args:
             rng (jax.random.PRNGKey): key used for PRNG.
             n (int): the number of configurations to generate.
-            elec_std (float): optional, a factor for scaling the spread of
                 electrons around the nuclei.
         """
-
         rng_remainder, rng_normal, rng_spin = random.split(rng, 3)
-        charges = self.mol.charges - self.mol.charge / len(self.mol.charges)
-        base = jnp.floor(charges).astype(jnp.int32)
-        prob = charges - base
+        valence_electrons = self.mol.ns_valence - self.mol.charge / self.mol.n_nuc
+        base = jnp.floor(valence_electrons).astype(jnp.int32)
+        prob = valence_electrons - base
         electrons_of_atom = jnp.tile(base[None], (n, 1))
-        n_remainder = int(self.mol.charges.sum() - self.mol.charge - base.sum())
+        n_remainder = int(self.mol.ns_valence.sum() - self.mol.charge - base.sum())
+        idxs = jnp.tile(
+            jnp.concatenate(
+                [i_atom * jnp.ones(b, jnp.int32) for i_atom, b in enumerate(base)]
+            )[None],
+            (n, 1),
+        )
         if n_remainder > 0:
             extra = random.categorical(rng_remainder, prob, shape=(n, n_remainder))
             n_extra = vmap(partial(jnp.bincount, length=base.shape[-1]))(extra)
@@ -78,7 +86,7 @@ class MolecularHamiltonian(Hamiltonian):
             )
         idxs = jnp.stack(idxs)
         centers = self.mol.coords[idxs]
-        std = elec_std * jnp.sqrt(self.mol.charges)[idxs][..., None]
+        std = self.elec_std * jnp.sqrt(self.mol.charges)[idxs][..., None]
         rs = centers + std * random.normal(rng_normal, centers.shape)
         return rs
 
@@ -120,17 +128,22 @@ class MolecularHamiltonian(Hamiltonian):
             )(r.flatten())
             Es_kin = -0.5 * (lap_log_psis + (quantum_force**2).sum(axis=-1))
             Es_nuc = nuclear_energy(mol)
-            Vs_nuc = nuclear_potential(r, mol)
             Vs_el = electronic_potential(r)
-            Es_loc = Es_kin + Vs_nuc + Vs_el + Es_nuc
-            result = (Es_loc, quantum_force) if return_grad else Es_loc
+            Vs_loc = local_potential(r, mol)
+            Es_loc = Es_kin + Vs_loc + Vs_el + Es_nuc
             stats = {
                 'hamil/V_el': Vs_el,
                 'hamil/E_kin': Es_kin,
-                'hamil/V_nuc': Vs_nuc,
+                'hamil/V_loc': Vs_loc,
                 'hamil/lap': lap_log_psis,
                 'hamil/quantum_force': (quantum_force**2).sum(axis=-1),
             }
+            if mol.any_pp:
+                Vs_nl = nonlocal_potential(r, mol, state, wf)
+                Es_loc += Vs_nl
+                stats = {**stats, 'hamil/V_nl': Vs_nl}
+
+            result = (Es_loc, quantum_force) if return_grad else Es_loc
             return result, stats
 
         return loc_ene
