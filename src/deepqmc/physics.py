@@ -190,7 +190,7 @@ def nonlocal_potential(rng, rs, mol, state, wf):
             axis=-1,
         )
 
-        quadrature_rs = get_quadrature_points(rng, nucleus_index, rs)
+        quadrature_rs = get_quadrature_points(rng, mol.coords[nucleus_index], rs)
 
         # (2l+1)/12 coefficient
         coefs = jnp.tile(
