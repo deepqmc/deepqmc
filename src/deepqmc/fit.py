@@ -117,7 +117,9 @@ def fit_wf(  # noqa: C901
             wf = lambda state, phys_conf: ansatz.apply(params, state, phys_conf)[0]
             return jax.vmap(wf)(state, phys_conf).log
 
-        E_mean = segment_nanmean(E_loc_s, phys_conf.mol_idx, len(sampler))
+        E_mean = segment_nanmean(E_loc_s, phys_conf.mol_idx, len(sampler))[
+            phys_conf.mol_idx
+        ]
         log_psi, log_psi_tangent = jax.jvp(log_likelihood, primals, tangents)
         kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
         loss_tangent = (E_loc_s - E_mean) * log_psi_tangent * weight
