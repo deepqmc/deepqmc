@@ -8,7 +8,14 @@ import kfac_jax
 import optax
 
 from .kfacext import make_graph_patterns
-from .utils import check_overflow, exp_normalize_mean, masked_mean, tree_norm
+from .utils import (
+    check_overflow,
+    exp_normalize_mean,
+    masked_mean,
+    per_mol_stats,
+    segment_nanmean,
+    tree_norm,
+)
 from .wf.base import init_wf_params
 
 __all__ = ()
@@ -62,19 +69,23 @@ def fit_wf(  # noqa: C901
     clip_mask_fn=None,
     clip_mask_kwargs=None,
 ):
+    stats_fn = partial(per_mol_stats, len(sampler))
+
     @partial(jax.custom_jvp, nondiff_argnums=(1, 2, 3))
     def loss_fn(params, state, rng, batch):
-        r, weight = batch
+        phys_conf, weight = batch
         rng_batch = jax.random.split(rng, len(weight))
-        wf = lambda state, r: ansatz.apply(params, state, r)[0]
-        E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(rng_batch, state, r)
+        wf = lambda state, phys_conf: ansatz.apply(params, state, phys_conf)[0]
+        E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(
+            rng_batch, state, phys_conf
+        )
         loss = jnp.nanmean(E_loc * weight)
         stats = {
-            'E_loc/mean': jnp.nanmean(E_loc),
-            'E_loc/std': jnp.nanstd(E_loc),
-            'E_loc/max': jnp.nanmax(E_loc),
-            'E_loc/min': jnp.nanmin(E_loc),
-            **jax.tree_util.tree_map(jnp.nanmean, hamil_stats),
+            **stats_fn(E_loc, phys_conf.mol_idx, 'E_loc'),
+            **{
+                k_hamil: stats_fn(v_hamil, phys_conf.mol_idx, k_hamil, mean_only=True)
+                for k_hamil, v_hamil in hamil_stats.items()
+            },
         }
         return loss, (None, (E_loc, stats))
         # - kfac-jax docs says the API should be (loss, state, aux), but that's
@@ -85,7 +96,7 @@ def fit_wf(  # noqa: C901
 
     @loss_fn.defjvp
     def loss_jvp(state, rng, batch, primals, tangents):
-        r, weight = batch
+        phys_conf, weight = batch
         (params,) = primals
         loss, other = loss_fn(params, state, rng, batch)
         # other is (state, aux) as per kfac-jax's convention
@@ -103,12 +114,15 @@ def fit_wf(  # noqa: C901
         )
 
         def log_likelihood(params):  # log(psi(theta))
-            wf = lambda state, r: ansatz.apply(params, state, r)[0]
-            return jax.vmap(wf)(state, r).log
+            wf = lambda state, phys_conf: ansatz.apply(params, state, phys_conf)[0]
+            return jax.vmap(wf)(state, phys_conf).log
 
+        E_mean = segment_nanmean(E_loc_s, phys_conf.mol_idx, len(sampler))[
+            phys_conf.mol_idx
+        ]
         log_psi, log_psi_tangent = jax.jvp(log_likelihood, primals, tangents)
         kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
-        loss_tangent = (E_loc_s - jnp.mean(E_loc_s)) * log_psi_tangent * weight
+        loss_tangent = (E_loc_s - E_mean) * log_psi_tangent * weight
         loss_tangent = masked_mean(loss_tangent, gradient_mask)
         return (loss, other), (loss_tangent, other)
         # jax.custom_jvp has actually no official support for auxiliary output.
@@ -124,13 +138,13 @@ def fit_wf(  # noqa: C901
         def _step(_rng_opt, wf_state, params, _opt_state, batch):
             loss, (_, (E_loc, stats)) = loss_fn(params, wf_state, _rng_opt, batch)
 
-            return params, None, E_loc, stats
+            return params, None, E_loc, {'per_mol': stats}
 
     elif isinstance(opt, optax.GradientTransformation):
 
         @jax.jit
         def _step(rng, wf_state, params, opt_state, batch):
-            (loss, (_, (E_loc, loss_stats))), grads = energy_and_grad_fn(
+            (loss, (_, (E_loc, per_mol_stats))), grads = energy_and_grad_fn(
                 params, wf_state, rng, batch
             )
             updates, opt_state = opt.update(grads, opt_state, params)
@@ -142,7 +156,7 @@ def fit_wf(  # noqa: C901
                 'opt/param_norm': param_norm,
                 'opt/grad_norm': grad_norm,
                 'opt/update_norm': update_norm,
-                **loss_stats,
+                'per_mol': per_mol_stats,
             }
             return params, opt_state, E_loc, stats
 
@@ -165,9 +179,14 @@ def fit_wf(  # noqa: C901
                 'opt/param_norm': opt_stats['param_norm'],
                 'opt/grad_norm': opt_stats['precon_grad_norm'],
                 'opt/update_norm': opt_stats['update_norm'],
-                **opt_stats['aux'][1],
+                'per_mol': opt_stats['aux'][1],
             }
-            return params, opt_state, opt_stats['aux'][0], stats
+            return (
+                params,
+                opt_state,
+                opt_stats['aux'][0],
+                stats,
+            )
 
         def init_opt(rng, wf_state, params, batch):
             opt_state = opt.init(
@@ -194,29 +213,38 @@ def fit_wf(  # noqa: C901
 
     @partial(check_overflow, state_callback)
     @jax.jit
-    def sample_wf(state, rng, params):
-        return sampler.sample(rng, state, partial(ansatz.apply, params))
+    def sample_wf(state, rng, params, select_idxs):
+        return sampler.sample(rng, state, partial(ansatz.apply, params), select_idxs)
 
     @jax.jit
     def update_sampler(state, params):
         return sampler.update(state, partial(ansatz.apply, params))
 
-    def train_step(rng, smpl_state, params, opt_state):
+    def train_step(rng, step, smpl_state, params, opt_state):
         rng_sample, rng_kfac = jax.random.split(rng)
-        smpl_state, r, smpl_stats = sample_wf(smpl_state, rng_sample, params)
+        select_idxs = sampler.select_idxs(sample_size, step)
+        smpl_state, phys_conf, smpl_stats = sample_wf(
+            smpl_state, rng_sample, params, select_idxs
+        )
         weight = exp_normalize_mean(
-            smpl_state.get('log_weight', jnp.zeros(sample_size))
+            sampler.get_state(
+                'log_weight',
+                smpl_state,
+                select_idxs,
+                default=jnp.zeros(sample_size),
+            )
         )
         params, opt_state, E_loc, stats = _step(
-            rng_kfac, smpl_state['wf'], params, opt_state, (r, weight)
+            rng_kfac,
+            sampler.get_state('wf', smpl_state, select_idxs),
+            params,
+            opt_state,
+            (phys_conf, weight),
         )
         if opt is not None:
             # WF was changed in _step, update psi values stored in smpl_state
             smpl_state = update_sampler(smpl_state, params)
-        stats = {
-            **smpl_stats,
-            **stats,
-        }
+        stats['per_mol'] = {**stats['per_mol'], **smpl_stats['per_mol']}
         return smpl_state, params, opt_state, E_loc, stats
 
     if train_state:
@@ -229,11 +257,18 @@ def fit_wf(  # noqa: C901
         opt_state = None
     if opt is not None and opt_state is None:
         rng, rng_opt = jax.random.split(rng)
+        init_select_idxs = sampler.select_idxs(sample_size, 0)
         opt_state = init_opt(
-            rng_opt, smpl_state['wf'], params, (smpl_state['r'], jnp.ones(sample_size))
+            rng_opt,
+            sampler.get_state('wf', smpl_state, init_select_idxs),
+            params,
+            (
+                sampler.phys_conf(smpl_state, init_select_idxs),
+                jnp.ones(sample_size),
+            ),
         )
     train_state = smpl_state, params, opt_state
 
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        *train_state, E_loc, stats = train_step(rng, *train_state)
+        *train_state, E_loc, stats = train_step(rng, step, *train_state)
         yield step, TrainState(*train_state), E_loc, stats

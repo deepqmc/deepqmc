@@ -45,7 +45,7 @@ class TestGraph:
 
     def test_molecular_graph_edge_builder(self, helpers, ndarrays_regression):
         mol = helpers.mol()
-        rs = helpers.rs()
+        phys_conf = helpers.phys_conf()
         edge_types = ('ne', 'same', 'anti')
         occupancy = {
             'ne': jnp.zeros(8),
@@ -54,7 +54,6 @@ class TestGraph:
         }
         graph_edges, occupancy = MolecularGraphEdgeBuilder(
             *mol.n_particles,
-            mol.coords,
             edge_types,
             {
                 edge_type: {
@@ -63,7 +62,7 @@ class TestGraph:
                 }
                 for edge_type in edge_types
             },
-        )(rs, occupancy)
+        )(phys_conf, occupancy)
         ndarrays_regression.check(
             helpers.flatten_pytree({'graph_edges': graph_edges, 'occupancy': occupancy})
         )
@@ -86,10 +85,10 @@ class TestSchNet:
     )
     def test_embedding(self, helpers, ndarrays_regression, kwargs):
         mol = helpers.mol()
-        rs = helpers.rs()
+        phys_conf = helpers.phys_conf()
         schnet = helpers.transform_model(SchNet, mol, 32, **kwargs)
-        params, state = helpers.init_model(schnet, rs)
-        emb, _ = schnet.apply(params, state, rs)
+        params, state = helpers.init_model(schnet, phys_conf)
+        emb, _ = schnet.apply(params, state, phys_conf)
         ndarrays_regression.check(
             {'embedding': emb}, default_tolerance={'rtol': 1e-4, 'atol': 1e-6}
         )

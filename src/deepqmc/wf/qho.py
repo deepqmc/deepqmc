@@ -13,8 +13,8 @@ class QHOAnsatz(hk.Module):
         self.width = 1 / jnp.sqrt(hamil.mass * hamil.nu / 2)
         self.kernel = hk.nets.MLP([64, 32, 1], activation=jax.nn.silu)
 
-    def __call__(self, r, return_mos=False):
-        r = r / self.width
+    def __call__(self, phys_conf, return_mos=False):
+        r = phys_conf.r / self.width
         x = self.kernel(r)
         x = jnp.squeeze(x, axis=-1)
         env = -jnp.sqrt(1 + jnp.sum(r**2))

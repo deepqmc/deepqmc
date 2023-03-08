@@ -36,7 +36,7 @@ def instantiate_ansatz(hamil, ansatz):
 
     return hk.without_apply_rng(
         hk.transform_with_state(
-            lambda r, return_mos=False: ansatz(hamil)(r, return_mos)
+            lambda phys_conf, return_mos=False: ansatz(hamil)(phys_conf, return_mos)
         )
     )
 

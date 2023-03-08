@@ -32,7 +32,7 @@ def init_ewm(
     )
 
     @jax.jit
-    def update(E_loc, state):
+    def update(x, state):
         clip, max_alpha, decay_alpha, alpha = (
             state.params['clip'],
             state.params['max_alpha'],
@@ -41,7 +41,6 @@ def init_ewm(
         )
         if state.mean is None:
             state.params['alpha'] = state.params['alpha'].at[0].set(1.0)
-            x = jnp.nanmean(E_loc)
             return state._replace(
                 buffer=state.buffer.at[0].set(x),
                 step=0,
@@ -49,18 +48,6 @@ def init_ewm(
                 var=jnp.array(1.0),
                 sqerr=jnp.array(1.0),
             )
-        diff = jnp.abs(state.mean - E_loc)
-        excluded = diff > clip * state.var
-        E_loc = jnp.where(
-            excluded,
-            state.mean,
-            E_loc,
-        )
-        clip *= (
-            jnp.maximum(excluded.mean(), jnp.array(max_exclude_ratio))
-            / max_exclude_ratio
-        )
-        x = jnp.nanmean(E_loc)
         buffer = jnp.concatenate([x[None], state.buffer[:-1]])
         alpha = jax.lax.cond(
             state.step + 1 >= len(alpha),

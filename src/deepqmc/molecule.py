@@ -90,7 +90,7 @@ class Molecule:
     pp_nl_params: jnp.ndarray
 
     # REDUNDANT AUXILIARY PROPERTIES:
-    # True if at leas one nucleus uses pseudopotential
+    # True if at least one nucleus uses pseudopotential
     any_pp: bool
     # Indices of nuclei with pseudopotential
     nuc_with_nl_pot: jnp.ndarray
@@ -121,7 +121,7 @@ class Molecule:
         unit_multiplier = {'bohr': 1.0, 'angstrom': angstrom}[unit]
         set_attr(
             coords=unit_multiplier * jnp.asarray(coords),
-            charges=1.0 * jnp.asarray(charges, dtype=jnp.int8),
+            charges=1.0 * jnp.asarray(charges),
             charge=charge,
             spin=spin,
             pp_mask=jnp.array(pp_mask),

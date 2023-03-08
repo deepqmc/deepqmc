@@ -1,3 +1,5 @@
+from typing import Sequence
+
 import haiku as hk
 import jax
 import pytest
@@ -23,7 +25,7 @@ class Helpers:
 
     @staticmethod
     def flatten_pytree(d, parent_key='', sep=':'):
-        if isinstance(d, tuple):
+        if isinstance(d, Sequence):
             try:
                 d = d._asdict()
             except AttributeError:
@@ -31,7 +33,7 @@ class Helpers:
         items = []
         for k, v in d.items():
             key = parent_key + sep + k if parent_key else k
-            if isinstance(v, dict) or isinstance(v, tuple):
+            if isinstance(v, dict) or isinstance(v, Sequence):
                 items.extend(Helpers.flatten_pytree(v, parent_key=key, sep=sep).items())
             else:
                 items.append((key, v))
@@ -42,17 +44,24 @@ class Helpers:
         return Molecule.from_name(name, pp_type=pp_type)
 
     @staticmethod
-    def hamil(mol=None, **kwargs):
+    def hamil(mol=None):
         mol = mol or Helpers.mol()
-        return MolecularHamiltonian(mol=mol, **kwargs)
+        return MolecularHamiltonian(mol=mol)
 
     @staticmethod
-    def rs(hamil=None, n=1):
+    def R(hamil=None):
         hamil = hamil or Helpers.hamil()
-        rs = hamil.init_sample(Helpers.rng(), n)
-        if n == 1:
-            rs = rs[0]
-        return rs
+        try:
+            R = hamil.mol.coords
+        except AttributeError:
+            R = None
+        return R
+
+    @staticmethod
+    def phys_conf(hamil=None, n=1, elec_std=1.0):
+        hamil = hamil or Helpers.hamil()
+        phys_conf = hamil.init_sample(Helpers.rng(), Helpers.R(hamil), n, elec_std)
+        return phys_conf[0] if n == 1 else phys_conf
 
     @staticmethod
     def transform_model(model, *model_args, **model_kwargs):
@@ -70,15 +79,23 @@ class Helpers:
         return params, state
 
     @staticmethod
-    def create_paulinet(hamil=None, rs=None, init_model_kwargs=None, **kwargs):
+    def create_paulinet(
+        hamil=None,
+        phys_conf=None,
+        init_model_kwargs=None,
+        phys_conf_kwargs=None,
+        paulinet_kwargs=None,
+    ):
         hamil = hamil or Helpers.hamil()
-        return_rs = rs is None
-        rs = rs or Helpers.rs(hamil)
-        paulinet = Helpers.transform_model(PauliNet, hamil, **kwargs)
-        params, state = Helpers.init_model(paulinet, rs, **(init_model_kwargs or {}))
+        return_phys_conf = phys_conf is None
+        phys_conf = phys_conf or Helpers.phys_conf(hamil, **(phys_conf_kwargs or {}))
+        paulinet = Helpers.transform_model(PauliNet, hamil, **(paulinet_kwargs or {}))
+        params, state = Helpers.init_model(
+            paulinet, phys_conf, **(init_model_kwargs or {})
+        )
         ret = (params, state, paulinet)
-        if return_rs:
-            ret += (rs,)
+        if return_phys_conf:
+            ret += (phys_conf,)
         return ret
 
 

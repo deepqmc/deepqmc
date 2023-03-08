@@ -1,14 +1,25 @@
+from typing import Sequence
+
 import haiku as hk
 import jax
+import jax.numpy as jnp
 from jax.tree_util import tree_map, tree_reduce
+
+from ..types import PhysicalConfiguration
 
 __all__ = ['state_callback']
 
 
 def init_wf_params(rng, hamil, ansatz):
-    rng_hamil, rng_params = jax.random.split(rng)
-    r = hamil.init_sample(rng_hamil, 1)[0]
-    params, _ = ansatz.init(rng_params, r)
+    rng_R, rng_r, rng_params = jax.random.split(rng, 3)
+    phys_conf = PhysicalConfiguration(
+        jax.random.normal(rng_R, (len(hamil.mol.charges), 3)),
+        jax.random.normal(
+            rng_r, (hamil.mol.charges.sum().astype(int) - hamil.mol.charge, 3)
+        ),
+        jnp.array(0),
+    )
+    params, _ = ansatz.init(rng_params, phys_conf)
     return params
 
 
@@ -60,6 +71,23 @@ def state_callback(state, batch_dim=True):
     """
     if not state:
         return state, False
+    if isinstance(state, Sequence):
+        # Allocated arrays have to fit the max edge number across all configurations
+        def extend_array(max_edges, x):
+            padding = jnp.zeros(
+                x.shape[:-1] + (max_edges - x.shape[-1],), dtype=jnp.int32
+            )
+            return jnp.concatenate([x, padding], axis=-1)
+
+        results = [state_callback(st, batch_dim) for st in state]
+        overflow = any(result[1] for result in results)
+        max_edges = tree_map(
+            lambda *xs: max(x.shape[-1] for x in xs),
+            *[result[0] for result in results],
+        )
+        state = [tree_map(extend_array, max_edges, result[0]) for result in results]
+        return state, overflow
+
     # Top-level key is the name of the hk.Module that creates the state
     # we assume there is only one such module
     keys = state.keys()
@@ -69,11 +97,11 @@ def state_callback(state, batch_dim=True):
     occupancies = state[key]['occupancies']
     if batch_dim:
         # Aggregate within batch
-        max_occupancy = tree_map(lambda x: jax.numpy.max(x, axis=0), occupancies)
+        max_occupancy = tree_map(lambda x: jnp.max(x, axis=0), occupancies)
     else:
         max_occupancy = occupancies
     # Aggregate over batches
-    max_occupancy = tree_map(lambda x: jax.numpy.max(x, axis=-1).item(), max_occupancy)
+    max_occupancy = tree_map(lambda x: jnp.max(x, axis=-1).item(), max_occupancy)
 
     overflow_per_entry = tree_map(
         lambda occ, max_occ: (occ.shape[-1] < max_occ), occupancies, max_occupancy
@@ -82,7 +110,7 @@ def state_callback(state, batch_dim=True):
 
     def create_new_occupancies(old, shape):
         if shape > old.shape[-1]:
-            new = jax.numpy.zeros_like(old, shape=(*old.shape[:-1], shape))
+            new = jnp.zeros_like(old, shape=(*old.shape[:-1], shape))
             copy_len = min(old.shape[-1], new.shape[-1])
             return new.at[..., :copy_len].set(old[..., :copy_len])
         else:

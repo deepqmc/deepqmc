@@ -1,13 +1,16 @@
 import logging
 from functools import partial
 from statistics import mean, stdev
+from typing import Sequence
 
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import jax_dataclasses as jdc
 from jax import lax
 
 from .physics import pairwise_diffs, pairwise_self_distance
+from .types import PhysicalConfiguration
 from .utils import check_overflow, multinomial_resampling, split_dict
 
 __all__ = [
@@ -57,17 +60,17 @@ class MetropolisSampler(Sampler):
         self.target_acceptance = target_acceptance
         self.max_age = max_age
 
-    def _update(self, state, wf):
-        psi, wf_state = jax.vmap(wf)(state['wf'], state['r'])
+    def _update(self, state, wf, R):
+        psi, wf_state = jax.vmap(wf)(state['wf'], self.phys_conf(R, state['r']))
         state = {**state, 'psi': psi, 'wf': wf_state}
         return state
 
-    def update(self, state, wf):
-        return self._update(state, wf)
+    def update(self, state, wf, R):
+        return self._update(state, wf, R)
 
-    def init(self, rng, wf, n, state_callback=None, wf_state=None):
+    def init(self, rng, wf, n, R, state_callback=None, wf_state=None):
         state = {
-            'r': self.hamil.init_sample(rng, n),
+            'r': self.hamil.init_sample(rng, R, n).r,
             'age': jnp.zeros(n, jnp.int32),
             'tau': jnp.array(self.initial_tau),
             'wf': wf_state or {},
@@ -75,7 +78,7 @@ class MetropolisSampler(Sampler):
 
         @partial(check_overflow, state_callback)
         def update(rng, state, wf):
-            return (self._update(state, wf),)
+            return (self._update(state, wf, R),)
 
         (state,) = update(None, state, wf)
         return state
@@ -87,14 +90,14 @@ class MetropolisSampler(Sampler):
     def _acc_log_prob(self, state, prop):
         return 2 * (prop['psi'].log - state['psi'].log)
 
-    def sample(self, rng, state, wf):
+    def sample(self, rng, state, wf, R):
         rng_prop, rng_acc = jax.random.split(rng)
         prop = {
             'r': self._proposal(state, rng_prop),
             'age': jnp.zeros_like(state['age']),
             **{k: v for k, v in state.items() if k not in self.WALKER_STATE},
         }
-        prop = self._update(prop, wf)
+        prop = self._update(prop, wf, R)
         log_prob = self._acc_log_prob(state, prop)
         accepted = log_prob > jnp.log(jax.random.uniform(rng_acc, log_prob.shape))
         if self.max_age:
@@ -123,7 +126,17 @@ class MetropolisSampler(Sampler):
             'sampling/log_psi/std': jnp.std(state['psi'].log),
             'sampling/dists/mean': jnp.mean(pairwise_self_distance(state['r'])),
         }
-        return state, state['r'], stats
+        return state, self.phys_conf(R, state['r']), stats
+
+    def phys_conf(self, R, r, **kwargs):
+        if r.ndim == 2:
+            return PhysicalConfiguration(R, r, jnp.array(0))
+        n_smpl = len(r)
+        return PhysicalConfiguration(
+            jnp.tile(R[None], (n_smpl, 1, 1)),
+            r,
+            jnp.zeros(n_smpl, dtype=jnp.int32),
+        )
 
 
 class LangevinSampler(MetropolisSampler):
@@ -135,15 +148,17 @@ class LangevinSampler(MetropolisSampler):
 
     WALKER_STATE = MetropolisSampler.WALKER_STATE + ['force']
 
-    def _update(self, state, wf):
+    def _update(self, state, wf, R):
         @jax.vmap
         @partial(jax.value_and_grad, argnums=1, has_aux=True)
         def wf_and_force(state, r):
-            psi, state = wf(state, r)
+            psi, state = wf(state, self.phys_conf(R, r))
             return psi.log, (psi, state)
 
         (_, (psi, wf_state)), force = wf_and_force(state['wf'], state['r'])
-        force = clean_force(force, state['r'], self.hamil.mol, tau=state['tau'])
+        force = clean_force(
+            force, self.phys_conf(R, state['r']), self.hamil.mol, tau=state['tau']
+        )
         state = {**state, 'psi': psi, 'force': force, 'wf': wf_state}
         return state
 
@@ -178,15 +193,15 @@ class DecorrSampler(Sampler):
     def __init__(self, *, length):
         self.length = length
 
-    def sample(self, rng, state, wf):
+    def sample(self, rng, state, wf, R):
         sample = super().sample  # lax cannot parse super()
         state, stats = lax.scan(
-            lambda state, rng: sample(rng, state, wf)[::2],
+            lambda state, rng: sample(rng, state, wf, R)[::2],
             state,
             jax.random.split(rng, self.length),
         )
         stats = {k: v[-1] for k, v in stats.items()}
-        return state, state['r'], stats
+        return state, self.phys_conf(R, state['r']), stats
 
 
 class ResampledSampler(Sampler):
@@ -215,9 +230,9 @@ class ResampledSampler(Sampler):
         self.period = period
         self.treshold = treshold
 
-    def update(self, state, wf):
+    def update(self, state, wf, R):
         state['log_weight'] -= 2 * state['psi'].log
-        state = self._update(state, wf)
+        state = self._update(state, wf, R)
         state['log_weight'] += 2 * state['psi'].log
         state['log_weight'] -= state['log_weight'].max()
         return state
@@ -242,9 +257,9 @@ class ResampledSampler(Sampler):
         }
         return state
 
-    def sample(self, rng, state, wf):
+    def sample(self, rng, state, wf, R):
         rng_re, rng_smpl = jax.random.split(rng)
-        state, _, stats = super().sample(rng_smpl, state, wf)
+        state, _, stats = super().sample(rng_smpl, state, wf, R)
         state['step'] += 1
         weight = jnp.exp(state['log_weight'])
         ess = jnp.sum(weight) ** 2 / jnp.sum(weight**2)
@@ -257,7 +272,135 @@ class ResampledSampler(Sampler):
             rng_re,
             state,
         )
-        return state, state['r'], stats
+        return state, self.phys_conf(R, state['r']), stats
+
+
+class MultimoleculeSampler(Sampler):
+    def __init__(self, sampler, mols, mol_idx_factory=None):
+        self.sampler = sampler
+        self.mols = mols if isinstance(mols, Sequence) else [mols]
+
+        class MolIdxFactory:
+            @staticmethod
+            def max_per_mol(sample_size, n_mol):
+                assert not (sample_size % n_mol)
+                return n_mol * [sample_size // n_mol]
+
+            @staticmethod
+            def n_per_mol(sample_size, n_mol, *args, **kwargs):
+                assert not (sample_size % n_mol)
+                return n_mol * [sample_size // n_mol]
+
+        self.mol_idx_factory = mol_idx_factory or MolIdxFactory()
+
+    def init(self, rng, wf, n, state_callback=None, wf_state=None):
+        wfs = self.assign_wfs(wf)
+        sample_sizes = self.mol_idx_factory.max_per_mol(n, len(self))
+        states = [
+            self.sampler.init(
+                rng, wf, sample_size, mol.coords, state_callback, wf_state
+            )
+            for rng, wf, sample_size, mol in zip(
+                hk.PRNGSequence(rng), wfs, sample_sizes, self.mols
+            )
+        ]
+        return states
+
+    def sample(self, rng, state, wave_function, select_idxs):
+        phys_confs, stats = [], []
+        wfs = self.assign_wfs(wave_function)
+        for i, rng in zip(range(len(self)), hk.PRNGSequence(rng)):
+            state[i], phys_conf, stat = self.sampler.sample(
+                rng, state[i], wfs[i], self.mols[i].coords
+            )
+            phys_confs.append(phys_conf)
+            stats.append({'per_mol': stat})
+
+        phys_conf = self.join_mols(phys_confs, select_idxs)
+        stats = self.join_mols(stats, None)
+        return state, phys_conf, stats
+
+    def assign_wfs(self, wf):
+        r"""Assign WF models to all molecules.
+
+        This allows for using different WFs for each molecule,
+        useful e.g. with HF baselines.
+        """
+        return wf if isinstance(wf, Sequence) else len(self) * [wf]
+
+    def update(self, states, wf):
+        wfs = self.assign_wfs(wf)
+        return [
+            self.sampler.update(state, wf, mol.coords)
+            for state, wf, mol in zip(states, wfs, self.mols)
+        ]
+
+    def get_state(self, key, states, select_idxs, default=None):
+        try:
+            data = [state[key] for state in states]
+        except KeyError:
+            return default
+        data = self.join_mols(data, select_idxs)
+        return data
+
+    def join_mols(self, data_per_mol, select_idxs):
+        if all([isinstance(d, PhysicalConfiguration) for d in data_per_mol]):
+            # phys_conf is special because we need to store which molecule the samples
+            # are coming from
+            data_per_mol = [
+                jdc.replace(pc, mol_idx=i * jnp.ones(len(pc), dtype=jnp.int32))
+                for i, pc in enumerate(data_per_mol)
+            ]
+        if select_idxs is None:
+            # data is zero dimensional
+            return jax.tree_util.tree_map(
+                lambda *xs: jnp.concatenate([x[select_idxs] for x in xs]),
+                *data_per_mol,
+            )
+        return jax.tree_util.tree_map(
+            lambda *xs: jnp.concatenate(xs)[select_idxs], *data_per_mol
+        )
+
+    def phys_conf(self, states, select_idxs):
+        phys_confs = [
+            self.sampler.phys_conf(mol.coords, state['r'])
+            for state, mol in zip(states, self.mols)
+        ]
+        return self.join_mols(phys_confs, select_idxs)
+
+    def select_idxs(self, sample_size, *args, **kwargs):
+        n_smpl_per_mol = self.mol_idx_factory.n_per_mol(
+            sample_size, len(self), *args, **kwargs
+        )
+        max_smpl_per_mol = self.mol_idx_factory.max_per_mol(sample_size, len(self))
+        assert all(n <= m for n, m in zip(n_smpl_per_mol, max_smpl_per_mol))
+        start_pos = 0
+        idxs = []
+        for n, m in zip(n_smpl_per_mol, max_smpl_per_mol):
+            idxs.append(start_pos + jnp.arange(n))
+            start_pos += m
+        return jnp.concatenate(idxs)
+
+    def mol_idx(self, sample_size, *args, **kwargs):
+        n_smpl_per_mol = self.mol_idx_factory.n_per_mol(
+            sample_size, len(self), *args, **kwargs
+        )
+        assert all(
+            n <= m
+            for n, m in zip(
+                n_smpl_per_mol,
+                self.mol_idx_factory.max_per_mol(sample_size, len(self)),
+            )
+        )
+        return jnp.concatenate(
+            [
+                i * jnp.ones(n_smpl, dtype=jnp.int32)
+                for i, n_smpl in enumerate(n_smpl_per_mol)
+            ]
+        )
+
+    def __len__(self):
+        return len(self.mols)
 
 
 def chain(*samplers):
@@ -300,15 +443,19 @@ def crossover_parameter(z, f, charge):
     return (1 + jnp.sum(f_unit * z_unit, axis=-1)) / 2 + Z2z2 / (10 * (4 + Z2z2))
 
 
-def clean_force(force, r, mol, *, tau):
-    z, idx = diffs_to_nearest_nuc(jnp.reshape(r, (-1, 3)), mol.coords)
+def clean_force(force, phys_conf, mol, *, tau):
+    z, idx = diffs_to_nearest_nuc(
+        jnp.reshape(phys_conf.r, (-1, 3)), phys_conf.R.reshape(-1, 3)
+    )
     a = crossover_parameter(z, jnp.reshape(force, (-1, 3)), mol.charges[idx])
-    z, a = jnp.reshape(z, (len(r), -1, 4)), jnp.reshape(a, (len(r), -1))
+    z, a = jnp.reshape(z, (len(phys_conf.r), -1, 4)), jnp.reshape(
+        a, (len(phys_conf.r), -1)
+    )
     av2tau = a * jnp.sum(force**2, axis=-1) * tau
     # av2tau can be small or zero, so the following expression must handle that
     factor = 2 / (jnp.sqrt(1 + 2 * av2tau) + 1)
     force = factor[..., None] * force
-    eps = jnp.finfo(r.dtype).eps
+    eps = jnp.finfo(phys_conf.r.dtype).eps
     norm_factor = jnp.minimum(
         1.0,
         jnp.sqrt(z[..., -1])
@@ -325,6 +472,7 @@ def equilibrate(
     state,
     criterion,
     steps,
+    sample_size,
     state_callback=None,
     *,
     block_size,
@@ -334,15 +482,16 @@ def equilibrate(
 
     @partial(check_overflow, state_callback)
     @jax.jit
-    def sample_wf(rng, state):
-        return sampler.sample(rng, state, wf)
+    def sample_wf(rng, state, select_idxs):
+        return sampler.sample(rng, state, wf, select_idxs)
 
     buffer_size = block_size * n_blocks
     buffer = []
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        state, r, stats = sample_wf(rng, state)
+        select_idxs = sampler.select_idxs(sample_size, step)
+        state, phys_conf, stats = sample_wf(rng, state, select_idxs)
         yield step, state, stats
-        buffer = [*buffer[-buffer_size + 1 :], criterion(r).item()]
+        buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]
         if len(buffer) < buffer_size:
             continue
         b1, b2 = buffer[:block_size], buffer[-block_size:]
