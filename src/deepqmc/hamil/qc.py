@@ -147,7 +147,7 @@ class MolecularHamiltonian(Hamiltonian):
                 'hamil/quantum_force': (quantum_force**2).sum(axis=-1),
             }
             if self.mol.any_pp:
-                Vs_nl = nonlocal_potential(rng, phys_conf.r, self.mol, state, wf)
+                Vs_nl = nonlocal_potential(rng, phys_conf, self.mol, state, wf)
                 Es_loc += Vs_nl
                 stats = {**stats, 'hamil/V_nl': Vs_nl}
 
