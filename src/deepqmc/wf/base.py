@@ -5,20 +5,18 @@ import jax
 import jax.numpy as jnp
 from jax.tree_util import tree_map, tree_reduce
 
-from ..types import PhysicalConfiguration
-
 __all__ = ['state_callback']
 
 
 def init_wf_params(rng, hamil, ansatz):
-    rng_R, rng_r, rng_params = jax.random.split(rng, 3)
-    phys_conf = PhysicalConfiguration(
-        jax.random.normal(rng_R, (len(hamil.mol.charges), 3)),
-        jax.random.normal(
-            rng_r, (hamil.mol.charges.sum().astype(int) - hamil.mol.charge, 3)
-        ),
-        jnp.array(0),
-    )
+    rng_sample, rng_params = jax.random.split(rng)
+    try:
+        # QC
+        R_shape = (len(hamil.mol.charges), 3)
+    except AttributeError:
+        # QHO
+        R_shape = 0
+    phys_conf = hamil.init_sample(rng_sample, jnp.zeros(R_shape), 1)[0]
     params, _ = ansatz.init(rng_params, phys_conf)
     return params
 
