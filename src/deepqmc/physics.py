@@ -33,9 +33,9 @@ def pairwise_self_distance(coords, full=False):
 
 
 def nuclear_energy(phys_conf, mol):
-    coulombs = triu_flat(mol.charges[:, None] * mol.charges) / pairwise_self_distance(
-        phys_conf.R
-    )
+    coulombs = triu_flat(
+        mol.ns_valence[:, None] * mol.ns_valence
+    ) / pairwise_self_distance(phys_conf.R)
     return coulombs.sum()
 
 
