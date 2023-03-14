@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 class Sampler:
     r"""Base class for all QMC samplers."""
 
-    def init(self, rng, wf, n, state_callback=None, wf_state=None):
+    def init(self, rng, wf, n, init_sample, state_callback=None, wf_state=None):
         raise NotImplementedError
 
     def sample(self, rng, state, wf):
@@ -68,9 +68,9 @@ class MetropolisSampler(Sampler):
     def update(self, state, wf, R):
         return self._update(state, wf, R)
 
-    def init(self, rng, wf, n, R, state_callback=None, wf_state=None):
+    def init(self, rng, wf, n, R, init_sample, state_callback=None, wf_state=None):
         state = {
-            'r': self.hamil.init_sample(rng, R, n).r,
+            'r': init_sample(rng, R, n).r,
             'age': jnp.zeros(n, jnp.int32),
             'tau': jnp.array(self.initial_tau),
             'wf': wf_state or {},
@@ -293,12 +293,12 @@ class MultimoleculeSampler(Sampler):
 
         self.mol_idx_factory = mol_idx_factory or MolIdxFactory()
 
-    def init(self, rng, wf, n, state_callback=None, wf_state=None):
+    def init(self, rng, wf, n, init_sample, state_callback=None, wf_state=None):
         wfs = self.assign_wfs(wf)
         sample_sizes = self.mol_idx_factory.max_per_mol(n, len(self))
         states = [
             self.sampler.init(
-                rng, wf, sample_size, mol.coords, state_callback, wf_state
+                rng, wf, sample_size, mol.coords, init_sample, state_callback, wf_state
             )
             for rng, wf, sample_size, mol in zip(
                 hk.PRNGSequence(rng), wfs, sample_sizes, self.mols

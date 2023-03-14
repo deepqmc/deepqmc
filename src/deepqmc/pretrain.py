@@ -17,6 +17,7 @@ def pretrain(  # noqa: C901
     ansatz,
     opt,
     sampler,
+    init_sample=None,
     state_callback=state_callback,
     *,
     steps,
@@ -31,6 +32,8 @@ def pretrain(  # noqa: C901
         ansatz (~deepqmc.wf.WaveFunction): the wave function Ansatz.
         opt (``optax`` optimizer): the optimizer to use.
         sampler (~deepqmc.sampling.Sampler): the sampler instance to use.
+        init_sample (Callable): optional, a method for generating initial samples.
+            If `None`, the Hamiltonian's builtin method is used.
         state_callback (Callable): optional, a function processing the :class:`haiku`
             state of the wave function Ansatz.
         steps: an iterable yielding the step numbers for the pretraining.
@@ -45,7 +48,7 @@ def pretrain(  # noqa: C901
     def baseline(phys_config, return_mos=False):
         return Baseline(hamil.mol, *baseline_init)(phys_config, return_mos)
 
-    init_pc = hamil.init_sample(rng, sampler.mols[0].coords, sample_size)
+    init_pc = (init_sample or hamil.init_sample)(rng, sampler.mols[0].coords, sample_size)
     params, wf_state = jax.vmap(ansatz.init, (None, 0, None), (None, 0))(
         rng, init_pc, False
     )
@@ -90,7 +93,7 @@ def pretrain(  # noqa: C901
     else:
         raise NotImplementedError
 
-    smpl_state = sampler.init(rng, baseline, sample_size)
+    smpl_state = sampler.init(rng, baseline, sample_size, init_sample or hamil.init_sample)
     opt_state = opt.init(params)
 
     @jax.jit

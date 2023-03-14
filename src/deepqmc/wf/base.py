@@ -8,7 +8,7 @@ from jax.tree_util import tree_map, tree_reduce
 __all__ = ['state_callback']
 
 
-def init_wf_params(rng, hamil, ansatz):
+def init_wf_params(rng, hamil, ansatz, init_sample=None):
     rng_sample, rng_params = jax.random.split(rng)
     try:
         # QC
@@ -16,7 +16,7 @@ def init_wf_params(rng, hamil, ansatz):
     except AttributeError:
         # QHO
         R_shape = 0
-    phys_conf = hamil.init_sample(rng_sample, jnp.zeros(R_shape), 1)[0]
+    phys_conf = (init_sample or hamil.init_sample)(rng_sample, jnp.zeros(R_shape), 1)[0]
     params, _ = ansatz.init(rng_params, phys_conf)
     return params
 
