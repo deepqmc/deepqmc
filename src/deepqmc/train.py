@@ -221,7 +221,7 @@ def train(  # noqa: C901
                         metric_logger.update(step, pretrain_stats, prefix='pretraining')
                 log.info(f'Pretraining completed with MSE = {mse_rep}')
             smpl_state = sampler.init(
-                rng, partial(ansatz.apply, params), sample_size, state_callback
+                rng, partial(ansatz.apply, params), sample_size, init_sample or hamil.init_sample, state_callback
             )
             log.info('Equilibrating sampler...')
             pbar = tqdm(
