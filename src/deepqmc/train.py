@@ -53,11 +53,11 @@ def train(  # noqa: C901
     opt,
     sampler,
     mols,
-    init_sample=None,
     workdir=None,
     train_state=None,
     init_step=0,
     state_callback=state_callback,
+    init_sample=None,
     *,
     steps,
     sample_size,
@@ -98,8 +98,6 @@ def train(  # noqa: C901
         sampler (~deepqmc.sampling.Sampler): a sampler instance
         mols (~deepqmc.molecule.Molecule): a molecule or a sequence of molecules to
             consider.
-        init_sample (Callable): optional, a method for generating initial samples.
-            If `None`, the Hamiltonian's builtin method is used.
         workdir (str): optional, path, where results and checkpoints should be saved.
         train_state (~deepqmc.fit.TrainState): optional, training checkpoint to
             restore training or run evaluation.
@@ -107,6 +105,8 @@ def train(  # noqa: C901
             calculation is restarted from checkpoint saved on disk.
         state_callback (Callable): optional, a function processing the :class:`haiku`
             state of the wave function Ansatz.
+        init_sample (Callable): optional, a method for generating initial samples.
+            If `None`, the Hamiltonian's builtin method is used.
         steps (int): optional, number of optimization steps.
         sample_size (int): the number of samples considered in a batch
         seed (int): the seed used for PRNG.

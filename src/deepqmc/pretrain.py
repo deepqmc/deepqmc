@@ -17,8 +17,8 @@ def pretrain(  # noqa: C901
     ansatz,
     opt,
     sampler,
-    init_sample=None,
     state_callback=state_callback,
+    init_sample=None,
     *,
     steps,
     sample_size,
@@ -32,10 +32,10 @@ def pretrain(  # noqa: C901
         ansatz (~deepqmc.wf.WaveFunction): the wave function Ansatz.
         opt (``optax`` optimizer): the optimizer to use.
         sampler (~deepqmc.sampling.Sampler): the sampler instance to use.
-        init_sample (Callable): optional, a method for generating initial samples.
-            If `None`, the Hamiltonian's builtin method is used.
         state_callback (Callable): optional, a function processing the :class:`haiku`
             state of the wave function Ansatz.
+        init_sample (Callable): optional, a method for generating initial samples.
+            If `None`, the Hamiltonian's builtin method is used.
         steps: an iterable yielding the step numbers for the pretraining.
         sample_size (int): the number of samples to use in a batch.
         baseline_kwargs (dict): optional, additional keyword arguments passed to the
