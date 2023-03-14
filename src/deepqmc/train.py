@@ -166,7 +166,9 @@ def train(  # noqa: C901
             )
         else:
             rng, rng_init, rng_eq = jax.random.split(rng, 3)
-            params = init_wf_params(rng_init, hamil, ansatz, init_sample or hamil.init_sample)
+            params = init_wf_params(
+                rng_init, hamil, ansatz, init_sample or hamil.init_sample
+            )
             num_params = tree_util.tree_reduce(
                 operator.add, tree_util.tree_map(lambda x: x.size, params)
             )
@@ -204,10 +206,11 @@ def train(  # noqa: C901
                         ewm_state if jnp.isnan(loss) else update_ewm(loss, ewm_state)
                         for loss, ewm_state in zip(per_mol_losses, ewm_states)
                     ]
-                    ewm_means = [ewm_state.mean if ewm_state.mean is not None else 0.0 for ewm_state in ewm_states]
-                    mse_rep = '|'.join(
-                        f'{mean:0.2e}' for mean in ewm_means
-                    )
+                    ewm_means = [
+                        ewm_state.mean if ewm_state.mean is not None else 0.0
+                        for ewm_state in ewm_states
+                    ]
+                    mse_rep = '|'.join(f'{mean:0.2e}' for mean in ewm_means)
                     pbar.set_postfix(MSE=mse_rep)
                     pretrain_stats = {
                         'per_mol': {
@@ -221,7 +224,11 @@ def train(  # noqa: C901
                         metric_logger.update(step, pretrain_stats, prefix='pretraining')
                 log.info(f'Pretraining completed with MSE = {mse_rep}')
             smpl_state = sampler.init(
-                rng, partial(ansatz.apply, params), sample_size, init_sample or hamil.init_sample, state_callback
+                rng,
+                partial(ansatz.apply, params),
+                sample_size,
+                init_sample or hamil.init_sample,
+                state_callback,
             )
             log.info('Equilibrating sampler...')
             pbar = tqdm(

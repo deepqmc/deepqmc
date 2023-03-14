@@ -48,7 +48,9 @@ def pretrain(  # noqa: C901
     def baseline(phys_config, return_mos=False):
         return Baseline(hamil.mol, *baseline_init)(phys_config, return_mos)
 
-    init_pc = (init_sample or hamil.init_sample)(rng, sampler.mols[0].coords, sample_size)
+    init_pc = (init_sample or hamil.init_sample)(
+        rng, sampler.mols[0].coords, sample_size
+    )
     params, wf_state = jax.vmap(ansatz.init, (None, 0, None), (None, 0))(
         rng, init_pc, False
     )
@@ -93,7 +95,9 @@ def pretrain(  # noqa: C901
     else:
         raise NotImplementedError
 
-    smpl_state = sampler.init(rng, baseline, sample_size, init_sample or hamil.init_sample)
+    smpl_state = sampler.init(
+        rng, baseline, sample_size, init_sample or hamil.init_sample
+    )
     opt_state = opt.init(params)
 
     @jax.jit
