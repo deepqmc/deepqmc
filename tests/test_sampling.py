@@ -49,7 +49,12 @@ class TestSampling:
     def test_sampler_init(self, helpers, samplers, ndarrays_regression):
         sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, self.mol.coords, state_callback
+            helpers.rng(),
+            self.wf,
+            self.SAMPLE_SIZE,
+            self.mol.coords,
+            self.hamil.init_sample,
+            state_callback,
         )
         ndarrays_regression.check(
             helpers.flatten_pytree(smpl_state),
@@ -59,7 +64,12 @@ class TestSampling:
     def test_sampler_sample(self, helpers, samplers, ndarrays_regression):
         sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, self.mol.coords, state_callback
+            helpers.rng(),
+            self.wf,
+            self.SAMPLE_SIZE,
+            self.mol.coords,
+            self.hamil.init_sample,
+            state_callback,
         )
         sample = check_overflow(state_callback, sampler.sample)
         for step in range(4):
@@ -91,7 +101,11 @@ class TestMultimoleculeSampling:
             [self.mol for _ in range(self.N_CONFIG)],
         )
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback
+            helpers.rng(),
+            self.wf,
+            self.SAMPLE_SIZE,
+            self.hamil.init_sample,
+            state_callback,
         )
         ndarrays_regression.check(
             helpers.flatten_pytree(smpl_state),
@@ -104,7 +118,11 @@ class TestMultimoleculeSampling:
             [self.mol for _ in range(self.N_CONFIG)],
         )
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback
+            helpers.rng(),
+            self.wf,
+            self.SAMPLE_SIZE,
+            self.hamil.init_sample,
+            state_callback,
         )
         sample = check_overflow(state_callback, sampler.sample)
         select_idxs = sampler.select_idxs(self.SAMPLE_SIZE, 0)
