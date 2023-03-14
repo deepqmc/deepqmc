@@ -166,7 +166,7 @@ def train(  # noqa: C901
             )
         else:
             rng, rng_init, rng_eq = jax.random.split(rng, 3)
-            params = init_wf_params(rng_init, hamil, ansatz, init_sample)
+            params = init_wf_params(rng_init, hamil, ansatz, init_sample or hamil.init_sample)
             num_params = tree_util.tree_reduce(
                 operator.add, tree_util.tree_map(lambda x: x.size, params)
             )
