@@ -1,6 +1,5 @@
 import pickle
 from collections import namedtuple
-from copy import deepcopy
 from pathlib import Path
 
 import jax.numpy as jnp
@@ -33,7 +32,7 @@ class CheckpointStore:
         self.buffer = None
 
     def update(self, step, state, loss=jnp.inf):
-        self.buffer = (step, deepcopy(state), loss)
+        self.buffer = (step, state, loss)
         if step > self.min_interval + (self.chkpts[-1].step if self.chkpts else 0) and (
             loss <= self.threshold * (self.chkpts[-1].loss if self.chkpts else jnp.inf)
         ):

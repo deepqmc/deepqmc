@@ -1,5 +1,4 @@
 import math
-from copy import deepcopy
 from functools import partial
 
 import haiku as hk
@@ -108,8 +107,8 @@ def pretrain(  # noqa: C901
             wf_state, params_new, opt_state_new, losses = _step(
                 rng,
                 wf_state,
-                deepcopy(params),
-                deepcopy(opt_state),
+                params,
+                opt_state,
                 phys_config,
             )
             wf_state, overflow = state_callback(wf_state)
