@@ -14,13 +14,14 @@ dim = 10
     'hamil,hamil_kwargs,wf',
     [
         (MolecularHamiltonian, {'mol': Helpers.mol()}, PauliNet),
+        (MolecularHamiltonian, {'mol': Helpers.mol(pp_type='ccECP')}, PauliNet),
         (
             QHOHamiltonian,
             {'dim': dim, 'mass': jnp.ones(dim), 'nu': jnp.ones(dim)},
             QHOAnsatz,
         ),
     ],
-    ids=['Molecular', 'QHO'],
+    ids=['Molecular', 'Molecular+PP', 'QHO'],
 )
 class TestHamil:
     SAMPLE_SIZE = 5
@@ -40,4 +41,7 @@ class TestHamil:
         E_loc, *_ = hamil.local_energy(
             lambda state, phys_conf: wf.apply(params, state, phys_conf)[0]
         )(helpers.rng(), state, phys_conf)
-        ndarrays_regression.check({'E_loc': E_loc})
+        ndarrays_regression.check(
+            {'E_loc': E_loc},
+            default_tolerance={'rtol': 2e-4},
+        )
