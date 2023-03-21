@@ -1,5 +1,6 @@
 import logging
 import operator
+import os
 from functools import partial
 from itertools import count
 
@@ -136,12 +137,13 @@ def train(  # noqa: C901
             else getattr(optax, opt)(**opt_kwargs)
         )
     if workdir:
-        workdir = f'{workdir}/{mode}'
+        workdir = os.path.join(workdir, mode)
+        os.makedirs(workdir, exist_ok=True)
         chkpts = CheckpointStore(workdir, **(chkpts_kwargs or {}))
         if metric_logger is None and workdir:
             metric_logger = TensorboardMetricLogger(workdir, len(sampler))
         log.debug('Setting up HDF5 file...')
-        h5file = h5py.File(f'{workdir}/result.h5', 'a', libver='v110')
+        h5file = h5py.File(os.path.join(workdir, 'result.h5'), 'a', libver='v110')
         h5file.swmr_mode = True
         tables = []
         for i, mol in enumerate(sampler.mols):
