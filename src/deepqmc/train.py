@@ -201,9 +201,11 @@ def train(  # noqa: C901
                         ewm_state if jnp.isnan(loss) else update_ewm(loss, ewm_state)
                         for loss, ewm_state in zip(per_mol_losses, ewm_states)
                     ]
-                    mse_rep = '|'.join(
-                        f'{ewm_state.mean:0.2e}' for ewm_state in ewm_states
-                    )
+                    ewm_means = [
+                        ewm_state.mean if ewm_state.mean is not None else 0.0
+                        for ewm_state in ewm_states
+                    ]
+                    mse_rep = '|'.join(f'{mean:0.2e}' for mean in ewm_means)
                     pbar.set_postfix(MSE=mse_rep)
                     pretrain_stats = {
                         'per_mol': {
