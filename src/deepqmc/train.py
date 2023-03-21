@@ -222,7 +222,10 @@ def train(  # noqa: C901
         if not train_state or train_state[0] is None:
             rng, rng_eq, rng_smpl_init = jax.random.split(rng, 3)
             smpl_state = sampler.init(
-                rng_smpl_init, partial(ansatz.apply, params), sample_size, state_callback
+                rng_smpl_init,
+                partial(ansatz.apply, params),
+                sample_size,
+                state_callback,
             )
             log.info('Equilibrating sampler...')
             pbar = tqdm(

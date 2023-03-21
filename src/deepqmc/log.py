@@ -21,7 +21,9 @@ class CheckpointStore:
 
     PATTERN = 'chkpt-{}.pt'
 
-    def __init__(self, workdir, *, size=3, min_interval=100, threshold=0.95, max_interval=10000):
+    def __init__(
+        self, workdir, *, size=3, min_interval=100, threshold=0.95, max_interval=10000
+    ):
         self.workdir = Path(workdir)
         for p in self.workdir.glob(self.PATTERN.format('*')):
             p.unlink()
