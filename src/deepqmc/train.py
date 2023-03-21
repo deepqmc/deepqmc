@@ -68,6 +68,7 @@ def train(  # noqa: C901
     pretrain_kwargs=None,
     opt_kwargs=None,
     fit_kwargs=None,
+    chkptdir=None,
     chkpts_kwargs=None,
     metric_logger=None,
     mol_idx_factory=None,
@@ -98,7 +99,7 @@ def train(  # noqa: C901
         sampler (~deepqmc.sampling.Sampler): a sampler instance
         mols (~deepqmc.molecule.Molecule): a molecule or a sequence of molecules to
             consider.
-        workdir (str): optional, path, where results and checkpoints should be saved.
+        workdir (str): optional, path, where results should be saved.
         train_state (~deepqmc.fit.TrainState): optional, training checkpoint to
             restore training or run evaluation.
         init_step (int): optional, initial step index, useful if
@@ -118,6 +119,9 @@ def train(  # noqa: C901
         opt_kwargs (dict): optional, extra arguments passed to the optimizer.
         fit_kwargs (dict): optional, extra arguments passed to the :func:`~.fit.fit_wf`
             function.
+        chkptdir (str): optional, path, where checkpoints should be saved. Checkpoints
+            are only saved if :data:`workdir` is not :data:`None`. Default:
+            data:`workdir`.
         chkpts_kwargs (dict): optional, extra arguments for checkpointing.
         metric_logger: optional, an object that consumes metric logging information.
             If not specified, the default `~.log.TensorboardMetricLogger` is used
@@ -138,8 +142,10 @@ def train(  # noqa: C901
         )
     if workdir:
         workdir = os.path.join(workdir, mode)
+        chkptdir = os.path.join(chkptdir, mode) if chkptdir else workdir
         os.makedirs(workdir, exist_ok=True)
-        chkpts = CheckpointStore(workdir, **(chkpts_kwargs or {}))
+        os.makedirs(chkptdir, exist_ok=True)
+        chkpts = CheckpointStore(chkptdir, **(chkpts_kwargs or {}))
         if metric_logger is None and workdir:
             metric_logger = TensorboardMetricLogger(workdir, len(sampler))
         log.debug('Setting up HDF5 file...')
