@@ -161,8 +161,9 @@ def train(  # noqa: C901
                     'evaluation': 'Start evaluation',
                 }[mode]
             )
+            params = train_state[1]
         else:
-            rng, rng_init, rng_eq = jax.random.split(rng, 3)
+            rng, rng_init = jax.random.split(rng, 2)
             params = init_wf_params(rng_init, hamil, ansatz)
             num_params = tree_util.tree_reduce(
                 operator.add, tree_util.tree_map(lambda x: x.size, params)
@@ -200,9 +201,11 @@ def train(  # noqa: C901
                         ewm_state if jnp.isnan(loss) else update_ewm(loss, ewm_state)
                         for loss, ewm_state in zip(per_mol_losses, ewm_states)
                     ]
-                    mse_rep = '|'.join(
-                        f'{ewm_state.mean:0.2e}' for ewm_state in ewm_states
-                    )
+                    ewm_means = [
+                        ewm_state.mean if ewm_state.mean is not None else 0.0
+                        for ewm_state in ewm_states
+                    ]
+                    mse_rep = '|'.join(f'{mean:0.2e}' for mean in ewm_means)
                     pbar.set_postfix(MSE=mse_rep)
                     pretrain_stats = {
                         'per_mol': {
@@ -215,8 +218,14 @@ def train(  # noqa: C901
                     if metric_logger:
                         metric_logger.update(step, pretrain_stats, prefix='pretraining')
                 log.info(f'Pretraining completed with MSE = {mse_rep}')
+
+        if not train_state or train_state[0] is None:
+            rng, rng_eq, rng_smpl_init = jax.random.split(rng, 3)
             smpl_state = sampler.init(
-                rng, partial(ansatz.apply, params), sample_size, state_callback
+                rng_smpl_init,
+                partial(ansatz.apply, params),
+                sample_size,
+                state_callback,
             )
             log.info('Equilibrating sampler...')
             pbar = tqdm(

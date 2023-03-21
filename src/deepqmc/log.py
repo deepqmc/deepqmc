@@ -21,12 +21,15 @@ class CheckpointStore:
 
     PATTERN = 'chkpt-{}.pt'
 
-    def __init__(self, workdir, *, size=3, min_interval=100, threshold=0.95):
+    def __init__(
+        self, workdir, *, size=3, min_interval=100, threshold=0.95, max_interval=10000
+    ):
         self.workdir = Path(workdir)
         for p in self.workdir.glob(self.PATTERN.format('*')):
             p.unlink()
         self.size = size
         self.min_interval = min_interval
+        self.max_interval = max_interval
         self.threshold = threshold
         self.chkpts = []
         self.buffer = None
@@ -36,6 +39,8 @@ class CheckpointStore:
         if step > self.min_interval + (self.chkpts[-1].step if self.chkpts else 0) and (
             loss <= self.threshold * (self.chkpts[-1].loss if self.chkpts else jnp.inf)
         ):
+            self.dump(step, state, loss)
+        elif step - (self.chkpts[-1].step if self.chkpts else 0) >= self.max_interval:
             self.dump(step, state, loss)
 
     def dump(self, step, state, loss=jnp.inf):
