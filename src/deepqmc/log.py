@@ -5,6 +5,7 @@ from pathlib import Path
 import jax.numpy as jnp
 import numpy as np
 import tensorboard.summary
+from jax.tree_util import tree_map
 
 Checkpoint = namedtuple('Checkpoint', 'step loss path')
 
@@ -15,14 +16,15 @@ class CheckpointStore:
     Args:
         workdir (str): path where checkpoints are stored.
         size (int): maximum number of checkpoints stored at any time.
-        min_interval (str): minimum number of steps between two checkpoints.
         threshold (float): treshold for decrease in criterion for new checkpoint.
+        min_interval (str): minimum number of steps between two checkpoints.
+        max_interval (str): maximum number of steps between two chcekpoints.
     """
 
     PATTERN = 'chkpt-{}.pt'
 
     def __init__(
-        self, workdir, *, size=3, min_interval=100, threshold=0.95, max_interval=10000
+        self, workdir, *, size=3, threshold=0.95, min_interval=100, max_interval=10000
     ):
         self.workdir = Path(workdir)
         for p in self.workdir.glob(self.PATTERN.format('*')):
@@ -36,24 +38,31 @@ class CheckpointStore:
 
     def update(self, step, state, loss=jnp.inf):
         self.buffer = (step, state, loss)
-        if step > self.min_interval + (self.chkpts[-1].step if self.chkpts else 0) and (
-            loss <= self.threshold * (self.chkpts[-1].loss if self.chkpts else jnp.inf)
+        if (
+            not self.chkpts
+            or (
+                step > self.min_interval + self.chkpts[-1].step
+                and loss <= self.threshold * self.chkpts[-1].loss
+            )
+            or ((step - self.chkpts[-1].step) >= self.max_interval)
         ):
-            self.dump(step, state, loss)
-        elif step - (self.chkpts[-1].step if self.chkpts else 0) >= self.max_interval:
-            self.dump(step, state, loss)
+            self.dump()
+        while len(self.chkpts) > self.size:
+            self.chkpts.pop(0).path.unlink()
 
-    def dump(self, step, state, loss=jnp.inf):
+    def dump(self):
+        step, state, loss = self.buffer
         path = self.workdir / self.PATTERN.format(step)
         with path.open('wb') as f:
             pickle.dump((step, state), f)
         self.chkpts.append(Checkpoint(step, loss, path))
-        while len(self.chkpts) > self.size:
-            self.chkpts.pop(0).path.unlink()
 
     def close(self):
-        if self.buffer is not None:
-            self.dump(*self.buffer)
+        if self.buffer and not any(tree_map(lambda x: x.is_deleted(), self.buffer[1])):
+            self.dump()
+        # If the training crashes KFAC might have already freed the buffers and the
+        # state can no longer be dumped. Preventing this by keeping a copy significantly
+        # impacts the performance and is therefore omitted.
 
     @property
     def last(self):

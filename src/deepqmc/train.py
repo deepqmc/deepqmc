@@ -261,7 +261,7 @@ def train(  # noqa: C901
             pbar.close()
             train_state = smpl_state, params, None
             if workdir and mode == 'training':
-                chkpts.dump(init_step, train_state)
+                chkpts.update(init_step, train_state)
             log.info(f'Start {mode}')
         best_ene = None
         ewm_state, update_ewm = init_ewm()
