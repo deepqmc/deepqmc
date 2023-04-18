@@ -314,12 +314,13 @@ class PauliNetEdgeFeatures(EdgeFeatures):
             powers = [*powers, 1]
             combine_idxs = [feature_dim - 1]
         envelope_factory = envelope_factory or IdentityEnvelope
+        radial_basis_kwargs = {'n_rbfs': [], 'factories': [], 'kwargs': []}
         if feature_dim - len(powers) > 0:
-            radial_basis_kwargs = {
-                'n_rbfs': [feature_dim - len(powers)],
-                'factories': [GaussianBasis],
-                'kwargs': [{'offset': offset, 'envelope_factory': envelope_factory}],
-            }
+            radial_basis_kwargs['n_rbfs'] += [feature_dim - len(powers)]
+            radial_basis_kwargs['factories'] += [GaussianBasis]
+            radial_basis_kwargs['kwargs'] += [
+                {'offset': offset, 'envelope_factory': envelope_factory}
+            ]
         if powers:
             radial_basis_kwargs['n_rbfs'] += [len(powers)]
             radial_basis_kwargs['factories'] += [DistancePowersBasis]
