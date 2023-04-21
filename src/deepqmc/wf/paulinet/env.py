@@ -1,5 +1,6 @@
 import haiku as hk
 import jax.numpy as jnp
+from ...utils import norm
 
 
 class ExponentialEnvelopes(hk.Module):
@@ -10,11 +11,20 @@ class ExponentialEnvelopes(hk.Module):
         center_idx, zetas = zip(*shells)
         self.center_idx = jnp.array(center_idx)
         self.zetas = hk.get_parameter(
-            'zetas', [len(zetas)], init=lambda shape, dtype: jnp.array(zetas)
+            'zetas',
+            jnp.array(zetas).shape,
+            init=lambda shape, dtype: jnp.array(zetas),
         )
 
     def __call__(self, diffs):
-        return jnp.exp(-jnp.abs(self.zetas * jnp.sqrt(diffs[..., self.center_idx, -1])))
+        return jnp.exp(
+            -norm(
+                jnp.einsum(
+                    'ers,ies->ier', self.zetas, diffs[..., self.center_idx, :-1]
+                ),
+                safe=True,
+            )
+        )
 
     @classmethod
     def from_mol(cls, mol):
@@ -24,5 +34,6 @@ class ExponentialEnvelopes(hk.Module):
             zip(mol.charges, mol.n_shells, mol.n_pp_shells)
         ):
             for k in range(n_pp_shell, n_shell):
-                shells.append((i, z / (k + 1)))
+                #  shells.append((i, [[z / (k + 1)] * 3] * 3))
+                shells.append((i, z / (k + 1) * jnp.eye(3)))
         return cls(shells)
