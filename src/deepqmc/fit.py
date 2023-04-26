@@ -22,6 +22,19 @@ __all__ = ()
 TrainState = namedtuple('TrainState', 'sampler params opt')
 
 
+def median_clip_and_mask(
+    E_loc, clip_width=5.0, median_center=False, exclude_width=jnp.inf
+):
+    clip_center = jnp.nanmedian(E_loc) if median_center else jnp.nanmean(E_loc)
+    deviation = jnp.abs(E_loc - clip_center)
+    sigma = jnp.nanmean(deviation)
+    E_loc_s = jnp.clip(
+        E_loc, clip_center - clip_width * sigma, clip_center + clip_width * sigma
+    )
+    gradient_mask = deviation < exclude_width
+    return E_loc_s, gradient_mask
+
+
 def log_squeeze(x):
     sgn, x = jnp.sign(x), jnp.abs(x)
     return sgn * jnp.log1p((x + 1 / 2 * x**2 + x**3) / (1 + x**2))
