@@ -98,8 +98,8 @@ def parse_pp_params(mol):
         if mol.pp_mask[i]:
             _, data = gto.M(
                 atom=[(int(atomic_number), jnp.array([0, 0, 0]))],
+                # spin is just a placeholder, ecp parameters don't depend on the spin
                 spin=atomic_number % 2,
-                basis='6-31G',
                 ecp=mol.pp_type,
             )._ecp.popitem()
             pp_loc_param = data[1][0][1][1:4]
