@@ -99,7 +99,6 @@ class GraphNeuralNetwork(hk.Module):
         mol (:class:`deepqmc.Molecule`): the molecule on which the GNN
             is defined
         embedding_dim (int): the size of the electron embeddings to be returned.
-        cutoff (float): cutoff distance above which graph edges are discarded.
         n_interactions (int): the number of interaction layers in the GNN.
         layer_kwargs (dict): optional, kwargs to be passed to the layers.
         ghost_coords (float, [N, 3]): optional, coordinates of ghost atoms.
@@ -113,7 +112,6 @@ class GraphNeuralNetwork(hk.Module):
         self,
         mol,
         embedding_dim,
-        cutoff,
         n_interactions,
         layer_factories=None,
         layer_kwargs=None,

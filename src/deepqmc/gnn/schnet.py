@@ -206,8 +206,6 @@ class SchNet(GraphNeuralNetwork):
     Args:
         mol (~deepqmc.Molecule): the molecule on which the graph is defined.
         embedding_dim (int): the length of the electron embedding vectors.
-        cutoff (float, a.u.): the distance cutoff beyond which interactions
-            are discarded.
         n_interactions (int): number of message passing interactions.
         edge_feat_kwargs (dict): extra arguments passed to
             :class:`~deepqmc.gnn.edge_features.EdgeFeatures`.
@@ -223,7 +221,6 @@ class SchNet(GraphNeuralNetwork):
         mol,
         embedding_dim,
         *,
-        cutoff=None,
         distance_basis_radius=30.0,
         n_interactions=3,
         edge_feat_kwargs=None,
@@ -244,7 +241,6 @@ class SchNet(GraphNeuralNetwork):
         super().__init__(
             mol,
             embedding_dim,
-            cutoff,
             n_interactions,
             **gnn_kwargs,
             layer_attrs={
