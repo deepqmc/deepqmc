@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax.numpy as jnp
 import pytest
 from conftest import Helpers
@@ -37,10 +39,10 @@ class TestHamil:
             helpers.rng(), Helpers.R(hamil), self.SAMPLE_SIZE
         )[0]
         wf = helpers.transform_model(wf, hamil)
-        params, state = helpers.init_model(wf, phys_conf)
-        E_loc, *_ = hamil.local_energy(
-            lambda state, phys_conf: wf.apply(params, state, phys_conf)[0]
-        )(helpers.rng(), state, phys_conf)
+        params = helpers.init_model(wf, phys_conf)
+        E_loc, _ = hamil.local_energy(partial(wf.apply, params))(
+            helpers.rng(), phys_conf
+        )
         ndarrays_regression.check(
             {'E_loc': E_loc},
             default_tolerance={'rtol': 2e-4},

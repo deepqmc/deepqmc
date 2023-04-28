@@ -5,7 +5,7 @@ import jax
 import pytest
 
 from deepqmc import MolecularHamiltonian, Molecule
-from deepqmc.wf import PauliNet, state_callback
+from deepqmc.wf import PauliNet
 
 
 @pytest.fixture(scope='session')
@@ -66,17 +66,15 @@ class Helpers:
     @staticmethod
     def transform_model(model, *model_args, **model_kwargs):
         return hk.without_apply_rng(
-            hk.transform_with_state(
+            hk.transform(
                 lambda *call_args: model(*model_args, **model_kwargs)(*call_args)
             )
         )
 
     @staticmethod
     def init_model(model, *args, seed=0, batch_dim=False):
-        params, state = model.init(Helpers.rng(seed), *args)
-        _, state = model.apply(params, state, *args)
-        state, _ = state_callback(state, batch_dim=batch_dim)
-        return params, state
+        params = model.init(Helpers.rng(seed), *args)
+        return params
 
     @staticmethod
     def create_paulinet(
@@ -90,10 +88,8 @@ class Helpers:
         return_phys_conf = phys_conf is None
         phys_conf = phys_conf or Helpers.phys_conf(hamil, **(phys_conf_kwargs or {}))
         paulinet = Helpers.transform_model(PauliNet, hamil, **(paulinet_kwargs or {}))
-        params, state = Helpers.init_model(
-            paulinet, phys_conf, **(init_model_kwargs or {})
-        )
-        ret = (params, state, paulinet)
+        params = Helpers.init_model(paulinet, phys_conf, **(init_model_kwargs or {}))
+        ret = (params, paulinet)
         if return_phys_conf:
             ret += (phys_conf,)
         return ret
