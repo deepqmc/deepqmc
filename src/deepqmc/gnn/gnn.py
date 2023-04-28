@@ -283,12 +283,6 @@ class GraphNeuralNetwork(hk.Module):
             float, (:math:`N_\text{elec}`, :data:`embedding_dim`):
             the final embeddings of the electrons.
         """
-        occupancies = hk.get_state(
-            'occupancies',
-            shape=1,
-            dtype=jnp.int32,
-            init=self.init_state,
-        )
         if self.ghost_coords is not None:
             phys_conf = phys_conf._replace(
                 R=jnp.concatenate(
@@ -301,7 +295,6 @@ class GraphNeuralNetwork(hk.Module):
             )
         graph_nodes = self.node_factory()
         graph_edges = self.edge_factory(phys_conf)
-        hk.set_state('occupancies', occupancies)
         graph = Graph(graph_nodes, graph_edges)
 
         for layer in self.layers:
