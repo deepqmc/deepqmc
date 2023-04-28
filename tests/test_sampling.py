@@ -1,7 +1,6 @@
 from functools import partial
 
 import pytest
-from jax import vmap
 
 from deepqmc.sampling import (
     DecorrSampler,
@@ -11,9 +10,7 @@ from deepqmc.sampling import (
     ResampledSampler,
     chain,
 )
-from deepqmc.utils import check_overflow
 from deepqmc.wf import PauliNet
-from deepqmc.wf.base import state_callback
 
 
 @pytest.fixture(scope='class')
@@ -21,9 +18,7 @@ def wf(helpers, request):
     request.cls.mol = helpers.mol()
     hamil = helpers.hamil(request.cls.mol)
     paulinet = helpers.transform_model(PauliNet, hamil)
-    params, _ = vmap(paulinet.init, (None, 0), (None, 0))(
-        helpers.rng(), helpers.phys_conf(n=request.cls.SAMPLE_SIZE)
-    )
+    params = paulinet.init(helpers.rng(), helpers.phys_conf())
     request.cls.wf = partial(paulinet.apply, params)
     request.cls.hamil = hamil
 
@@ -49,7 +44,7 @@ class TestSampling:
     def test_sampler_init(self, helpers, samplers, ndarrays_regression):
         sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, self.mol.coords, state_callback
+            helpers.rng(), self.wf, self.SAMPLE_SIZE, self.mol.coords
         )
         ndarrays_regression.check(
             helpers.flatten_pytree(smpl_state),
@@ -59,11 +54,10 @@ class TestSampling:
     def test_sampler_sample(self, helpers, samplers, ndarrays_regression):
         sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, self.mol.coords, state_callback
+            helpers.rng(), self.wf, self.SAMPLE_SIZE, self.mol.coords
         )
-        sample = check_overflow(state_callback, sampler.sample)
         for step in range(4):
-            smpl_state, _, stats = sample(
+            smpl_state, _, stats = sampler.sample(
                 helpers.rng(step), smpl_state, self.wf, self.mol.coords
             )
         ndarrays_regression.check(
@@ -90,9 +84,7 @@ class TestMultimoleculeSampling:
             chain(*samplers[:-1], samplers[-1](self.hamil)),
             [self.mol for _ in range(self.N_CONFIG)],
         )
-        smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback
-        )
+        smpl_state = sampler.init(helpers.rng(), self.wf, self.SAMPLE_SIZE)
         ndarrays_regression.check(
             helpers.flatten_pytree(smpl_state),
             default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
@@ -103,13 +95,10 @@ class TestMultimoleculeSampling:
             chain(*samplers[:-1], samplers[-1](self.hamil)),
             [self.mol for _ in range(self.N_CONFIG)],
         )
-        smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, state_callback
-        )
-        sample = check_overflow(state_callback, sampler.sample)
+        smpl_state = sampler.init(helpers.rng(), self.wf, self.SAMPLE_SIZE)
         select_idxs = sampler.select_idxs(self.SAMPLE_SIZE, 0)
         for step in range(4):
-            smpl_state, phys_conf, stats = sample(
+            smpl_state, phys_conf, stats = sampler.sample(
                 helpers.rng(step), smpl_state, self.wf, select_idxs
             )
         ndarrays_regression.check(

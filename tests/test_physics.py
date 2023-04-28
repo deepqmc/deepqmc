@@ -9,15 +9,15 @@ class TestPhysics:
     def test_pseudo_potentials(self, helpers, name, pp_type, ndarrays_regression):
         mol = helpers.mol(name, pp_type)
         hamil = helpers.hamil(mol)
-        params, state, paulinet, phys_conf = helpers.create_paulinet(
+        params, paulinet, phys_conf = helpers.create_paulinet(
             hamil, phys_conf_kwargs={'elec_std': 0.45}
         )
-        wf = lambda state, phys_conf: paulinet.apply(params, state, phys_conf)[0]
+        wf = lambda phys_conf: paulinet.apply(params, phys_conf)
         ndarrays_regression.check(
             {
                 'local_potential': local_potential(phys_conf, mol),
                 'nonlocal_potential': (
-                    nonlocal_potential(helpers.rng(), phys_conf, mol, state, wf)
+                    nonlocal_potential(helpers.rng(), phys_conf, mol, wf)
                     if pp_type
                     else 0
                 ),

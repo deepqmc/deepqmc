@@ -14,16 +14,10 @@ def nodes():
     return jnp.array([[0.0, 0.0, 0.0], [0.0, 0.0, 2.0], [0.0, 0.0, 6.0]])
 
 
-@pytest.fixture(scope='class')
-def cutoff(request):
-    request.cls.cutoff = 5.0
-
-
-@pytest.mark.usefixtures('cutoff')
 class TestGraph:
     @pytest.mark.parametrize(
-        'mask_self,offsets,mask_vals,occupancy_len',
-        [(True, (0, 0), (3, 3), 5), (False, (0, 3), (6, 6), 8)],
+        'mask_self,offsets,mask_vals',
+        [(True, (0, 0), (3, 3)), (False, (0, 3), (6, 6))],
         ids=['mask_self=True', 'mask_self=False'],
     )
     def test_graph_edge_builder(
@@ -33,38 +27,29 @@ class TestGraph:
         mask_self,
         offsets,
         mask_vals,
-        occupancy_len,
         ndarrays_regression,
     ):
-        graph_edges, occupancy = GraphEdgeBuilder(
-            self.cutoff, mask_self, offsets, mask_vals, difference_callback
-        )(nodes, nodes, jnp.zeros(occupancy_len, dtype=int))
+        graph_edges = GraphEdgeBuilder(
+            mask_self, offsets, mask_vals, difference_callback
+        )(nodes, nodes)
         ndarrays_regression.check(
-            helpers.flatten_pytree({'graph_edges': graph_edges, 'occupancy': occupancy})
+            helpers.flatten_pytree(graph_edges)
         )
 
     def test_molecular_graph_edge_builder(self, helpers, ndarrays_regression):
         mol = helpers.mol()
         phys_conf = helpers.phys_conf()
         edge_types = ('ne', 'same', 'anti')
-        occupancy = {
-            'ne': jnp.zeros(8),
-            'same': (jnp.zeros(3), jnp.zeros(2)),
-            'anti': (jnp.zeros(5), jnp.zeros(3)),
-        }
-        graph_edges, occupancy = MolecularGraphEdgeBuilder(
+        graph_edges = MolecularGraphEdgeBuilder(
             *mol.n_particles,
             edge_types,
             {
-                edge_type: {
-                    'cutoff': self.cutoff,
-                    'feature_callback': difference_callback,
-                }
+                edge_type: {'feature_callback': difference_callback}
                 for edge_type in edge_types
             },
-        )(phys_conf, occupancy)
+        )(phys_conf)
         ndarrays_regression.check(
-            helpers.flatten_pytree({'graph_edges': graph_edges, 'occupancy': occupancy})
+            helpers.flatten_pytree(graph_edges)
         )
 
 
@@ -87,8 +72,8 @@ class TestSchNet:
         mol = helpers.mol()
         phys_conf = helpers.phys_conf()
         schnet = helpers.transform_model(SchNet, mol, 32, **kwargs)
-        params, state = helpers.init_model(schnet, phys_conf)
-        emb, _ = schnet.apply(params, state, phys_conf)
+        params = helpers.init_model(schnet, phys_conf)
+        emb = schnet.apply(params, phys_conf)
         ndarrays_regression.check(
             {'embedding': emb}, default_tolerance={'rtol': 1e-4, 'atol': 1e-6}
         )
