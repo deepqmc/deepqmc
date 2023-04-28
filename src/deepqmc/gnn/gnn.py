@@ -131,7 +131,6 @@ class GraphNeuralNetwork(hk.Module):
             n_atom_types += 1
         self.ghost_coords = ghost_coords
         self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
-        self.cutoff = cutoff
         self.embedding_dim = embedding_dim
         self.node_data = {
             'n_nodes': {'nuclei': n_nuc, 'electrons': n_up + n_down},
@@ -259,7 +258,6 @@ class GraphNeuralNetwork(hk.Module):
             self.edge_types,
             kwargs_by_edge_type={
                 typ: {
-                    'cutoff': self.cutoff[typ],
                     'feature_callback': partial(self.edge_feature_callback, typ),
                 }
                 for typ in self.edge_types

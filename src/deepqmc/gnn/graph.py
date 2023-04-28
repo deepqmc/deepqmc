@@ -60,7 +60,6 @@ def difference_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
 
 
 def GraphEdgeBuilder(
-    cutoff,
     mask_self,
     offsets,
     mask_vals,
@@ -70,7 +69,6 @@ def GraphEdgeBuilder(
     Create a function that builds graph edges.
 
     Args:
-        cutoff (float): the cutoff distance above which edges are discarded.
         mask_self (bool): whether to mask edges between nodes of the same index.
         offsets ((int, int)): node index offset to be added to the returned
             sender and receiver node indeces respectively.
