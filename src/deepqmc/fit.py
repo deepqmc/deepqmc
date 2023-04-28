@@ -46,11 +46,9 @@ def median_log_squeeze_and_mask(
     return clipped_x, gradient_mask
 
 
-def init_fit(rng, hamil, ansatz, sampler, sample_size, state_callback):
+def init_fit(rng, hamil, ansatz, sampler, sample_size):
     params = init_wf_params(rng, hamil, ansatz)
-    smpl_state = sampler.init(
-        rng, partial(ansatz.apply, params), sample_size, state_callback
-    )
+    smpl_state = sampler.init(rng, partial(ansatz.apply, params), sample_size)
     return params, smpl_state
 
 
@@ -62,7 +60,6 @@ def fit_wf(  # noqa: C901
     sampler,
     sample_size,
     steps,
-    state_callback=None,
     train_state=None,
     *,
     clip_mask_fn=None,
@@ -249,9 +246,7 @@ def fit_wf(  # noqa: C901
         smpl_state, params, opt_state = train_state
     else:
         rng, rng_init_fit = jax.random.split(rng)
-        params, smpl_state = init_fit(
-            rng_init_fit, hamil, ansatz, sampler, sample_size, state_callback
-        )
+        params, smpl_state = init_fit(rng_init_fit, hamil, ansatz, sampler, sample_size)
         opt_state = None
     if opt is not None and opt_state is None:
         rng, rng_opt = jax.random.split(rng)

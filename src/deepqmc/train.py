@@ -20,7 +20,7 @@ from .physics import pairwise_self_distance
 from .pretrain import pretrain
 from .sampling import MultimoleculeSampler, equilibrate
 from .utils import InverseSchedule, segment_nanmean
-from .wf.base import init_wf_params, state_callback
+from .wf.base import init_wf_params
 
 __all__ = ['train']
 
@@ -57,7 +57,6 @@ def train(  # noqa: C901
     workdir=None,
     train_state=None,
     init_step=0,
-    state_callback=state_callback,
     *,
     steps,
     sample_size,
@@ -104,8 +103,6 @@ def train(  # noqa: C901
             restore training or run evaluation.
         init_step (int): optional, initial step index, useful if
             calculation is restarted from checkpoint saved on disk.
-        state_callback (Callable): optional, a function processing the :class:`haiku`
-            state of the wave function Ansatz.
         steps (int): optional, number of optimization steps.
         sample_size (int): the number of samples considered in a batch
         seed (int): the seed used for PRNG.
@@ -233,7 +230,6 @@ def train(  # noqa: C901
                 rng_smpl_init,
                 partial(ansatz.apply, params),
                 sample_size,
-                state_callback,
             )
             log.info('Equilibrating sampler...')
             pbar = tqdm(
@@ -249,7 +245,6 @@ def train(  # noqa: C901
                 lambda phys_conf: pairwise_self_distance(phys_conf.r).mean(),
                 pbar,
                 sample_size,
-                state_callback,
                 block_size=10,
             ):
                 tau_rep = '|'.join(
@@ -284,7 +279,6 @@ def train(  # noqa: C901
                     sampler,
                     sample_size,
                     pbar,
-                    state_callback,
                     train_state,
                     **(fit_kwargs or {}),
                 ):

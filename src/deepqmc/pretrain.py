@@ -6,7 +6,6 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from .wf.base import state_callback
 from .wf.baseline import Baseline
 
 
@@ -16,7 +15,6 @@ def pretrain(  # noqa: C901
     ansatz,
     opt,
     sampler,
-    state_callback=state_callback,
     *,
     steps,
     sample_size,
@@ -30,8 +28,6 @@ def pretrain(  # noqa: C901
         ansatz (~deepqmc.wf.WaveFunction): the wave function Ansatz.
         opt (``optax`` optimizer): the optimizer to use.
         sampler (~deepqmc.sampling.Sampler): the sampler instance to use.
-        state_callback (Callable): optional, a function processing the :class:`haiku`
-            state of the wave function Ansatz.
         steps: an iterable yielding the step numbers for the pretraining.
         sample_size (int): the number of samples to use in a batch.
         baseline_kwargs (dict): optional, additional keyword arguments passed to the
@@ -103,16 +99,11 @@ def pretrain(  # noqa: C901
             smpl_state, rng_sample, select_idxs
         )
 
-        while True:
-            wf_state, params_new, opt_state_new, losses = _step(
-                rng,
-                wf_state,
-                params,
-                opt_state,
-                phys_config,
-            )
-            wf_state, overflow = state_callback(wf_state)
-            if not overflow:
-                params, opt_state = params_new, opt_state_new
-                break
+        wf_state, params, opt_state, losses = _step(
+            rng,
+            wf_state,
+            params,
+            opt_state,
+            phys_config,
+        )
         yield step, params, losses
