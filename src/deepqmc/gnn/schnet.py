@@ -1,5 +1,3 @@
-from typing import Mapping
-
 import haiku as hk
 import jax.numpy as jnp
 from jax import ops
@@ -243,13 +241,6 @@ class SchNet(GraphNeuralNetwork):
             edge_feat_kwargs_by_typ.setdefault(typ, {})
             for k, v in edge_feat_kwargs.items():
                 edge_feat_kwargs_by_typ[typ].setdefault(k, v)
-        if not isinstance(cutoff, Mapping):
-            cutoff = {typ: cutoff for typ in self.edge_types}
-        for typ in self.edge_types:
-            assert (
-                cutoff[typ] is None
-                or edge_feat_kwargs_by_typ[typ]['cutoff'] <= cutoff[typ]
-            )
         super().__init__(
             mol,
             embedding_dim,
