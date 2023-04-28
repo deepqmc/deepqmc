@@ -18,9 +18,9 @@ class QHOHamiltonian(Hamiltonian):
         self.nu = nu
 
     def local_energy(self, wf):
-        def loc_ene(rng, state, phys_conf):
+        def loc_ene(rng, phys_conf):
             def wave_function(r):
-                return wf(state, jdc.replace(phys_conf, r=r)).log
+                return wf(jdc.replace(phys_conf, r=r)).log
 
             pot = 1 / 2 * self.mass * self.nu**2 * jnp.sum(phys_conf.r**2)
             lap_log, grad_log = laplacian(wave_function)(phys_conf.r)

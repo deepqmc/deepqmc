@@ -158,7 +158,7 @@ def get_quadrature_points(rng, nucleus_position, phys_conf):
     )
 
 
-def nonlocal_potential(rng, phys_conf, mol, state, wf):
+def nonlocal_potential(rng, phys_conf, mol, wf):
     r"""Calculate the non-local term of the pseudopotential.
 
     Formulas are based on data from [Burkatzki et al. 2007] or
@@ -174,15 +174,11 @@ def nonlocal_potential(rng, phys_conf, mol, state, wf):
             nuclear coordinates.
         mol (:class:`deepqmc.Molecule`): a molecule that is used to load the
             pseudopotential parameters.
-        state (dic): wave function state.
         wf (deepqmc.wf.WaveFunction): the wave function ansatz.
     """
 
     # get value of the denominator (which is constant)
-    denominator_wf_sign, denominator_wf_exponent = wf(state, phys_conf)
-
-    # vmap over 12 integration quadrature points
-    wf_vmapped = jax.vmap(wf, in_axes=(None, 0), out_axes=(0))
+    denominator_wf_sign, denominator_wf_exponent = wf(phys_conf)
 
     pp_nl_params = jnp.array(mol.pp_nl_params)
     nuc_with_nl_pot = mol.nuc_with_nl_pot  # filter out masked nuclei
@@ -225,7 +221,7 @@ def nonlocal_potential(rng, phys_conf, mol, state, wf):
             nl_pot_coefs=nl_pot_coefs,
         ):
             # numerator
-            sign, exponent = wf_vmapped(state, quadrature_phys_conf[i])  # shape (12,)
+            sign, exponent = jax.vmap(wf)(quadrature_phys_conf[i])  # shape (12,)
             wf_ratio = (
                 denominator_wf_sign * sign * jnp.exp(exponent - denominator_wf_exponent)
             )  # shape (12,)

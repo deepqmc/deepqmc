@@ -61,7 +61,7 @@ class MetropolisSampler(Sampler):
         self.max_age = max_age
 
     def _update(self, state, wf, R):
-        psi, _ = jax.vmap(wf)({}, self.phys_conf(R, state['r']))
+        psi = jax.vmap(wf)(self.phys_conf(R, state['r']))
         state = {**state, 'psi': psi}
         return state
 
@@ -146,7 +146,7 @@ class LangevinSampler(MetropolisSampler):
         @jax.vmap
         @partial(jax.value_and_grad, has_aux=True)
         def wf_and_force(r):
-            psi, _ = wf({}, self.phys_conf(R, r))
+            psi = wf(self.phys_conf(R, r))
             return psi.log, psi
 
         (_, psi), force = wf_and_force(state['r'])

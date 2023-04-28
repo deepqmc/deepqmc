@@ -14,7 +14,7 @@ def init_wf_params(rng, hamil, ansatz):
         # QHO
         R_shape = 0
     phys_conf = hamil.init_sample(rng_sample, jnp.zeros(R_shape), 1)[0]
-    params, _ = ansatz.init(rng_params, phys_conf)
+    params = ansatz.init(rng_params, phys_conf)
     return params
 
 
