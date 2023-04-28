@@ -3,8 +3,6 @@ from collections import namedtuple
 import jax.numpy as jnp
 from jax.tree_util import tree_map, tree_structure, tree_transpose
 
-from ..utils import no_grad
-
 GraphEdges = namedtuple('GraphEdges', 'senders receivers features')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
@@ -53,103 +51,6 @@ def mask_self_edges(idx):
     return jnp.where(self_mask, idx.shape[0], idx)
 
 
-def prune_graph_edges(
-    pos_sender,
-    pos_receiver,
-    cutoff,
-    idx,
-    occupancy_limit,
-    offsets,
-    mask_vals,
-    feature_callback,
-):
-    r"""Discards graph edges which have a distance larger than :data:`cutoff`.
-
-    Args:
-        pos_sender (float, (:math:`N_{nodes}`, 3)): coordinates of graph nodes
-            that send edges.
-        pos_receiver (float, (:math:`M_{nodes}`, 3)): coordinates of graph nodes
-            that receive edges.
-        cutoff (float): cutoff distance above which edges are discarded.
-        idx (int, (:math:`N_\text{nodes}`, :math:`N_\text{nodes}`)): matrix of
-            receiving node indices as created by :func:`all_graph_edges`
-            (or :func:`mask_self_edges`).
-        occupancy_limit (int): the number of edges that can be considered
-            without overflow. The arrays describing the edges will have
-            a last dimension of size :data:`occupancy_limit`.
-        offsets ((int, int)): node index offset to be added to the returned
-            sender and receiver node indeces respectively.
-        mask_vals ((int, int)): if :data:`occupancy_limit` is larger than the number
-            of valid edges, the remaining node indices will be filled with these
-            values for the sender and receiver nodes respectively
-            (i.e. the value to pad the node index arrays with).
-        feature_callback (Callable): a function that takes the sender positions,
-            receiver positions, sender node indeces and receiver node indeces and
-            returns some data (features) computed for the edges.
-
-    Returns:
-        ~deepqmc.types.GraphEdges: object containing the indeces of the edge
-        sending and edge receiving nodes, along with the features associated
-        with the edges.
-    """
-
-    def apply_callback(pos_sender, pos2, sender_idx, receiver_idx):
-        r"""Apply the feature_callback function, or return no features."""
-        return (
-            feature_callback(pos_sender, pos2, sender_idx, receiver_idx)
-            if feature_callback
-            else {}
-        )
-
-    if pos_sender.shape[0] == 0 or pos_receiver.shape[0] == 0:
-        ones = jnp.ones(occupancy_limit, idx.dtype)
-        sender_idx = offsets[0] * ones
-        receiver_idx = offsets[1] * ones
-        return (
-            GraphEdges(
-                sender_idx,
-                receiver_idx,
-                apply_callback(pos_sender, pos_receiver, sender_idx, receiver_idx),
-            ),
-            jnp.array(0),
-        )
-
-    @no_grad
-    def dist(sender, receiver):
-        r"""Compute pairwise distances between inputs."""
-        return jnp.sqrt(((receiver - sender) ** 2).sum(axis=-1))
-
-    N_sender, N_receiver = pos_sender.shape[0], pos_receiver.shape[0]
-    sender_idx = jnp.broadcast_to(jnp.arange(N_sender)[:, None], idx.shape)
-    sender_idx = jnp.reshape(sender_idx, (-1,))
-    receiver_idx = jnp.reshape(idx, (-1,))
-
-    distances = dist(pos_sender[sender_idx], pos_receiver[receiver_idx])
-    mask = receiver_idx < N_receiver
-    if cutoff is not None:
-        mask &= distances < cutoff
-    cumsum = jnp.cumsum(mask)
-    occupancy = cumsum[-1]
-
-    # edge buffer is one larger than occupancy_limit:
-    # masked edges assigned to last position and discarded
-    out_sender_idx, out_receiver_idx = (
-        (mask_val - offset) * jnp.ones(occupancy_limit + 1, jnp.int32)
-        for mask_val, offset in zip(mask_vals, offsets)
-    )
-    index = jnp.where(mask, cumsum - 1, occupancy_limit)
-
-    sender_idx = out_sender_idx.at[index].set(sender_idx)[:occupancy_limit]
-    receiver_idx = out_receiver_idx.at[index].set(receiver_idx)[:occupancy_limit]
-
-    features = apply_callback(pos_sender, pos_receiver, sender_idx, receiver_idx)
-
-    return (
-        GraphEdges(sender_idx + offsets[0], receiver_idx + offsets[1], features),
-        occupancy,
-    )
-
-
 def difference_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
     r"""feature_callback computing the Euclidian difference vector for each edge."""
     if len(pos_sender) == 0 or len(pos_receiver) == 0:
@@ -191,38 +92,45 @@ def GraphEdgeBuilder(
                 that send edges.
             pos_receiver (float, (:math:`M_{nodes}`, 3)): coordinates of graph nodes
                 that receive edges.
-            occupancies (int, (:data:`occupancy_limit`)): array to store
-                occupancies in.
 
         Returns:
-            tuple: a tuple containing the graph edges, the input occupancies
-            updated with the current occupancy, and the number of stored
-            occupancies.
+            A :class:`~deepqmc.gnn.graph.GraphEdges` instance.
         """
         assert pos_sender.shape[-1] == 3 and pos_receiver.shape[-1] == 3
         assert len(pos_sender.shape) == 2
         assert not mask_self or pos_sender.shape[0] == pos_receiver.shape[0]
 
-        occupancy_limit = occupancies.shape[0]
+        N_sender, N_receiver = pos_sender.shape[0], pos_receiver.shape[0]
 
         edges_idx = all_graph_edges(pos_sender, pos_receiver)
 
         if mask_self:
             edges_idx = mask_self_edges(edges_idx)
-        edges, occupancy = prune_graph_edges(
-            pos_sender,
-            pos_receiver,
-            cutoff,
-            edges_idx,
-            occupancy_limit,
-            offsets,
-            mask_vals,
-            feature_callback,
-        )
+
+        sender_idx = jnp.broadcast_to(jnp.arange(N_sender)[:, None], edges_idx.shape)
+        sender_idx = jnp.reshape(sender_idx, (-1,))
+        receiver_idx = jnp.reshape(edges_idx, (-1,))
+
+        if mask_self:
+            N_edge = N_sender * (N_sender - 1)
+            mask = receiver_idx < N_receiver
+            cumsum = jnp.cumsum(mask)
+            index = jnp.where(mask, cumsum - 1, N_edge)
+
+            # edge buffer is one larger than number of edges:
+            # masked edges assigned to last position and discarded
+            sender_idx_buf, receiver_idx_buf = (
+                (mask_val - offset) * jnp.ones(N_edge + 1, jnp.int32)
+                for mask_val, offset in zip(mask_vals, offsets)
+            )
+            sender_idx = sender_idx_buf.at[index].set(sender_idx)[:N_edge]
+            receiver_idx = receiver_idx_buf.at[index].set(receiver_idx)[:N_edge]
+
+        features = feature_callback(pos_sender, pos_receiver, sender_idx, receiver_idx)
 
         return (
-            edges,
-            occupancies.at[1:].set(occupancies[:-1]).at[0].set(occupancy),
+            GraphEdges(sender_idx + offsets[0], receiver_idx + offsets[1], features),
+            occupancies,
         )
 
     return build
