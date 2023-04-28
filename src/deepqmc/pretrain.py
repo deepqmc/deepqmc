@@ -36,23 +36,19 @@ def pretrain(  # noqa: C901
     baseline_init = Baseline.from_mol(sampler.mols, **(baseline_kwargs or {}))
 
     @hk.without_apply_rng
-    @hk.transform_with_state
+    @hk.transform
     def baseline(phys_config, return_mos=False):
         return Baseline(hamil.mol, *baseline_init)(phys_config, return_mos)
 
-    init_pc = hamil.init_sample(rng, sampler.mols[0].coords, sample_size)
-    params, _ = jax.vmap(ansatz.init, (None, 0, None), (None, 0))(rng, init_pc, False)
-    params_baseline = jax.vmap(baseline.init, (None, 0, None), (None, 0))(
-        rng, init_pc, False
-    )[0]
+    init_pc = hamil.init_sample(rng, sampler.mols[0].coords, 1)[0]
+    params = ansatz.init(rng, init_pc, False)
+    params_baseline = baseline.init(rng, init_pc, False)
     baseline = partial(baseline.apply, params_baseline)
 
     def loss_fn(params, phys_config):
         n_batch = phys_config.r.shape[0]
-        dets, _ = jax.vmap(ansatz.apply, (None, 0, 0, None))(
-            params, {}, phys_config, True
-        )
-        dets_target = jax.vmap(baseline, (0, 0, None))({}, phys_config, True)[0]
+        dets = jax.vmap(ansatz.apply, (None, 0, None))(params, phys_config, True)
+        dets_target = jax.vmap(baseline, (0, None))(phys_config, True)
         repeats = math.ceil(dets[0].shape[-3] / dets_target[0].shape[-3])
         dets_target = (
             jnp.tile(det, (1, repeats, 1, 1))[:, : dets[0].shape[-3]]

@@ -126,10 +126,10 @@ class MolecularHamiltonian(Hamiltonian):
         return up, down
 
     def local_energy(self, wf, return_grad=False):
-        def loc_ene(rng, state, phys_conf):
+        def loc_ene(rng, phys_conf):
             def wave_function(r):
                 pc = jdc.replace(phys_conf, r=r.reshape(-1, 3))
-                return wf(state, pc).log
+                return wf(pc).log
 
             lap_log_psis, quantum_force = laplacian(wave_function)(
                 phys_conf.r.flatten()
@@ -147,7 +147,7 @@ class MolecularHamiltonian(Hamiltonian):
                 'hamil/quantum_force': (quantum_force**2).sum(axis=-1),
             }
             if self.mol.any_pp:
-                Vs_nl = nonlocal_potential(rng, phys_conf, self.mol, state, wf)
+                Vs_nl = nonlocal_potential(rng, phys_conf, self.mol, wf)
                 Es_loc += Vs_nl
                 stats = {**stats, 'hamil/V_nl': Vs_nl}
 

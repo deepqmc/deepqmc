@@ -35,7 +35,7 @@ def instantiate_ansatz(hamil, ansatz):
     import haiku as hk
 
     return hk.without_apply_rng(
-        hk.transform_with_state(
+        hk.transform(
             lambda phys_conf, return_mos=False: ansatz(hamil)(phys_conf, return_mos)
         )
     )

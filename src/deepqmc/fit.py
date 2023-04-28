@@ -67,14 +67,12 @@ def fit_wf(  # noqa: C901
 ):
     stats_fn = partial(per_mol_stats, len(sampler))
 
-    @partial(jax.custom_jvp, nondiff_argnums=(1, 2, 3))
-    def loss_fn(params, state, rng, batch):
+    @partial(jax.custom_jvp, nondiff_argnums=(1, 2))
+    def loss_fn(params, rng, batch):
         phys_conf, weight = batch
         rng_batch = jax.random.split(rng, len(weight))
-        wf = lambda state, phys_conf: ansatz.apply(params, state, phys_conf)[0]
-        E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(
-            rng_batch, state, phys_conf
-        )
+        wf = partial(ansatz.apply, params)
+        E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(rng_batch, phys_conf)
         loss = jnp.nanmean(E_loc * weight)
         stats = {
             **stats_fn(E_loc, phys_conf.mol_idx, 'E_loc'),
@@ -83,7 +81,7 @@ def fit_wf(  # noqa: C901
                 for k_hamil, v_hamil in hamil_stats.items()
             },
         }
-        return loss, (None, (E_loc, stats))
+        return loss, (E_loc, stats)
         # - kfac-jax docs says the API should be (loss, state, aux), but that's
         #   wrong, it in fact expects (loss, (state, aux)):
         #   https://github.com/deepmind/kfac-jax/blob/17831f5a0621b0259c644503556ee7f65acdf0c5/kfac_jax/_src/optimizer.py#L1380-L1383  # noqa: B950
@@ -91,12 +89,11 @@ def fit_wf(  # noqa: C901
         #   actually use it (hence None)
 
     @loss_fn.defjvp
-    def loss_jvp(state, rng, batch, primals, tangents):
+    def loss_jvp(rng, batch, primals, tangents):
         phys_conf, weight = batch
         (params,) = primals
-        loss, other = loss_fn(params, state, rng, batch)
-        # other is (state, aux) as per kfac-jax's convention
-        _, (E_loc, _) = other
+        loss, aux = loss_fn(params, rng, batch)
+        E_loc, _ = aux
         E_loc_s, gradient_mask = (clip_mask_fn or median_log_squeeze_and_mask)(
             E_loc, **(clip_mask_kwargs or {})
         )
@@ -110,8 +107,7 @@ def fit_wf(  # noqa: C901
         )
 
         def log_likelihood(params):  # log(psi(theta))
-            wf = lambda state, phys_conf: ansatz.apply(params, state, phys_conf)[0]
-            return jax.vmap(wf)(state, phys_conf).log
+            return jax.vmap(ansatz.apply, (None, 0))(params, phys_conf).log
 
         E_mean = segment_nanmean(E_loc_s, phys_conf.mol_idx, len(sampler))[
             phys_conf.mol_idx
@@ -120,7 +116,7 @@ def fit_wf(  # noqa: C901
         kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
         loss_tangent = (E_loc_s - E_mean) * log_psi_tangent * weight
         loss_tangent = masked_mean(loss_tangent, gradient_mask)
-        return (loss, other), (loss_tangent, other)
+        return (loss, aux), (loss_tangent, aux)
         # jax.custom_jvp has actually no official support for auxiliary output.
         # the second other in the tangent output should be in fact other_tangent.
         # we just output the same thing to satisfy jax's API requirement with
@@ -132,7 +128,7 @@ def fit_wf(  # noqa: C901
 
         @jax.jit
         def _step(_rng_opt, params, _opt_state, batch):
-            loss, (_, (E_loc, stats)) = loss_fn(params, {}, _rng_opt, batch)
+            loss, (E_loc, stats) = loss_fn(params, _rng_opt, batch)
 
             return params, None, E_loc, {'per_mol': stats}
 
@@ -140,8 +136,8 @@ def fit_wf(  # noqa: C901
 
         @jax.jit
         def _step(rng, params, opt_state, batch):
-            (loss, (_, (E_loc, per_mol_stats))), grads = energy_and_grad_fn(
-                params, {}, rng, batch
+            (loss, (E_loc, per_mol_stats)), grads = energy_and_grad_fn(
+                params, rng, batch
             )
             updates, opt_state = opt.update(grads, opt_state, params)
             param_norm, update_norm, grad_norm = map(
@@ -163,11 +159,10 @@ def fit_wf(  # noqa: C901
     else:
 
         def _step(rng, params, opt_state, batch):
-            params, opt_state, _, opt_stats = opt.step(
+            params, opt_state, opt_stats = opt.step(
                 params,
                 opt_state,
                 rng,
-                func_state={},
                 batch=batch,
                 momentum=0,
             )
@@ -189,7 +184,6 @@ def fit_wf(  # noqa: C901
                 params,
                 rng,
                 batch,
-                {},
             )
             return opt_state
 
@@ -197,7 +191,6 @@ def fit_wf(  # noqa: C901
             value_and_grad_func=energy_and_grad_fn,
             l2_reg=0.0,
             value_func_has_aux=True,
-            value_func_has_state=True,
             value_func_has_rng=True,
             auto_register_kwargs={'graph_patterns': make_graph_patterns()},
             include_norms_in_stats=True,
