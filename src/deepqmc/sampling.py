@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 class Sampler:
     r"""Base class for all QMC samplers."""
 
-    def init(self, rng, wf, n, wf_state=None):
+    def init(self, rng, wf, n):
         raise NotImplementedError
 
     def sample(self, rng, state, wf):
@@ -61,19 +61,18 @@ class MetropolisSampler(Sampler):
         self.max_age = max_age
 
     def _update(self, state, wf, R):
-        psi, wf_state = jax.vmap(wf)(state['wf'], self.phys_conf(R, state['r']))
-        state = {**state, 'psi': psi, 'wf': wf_state}
+        psi, _ = jax.vmap(wf)({}, self.phys_conf(R, state['r']))
+        state = {**state, 'psi': psi}
         return state
 
     def update(self, state, wf, R):
         return self._update(state, wf, R)
 
-    def init(self, rng, wf, n, R, wf_state=None):
+    def init(self, rng, wf, n, R):
         state = {
             'r': self.hamil.init_sample(rng, R, n).r,
             'age': jnp.zeros(n, jnp.int32),
             'tau': jnp.array(self.initial_tau),
-            'wf': wf_state or {},
         }
 
         return self._update(state, wf, R)
@@ -145,16 +144,16 @@ class LangevinSampler(MetropolisSampler):
 
     def _update(self, state, wf, R):
         @jax.vmap
-        @partial(jax.value_and_grad, argnums=1, has_aux=True)
-        def wf_and_force(state, r):
-            psi, state = wf(state, self.phys_conf(R, r))
-            return psi.log, (psi, state)
+        @partial(jax.value_and_grad, has_aux=True)
+        def wf_and_force(r):
+            psi, _ = wf({}, self.phys_conf(R, r))
+            return psi.log, psi
 
-        (_, (psi, wf_state)), force = wf_and_force(state['wf'], state['r'])
+        (_, psi), force = wf_and_force(state['r'])
         force = clean_force(
             force, self.phys_conf(R, state['r']), self.hamil.mol, tau=state['tau']
         )
-        state = {**state, 'psi': psi, 'force': force, 'wf': wf_state}
+        state = {**state, 'psi': psi, 'force': force}
         return state
 
     def _proposal(self, state, rng):
@@ -288,11 +287,11 @@ class MultimoleculeSampler(Sampler):
 
         self.mol_idx_factory = mol_idx_factory or MolIdxFactory()
 
-    def init(self, rng, wf, n, wf_state=None):
+    def init(self, rng, wf, n):
         wfs = self.assign_wfs(wf)
         sample_sizes = self.mol_idx_factory.max_per_mol(n, len(self))
         states = [
-            self.sampler.init(rng, wf, sample_size, mol.coords, wf_state)
+            self.sampler.init(rng, wf, sample_size, mol.coords)
             for rng, wf, sample_size, mol in zip(
                 hk.PRNGSequence(rng), wfs, sample_sizes, self.mols
             )

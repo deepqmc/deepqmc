@@ -41,18 +41,16 @@ def pretrain(  # noqa: C901
         return Baseline(hamil.mol, *baseline_init)(phys_config, return_mos)
 
     init_pc = hamil.init_sample(rng, sampler.mols[0].coords, sample_size)
-    params, wf_state = jax.vmap(ansatz.init, (None, 0, None), (None, 0))(
-        rng, init_pc, False
-    )
+    params, _ = jax.vmap(ansatz.init, (None, 0, None), (None, 0))(rng, init_pc, False)
     params_baseline = jax.vmap(baseline.init, (None, 0, None), (None, 0))(
         rng, init_pc, False
     )[0]
     baseline = partial(baseline.apply, params_baseline)
 
-    def loss_fn(params, wf_state, phys_config):
+    def loss_fn(params, phys_config):
         n_batch = phys_config.r.shape[0]
-        dets, wf_state = jax.vmap(ansatz.apply, (None, 0, 0, None))(
-            params, wf_state, phys_config, True
+        dets, _ = jax.vmap(ansatz.apply, (None, 0, 0, None))(
+            params, {}, phys_config, True
         )
         dets_target = jax.vmap(baseline, (0, 0, None))({}, phys_config, True)[0]
         repeats = math.ceil(dets[0].shape[-3] / dets_target[0].shape[-3])
@@ -67,20 +65,18 @@ def pretrain(  # noqa: C901
             for det_up, det_down in (dets, dets_target)
         )
         losses = (mos - mos_target) ** 2
-        return losses.mean(), (wf_state, losses.mean(axis=-1))
+        return losses.mean(), losses.mean(axis=-1)
 
     loss_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
     if isinstance(opt, optax.GradientTransformation):
 
         @jax.jit
-        def _step(rng, wf_state, params, opt_state, phys_config):
-            (_, (wf_state, losses)), grads = loss_and_grad_fn(
-                params, wf_state, phys_config
-            )
+        def _step(rng, params, opt_state, phys_config):
+            (_, losses), grads = loss_and_grad_fn(params, phys_config)
             updates, opt_state = opt.update(grads, opt_state, params)
             params = optax.apply_updates(params, updates)
-            return wf_state, params, opt_state, losses
+            return params, opt_state, losses
 
     else:
         raise NotImplementedError
@@ -99,9 +95,8 @@ def pretrain(  # noqa: C901
             smpl_state, rng_sample, select_idxs
         )
 
-        wf_state, params, opt_state, losses = _step(
+        params, opt_state, losses = _step(
             rng,
-            wf_state,
             params,
             opt_state,
             phys_config,
