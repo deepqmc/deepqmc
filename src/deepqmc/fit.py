@@ -9,7 +9,6 @@ import optax
 
 from .kfacext import make_graph_patterns
 from .utils import (
-    check_overflow,
     exp_normalize_mean,
     masked_mean,
     per_mol_stats,
@@ -211,7 +210,6 @@ def fit_wf(  # noqa: C901
             inverse_update_period=1,
         )
 
-    @partial(check_overflow, state_callback)
     @jax.jit
     def sample_wf(state, rng, params, select_idxs):
         return sampler.sample(rng, state, partial(ansatz.apply, params), select_idxs)

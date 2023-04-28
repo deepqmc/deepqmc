@@ -11,7 +11,7 @@ from jax import lax
 
 from .physics import pairwise_diffs, pairwise_self_distance
 from .types import PhysicalConfiguration
-from .utils import check_overflow, multinomial_resampling, split_dict
+from .utils import multinomial_resampling, split_dict
 
 __all__ = [
     'MetropolisSampler',
@@ -76,12 +76,7 @@ class MetropolisSampler(Sampler):
             'wf': wf_state or {},
         }
 
-        @partial(check_overflow, state_callback)
-        def update(rng, state, wf):
-            return (self._update(state, wf, R),)
-
-        (state,) = update(None, state, wf)
-        return state
+        return self._update(state, wf, R)
 
     def _proposal(self, state, rng):
         r = state['r']
@@ -480,7 +475,6 @@ def equilibrate(
 ):
     criterion = jax.jit(criterion)
 
-    @partial(check_overflow, state_callback)
     @jax.jit
     def sample_wf(rng, state, select_idxs):
         return sampler.sample(rng, state, wf, select_idxs)

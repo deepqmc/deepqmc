@@ -1,5 +1,3 @@
-from typing import Sequence
-
 import jax
 import jax.numpy as jnp
 from jax import ops
@@ -72,42 +70,6 @@ def split_dict(dct, cond):
     for k, v in dct.items():
         (included if cond(k) else excluded)[k] = v
     return included, excluded
-
-
-def check_overflow(state_callback, func):
-    def wrapper(rng, smpl_state, *args, **kwargs):
-        while True:
-            smpl_state, *other = func(
-                rng, smpl_state_prev := smpl_state, *args, **kwargs
-            )
-            if state_callback:
-                wf_state = (
-                    [st['wf'] for st in smpl_state]
-                    if isinstance(smpl_state, Sequence)
-                    else smpl_state['wf']
-                )
-                wf_state, overflow = state_callback(wf_state)
-                if overflow:
-                    smpl_state = (
-                        [
-                            {**prev, 'wf': st}
-                            for prev, st in zip(smpl_state_prev, wf_state)
-                        ]
-                        if isinstance(smpl_state, Sequence)
-                        else {**smpl_state_prev, 'wf': wf_state}
-                    )
-                    continue
-            return smpl_state, *other
-
-    return wrapper
-
-
-def no_grad(func):
-    def wrapper(*args, **kwargs):
-        args = jax.tree_util.tree_map(jax.lax.stop_gradient, args)
-        return func(*args, **kwargs)
-
-    return wrapper
 
 
 def InverseSchedule(init_value, decay_rate):
