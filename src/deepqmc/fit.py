@@ -131,17 +131,17 @@ def fit_wf(  # noqa: C901
     if opt is None:
 
         @jax.jit
-        def _step(_rng_opt, wf_state, params, _opt_state, batch):
-            loss, (_, (E_loc, stats)) = loss_fn(params, wf_state, _rng_opt, batch)
+        def _step(_rng_opt, params, _opt_state, batch):
+            loss, (_, (E_loc, stats)) = loss_fn(params, {}, _rng_opt, batch)
 
             return params, None, E_loc, {'per_mol': stats}
 
     elif isinstance(opt, optax.GradientTransformation):
 
         @jax.jit
-        def _step(rng, wf_state, params, opt_state, batch):
+        def _step(rng, params, opt_state, batch):
             (loss, (_, (E_loc, per_mol_stats))), grads = energy_and_grad_fn(
-                params, wf_state, rng, batch
+                params, {}, rng, batch
             )
             updates, opt_state = opt.update(grads, opt_state, params)
             param_norm, update_norm, grad_norm = map(
@@ -156,18 +156,18 @@ def fit_wf(  # noqa: C901
             }
             return params, opt_state, E_loc, stats
 
-        def init_opt(rng, wf_state, params, batch):
+        def init_opt(rng, params, batch):
             opt_state = opt.init(params)
             return opt_state
 
     else:
 
-        def _step(rng, wf_state, params, opt_state, batch):
+        def _step(rng, params, opt_state, batch):
             params, opt_state, _, opt_stats = opt.step(
                 params,
                 opt_state,
                 rng,
-                func_state=wf_state,
+                func_state={},
                 batch=batch,
                 momentum=0,
             )
@@ -184,12 +184,12 @@ def fit_wf(  # noqa: C901
                 stats,
             )
 
-        def init_opt(rng, wf_state, params, batch):
+        def init_opt(rng, params, batch):
             opt_state = opt.init(
                 params,
                 rng,
                 batch,
-                wf_state,
+                {},
             )
             return opt_state
 
@@ -231,7 +231,6 @@ def fit_wf(  # noqa: C901
         )
         params, opt_state, E_loc, stats = _step(
             rng_kfac,
-            sampler.get_state('wf', smpl_state, select_idxs),
             params,
             opt_state,
             (phys_conf, weight),
@@ -253,7 +252,6 @@ def fit_wf(  # noqa: C901
         init_select_idxs = sampler.select_idxs(sample_size, 0)
         opt_state = init_opt(
             rng_opt,
-            sampler.get_state('wf', smpl_state, init_select_idxs),
             params,
             (
                 sampler.phys_conf(smpl_state, init_select_idxs),
