@@ -250,7 +250,7 @@ class GraphNeuralNetwork(hk.Module):
         """
         raise NotImplementedError
 
-    def edge_factory(self, phys_conf, occupancies):
+    def edge_factory(self, phys_conf):
         r"""Return a function that builds all the edges used in the GNN."""
         edge_factory = MolecularGraphEdgeBuilder(
             self.n_nuc,
@@ -265,7 +265,7 @@ class GraphNeuralNetwork(hk.Module):
                 for typ in self.edge_types
             },
         )
-        return edge_factory(phys_conf, occupancies)
+        return edge_factory(phys_conf)
 
     def process_final_embedding(self, final_embedding):
         r"""Process final embedding produced by last layer."""
@@ -300,7 +300,7 @@ class GraphNeuralNetwork(hk.Module):
                 )
             )
         graph_nodes = self.node_factory()
-        graph_edges, occupancies = self.edge_factory(phys_conf, occupancies)
+        graph_edges = self.edge_factory(phys_conf)
         hk.set_state('occupancies', occupancies)
         graph = Graph(graph_nodes, graph_edges)
 
