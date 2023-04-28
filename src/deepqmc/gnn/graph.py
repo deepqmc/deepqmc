@@ -244,7 +244,7 @@ def MolecularGraphEdgeBuilder(
         'anti': build_anti,
     }
 
-    def build(phys_conf, occupancies):
+    def build(phys_conf):
         r"""
         Build many types of molecular graph edges.
 
@@ -259,7 +259,7 @@ def MolecularGraphEdgeBuilder(
         edges = {
             edge_type: build_rules[edge_type](phys_conf) for edge_type in edge_types
         }
-        return edges, occupancies
+        return edges
 
     return build
 
