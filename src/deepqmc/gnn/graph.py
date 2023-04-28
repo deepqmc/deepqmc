@@ -83,7 +83,7 @@ def GraphEdgeBuilder(
             returns some data (features) computed for the edges.
     """
 
-    def build(pos_sender, pos_receiver, occupancies):
+    def build(pos_sender, pos_receiver):
         r"""
         Build graph edges.
 
@@ -128,29 +128,23 @@ def GraphEdgeBuilder(
 
         features = feature_callback(pos_sender, pos_receiver, sender_idx, receiver_idx)
 
-        return (
-            GraphEdges(sender_idx + offsets[0], receiver_idx + offsets[1], features),
-            occupancies,
-        )
+        return GraphEdges(sender_idx + offsets[0], receiver_idx + offsets[1], features)
 
     return build
 
 
-def concatenate_edges(edges_and_occs):
+def concatenate_edges(edges):
     r"""
     Concatenate two edge lists.
 
     Utility function used only internally, e.g. to concatenate ``uu`` and ``dd``
     edges to get all ``same`` edges.
     """
-    edges = [edge_occ[0] for edge_occ in edges_and_occs]
-    occupancies = tuple(edge_occ[1] for edge_occ in edges_and_occs)
     edge_of_lists = tree_transpose(
         tree_structure([0] * len(edges)), tree_structure(edges[0]), edges
     )
-    return (
-        tree_map(jnp.concatenate, edge_of_lists, is_leaf=lambda x: isinstance(x, list)),
-        occupancies,
+    return tree_map(
+        jnp.concatenate, edge_of_lists, is_leaf=lambda x: isinstance(x, list)
     )
 
 
@@ -224,28 +218,28 @@ def MolecularGraphEdgeBuilder(
         for builder_type in builder_mapping[edge_type]
     }
 
-    def build_same(phys_conf, occs):
+    def build_same(phys_conf):
         r = phys_conf.r
         return concatenate_edges(
             [
-                builders['uu'](r[:n_up], r[:n_up], occs['same'][0]),
-                builders['dd'](r[n_up:], r[n_up:], occs['same'][1]),
+                builders['uu'](r[:n_up], r[:n_up]),
+                builders['dd'](r[n_up:], r[n_up:]),
             ]
         )
 
-    def build_anti(phys_conf, occs):
+    def build_anti(phys_conf):
         r = phys_conf.r
         return concatenate_edges(
             [
-                builders['ud'](r[:n_up], r[n_up:], occs['anti'][0]),
-                builders['du'](r[n_up:], r[:n_up], occs['anti'][1]),
+                builders['ud'](r[:n_up], r[n_up:]),
+                builders['du'](r[n_up:], r[:n_up]),
             ]
         )
 
     build_rules = {
-        'nn': lambda pc, occs: builders['nn'](pc.R, pc.R, occs['nn']),
-        'ne': lambda pc, occs: builders['ne'](pc.R, pc.r, occs['ne']),
-        'en': lambda pc, occs: builders['en'](pc.r, pc.R, occs['en']),
+        'nn': lambda pc: builders['nn'](pc.R, pc.R),
+        'ne': lambda pc: builders['ne'](pc.R, pc.r),
+        'en': lambda pc: builders['en'](pc.r, pc.R),
         'same': build_same,
         'anti': build_anti,
     }
@@ -262,12 +256,9 @@ def MolecularGraphEdgeBuilder(
         """
         assert phys_conf.r.shape[0] == n_up + n_down
 
-        edges_and_occs = {
-            edge_type: build_rules[edge_type](phys_conf, occupancies)
-            for edge_type in edge_types
+        edges = {
+            edge_type: build_rules[edge_type](phys_conf) for edge_type in edge_types
         }
-        edges = {k: edge_and_occ[0] for k, edge_and_occ in edges_and_occs.items()}
-        occupancies = {k: edge_and_occ[1] for k, edge_and_occ in edges_and_occs.items()}
         return edges, occupancies
 
     return build
