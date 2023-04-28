@@ -71,8 +71,9 @@ def fit_wf(  # noqa: C901
     def loss_fn(params, rng, batch):
         phys_conf, weight = batch
         rng_batch = jax.random.split(rng, len(weight))
-        wf = partial(ansatz.apply, params)
-        E_loc, hamil_stats = jax.vmap(hamil.local_energy(wf))(rng_batch, phys_conf)
+        E_loc, hamil_stats = jax.vmap(
+            hamil.local_energy(partial(ansatz.apply, params))
+        )(rng_batch, phys_conf)
         loss = jnp.nanmean(E_loc * weight)
         stats = {
             **stats_fn(E_loc, phys_conf.mol_idx, 'E_loc'),
@@ -82,21 +83,18 @@ def fit_wf(  # noqa: C901
             },
         }
         return loss, (E_loc, stats)
-        # - kfac-jax docs says the API should be (loss, state, aux), but that's
-        #   wrong, it in fact expects (loss, (state, aux)):
-        #   https://github.com/deepmind/kfac-jax/blob/17831f5a0621b0259c644503556ee7f65acdf0c5/kfac_jax/_src/optimizer.py#L1380-L1383  # noqa: B950
-        # - we're passing out None as state to satisfy KFAC API, but we don't
-        #   actually use it (hence None)
 
     @loss_fn.defjvp
     def loss_jvp(rng, batch, primals, tangents):
         phys_conf, weight = batch
-        (params,) = primals
-        loss, aux = loss_fn(params, rng, batch)
+        loss, aux = loss_fn(*primals, rng, batch)
         E_loc, _ = aux
         E_loc_s, gradient_mask = (clip_mask_fn or median_log_squeeze_and_mask)(
             E_loc, **(clip_mask_kwargs or {})
         )
+        E_mean = segment_nanmean(E_loc_s, phys_conf.mol_idx, len(sampler))[
+            phys_conf.mol_idx
+        ]
         assert E_loc_s.shape == E_loc.shape, (
             f'Error with clipping function: shape of E_loc {E_loc.shape} '
             f'must equal shape of clipped E_loc {E_loc_s.shape}.'
@@ -109,18 +107,15 @@ def fit_wf(  # noqa: C901
         def log_likelihood(params):  # log(psi(theta))
             return jax.vmap(ansatz.apply, (None, 0))(params, phys_conf).log
 
-        E_mean = segment_nanmean(E_loc_s, phys_conf.mol_idx, len(sampler))[
-            phys_conf.mol_idx
-        ]
         log_psi, log_psi_tangent = jax.jvp(log_likelihood, primals, tangents)
         kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
         loss_tangent = (E_loc_s - E_mean) * log_psi_tangent * weight
         loss_tangent = masked_mean(loss_tangent, gradient_mask)
         return (loss, aux), (loss_tangent, aux)
         # jax.custom_jvp has actually no official support for auxiliary output.
-        # the second other in the tangent output should be in fact other_tangent.
+        # the second aux in the tangent output should be in fact aux_tangent.
         # we just output the same thing to satisfy jax's API requirement with
-        # the understanding that we'll never need other_tangent
+        # the understanding that we'll never need aux_tangent
 
     energy_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
