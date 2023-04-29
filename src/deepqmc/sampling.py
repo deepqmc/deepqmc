@@ -336,7 +336,7 @@ class MultimoleculeSampler(Sampler):
         return data
 
     def join_mols(self, data_per_mol, select_idxs):
-        if all([isinstance(d, PhysicalConfiguration) for d in data_per_mol]):
+        if all(isinstance(d, PhysicalConfiguration) for d in data_per_mol):
             # phys_conf is special because we need to store which molecule the samples
             # are coming from
             data_per_mol = [
