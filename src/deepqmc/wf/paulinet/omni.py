@@ -200,3 +200,93 @@ class OmniNet(hk.Module):
             )
         )
         return jastrow, backflow
+
+
+class OmniNet(hk.Module):
+    r"""Combine the GNN, the Jastrow and backflow MLPs.
+
+    A GNN is used to create embedding vectors for each electron, which are then fed
+    into the Jastrow and/or backflow MLPs to produce the Jastrow--backflow part of
+    deep QMC Ansatzes.
+
+    Args:
+        mol (~deepqmc.Molecule): the molecule to consider.
+        n_orb_up (int): the number of spin-up orbitals in a single deterimant,
+            to compute backflow factors for. This is equal to the number of
+            spin-up electrons, except when full determinants are used, in which case
+            it is equal to the total number of electrons.
+        n_orb_down (int): the number of spin-up orbitals in a single deterimant,
+            to compute backflow factors for. This is equal to the number of
+            spin-up electrons, except when full determinants are used, in which case
+            it is equal to the total number of electrons.
+        n_determinants (int): the number of determinants to use.
+        n_backflows (int): the number of independent backflow channels for each orbital,
+            e.g. two channels are necessary if both additive and multiplicative
+            backflows are used.
+        gnn_factory (Callable): function that returns a GNN instance.
+        jastrow_factory (Callable): function that returns a :class:`Jastrow` instance.
+        backflow_factory (Callable): function that returns a :class:`Backflow` instance.
+        embedding_dim (int): the length of the electron embedding vectors.
+    """
+
+    def __init__(
+        self,
+        mol,
+        n_orb_up,
+        n_orb_down,
+        n_determinants,
+        n_backflows,
+        *,
+        gnn_factory=None,
+        jastrow_factory=None,
+        backflow_factory=None,
+        embedding_dim=128,
+        gnn_kwargs=None,
+        jastrow=True,
+        jastrow_kwargs=None,
+        backflow=True,
+        backflow_kwargs=None,
+    ):
+        super().__init__()
+        self.n_up = mol.n_up
+        if jastrow or backflow:
+            if gnn_factory is None:
+                gnn_factory = SchNet
+            self.gnn = gnn_factory(
+                mol,
+                embedding_dim,
+                **(gnn_kwargs or {}),
+            )
+        else:
+            self.gnn = None
+
+        if jastrow:
+            if jastrow_factory is None:
+                jastrow_factory = partial(Jastrow, **(jastrow_kwargs or {}))
+            self.jastrow = jastrow_factory(embedding_dim)
+        else:
+            self.jastrow = None
+
+        if backflow:
+            if backflow_factory is None:
+                backflow_factory = partial(Backflow, **(backflow_kwargs or {}))
+            self.backflow = {
+                l: backflow_factory(embedding_dim, n_determinants * n, n_backflows)
+                for l, n in zip(['up', 'down'], [n_orb_up, n_orb_down])
+            }
+        else:
+            self.backflow = None
+
+    def __call__(self, phys_conf):
+        if self.gnn:
+            embeddings = self.gnn(phys_conf)
+        jastrow = self.jastrow(embeddings) if self.jastrow else None
+        backflow = (
+            (
+                self.backflow['up'](embeddings[..., : self.n_up, :]),
+                self.backflow['down'](embeddings[..., self.n_up :, :]),
+            )
+            if self.backflow
+            else None
+        )
+        return jastrow, backflow

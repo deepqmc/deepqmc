@@ -131,7 +131,11 @@ class PauliNet(WaveFunction):
         )
         self.n_determinants = len(self.confs) * backflow_channels
         self.full_determinant = full_determinant
-        backflow_spec = [self.n_orbitals, backflow_channels]
+        backflow_spec = [
+            *((n_up + n_down, n_up + n_down) if full_determinant else (n_up, n_down)),
+            self.n_determinants,
+            2 if backflow_transform == 'both' else 1,
+        ]
         if backflow_transform == 'both':
             backflow_spec[1] *= 2
         self.backflow_transform = backflow_transform
@@ -147,7 +151,11 @@ class PauliNet(WaveFunction):
         elif self.backflow_transform == 'add':
             fs_mult, fs_add = None, fs
         elif self.backflow_transform == 'both':
-            fs_mult, fs_add = fs[:, : fs.shape[1] // 2], fs[:, fs.shape[1] // 2 :]
+            fs_mult, fs_add = jnp.split(fs, 2, axis=-3)
+
+        fs_add = fs_add.squeeze(axis=-3) if fs_add is not None else fs_add
+        fs_mult = fs_mult.squeeze(axis=-3) if fs_mult is not None else fs_mult
+
         return self.backflow_op(xs, fs_mult, fs_add, dists_nuc)
 
     def __call__(self, phys_conf, return_mos=False):
@@ -162,6 +170,7 @@ class PauliNet(WaveFunction):
         xs = jnp.expand_dims(xs, axis=-3)
         J, fs = self.omni(phys_conf) if self.omni else (None, None)
         if fs is not None:
+            fs = jnp.concatenate(fs, axis=1)
             xs = self._backflow_op(xs, fs, dists_nuc)
         n_up = self.n_up
         n_slice = n_up + self.n_down if self.full_determinant else n_up
