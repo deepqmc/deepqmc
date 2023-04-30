@@ -170,8 +170,13 @@ class PauliNet(WaveFunction):
         xs = jnp.expand_dims(xs, axis=-3)
         J, fs = self.omni(phys_conf) if self.omni else (None, None)
         if fs is not None:
-            fs = jnp.concatenate(fs, axis=1)
-            xs = self._backflow_op(xs, fs, dists_nuc)
+            orb_up = self._backflow_op(
+                xs[:, : self.n_up], fs[0], dists_nuc[: self.n_up]
+            )
+            orb_down = self._backflow_op(
+                xs[:, self.n_up :], fs[1], dists_nuc[self.n_up :]
+            )
+            xs = jnp.concatenate((orb_up, orb_down), axis=1)
         n_up = self.n_up
         n_slice = n_up + self.n_down if self.full_determinant else n_up
         conf_up, conf_down = self.confs[..., :n_slice], self.confs[..., n_slice:]
