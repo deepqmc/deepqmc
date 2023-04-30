@@ -94,7 +94,6 @@ class PauliNet(WaveFunction):
         full_determinant=False,
         cusp_electrons=True,
         cusp_alpha=10.0,
-        backflow_type='orbital',
         backflow_channels=1,
         backflow_transform='mult',
         omni_factory=None,
@@ -132,17 +131,9 @@ class PauliNet(WaveFunction):
         )
         self.n_determinants = len(self.confs) * backflow_channels
         self.full_determinant = full_determinant
-
-        backflow_spec = {
-            'orbital': [self.n_orbitals, backflow_channels],
-            'det': [
-                n_up + n_down if full_determinant else (n_up, n_down),
-                len(self.confs) * backflow_channels,
-            ],
-        }[backflow_type]
+        backflow_spec = [self.n_orbitals, backflow_channels]
         if backflow_transform == 'both':
             backflow_spec[1] *= 2
-        self.backflow_type = backflow_type
         self.backflow_transform = backflow_transform
         self.backflow_op = backflow_op or BackflowOp()
 
@@ -170,7 +161,7 @@ class PauliNet(WaveFunction):
         xs = self.mo_coeff(aos)
         xs = jnp.expand_dims(xs, axis=-3)
         J, fs = self.omni(phys_conf) if self.omni else (None, None)
-        if fs is not None and self.backflow_type == 'orbital':
+        if fs is not None:
             xs = self._backflow_op(xs, fs, dists_nuc)
         n_up = self.n_up
         n_slice = n_up + self.n_down if self.full_determinant else n_up
@@ -183,17 +174,6 @@ class PauliNet(WaveFunction):
             det_full = det_full.at[..., n_up:, :].set(det_down)
             det_up = det_full
             det_down = jnp.empty((*det_down.shape[:-2], 0, 0))
-        if fs is not None and self.backflow_type == 'det':
-            n_conf = len(self.confs)
-            if self.full_determinant:
-                fs = (unflatten(fs, -3, (fs.shape[-3] // n_conf, n_conf)), None)
-            else:
-                fs = (
-                    unflatten(fs[0], -3, (fs[0].shape[-3] // n_conf, n_conf)),
-                    unflatten(fs[1], -3, (fs[1].shape[-3] // n_conf, n_conf)),
-                )
-            det_up = self._backflow_op(det_up, fs[0], dists_nuc[..., :n_up, :])
-            det_down = self._backflow_op(det_down, fs[1], dists_nuc[..., n_up:, :])
         if return_mos:
             return det_up, det_down
         sign_up, det_up = eval_log_slater(det_up)
