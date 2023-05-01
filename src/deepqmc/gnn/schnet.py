@@ -75,7 +75,6 @@ class SchNetLayer(MessagePassingLayer):
         self.update_features = update_features
         self.update_rule = update_rule
         self.convolution = convolution
-        default_n_layers = {'w': 3, 'h': 3, 'g': 2, 'u': 2}
         subnet_kwargs = subnet_kwargs or {}
         subnet_kwargs.setdefault('last_linear', True)
         subnet_kwargs.setdefault('activation', jnp.tanh)
@@ -85,9 +84,6 @@ class SchNetLayer(MessagePassingLayer):
             for k, v in subnet_kwargs.items():
                 subnet_kwargs_by_lbl[lbl].setdefault(k, v)
             subnet_kwargs_by_lbl[lbl].setdefault('bias', lbl != 'w')
-            subnet_kwargs_by_lbl[lbl].setdefault(
-                'hidden_layers', ('log', default_n_layers[lbl])
-            )
         if deep_features:
             self.u = {
                 typ: MLP(
