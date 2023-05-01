@@ -8,62 +8,56 @@ backflow_op:
   _partial_: true
 n_determinants: 16
 full_determinant: false
-cusp_electrons: true
-cusp_alpha: 10.0
+cusp_electrons: false
+cusp_alpha: null
 backflow_transform: mult
 omni_factory:
   _target_: deepqmc.wf.paulinet.omni.OmniNet
   _partial_: true
-  embedding_dim: 64
-  jastrow_factory: 
-    _target_: deepqmc.wf.paulinet.omni.Jastrow
-    _partial_: true
-    sum_first: true
-    subnet_kwargs: 
-      hidden_layers: ['log', 3]
-      last_linear: true
-      bias: 'not_last'
-      activation: 
-        _target_: deepqmc.hkext.ssp
-        _partial_: true
+  embedding_dim: 256
+  jastrow_factory: null
   backflow_factory:  
     _target_: deepqmc.wf.paulinet.omni.Backflow
     _partial_: true
     subnet_kwargs:
-      hidden_layers: ['log', 3]
+      hidden_layers: ['log', 1]
       last_linear: true
-      activation:
+      activation: 
         _target_: deepqmc.hkext.ssp
         _partial_: true
+ 
   gnn_factory:
     _target_: deepqmc.gnn.schnet.SchNet
     _partial_: true
     n_interactions: 4
-    positional_electron_embeddings: false
+    positional_electron_embeddings: true
     atom_type_embeddings: false
     edge_feat_factory:
       _target_: deepqmc.gnn.edge_features.PauliNetEdgeFeatures
       _partial_: true
     edge_feat_kwargs:
-      cutoff: 30.
+      cutoff: 30
       feature_dim: 4
       difference: true
       powers: 
         - 1
     layer_kwargs:
       subnet_kwargs:
-        hidden_layers: ['log', 3]
+        hidden_layers: ['log', 1]
         last_linear: false
         activation: 
           _target_: jax.numpy.tanh
           _partial_: true
       subnet_kwargs_by_lbl: null
       residual: true
-      convolution: true
-      deep_features: false
-      update_rule: featurewise
+      convolution: false
+      deep_features: true
+      update_rule: concatenate
       update_features: 
         - same
         - anti
-        - ne
+        - residual
+        - nodes_up 
+        - nodes_down
+
   
