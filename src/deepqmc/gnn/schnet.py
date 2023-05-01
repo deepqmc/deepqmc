@@ -3,6 +3,7 @@ import jax.numpy as jnp
 from jax import ops
 
 from ..hkext import MLP
+from ..utils import flatten
 from .edge_features import PauliNetEdgeFeatures
 from .gnn import GraphNeuralNetwork, MessagePassingLayer
 from .graph import GraphNodes, difference_callback
@@ -240,6 +241,8 @@ class SchNet(GraphNeuralNetwork):
         mol (~deepqmc.Molecule): the molecule on which the graph is defined.
         embedding_dim (int): the length of the electron embedding vectors.
         n_interactions (int): number of message passing interactions.
+        posisional_electron_embeddings(bool): whether to initialize the electron
+            embbedings with the concatenated edge features.
         edge_feat_kwargs (dict): extra arguments passed to
             :class:`~deepqmc.gnn.edge_features.EdgeFeatures`.
         edge_feat_kwargs_by_typ (dict): extra arguments passed to
@@ -256,6 +259,7 @@ class SchNet(GraphNeuralNetwork):
         *,
         distance_basis_radius=30.0,
         n_interactions=3,
+        positional_electron_embeddings=False,
         edge_feat_kwargs=None,
         edge_feat_kwargs_by_typ=None,
         **gnn_kwargs,
@@ -287,16 +291,35 @@ class SchNet(GraphNeuralNetwork):
             typ: PauliNetEdgeFeatures(**kwargs)
             for typ, kwargs in edge_feat_kwargs_by_typ.items()
         }
+        self.positional_electron_embeddings = positional_electron_embeddings
 
-    def node_factory(self):
+    def node_factory(self, edges):
         n_elec_types = self.node_data['n_node_types']['electrons']
         n_nuc_types = self.node_data['n_node_types']['nuclei']
-        X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
+        if self.positional_electron_embeddings:
+            X = hk.Linear(
+                output_size=self.embedding_dim,
+                with_bias=False,
+                name='ElectronicEmbedding',
+            )
+            ne_pos_feat = (
+                jnp.zeros(
+                    (
+                        self.n_up + self.n_down + 1,
+                        self.n_nuc + 1,
+                        edges['ne'].features.shape[-1],
+                    )
+                )
+                .at[edges['ne'].receivers, edges['ne'].senders]
+                .set(edges['ne'].features)[: self.n_up + self.n_down, : self.n_nuc]
+            )  # [n_elec, n_nuc, n_edge_feat_dim]
+            x = X(flatten(ne_pos_feat, start_axis=1))
+        else:
+            X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
+            x = X(self.node_data['node_types']['electrons'])
         Y = hk.Embed(n_nuc_types, self.embedding_dim, name='NuclearEmbedding')
-        return GraphNodes(
-            Y(self.node_data['node_types']['nuclei'] - n_elec_types),
-            X(self.node_data['node_types']['electrons']),
-        )
+        y = Y(self.node_data['node_types']['nuclei'] - n_elec_types)
+        return GraphNodes(y, x)
 
     @classmethod
     @property

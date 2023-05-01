@@ -207,7 +207,7 @@ class GraphNeuralNetwork(hk.Module):
 
         return layer_factories
 
-    def node_factory(self):
+    def node_factory(self,  graph_edges):
         r"""Return the initial node representation as a :class:`GraphNodes` instance."""
         raise NotImplementedError
 
@@ -285,8 +285,8 @@ class GraphNeuralNetwork(hk.Module):
                     axis=-2,
                 )
             )
-        graph_nodes = self.node_factory()
         graph_edges = self.edge_factory(phys_conf)
+        graph_nodes = self.node_factory(graph_edges)
         graph = Graph(graph_nodes, graph_edges)
 
         for layer in self.layers:
