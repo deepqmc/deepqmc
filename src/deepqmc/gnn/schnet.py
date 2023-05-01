@@ -10,57 +10,74 @@ from .graph import GraphNodes, difference_callback
 
 class SchNetLayer(MessagePassingLayer):
     r"""
-    The message passing layer of :class:`SchNet`.
+    The message passing layer of :class:`ElectronGNN`.
 
     Derived from :class:`~deepqmc.gnn.gnn.MessagePassingLayer`.
 
     Args:
-        ilayer (int): the index of the current layer in the list of all layers
-        shared (dict): attribute names and values which are shared between the
-            layers and the :class:`SchNet` instance.
-        shared_h (bool): optional, whether to use a shared :data:`h` subnetwork.
-        shared_g (bool): optional, whether to use a shared :data:`g` subnetwork.
-        n_layers_w (int): optional, the number of layers in the :data:`w`
-            subnetwork.
-        n_layers_h (int): optional, the number of layers in the :data:`h`
-            subnetwork.
-        n_layers_g (int): optional, the number of layers in the :data:`g`
-            subnetwork.
-        subnet_kwargs (dict): optional, extra arguments passed to the
+        residual (bool): whether a residual connection is used when updating
+            the electron embeddings.
+        convolution (bool): if :data:`true` the messages are generated via graph
+            covolutions, else messages are generated from edge featues only.
+        deep_features (bool): if :data:`true` edge features are updated through
+            an MLP (:data:`u`), else initial edge features are reused.
+        update_features (list[str]): which features to collect for the update
+            of the electron embeddings.
+            Possible values:
+
+            - ``'residual'``: include electron embedding
+            - ``'ne'``: sum over messages from nuclei
+            - ``'same'``: sum over messages from electrons with same spin
+            - ``'anti'``: sum over messages from electrons with opposite spin
+            - ``'ee'``: sum of same and anti messeages
+            - ``'nodes_up'``: sum over embeddings from spin-up electrons
+            - ``'nodes_down'``: sum over embeddings from spin-down electrons
+
+        update_rule (str): how to combine features for the update of the
+            electron embeddings.
+            Possible values:
+
+            - ``'concatenate'``: run concatenated features through MLP
+            - ``'featurewise'``: apply different MLP to each feature channel and sum
+            - ``'featurewise_shared'``: apply the same MLP across feature channels
+            - ``'sum'``: sum features before sending through an MLP
+            note that `sum` and `featurewise_shared` imply features of same size
+
+        subnet_kwargs (dict): extra arguments passed to the
             :class:`~deepqmc.hkext.MLP` constructor of the subnetworks.
         subnet_kwargs_by_lbl (dict): optional, extra arguments passed to the
             :class:`~deepqmc.hkext.MLP` constructor of the subnetworks. Arguments
             can be specified independently for each subnet
-            (:data:`w`, :data:`h` or :data:`g`).
+            (:data:`w`, :data:`h`, :data:`g` or :data:`u`).
     """
 
     def __init__(
         self,
         *,
-        shared_h=False,
-        shared_g=False,
-        n_layers_w=3,
-        n_layers_h=3,
-        n_layers_g=2,
+        residual=True,
+        convolution=True,
+        deep_features=False,
+        update_features=['same', 'anti', 'ne'],
+        update_rule='featurewise',
         subnet_kwargs=None,
         subnet_kwargs_by_lbl=None,
-        residual=True,
-        sum_z=False,
-        deep_w=False,
         **layer_attrs,
     ):
         super().__init__(**layer_attrs)
-        self.shared_h = shared_h
-        self.shared_g = shared_g
-        assert shared_g or not sum_z
-        self.sum_z = sum_z
-        self.deep_w = deep_w
-        default_n_layers = {'w': n_layers_w, 'h': n_layers_h, 'g': n_layers_g}
-
+        assert update_rule in [
+            'concatenate',
+            'featurewise',
+            'featurewise_shared',
+            'sum',
+        ]
+        self.deep_features = deep_features
+        self.update_features = update_features
+        self.update_rule = update_rule
+        self.convolution = convolution
+        default_n_layers = {'w': 3, 'h': 3, 'g': 2, 'u': 2}
         subnet_kwargs = subnet_kwargs or {}
         subnet_kwargs.setdefault('last_linear', True)
         subnet_kwargs.setdefault('activation', jnp.tanh)
-
         subnet_kwargs_by_lbl = subnet_kwargs_by_lbl or {}
         for lbl in self.subnet_labels:
             subnet_kwargs_by_lbl.setdefault(lbl, {})
@@ -70,97 +87,100 @@ class SchNetLayer(MessagePassingLayer):
             subnet_kwargs_by_lbl[lbl].setdefault(
                 'hidden_layers', ('log', default_n_layers[lbl])
             )
-
-        self.w = {
-            typ: MLP(
-                (
-                    self.edge_feat_dim[typ]
-                    if not deep_w or self.first_layer
-                    else self.embedding_dim
-                ),
-                self.embedding_dim,
-                name=f'w_{typ}',
-                **subnet_kwargs_by_lbl['w'],
-            )
-            for typ in self.edge_types
-        }
-
-        def h_factory(typ=None):
-            name = 'h' if shared_h else f'h_{typ}'
-            return MLP(
-                self.embedding_dim,
-                self.embedding_dim,
-                name=name,
-                **subnet_kwargs_by_lbl['h'],
-            )
-
-        self.h = (
-            h_factory()
-            if shared_h
-            else {typ: h_factory(typ) for typ in self.edge_types}
-        )
+        if deep_features:
+            self.u = {
+                typ: MLP(
+                    (
+                        self.edge_feat_dim[typ]
+                        if self.first_layer
+                        else self.embedding_dim
+                    ),
+                    self.embedding_dim,
+                    residual=not self.first_layer,
+                    name=f'u{typ}',
+                    **subnet_kwargs_by_lbl['u'],
+                )
+                for typ in self.edge_types
+            }
+        if self.convolution:
+            self.w = {
+                typ: MLP(
+                    (
+                        self.edge_feat_dim[typ]
+                        if not deep_features
+                        else self.embedding_dim
+                    ),
+                    self.embedding_dim,
+                    name=f'w_{typ}',
+                    **subnet_kwargs_by_lbl['w'],
+                )
+                for typ in self.edge_types
+            }
+            self.h = {
+                typ: MLP(
+                    self.embedding_dim,
+                    self.embedding_dim,
+                    name=f'h_{typ}',
+                    **subnet_kwargs_by_lbl['h'],
+                )
+                for typ in self.edge_types
+            }
         self.g = (
             MLP(
-                self.embedding_dim,
+                self.embedding_dim
+                * (len(self.update_features) if update_rule == 'concatenate' else 1),
                 self.embedding_dim,
                 name='g',
                 **subnet_kwargs_by_lbl['g'],
             )
-            if shared_g
+            if not self.update_rule == 'featurewise'
             else {
                 typ: MLP(
-                    self.embedding_dim
-                    + (2 * self.embedding_dim if shared_g and not sum_z else 0),
+                    self.embedding_dim,
                     self.embedding_dim,
                     name=f'g_{typ}',
                     **subnet_kwargs_by_lbl['g'],
                 )
-                for typ in self.edge_types
+                for typ in (self.update_features)
             }
         )
         self.residual = residual
-        self.f = hk.Linear(1, with_bias=False, w_init=jnp.ones, name='f')
 
     @classmethod
     @property
     def subnet_labels(cls):
-        return ('w', 'h', 'g')
+        return ('w', 'h', 'g', 'u')
 
     def get_update_edges_fn(self):
         def update_edges(edges):
-            updated_edges = {
-                typ: edge._replace(features=self.w[typ](edge.features))
-                for typ, edge in edges.items()
-            }
-            return updated_edges if self.deep_w else edges
+            if self.deep_features:
+                updated_edges = {
+                    typ: edge._replace(features=self.u[typ](edge.features))
+                    for typ, edge in edges.items()
+                }
+                return updated_edges
+            else:
+                return edges
 
         return update_edges
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes(nodes, edges):
-            if self.deep_w:
-                we = {typ: edge.features for typ, edge in edges.items()}
-            else:
-                we = {typ: self.w[typ](edges[typ].features) for typ in self.edge_types}
-            if self.shared_h:
-                hx = nodes.electrons if self.first_layer else self.h(nodes.electrons)
-                hx = {typ: hx[edges[typ].senders] for typ in self.edge_types[:2]}
-            else:
+            if self.convolution:
+                we = {typ: self.w[typ](edge.features) for typ, edge in edges.items()}
                 hx = {
-                    typ: (
-                        nodes.electrons
-                        if self.first_layer
-                        else self.h[typ](nodes.electrons)
-                    )[edges[typ].senders]
-                    for typ in self.edge_types[:2]
+                    typ: (self.h[typ](self.mapping.sender_data_of(typ, nodes)))[
+                        edges[typ].senders
+                    ]
+                    for typ in self.edge_types
                 }
-            wh = {
-                typ: we[typ] * hx[typ] for typ in self.mapping.with_sender('electrons')
-            }
-            wh['ne'] = we['ne'] * nodes.nuclei[edges['ne'].senders]
+                message = {typ: we[typ] * hx[typ] for typ in self.edge_types}
+            else:
+                message = {typ: edge.features for typ, edge in edges.items()}
+
             z = {
                 typ: ops.segment_sum(
-                    data=wh[typ],
+                    data=message[typ],
                     segment_ids=edges[typ].receivers,
                     num_segments=self.mapping.receiver_data_of(typ, 'n_nodes'),
                 )
@@ -172,24 +192,37 @@ class SchNetLayer(MessagePassingLayer):
 
     def get_update_nodes_fn(self):
         def update_nodes(nodes, z):
-            if self.shared_g:
-                if self.sum_z:
-                    zs = jnp.stack(list(z.values()), axis=-1)
-                    fz = self.f(zs).squeeze(axis=-1)
-                    updated = self.g(fz) + (nodes.electrons if self.residual else 0)
-                else:
-                    zs = jnp.concatenate(
-                        [nodes.electrons, z['same'] + z['anti'], z['ne']],
-                        axis=-1,
-                    )
-                    updated = self.g(zs)
-            else:
-                gs = jnp.stack(
-                    [self.g[typ](z[typ]) for typ in self.edge_types], axis=-1
+            FEATURE_MAPPING = {
+                'residual': nodes.electrons,
+                'nodes_up': (
+                    nodes.electrons[: self.n_up]
+                    .mean(axis=0, keepdims=True)
+                    .repeat(self.n_up + self.n_down, axis=0)
+                ),
+                'nodes_down': (
+                    nodes.electrons[self.n_up :]
+                    .mean(axis=0, keepdims=True)
+                    .repeat(self.n_up + self.n_down, axis=0)
+                ),
+                'same': z['same'],
+                'anti': z['anti'],
+                'ee': z['same'] + z['anti'],
+                'ne': z['ne'],
+            }
+            f = {typ: FEATURE_MAPPING[typ] for typ in self.update_features}
+            if self.update_rule == 'concatenate':
+                updated = self.g(jnp.concatenate(jnp.stack(list(f.values())), axis=-1))
+            elif self.update_rule == 'featurewise':
+                updated = jnp.sum(
+                    jnp.stack([self.g[typ](f[typ]) for typ in self.update_features]),
+                    axis=0,
                 )
-                if self.residual:
-                    gs = jnp.concatenate([nodes.electrons[..., None], gs], axis=-1)
-                updated = self.f(gs).squeeze(axis=-1)
+            elif self.update_rule == 'sum':
+                updated = self.g(jnp.sum(jnp.stack(list(f.values())), axis=0))
+            elif self.update_rule == 'featurewise_shared':
+                updated = jnp.sum(self.g(jnp.stack(list(f.values()))), axis=0)
+            if self.residual:
+                updated = updated + nodes.electrons
             nodes = GraphNodes(nodes.nuclei, updated)
 
             return nodes

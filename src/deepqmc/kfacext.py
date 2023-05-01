@@ -107,11 +107,9 @@ def make_dense_pattern(
     p_shapes = [[in_dim, out_dim], [out_dim]] if with_bias else [[in_dim, out_dim]]
     compute_func = vmap(_dense, in_axes=(0, None))
     return kfac_jax.tag_graph_matcher.GraphPattern(
-        name=(
-            f'repeated{n_extra_dims}_dense_with_bias'
-            if with_bias
-            else f'repeated{n_extra_dims}_dense_no_bias'
-        ),
+        name=f'repeated{n_extra_dims}_dense_with_bias'
+        if with_bias
+        else f'repeated{n_extra_dims}_dense_no_bias',
         tag_primitive=kfac_jax.LayerTag(f'repeated{n_extra_dims}_dense_tag', 1, 1),
         #  precedence=0 if with_bias else 1,
         compute_func=compute_func,
