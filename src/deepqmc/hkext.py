@@ -52,12 +52,14 @@ class MLP(hk.Module):
         last_linear=False,
         activation=ssp,
         name=None,
+        residual=False,
         w_init='default',
     ):
         assert bias in (True, False, 'not_last')
         super().__init__(name=name)
         self.activation = activation
         self.last_linear = last_linear
+        self.residual = residual
         if isinstance(w_init, str):
             w_init = {
                 'deeperwin': VarianceScaling(1.0, 'fan_avg', 'uniform'),
@@ -88,4 +90,4 @@ class MLP(hk.Module):
             out = layer(out)
             if i < (len(self.layers) - 1) or not self.last_linear:
                 out = self.activation(out)
-        return out
+        return out + inputs if self.residual else out
