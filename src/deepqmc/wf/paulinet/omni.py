@@ -1,10 +1,7 @@
-from functools import partial
-
 import haiku as hk
 import jax.numpy as jnp
 
-from ...gnn import SchNet
-from ...hkext import MLP, ssp
+from ...hkext import MLP
 from ...utils import unflatten
 
 
@@ -13,7 +10,6 @@ class Jastrow(hk.Module):
 
     Args:
         embedding_dim (int): the length of the electron embedding vectors.
-        n_layers (int): the number of Jastrow MLP layers.
         sum_first (bool): if :data:`True`, the electronic embeddings are summed before
             feeding them to the MLP. Otherwise the MLP is applyied separately on each
             electron embedding, and the outputs are summed, yielding a (quasi)
@@ -22,14 +18,15 @@ class Jastrow(hk.Module):
     """
 
     def __init__(
-        self, embedding_dim, *, n_layers=3, sum_first=True, name='Jastrow', **kwargs
+        self,
+        embedding_dim,
+        *,
+        sum_first,
+        name='Jastrow',
+        subnet_kwargs=None,
     ):
-        kwargs.setdefault('activation', ssp)
-        kwargs.setdefault('hidden_layers', ('log', n_layers))
-        kwargs.setdefault('last_linear', True)
-        kwargs.setdefault('bias', 'not_last')
         super().__init__(name=name)
-        self.net = MLP(embedding_dim, 1, **kwargs)
+        self.net = MLP(embedding_dim, 1, **(subnet_kwargs or {}))
         self.sum_first = sum_first
 
     def __call__(self, xs):
@@ -50,7 +47,6 @@ class Backflow(hk.Module):
         multi_head (bool): if :data:`True`, create separate MLPs for the
             :data:`n_backflow` many backflows, otherwise use a single larger MLP
             for all.
-        n_layers (int): the number of layers in the MLP(s).
         name (str): the name of this haiku module.
         param_scaling (float): a scaling factor to apply during the initialization of
             the MLP parameters.
@@ -60,17 +56,13 @@ class Backflow(hk.Module):
         self,
         embedding_dim,
         n_orbitals,
-        n_backflows=1,
+        n_backflows,
         multi_head=True,
         *,
-        n_layers=3,
         name='Backflow',
         param_scaling=1.0,
-        **kwargs,
+        subnet_kwargs=None,
     ):
-        kwargs.setdefault('activation', ssp)
-        kwargs.setdefault('hidden_layers', ('log', n_layers))
-        kwargs.setdefault('last_linear', True)
         super().__init__(name=name)
         self.multi_head = multi_head
         if multi_head:
@@ -79,19 +71,17 @@ class Backflow(hk.Module):
                     embedding_dim,
                     n_orbitals,
                     w_init=hk.initializers.VarianceScaling(param_scaling),
-                    **kwargs,
+                    **(subnet_kwargs or {}),
                 )
                 for _ in range(n_backflows)
             ]
         else:
             self.n_orbitals = n_orbitals
-            hidden_layers = kwargs.pop('hidden_layers')
             self.net = MLP(
                 embedding_dim,
                 n_backflows * n_orbitals,
-                hidden_layers,
                 w_init=hk.initializers.VarianceScaling(param_scaling),
-                **kwargs,
+                **subnet_kwargs,
             )
 
     def __call__(self, xs):
@@ -125,10 +115,10 @@ class OmniNet(hk.Module):
         n_backflows (int): the number of independent backflow channels for each orbital,
             e.g. two channels are necessary if both additive and multiplicative
             backflows are used.
+        embedding_dim (int): the length of the electron embedding vectors.
         gnn_factory (Callable): function that returns a GNN instance.
         jastrow_factory (Callable): function that returns a :class:`Jastrow` instance.
         backflow_factory (Callable): function that returns a :class:`Backflow` instance.
-        embedding_dim (int): the length of the electron embedding vectors.
     """
 
     def __init__(
@@ -139,45 +129,23 @@ class OmniNet(hk.Module):
         n_determinants,
         n_backflows,
         *,
-        gnn_factory=None,
-        jastrow_factory=None,
-        backflow_factory=None,
-        embedding_dim=128,
-        gnn_kwargs=None,
-        jastrow=True,
-        jastrow_kwargs=None,
-        backflow=True,
-        backflow_kwargs=None,
+        embedding_dim,
+        gnn_factory,
+        jastrow_factory,
+        backflow_factory,
     ):
         super().__init__()
         self.n_up = mol.n_up
-        if jastrow or backflow:
-            if gnn_factory is None:
-                gnn_factory = SchNet
-            self.gnn = gnn_factory(
-                mol,
-                embedding_dim,
-                **(gnn_kwargs or {}),
-            )
-        else:
-            self.gnn = None
-
-        if jastrow:
-            if jastrow_factory is None:
-                jastrow_factory = partial(Jastrow, **(jastrow_kwargs or {}))
-            self.jastrow = jastrow_factory(embedding_dim)
-        else:
-            self.jastrow = None
-
-        if backflow:
-            if backflow_factory is None:
-                backflow_factory = partial(Backflow, **(backflow_kwargs or {}))
-            self.backflow = {
+        self.gnn = gnn_factory(mol, embedding_dim) if gnn_factory else None
+        self.jastrow = jastrow_factory(embedding_dim) if jastrow_factory else None
+        self.backflow = (
+            {
                 l: backflow_factory(embedding_dim, n_determinants * n, n_backflows)
                 for l, n in zip(['up', 'down'], [n_orb_up, n_orb_down])
             }
-        else:
-            self.backflow = None
+            if backflow_factory
+            else None
+        )
 
     def __call__(self, phys_conf):
         if self.gnn:
@@ -185,8 +153,8 @@ class OmniNet(hk.Module):
         jastrow = self.jastrow(embeddings) if self.jastrow else None
         backflow = (
             (
-                self.backflow['up'](embeddings[..., : self.n_up, :]),
-                self.backflow['down'](embeddings[..., self.n_up :, :]),
+                self.backflow['up'](embeddings[: self.n_up]),
+                self.backflow['down'](embeddings[self.n_up :]),
             )
             if self.backflow
             else None

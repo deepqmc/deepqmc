@@ -100,12 +100,12 @@ class GraphNeuralNetwork(hk.Module):
             is defined
         embedding_dim (int): the size of the electron embeddings to be returned.
         n_interactions (int): the number of interaction layers in the GNN.
+        atom_type_embeddings (bool): whether identical embeddings are used for
+            nuclei of the same atom type.
         layer_kwargs (dict): optional, kwargs to be passed to the layers.
         ghost_coords (float, [N, 3]): optional, coordinates of ghost atoms.
             These will be included as nuclear nodes in the graph. Useful for
             breaking undesired spatial symmetries.
-        atom_type_embeddings (bool): whether identical embeddings are used for
-            nuclei of the same atom type.
     """
 
     def __init__(
@@ -113,10 +113,10 @@ class GraphNeuralNetwork(hk.Module):
         mol,
         embedding_dim,
         n_interactions,
+        atom_type_embeddings,
         layer_factories=None,
         layer_kwargs=None,
         ghost_coords=None,
-        atom_type_embeddings=False,
         layer_attrs=None,
     ):
         super().__init__()
@@ -141,7 +141,8 @@ class GraphNeuralNetwork(hk.Module):
                     jnp.unique(charges, size=n_nuc, return_inverse=True)[-1]
                     if atom_type_embeddings
                     else jnp.arange(n_nuc)
-                ) + (1 if n_up == n_down else 2),
+                )
+                + (1 if n_up == n_down else 2),
                 'electrons': jnp.array(n_up * [0] + n_down * [int(n_up != n_down)]),
             },
         }
@@ -207,7 +208,7 @@ class GraphNeuralNetwork(hk.Module):
 
         return layer_factories
 
-    def node_factory(self,  graph_edges):
+    def node_factory(self, graph_edges):
         r"""Return the initial node representation as a :class:`GraphNodes` instance."""
         raise NotImplementedError
 

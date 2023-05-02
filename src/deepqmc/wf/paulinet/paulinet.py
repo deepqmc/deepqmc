@@ -7,8 +7,6 @@ from ...types import Psi
 from ...utils import flatten, triu_flat
 from ..base import WaveFunction
 from .cusp import ElectronicAsymptotic
-from .env import ExponentialEnvelopes
-from .omni import OmniNet
 
 __all__ = ['PauliNet']
 
@@ -71,19 +69,16 @@ class PauliNet(WaveFunction):
         self,
         hamil,
         *,
-        basis=None,
-        backflow_op=None,
-        n_determinants=1,
-        full_determinant=True,
-        cusp_electrons=True,
-        cusp_alpha=10.0,
-        backflow_transform='mult',
-        omni_factory=None,
+        omni_factory,
+        basis,
+        backflow_op,
+        n_determinants,
+        full_determinant,
+        cusp_electrons,
+        cusp_alpha,
+        backflow_transform,
     ):
         super().__init__(hamil.mol)
-        basis = basis or ExponentialEnvelopes.from_mol
-        backflow_op = BackflowOp
-        omni_factory = OmniNet
         n_up, n_down = self.n_up, self.n_down
         self.n_det = n_determinants
         self.full_determinant = full_determinant

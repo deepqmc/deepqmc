@@ -55,11 +55,11 @@ class SchNetLayer(MessagePassingLayer):
     def __init__(
         self,
         *,
-        residual=True,
-        convolution=True,
-        deep_features=False,
-        update_features=['same', 'anti', 'ne'],
-        update_rule='featurewise',
+        residual,
+        convolution,
+        deep_features,
+        update_features,
+        update_rule,
         subnet_kwargs=None,
         subnet_kwargs_by_lbl=None,
         **layer_attrs,
@@ -76,8 +76,6 @@ class SchNetLayer(MessagePassingLayer):
         self.update_rule = update_rule
         self.convolution = convolution
         subnet_kwargs = subnet_kwargs or {}
-        subnet_kwargs.setdefault('last_linear', True)
-        subnet_kwargs.setdefault('activation', jnp.tanh)
         subnet_kwargs_by_lbl = subnet_kwargs_by_lbl or {}
         for lbl in self.subnet_labels:
             subnet_kwargs_by_lbl.setdefault(lbl, {})
@@ -253,19 +251,15 @@ class SchNet(GraphNeuralNetwork):
         mol,
         embedding_dim,
         *,
-        distance_basis_radius=30.0,
-        n_interactions=3,
-        positional_electron_embeddings=False,
+        n_interactions,
+        positional_electron_embeddings,
+        edge_feat_factory=None,
         edge_feat_kwargs=None,
         edge_feat_kwargs_by_typ=None,
         **gnn_kwargs,
     ):
         n_nuc, n_up, n_down = mol.n_particles
         edge_feat_kwargs = edge_feat_kwargs or {}
-        edge_feat_kwargs.setdefault('feature_dim', 32)
-        edge_feat_kwargs.setdefault('cutoff', distance_basis_radius)
-        edge_feat_kwargs.setdefault('powers', [1])
-        edge_feat_kwargs.setdefault('difference', True)
         edge_feat_kwargs_by_typ = edge_feat_kwargs_by_typ or {}
         for typ in self.edge_types:
             edge_feat_kwargs_by_typ.setdefault(typ, {})
@@ -284,7 +278,7 @@ class SchNet(GraphNeuralNetwork):
             },
         )
         self.edge_features = {
-            typ: PauliNetEdgeFeatures(**kwargs)
+            typ: (edge_feat_factory or PauliNetEdgeFeatures)(**kwargs)
             for typ, kwargs in edge_feat_kwargs_by_typ.items()
         }
         self.positional_electron_embeddings = positional_electron_embeddings
