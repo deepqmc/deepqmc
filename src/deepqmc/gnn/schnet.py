@@ -4,7 +4,6 @@ from jax import ops
 
 from ..hkext import MLP
 from ..utils import flatten
-from .edge_features import PauliNetEdgeFeatures
 from .gnn import GraphNeuralNetwork, MessagePassingLayer
 from .graph import GraphNodes, difference_callback
 
@@ -237,11 +236,7 @@ class SchNet(GraphNeuralNetwork):
         n_interactions (int): number of message passing interactions.
         posisional_electron_embeddings(bool): whether to initialize the electron
             embbedings with the concatenated edge features.
-        edge_feat_kwargs (dict): extra arguments passed to
-            :class:`~deepqmc.gnn.edge_features.EdgeFeatures`.
-        edge_feat_kwargs_by_typ (dict): extra arguments passed to
-            :class:`~deepqmc.gnn.edge_features.EdgeFeatures`, specified
-            indepenedently for different edge types.
+        edge_feat_factory:
         gnn_kwargs (dict): extra arguments passed to the
             :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork` base class.
     """
@@ -253,33 +248,23 @@ class SchNet(GraphNeuralNetwork):
         *,
         n_interactions,
         positional_electron_embeddings,
-        edge_feat_factory=None,
-        edge_feat_kwargs=None,
-        edge_feat_kwargs_by_typ=None,
+        edge_feat_factory,
         **gnn_kwargs,
     ):
         n_nuc, n_up, n_down = mol.n_particles
-        edge_feat_kwargs = edge_feat_kwargs or {}
-        edge_feat_kwargs_by_typ = edge_feat_kwargs_by_typ or {}
-        for typ in self.edge_types:
-            edge_feat_kwargs_by_typ.setdefault(typ, {})
-            for k, v in edge_feat_kwargs.items():
-                edge_feat_kwargs_by_typ[typ].setdefault(k, v)
         super().__init__(
             mol,
             embedding_dim,
             n_interactions,
             **gnn_kwargs,
-            layer_attrs={
-                'edge_feat_dim': {
-                    typ: edge_feat_kwargs_by_typ[typ]['feature_dim']
-                    for typ in self.edge_types
-                },
-            },
         )
         self.edge_features = {
-            typ: (edge_feat_factory or PauliNetEdgeFeatures)(**kwargs)
-            for typ, kwargs in edge_feat_kwargs_by_typ.items()
+            typ: (
+                edge_feat_factory[typ]()
+                if isinstance(edge_feat_factory, dict)
+                else edge_feat_factory()
+            )
+            for typ in self.edge_types
         }
         self.positional_electron_embeddings = positional_electron_embeddings
 
