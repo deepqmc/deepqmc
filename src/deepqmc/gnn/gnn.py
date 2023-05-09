@@ -207,10 +207,6 @@ class GraphNeuralNetwork(hk.Module):
 
         return layer_factories
 
-    def init_state(self, shape, dtype):
-        r"""Initialize the haiku state that communicates the sizes of edge lists."""
-        raise NotImplementedError
-
     def node_factory(self):
         r"""Return the initial node representation as a :class:`GraphNodes` instance."""
         raise NotImplementedError
