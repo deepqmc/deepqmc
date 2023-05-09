@@ -9,6 +9,47 @@ __all__ = ['make_graph_patterns']
 log = logging.getLogger(__name__)
 
 
+class DenseBlock(kfac_jax.DenseTwoKroneckerFactored):
+    r"""
+    Modification of the kfac_jax dense block.
+
+    Expand the input to include batch dimension, if necessary.
+    """
+
+    def update_curvature_matrix_estimate(
+        self,
+        state,
+        estimation_data,
+        ema_old,
+        ema_new,
+        batch_size,
+        pmap_axis_name,
+    ):
+        del pmap_axis_name
+        (x,) = estimation_data['inputs']
+        (dy,) = estimation_data['outputs_tangent']
+        if not kfac_jax.utils.first_dim_is_size(batch_size, x, dy):
+            log.debug("Input of dense block doesn't have first dim of batch_size")
+            log.debug(f"It's shape is {x.shape}, expanding to {(batch_size, *x.shape)}")
+            x, dy = (
+                jnp.tile(a[None], (batch_size, *(1 for _ in a.shape))).reshape(
+                    (-1, a.shape[-1])
+                )
+                for a in (x, dy)
+            )
+            batch_size = x.size // x.shape[-1]
+        assert kfac_jax.utils.first_dim_is_size(batch_size, x, dy)
+
+        if self.has_bias:
+            x_one = jnp.ones_like(x[:, :1])
+            x = jnp.concatenate([x, x_one], axis=1)
+        input_stats = jnp.matmul(x.T, x) / batch_size
+        output_stats = jnp.matmul(dy.T, dy) / batch_size
+        state.inputs_factor.update(input_stats, ema_old, ema_new)
+        state.outputs_factor.update(output_stats, ema_old, ema_new)
+        return state
+
+
 class RepeatedDenseBlock(kfac_jax.DenseTwoKroneckerFactored):
     """Dense block that is repeatedly applied to multiple inputs (e.g. vmap)."""
 
@@ -92,6 +133,8 @@ def make_graph_patterns():
             kfac_jax.set_default_tag_to_block_ctor(
                 f'repeated{n_extra_dims}_dense_tag', RepeatedDenseBlock
             )
+
+    kfac_jax.set_default_tag_to_block_ctor('dense_tag', DenseBlock)
 
     graph_patterns = (
         *(custom_patterns),
