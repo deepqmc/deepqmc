@@ -265,10 +265,6 @@ class SchNet(GraphNeuralNetwork):
             X(self.node_data['node_types']['electrons']),
         )
 
-    def init_state(self, shape, dtype):
-        zeros = jnp.zeros(shape, dtype)
-        return {'anti': (zeros, zeros), 'ne': zeros, 'same': (zeros, zeros)}
-
     @classmethod
     @property
     def edge_types(cls):
