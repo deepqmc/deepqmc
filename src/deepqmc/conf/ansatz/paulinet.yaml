@@ -3,6 +3,7 @@ _partial_: true
 envelope:
   _target_: deepqmc.wf.paulinet.env.ExponentialEnvelopes.from_mol
   _partial_: true
+  isotropic: true
 backflow_op:
   _target_: deepqmc.wf.paulinet.paulinet.BackflowOp
   _partial_: true
