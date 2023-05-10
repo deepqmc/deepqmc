@@ -33,21 +33,12 @@ omni_factory:
     n_interactions: 4
     positional_electron_embeddings: true
     atom_type_embeddings: false
-    edge_feat_factory:
-      _target_: deepqmc.gnn.edge_features.EdgeFeatures
-      _partial_: true
-      n_rbf: 1
-      r_cut: 30.
-      irreps: 0y+1y
-      radial_basis_factory:
-        _target_: deepqmc.gnn.edge_features.DistancePowersBasis
-        _partial_: true
+    edge_features:
+      _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+      edge_features:
+      - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
         powers: [1]
-    layer_attrs:
-      edge_feat_dim:
-        ne: 4
-        anti: 4
-        same: 4
+      - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
     layer_kwargs:
       subnet_kwargs:
         hidden_layers: ['log', 1]

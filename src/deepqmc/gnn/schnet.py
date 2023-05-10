@@ -248,24 +248,24 @@ class SchNet(GraphNeuralNetwork):
         *,
         n_interactions,
         positional_electron_embeddings,
-        edge_feat_factory,
+        edge_features,
         **gnn_kwargs,
     ):
         n_nuc, n_up, n_down = mol.n_particles
+        edge_features = (
+            edge_features
+            if isinstance(edge_features, dict)
+            else {typ: edge_features for typ in self.edge_types}
+        )
+        edge_feat_dim = {typ: len(edge_features[typ]) for typ in self.edge_types}
         super().__init__(
             mol,
             embedding_dim,
             n_interactions,
+            layer_attrs={'edge_feat_dim': edge_feat_dim},
             **gnn_kwargs,
         )
-        self.edge_features = {
-            typ: (
-                edge_feat_factory[typ]()
-                if isinstance(edge_feat_factory, dict)
-                else edge_feat_factory()
-            )
-            for typ in self.edge_types
-        }
+        self.edge_features = edge_features
         self.positional_electron_embeddings = positional_electron_embeddings
 
     def node_factory(self, edges):
