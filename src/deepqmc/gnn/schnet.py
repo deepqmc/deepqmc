@@ -205,12 +205,9 @@ class SchNetLayer(MessagePassingLayer):
             }
             f = {uf: FEATURE_MAPPING[uf] for uf in self.update_features}
             if self.update_rule == 'concatenate':
-                updated = self.g(jnp.concatenate(jnp.stack(list(f.values())), axis=-1))
+                updated = self.g(jnp.concatenate(list(f.values()), axis=-1))
             elif self.update_rule == 'featurewise':
-                updated = jnp.sum(
-                    jnp.stack([self.g[uf](f[uf]) for uf in self.update_features]),
-                    axis=0,
-                )
+                updated = sum(self.g[uf](f[uf]) for uf in self.update_features)
             elif self.update_rule == 'sum':
                 updated = self.g(sum(f.values()))
             elif self.update_rule == 'featurewise_shared':
