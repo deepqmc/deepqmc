@@ -129,13 +129,13 @@ class SchNetLayer(MessagePassingLayer):
             )
             if not self.update_rule == 'featurewise'
             else {
-                typ: MLP(
+                uf: MLP(
                     self.embedding_dim,
                     self.embedding_dim,
-                    name=f'g_{typ}',
+                    name=f'g_{uf}',
                     **subnet_kwargs_by_lbl['g'],
                 )
-                for typ in (self.update_features)
+                for uf in (self.update_features)
             }
         )
         self.residual = residual
@@ -203,12 +203,12 @@ class SchNetLayer(MessagePassingLayer):
                 'ee': z['same'] + z['anti'],
                 'ne': z['ne'],
             }
-            f = {typ: FEATURE_MAPPING[typ] for typ in self.update_features}
+            f = {uf: FEATURE_MAPPING[uf] for uf in self.update_features}
             if self.update_rule == 'concatenate':
                 updated = self.g(jnp.concatenate(jnp.stack(list(f.values())), axis=-1))
             elif self.update_rule == 'featurewise':
                 updated = jnp.sum(
-                    jnp.stack([self.g[typ](f[typ]) for typ in self.update_features]),
+                    jnp.stack([self.g[uf](f[uf]) for uf in self.update_features]),
                     axis=0,
                 )
             elif self.update_rule == 'sum':
