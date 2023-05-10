@@ -105,7 +105,7 @@ def fit_wf(  # noqa: C901
         E_loc_s, gradient_mask = (clip_mask_fn or median_log_squeeze_and_mask)(
             E_loc, **(clip_mask_kwargs or {})
         )
-        E_mean = segment_nanmean(E_loc_s, phys_conf.mol_idx, len(sampler))[
+        E_mean = segment_nanmean(E_loc_s * weight, phys_conf.mol_idx, len(sampler))[
             phys_conf.mol_idx
         ]
         assert E_loc_s.shape == E_loc.shape, (
