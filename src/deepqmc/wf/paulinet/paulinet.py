@@ -44,6 +44,8 @@ def eval_log_slater(xs):
 
 class PauliNet(WaveFunction):
     r"""
+    Implements the neural network wave function.
+
     Args:
         hamil (~MolecularHamiltonian): the Hamiltonian of the system.
         basis (~wf.paulinet.env.ExponentialEnvelopes): the orbital envelopes.
