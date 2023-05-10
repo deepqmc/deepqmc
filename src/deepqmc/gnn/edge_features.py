@@ -240,10 +240,6 @@ class EdgeFeatures:
         r_cut (float): the cutoff radius for the radial basis
         irreps (Sequence[e3nn_jax.Irrep]): the irreducible representations for
             the angular basis
-        separate (bool): default :data:`False`, whether to keep radial and angular
-            parts separate.
-        equivariant: default True, if False the distinction between feature
-            dimension and irreps dimension is removed
         radial_basis_factory (Callable): optional, creates the radial basis
         radial_basis_kwargs (dict): optional, kwargs for the radial basis
     """
@@ -253,14 +249,11 @@ class EdgeFeatures:
         n_rbf: int,
         r_cut: float,
         irreps: Sequence[e3nn.Irrep],
-        equivariant: bool = True,
         combine_idxs=None,
         *,
-        separate: bool = False,
         radial_basis_factory: Optional = None,
         radial_basis_kwargs: Optional[dict] = None,
     ):
-        assert combine_idxs is None or not equivariant
         if radial_basis_factory is None:
             radial_basis_factory = BesselBasis
         self.radial_basis = radial_basis_factory(
@@ -269,25 +262,17 @@ class EdgeFeatures:
         self.angular_basis = lambda r: e3nn.spherical_harmonics(
             irreps, r, normalize=True, normalization='component'
         ).array
-        self.equivariant = equivariant
         self.combine_idxs = range(n_rbf) if combine_idxs is None else combine_idxs
-        self.separate = separate
 
     def __call__(self, r: jnp.ndarray):
         radial = self.radial_basis(jnp.linalg.norm(r, axis=-1))
         angular = self.angular_basis(r)
-        if self.equivariant:
-            if self.separate:
-                features = {'radial': radial, 'angular': angular}
-            else:
-                features = radial[..., None] * angular[..., None, :]
-        else:
-            features = [
-                r[..., None] * (angular if i in self.combine_idxs else 1)
-                for i, r in enumerate(jnp.rollaxis(radial, -1))
-            ]
-            features = tree_reduce(
-                lambda x, y: jnp.concatenate((x, y), axis=-1),
-                features,
-            )
+        features = [
+            r[..., None] * (angular if i in self.combine_idxs else 1)
+            for i, r in enumerate(jnp.rollaxis(radial, -1))
+        ]
+        features = tree_reduce(
+            lambda x, y: jnp.concatenate((x, y), axis=-1),
+            features,
+        )
         return features

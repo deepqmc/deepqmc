@@ -47,7 +47,6 @@ omni_factory:
       n_rbf: 1
       r_cut: 30.
       irreps: 0y+1y
-      equivariant: false
       radial_basis_factory:
         _target_: deepqmc.gnn.edge_features.DistancePowersBasis
         _partial_: true
