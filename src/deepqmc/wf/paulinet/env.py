@@ -23,7 +23,7 @@ class ExponentialEnvelopes(hk.Module):
     def __call__(self, diffs):
         d = diffs[..., self.center_idx, :-1]
         R = (
-            self.zetas * d
+            self.zetas[..., None] * d
             if self.isotropic
             else jnp.einsum('ers,ies->ier', self.zetas, d)
         )
