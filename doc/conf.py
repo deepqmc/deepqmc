@@ -72,7 +72,6 @@ autodoc_mock_imports = [
     'kfac_jax',
     'haiku',
     'optax',
-    'e3nn_jax',
     'yaml',
     'tensorboard',
 ]
