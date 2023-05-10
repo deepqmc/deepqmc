@@ -25,7 +25,7 @@ class SchNetLayer(MessagePassingLayer):
             of the electron embeddings.
             Possible values:
 
-            - ``'residual'``: include electron embedding
+            - ``'residual'``: electron embedding from the previous interaction layer
             - ``'ne'``: sum over messages from nuclei
             - ``'same'``: sum over messages from electrons with same spin
             - ``'anti'``: sum over messages from electrons with opposite spin
