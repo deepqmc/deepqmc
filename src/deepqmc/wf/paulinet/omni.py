@@ -107,9 +107,9 @@ class OmniNet(hk.Module):
             to compute backflow factors for. This is equal to the number of
             spin-up electrons, except when full determinants are used, in which case
             it is equal to the total number of electrons.
-        n_orb_down (int): the number of spin-up orbitals in a single deterimant,
+        n_orb_down (int): the number of spin-down orbitals in a single deterimant,
             to compute backflow factors for. This is equal to the number of
-            spin-up electrons, except when full determinants are used, in which case
+            spin-down electrons, except when full determinants are used, in which case
             it is equal to the total number of electrons.
         n_determinants (int): the number of determinants to use.
         n_backflows (int): the number of independent backflow channels for each orbital,
