@@ -212,7 +212,7 @@ class SchNetLayer(MessagePassingLayer):
                     axis=0,
                 )
             elif self.update_rule == 'sum':
-                updated = self.g(jnp.sum(jnp.stack(list(f.values())), axis=0))
+                updated = self.g(sum(f.values()))
             elif self.update_rule == 'featurewise_shared':
                 updated = jnp.sum(self.g(jnp.stack(list(f.values()))), axis=0)
             if self.residual:
