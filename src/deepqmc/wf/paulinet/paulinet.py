@@ -48,7 +48,7 @@ class PauliNet(WaveFunction):
 
     Args:
         hamil (~MolecularHamiltonian): the Hamiltonian of the system.
-        basis (~wf.paulinet.env.ExponentialEnvelopes): the orbital envelopes.
+        envelope (~wf.paulinet.env.ExponentialEnvelopes): the orbital envelopes.
         backflow_op (Callable): specifies how the backflow is applied to the
             orbitals.
         n_determinants (int): specifies the number of determinants
@@ -72,7 +72,7 @@ class PauliNet(WaveFunction):
         hamil,
         *,
         omni_factory,
-        basis,
+        envelope,
         backflow_op,
         n_determinants,
         full_determinant,
@@ -84,7 +84,7 @@ class PauliNet(WaveFunction):
         n_up, n_down = self.n_up, self.n_down
         self.n_det = n_determinants
         self.full_determinant = full_determinant
-        self.basis = basis(hamil.mol)
+        self.envelope = envelope(hamil.mol)
         self.mo_coeff = hk.Linear(
             n_determinants * (n_up + n_down),
             with_bias=False,
@@ -126,7 +126,7 @@ class PauliNet(WaveFunction):
         diffs_nuc = pairwise_diffs(phys_conf.r, phys_conf.R)
         dists_nuc = jnp.sqrt(diffs_nuc[..., -1])
         dists_elec = pairwise_self_distance(phys_conf.r, full=True)
-        aos = self.basis(diffs_nuc)
+        aos = self.envelope(diffs_nuc)
         orb = self.mo_coeff(aos)
         jastrow, fs = self.omni(phys_conf) if self.omni else (None, None)
         orb_up, orb_down = (
