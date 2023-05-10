@@ -1,6 +1,6 @@
 _target_: deepqmc.wf.PauliNet
 _partial_: true
-basis:
+envelope:
   _target_: deepqmc.wf.paulinet.env.ExponentialEnvelopes.from_mol
   _partial_: true
 backflow_op:
