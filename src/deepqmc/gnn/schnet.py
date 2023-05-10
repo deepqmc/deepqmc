@@ -17,7 +17,7 @@ class SchNetLayer(MessagePassingLayer):
     Args:
         residual (bool): whether a residual connection is used when updating
             the electron embeddings.
-        convolution (bool): if :data:`true` the messages are generated via graph
+        convolution (bool): if :data:`True` the messages are generated via graph
             covolutions, else messages are generated from edge featues only.
         deep_features (bool): if :data:`true` edge features are updated through
             an MLP (:data:`u`), else initial edge features are reused.
