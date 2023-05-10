@@ -1,3 +1,3 @@
-from .schnet import SchNet
+from .electron_gnn import ElectronGNN
 
-__all__ = ['SchNet']
+__all__ = ['ElectronGNN']

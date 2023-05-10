@@ -37,7 +37,7 @@ omni_factory:
         _target_: deepqmc.hkext.ssp
         _partial_: true
   gnn_factory:
-    _target_: deepqmc.gnn.schnet.SchNet
+    _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
     n_interactions: 4
     positional_electron_embeddings: false

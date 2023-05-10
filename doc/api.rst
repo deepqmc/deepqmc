@@ -70,12 +70,13 @@ This submodule provides the base classes that all GNN instances should inherit f
 
 .. automodule:: deepqmc.gnn.gnn
 
-SchNet
+ElectronGNN
 ~~~~~~
 
-This submodule defines the SchNet architecutre adapted for graphs of nuclei and electrons.
+This submodule provides the ElectronGNN architecture for defining neural network
+parametrized functions acting on graphs of electrons and nuclei.
 
-.. automodule:: deepqmc.gnn.schnet
+.. automodule:: deepqmc.gnn.electron_gnn
 
 
 .. toctree::

@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import pytest
 
-from deepqmc.gnn import SchNet
+from deepqmc.gnn import ElectronGNN
 from deepqmc.gnn.graph import (
     GraphEdgeBuilder,
     MolecularGraphEdgeBuilder,
@@ -49,7 +49,7 @@ class TestGraph:
         ndarrays_regression.check(helpers.flatten_pytree(graph_edges))
 
 
-class TestSchNet:
+class TestElectronGNN:
     @pytest.mark.parametrize(
         'kwargs',
         [
@@ -67,9 +67,9 @@ class TestSchNet:
     def test_embedding(self, helpers, ndarrays_regression, kwargs):
         mol = helpers.mol()
         phys_conf = helpers.phys_conf()
-        schnet = helpers.transform_model(SchNet, mol, 32, **kwargs)
-        params = helpers.init_model(schnet, phys_conf)
-        emb = schnet.apply(params, phys_conf)
+        electron_gnn = helpers.transform_model(ElectronGNN, mol, 32, **kwargs)
+        params = helpers.init_model(electron_gnn, phys_conf)
+        emb = electron_gnn.apply(params, phys_conf)
         ndarrays_regression.check(
             {'embedding': emb}, default_tolerance={'rtol': 1e-4, 'atol': 1e-6}
         )

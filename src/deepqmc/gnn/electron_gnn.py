@@ -8,7 +8,7 @@ from .gnn import GraphNeuralNetwork, MessagePassingLayer
 from .graph import GraphNodes, difference_callback
 
 
-class SchNetLayer(MessagePassingLayer):
+class ElectronGNNLayer(MessagePassingLayer):
     r"""
     The message passing layer of :class:`ElectronGNN`.
 
@@ -221,9 +221,9 @@ class SchNetLayer(MessagePassingLayer):
         return update_nodes
 
 
-class SchNet(GraphNeuralNetwork):
+class ElectronGNN(GraphNeuralNetwork):
     r"""
-    The SchNet architecture [SchuettJCP18]_ adapted for graphs of nuclei and electrons.
+    A neural network acting on graphs defined by electrons and nuclei.
 
     Derived from :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork`.
 
@@ -305,4 +305,4 @@ class SchNet(GraphNeuralNetwork):
     @classmethod
     @property
     def layer_factory(cls):
-        return SchNetLayer
+        return ElectronGNNLayer
