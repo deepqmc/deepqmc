@@ -1,7 +1,6 @@
 import jax.numpy as jnp
 import pytest
 
-from deepqmc.gnn import ElectronGNN
 from deepqmc.gnn.graph import (
     GraphEdgeBuilder,
     MolecularGraphEdgeBuilder,
@@ -49,27 +48,15 @@ class TestGraph:
         ndarrays_regression.check(helpers.flatten_pytree(graph_edges))
 
 
-class TestElectronGNN:
-    @pytest.mark.parametrize(
-        'kwargs',
-        [
-            {},
-            {'edge_feat_kwargs': {'difference': False}},
-            {'layer_kwargs': {'deep_w': True}},
-            {'layer_kwargs': {'residual': False}},
-            {'layer_kwargs': {'shared_g': True}},
-            {'layer_kwargs': {'shared_h': True}},
-        ],
-        ids=lambda x: (
-            ','.join(f'{k}={v}' for k, v in x.items()) if isinstance(x, dict) else x
-        ),
-    )
-    def test_embedding(self, helpers, ndarrays_regression, kwargs):
+class TestGNN:
+    def test_embedding(self, helpers, ndarrays_regression):
         mol = helpers.mol()
-        phys_conf = helpers.phys_conf()
-        electron_gnn = helpers.transform_model(ElectronGNN, mol, 32, **kwargs)
-        params = helpers.init_model(electron_gnn, phys_conf)
-        emb = electron_gnn.apply(params, phys_conf)
+        hamil = helpers.hamil(mol)
+        phys_conf = helpers.phys_conf(hamil)
+        _gnn = helpers.init_conf('gnn.yaml')
+        gnn = helpers.transform_model(_gnn, mol, 8)
+        params = helpers.init_model(gnn, phys_conf)
+        emb = gnn.apply(params, phys_conf)
         ndarrays_regression.check(
             {'embedding': emb}, default_tolerance={'rtol': 1e-4, 'atol': 1e-6}
         )

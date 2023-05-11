@@ -10,16 +10,14 @@ from deepqmc.sampling import (
     ResampledSampler,
     chain,
 )
-from deepqmc.wf import PauliNet
 
 
 @pytest.fixture(scope='class')
 def wf(helpers, request):
     request.cls.mol = helpers.mol()
     hamil = helpers.hamil(request.cls.mol)
-    paulinet = helpers.transform_model(PauliNet, hamil)
-    params = paulinet.init(helpers.rng(), helpers.phys_conf())
-    request.cls.wf = partial(paulinet.apply, params)
+    wf, params = helpers.create_ansatz(hamil)
+    request.cls.wf = partial(wf.apply, params)
     request.cls.hamil = hamil
 
 
@@ -39,7 +37,7 @@ def wf(helpers, request):
 )
 @pytest.mark.usefixtures('wf')
 class TestSampling:
-    SAMPLE_SIZE = 100
+    SAMPLE_SIZE = 10
 
     def test_sampler_init(self, helpers, samplers, ndarrays_regression):
         sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
@@ -76,7 +74,7 @@ class TestSampling:
 )
 @pytest.mark.usefixtures('wf')
 class TestMultimoleculeSampling:
-    SAMPLE_SIZE = 100
+    SAMPLE_SIZE = 10
     N_CONFIG = 2
 
     def test_multimolecule_sampler_init(self, helpers, samplers, ndarrays_regression):

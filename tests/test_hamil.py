@@ -1,45 +1,30 @@
 from functools import partial
 
-import jax.numpy as jnp
 import pytest
-from conftest import Helpers
 
 from deepqmc.hamil import MolecularHamiltonian
-from deepqmc.hamil.qho import QHOHamiltonian
-from deepqmc.wf import PauliNet
-from deepqmc.wf.qho import QHOAnsatz
-
-dim = 10
 
 
 @pytest.mark.parametrize(
-    'hamil,hamil_kwargs,wf',
+    'hamil,mol_kwargs',
     [
-        (MolecularHamiltonian, {'mol': Helpers.mol()}, PauliNet),
-        (MolecularHamiltonian, {'mol': Helpers.mol(pp_type='ccECP')}, PauliNet),
-        (
-            QHOHamiltonian,
-            {'dim': dim, 'mass': jnp.ones(dim), 'nu': jnp.ones(dim)},
-            QHOAnsatz,
-        ),
+        (MolecularHamiltonian, {}),
+        (MolecularHamiltonian, {'pp_type': 'ccECP'}),
     ],
-    ids=['Molecular', 'Molecular+PP', 'QHO'],
+    ids=['Molecular', 'Molecular+PP'],
 )
 class TestHamil:
     SAMPLE_SIZE = 5
 
-    def test_init_sample(self, helpers, hamil, hamil_kwargs, wf, ndarrays_regression):
-        hamil = hamil(**hamil_kwargs)
-        phys_conf = hamil.init_sample(helpers.rng(), helpers.R(hamil), self.SAMPLE_SIZE)
+    def test_init_sample(self, helpers, hamil, mol_kwargs, ndarrays_regression):
+        hamil = helpers.hamil(helpers.mol(**mol_kwargs))
+        phys_conf = helpers.phys_conf(hamil, n=self.SAMPLE_SIZE)
         ndarrays_regression.check({'rs': phys_conf.r})
 
-    def test_local_energy(self, helpers, hamil, hamil_kwargs, wf, ndarrays_regression):
-        hamil = hamil(**hamil_kwargs)
-        phys_conf = hamil.init_sample(
-            helpers.rng(), Helpers.R(hamil), self.SAMPLE_SIZE
-        )[0]
-        wf = helpers.transform_model(wf, hamil)
-        params = helpers.init_model(wf, phys_conf)
+    def test_local_energy(self, helpers, hamil, mol_kwargs, ndarrays_regression):
+        hamil = helpers.hamil(helpers.mol(**mol_kwargs))
+        phys_conf = helpers.phys_conf(hamil)
+        wf, params = helpers.create_ansatz(hamil)
         E_loc, _ = hamil.local_energy(partial(wf.apply, params))(
             helpers.rng(), phys_conf
         )

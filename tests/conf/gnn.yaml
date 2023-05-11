@@ -1,0 +1,28 @@
+_target_: deepqmc.gnn.electron_gnn.ElectronGNN
+_partial_: true
+n_interactions: 4
+positional_electron_embeddings: false
+atom_type_embeddings: false
+edge_features:
+  _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+  edge_features:
+  - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+    powers: [1]
+  - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+layer_kwargs:
+  subnet_kwargs:
+    hidden_layers: ['log', 3]
+    last_linear: false
+    activation: 
+      _target_: jax.numpy.tanh
+      _partial_: true
+  subnet_kwargs_by_lbl: null
+  residual: true
+  convolution: true
+  deep_features: false
+  update_rule: featurewise
+  update_features: 
+    - same
+    - anti
+    - ne
+

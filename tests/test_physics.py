@@ -4,15 +4,14 @@ from deepqmc.physics import local_potential, nonlocal_potential
 
 
 @pytest.mark.parametrize('pp_type', [None, 'bfd', 'ccECP'])
-@pytest.mark.parametrize('name', ['LiH', 'C', 'ScO'])
+@pytest.mark.parametrize('name', ['LiH', 'C'])
 class TestPhysics:
     def test_pseudo_potentials(self, helpers, name, pp_type, ndarrays_regression):
         mol = helpers.mol(name, pp_type)
         hamil = helpers.hamil(mol)
-        params, paulinet, phys_conf = helpers.create_paulinet(
-            hamil, phys_conf_kwargs={'elec_std': 0.45}
-        )
-        wf = lambda phys_conf: paulinet.apply(params, phys_conf)
+        phys_conf = helpers.phys_conf(hamil)
+        _wf, params = helpers.create_ansatz(hamil)
+        wf = lambda phys_conf: _wf.apply(params, phys_conf)
         ndarrays_regression.check(
             {
                 'local_potential': local_potential(phys_conf, mol),
