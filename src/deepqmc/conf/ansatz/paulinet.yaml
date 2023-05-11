@@ -1,11 +1,11 @@
-_target_: deepqmc.wf.PauliNet
+_target_: deepqmc.wf.NeuralNetworkWaveFunction
 _partial_: true
 envelope:
-  _target_: deepqmc.wf.paulinet.env.ExponentialEnvelopes.from_mol
+  _target_: deepqmc.wf.nn_wave_function.env.ExponentialEnvelopes.from_mol
   _partial_: true
   isotropic: true
 backflow_op:
-  _target_: deepqmc.wf.paulinet.paulinet.BackflowOp
+  _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
   _partial_: true
 n_determinants: 16
 full_determinant: false
@@ -13,11 +13,11 @@ cusp_electrons: true
 cusp_alpha: 10.0
 backflow_transform: mult
 omni_factory:
-  _target_: deepqmc.wf.paulinet.omni.OmniNet
+  _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
   _partial_: true
   embedding_dim: 64
   jastrow_factory: 
-    _target_: deepqmc.wf.paulinet.omni.Jastrow
+    _target_: deepqmc.wf.nn_wave_function.omni.Jastrow
     _partial_: true
     sum_first: true
     subnet_kwargs: 
@@ -28,7 +28,7 @@ omni_factory:
         _target_: deepqmc.hkext.ssp
         _partial_: true
   backflow_factory:  
-    _target_: deepqmc.wf.paulinet.omni.Backflow
+    _target_: deepqmc.wf.nn_wave_function.omni.Backflow
     _partial_: true
     subnet_kwargs:
       hidden_layers: ['log', 3]

@@ -163,9 +163,9 @@ def collect_kwarg_defaults(func):
     from .gnn import SchNet
     from .pretrain import pretrain
     from .train import OPT_KWARGS, CheckpointStore, train
-    from .wf import PauliNet
+    from .wf import NeuralNetworkWaveFunction
     from .wf.baseline import Baseline
-    from .wf.paulinet.omni import Backflow, Jastrow, OmniNet
+    from .wf.nn_wave_function.omni import Backflow, Jastrow, OmniNet
 
     DEEPQMC_DEFAULTS = {
         (train, 'pretrain_kwargs'): pretrain,
@@ -173,7 +173,7 @@ def collect_kwarg_defaults(func):
         (train, 'fit_kwargs'): fit_wf,
         (train, 'chkpts_kwargs'): CheckpointStore,
         (pretrain, 'baseline_kwargs'): Baseline.from_mol,
-        (PauliNet.__init__, 'omni_kwargs'): OmniNet,
+        (NeuralNetworkWaveFunction.__init__, 'omni_kwargs'): OmniNet,
         (OmniNet.__init__, 'gnn_kwargs'): SchNet,
         (OmniNet.__init__, 'jastrow_kwargs'): Jastrow,
         (OmniNet.__init__, 'backflow_kwargs'): Backflow,
@@ -213,7 +213,7 @@ def collect_deepqmc_kwarg_defaults(workdir, return_yaml=False):
         'MetropolisSampler',
         'DecorrSampler',
         'ResampledSampler',
-        'PauliNet',
+        'NeuralNetworkWaveFunction',
     ]
     members = dict(inspect.getmembers(deepqmc.wf)) | dict(inspect.getmembers(deepqmc))
     funcs = {func: members[func] for func in listed}

@@ -8,7 +8,7 @@ from ...utils import flatten, triu_flat
 from ..base import WaveFunction
 from .cusp import ElectronicAsymptotic
 
-__all__ = ['PauliNet']
+__all__ = ['NeuralNetworkWaveFunction']
 
 
 class BackflowOp(hk.Module):
@@ -42,13 +42,13 @@ def eval_log_slater(xs):
     return jnp.linalg.slogdet(xs)
 
 
-class PauliNet(WaveFunction):
+class NeuralNetworkWaveFunction(WaveFunction):
     r"""
     Implements the neural network wave function.
 
     Args:
         hamil (~MolecularHamiltonian): the Hamiltonian of the system.
-        envelope (~wf.paulinet.env.ExponentialEnvelopes): the orbital envelopes.
+        envelope (~wf.nn_wave_function.env.ExponentialEnvelopes): the orbital envelopes.
         backflow_op (Callable): specifies how the backflow is applied to the
             orbitals.
         n_determinants (int): specifies the number of determinants
