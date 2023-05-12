@@ -94,7 +94,3 @@ class Helpers:
         ):
             cfg = compose(config_name=config_name)
         return instantiate(cfg, _recursive_=True)
-
-
-def pytest_sessionstart(session):
-    jax.config.update('jax_platform_name', 'cpu')

@@ -37,6 +37,6 @@ jobs:
       - name: Install Coverage
         run: pip install 'coverage<7.0.0'
       - name: Test
-        run: coverage run -m pytest
+        run: JAX_PLATFORM_NAME=cpu coverage run -m pytest
       - name: Upload to Codecov
         run: bash <(curl -s https://codecov.io/bash)
