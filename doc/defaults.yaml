@@ -1,78 +1,67 @@
-MolecularHamiltonian:
-  mol: ???
-Molecule:
-  coords: ???
-  charges: ???
-  charge: ???
-  spin: ???
-  unit: bohr
-  data: null
-train:
-  steps: ???
-  sample_size: ???
-  seed: ???
-  max_restarts: 3
-  max_eq_steps: 1000
-  pretrain_steps: null
-  pretrain_kwargs:
-    steps: ???
-    sample_size: ???
-    baseline_kwargs:
-      basis: 6-31G
-      cas: null
-  opt_kwargs:
-    adam:
-      learning_rate: 0.001
-      b1: 0.9
-      b2: 0.9
-    adamw:
-      learning_rate: 0.001
-      b1: 0.9
-      b2: 0.9
-    kfac:
-      learning_rate_schedule: !!python/name:deepqmc.utils.%3Clambda%3E ''
-      damping_schedule: !!python/name:deepqmc.utils.%3Clambda%3E ''
-      norm_constraint: 0.001
-  fit_kwargs:
-    clip_width: 1.0
-    exclude_width: .inf
-    clip_quantile: 0.95
-  chkpts_kwargs:
-    size: 3
-    min_interval: 100
-    threshold: 0.95
-MetropolisSampler:
-  tau: 1.0
-  target_acceptance: 0.57
-  max_age: null
-DecorrSampler:
-  length: ???
-ResampledSampler:
-  frequency: null
-  treshold: null
-PauliNet:
-  full_determinant: false
-  cusp_electrons: true
-  cusp_alpha: 10.0
-  backflow_type: orbital
-  backflow_channels: 1
-  backflow_transform: mult
-  omni_factory: null
-  omni_kwargs:
-    embedding_dim: 128
-    gnn_kwargs:
-      cutoff: 30.0
-      n_interactions: 3
-      kernel_dim: 64
-      fix_init_emb: false
-    jastrow: true
-    jastrow_kwargs:
-      n_layers: 3
-      sum_first: true
-      name: Jastrow
-    backflow: true
-    backflow_kwargs:
-      n_layers: 3
-      name: Backflow
-      param_scaling: 1.0
-  mo_scaling: 1.0
+_target_: deepqmc.wf.NeuralNetworkWaveFunction
+_partial_: true
+envelope:
+  _target_: deepqmc.wf.nn_wave_function.env.ExponentialEnvelopes.from_mol
+  _partial_: true
+  isotropic: true
+backflow_op:
+  _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
+  _partial_: true
+n_determinants: 16
+full_determinant: false
+cusp_electrons: true
+cusp_alpha: 10.0
+backflow_transform: mult
+omni_factory:
+  _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
+  _partial_: true
+  embedding_dim: 64
+  jastrow_factory:
+    _target_: deepqmc.wf.nn_wave_function.omni.Jastrow
+    _partial_: true
+    sum_first: true
+    subnet_kwargs:
+      hidden_layers: ['log', 3]
+      last_linear: true
+      bias: 'not_last'
+      activation:
+        _target_: deepqmc.hkext.ssp
+        _partial_: true
+  backflow_factory:
+    _target_: deepqmc.wf.nn_wave_function.omni.Backflow
+    _partial_: true
+    subnet_kwargs:
+      hidden_layers: ['log', 3]
+      last_linear: true
+      activation:
+        _target_: deepqmc.hkext.ssp
+        _partial_: true
+  gnn_factory:
+    _target_: deepqmc.gnn.ElectronGNN
+    _partial_: true
+    n_interactions: 4
+    positional_electron_embeddings: false
+    atom_type_embeddings: false
+    two_particle_stream_dim: 64
+    edge_features:
+      _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+      edge_features:
+      - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+        powers: [1]
+      - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+    layer_kwargs:
+      subnet_kwargs:
+        hidden_layers: ['log', 3]
+        last_linear: false
+        activation:
+          _target_: jax.numpy.tanh
+          _partial_: true
+      subnet_kwargs_by_lbl: null
+      residual: true
+      convolution: true
+      deep_features: false
+      update_rule: featurewise
+      update_features:
+        - same
+        - anti
+        - ne

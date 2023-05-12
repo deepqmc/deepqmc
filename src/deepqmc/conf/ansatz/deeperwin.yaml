@@ -1,0 +1,65 @@
+_target_: deepqmc.wf.NeuralNetworkWaveFunction
+_partial_: true
+envelope:
+  _target_: deepqmc.wf.nn_wave_function.env.ExponentialEnvelopes.from_mol
+  _partial_: true
+  isotropic: true
+backflow_op:
+  _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
+  _partial_: true
+n_determinants: 32
+full_determinant: false
+cusp_electrons: false
+cusp_alpha: null
+backflow_transform: mult
+omni_factory:
+  _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
+  _partial_: true
+  embedding_dim: 256
+  jastrow_factory: null
+  backflow_factory:
+    _target_: deepqmc.wf.nn_wave_function.omni.Backflow
+    _partial_: true
+    subnet_kwargs:
+      hidden_layers: ['log', 1]
+      last_linear: true
+      bias: false
+  gnn_factory:
+    _target_: deepqmc.gnn.ElectronGNN
+    _partial_: true
+    n_interactions: 4
+    positional_electron_embeddings: true
+    atom_type_embeddings: true
+    two_particle_stream_dim: 32
+    edge_features:
+      ne:
+        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+        edge_features:
+        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+          powers: [1]
+        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+      same:
+        _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+        powers: [1]
+      anti:
+        _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+        powers: [1]
+    layer_kwargs:
+      subnet_kwargs:
+        hidden_layers: ['log', 1]
+        last_linear: false
+        bias: true
+        activation: 
+          _target_: jax.numpy.tanh
+          _partial_: true
+      subnet_kwargs_by_lbl: null
+      residual: true
+      convolution: true
+      deep_features: true
+      update_rule: concatenate
+      update_features: 
+        - residual
+        - nodes_up
+        - nodes_down
+        - ee
+        - ne

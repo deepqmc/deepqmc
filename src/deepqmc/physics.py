@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from scipy.special import legendre
 
 from .types import PhysicalConfiguration
-from .utils import rot_y, rot_z, sph2cart, triu_flat
+from .utils import norm, rot_y, rot_z, sph2cart, triu_flat
 
 __all__ = ()
 
@@ -20,7 +20,7 @@ def pairwise_diffs(coords1, coords2):
 def pairwise_self_distance(coords, full=False):
     i, j = jnp.triu_indices(coords.shape[-2], k=1)
     diffs = coords[..., :, None, :] - coords[..., None, :, :]
-    dists = jnp.linalg.norm(diffs[..., i, j, :], axis=-1)
+    dists = norm(diffs[..., i, j, :], safe=True, axis=-1)
     if full:
         dists = (
             jnp.zeros(diffs.shape[:-1])

@@ -1,4 +1,0 @@
-defaults:
-  - radial_basis_factory: bessel
-_target_: deepqmc.gnn.edge_features.EdgeFeatures
-_partial_: true

@@ -43,21 +43,21 @@ Wave functions
 
 .. autoclass:: deepqmc.wf.WaveFunction
 
-.. autoclass:: deepqmc.wf.PauliNet
+.. autoclass:: deepqmc.wf.NeuralNetworkWaveFunction
 
-.. automodule:: deepqmc.wf.paulinet.paulinet
-   :exclude-members: PauliNet
+.. automodule:: deepqmc.wf.nn_wave_function.nn_wave_function
+   :exclude-members: NeuralNetworkWaveFunction
 
 Graph neural networks
 ---------------------
 
-A graph neural network is the most important component of the PauliNet Ansatz.
-This module implements the most useful GNNs used in deep QMC.
+A graph neural network is the most important component of the neural network wave function ansatz.
+This module implements a general gnn framework, that can be configured to obtain a variety of different ansatzes.
 
 Graphs
 ~~~~~~
 
-This submodule implements the basic functionality for working with (truncated) graphs.
+This submodule implements the basic functionality for working with graphs.
 
 .. automodule:: deepqmc.gnn.graph
 
@@ -70,12 +70,13 @@ This submodule provides the base classes that all GNN instances should inherit f
 
 .. automodule:: deepqmc.gnn.gnn
 
-SchNet
-~~~~~~
+ElectronGNN
+~~~~~~~~~~~
 
-This submodule defines the SchNet architecutre adapted for graphs of nuclei and electrons.
+This submodule provides the ElectronGNN architecture for defining neural network
+parametrized functions acting on graphs of electrons and nuclei.
 
-.. automodule:: deepqmc.gnn.schnet
+.. automodule:: deepqmc.gnn.electron_gnn
 
 
 .. toctree::

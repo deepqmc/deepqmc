@@ -7,7 +7,7 @@ envelope:
 backflow_op:
   _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
   _partial_: true
-n_determinants: 16
+n_determinants: 2
 full_determinant: false
 cusp_electrons: true
 cusp_alpha: 10.0
@@ -15,7 +15,7 @@ backflow_transform: mult
 omni_factory:
   _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
   _partial_: true
-  embedding_dim: 64
+  embedding_dim: 8
   jastrow_factory: 
     _target_: deepqmc.wf.nn_wave_function.omni.Jastrow
     _partial_: true
@@ -37,12 +37,12 @@ omni_factory:
         _target_: deepqmc.hkext.ssp
         _partial_: true
   gnn_factory:
-    _target_: deepqmc.gnn.ElectronGNN
+    _target_: deepqmc.gnn.electron_gnn.ElectronGNN
     _partial_: true
-    n_interactions: 4
+    n_interactions: 1
     positional_electron_embeddings: false
     atom_type_embeddings: false
-    two_particle_stream_dim: 64
+    two_particle_stream_dim: 8
     edge_features:
       _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
       edge_features:
@@ -51,7 +51,7 @@ omni_factory:
       - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
     layer_kwargs:
       subnet_kwargs:
-        hidden_layers: ['log', 3]
+        hidden_layers: ['log', 1]
         last_linear: false
         activation: 
           _target_: jax.numpy.tanh

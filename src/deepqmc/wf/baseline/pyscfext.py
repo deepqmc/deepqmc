@@ -1,6 +1,6 @@
 import logging
 
-import numpy as jnp
+import jax.numpy as jnp
 from pyscf import gto
 from pyscf.mcscf import CASSCF
 from pyscf.scf import RHF

@@ -14,7 +14,7 @@ A molecule is represented by the :class:`~deepqmc.Molecule` class in DeepQMC. Th
 
    mol = Molecule.from_name('LiH')
 
-To get all available molecules use::
+To get all available predefined molecules use::
 
     >>> Molecule.all_names
     {'B', 'B2', 'Be', ..., bicyclobutane'}
@@ -22,7 +22,7 @@ To get all available molecules use::
 A :class:`~deepqmc.Molecule` can be also created from scratch by specifying the nuclear coordinates and charges, as well as the total charge and spin multiplicity::
 
     mol = Molecule(  # LiH
-        coords=[[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]],
+        coords=[[0.0, 0.0, 0.0], [3.015, 0.0, 0.0]],
         charges=[3, 1],
         charge=0,
         spin=0,
@@ -43,15 +43,29 @@ The Hamiltonian provides the local energy function for the evaluation of the ene
 Create a wave function ansatz
 -----------------------------
 
-The PauliNet wavefunction ansatz is available in the :mod:`deepqmc.wf` subpackage. It is initialized from the molecular Hamiltonian. Being a :mod:`haiku` module the ansatz has to be initialized inside a :func:`haiku.transform`::
-    
+The neural network wave function ansatz is available in the :mod:`deepqmc.wf` subpackage. A convinient way of initializing a wave function instance is to use a :mod:`hydra` config file. DeepQMC comes with config files for predefined wave functions (at ``../deepqmc/src/deepqmc/conf/ansatz``), however custom configurations may be used. Being a :mod:`haiku` module the ansatz has to be initialized inside a :func:`haiku.transform`::
+
+    import os
+
+    import deepqmc
     import haiku as hk
-    from deepqmc.wf import PauliNet
+    from deepqmc.wf import NeuralNetworkWaveFunction
+    from hydra import compose, initialize_config_dir
+    from hydra.utils import instantiate
+
+    deepqmc_dir = os.path.dirname(deepqmc.__file__)
+    config_dir = os.path.join(deepqmc_dir, 'conf/ansatz')
+
+    with initialize_config_dir(version_base=None, config_dir=config_dir):
+        cfg = compose(config_name='paulinet')
+
+    _ansatz = instantiate(cfg, _recursive_=True)
+
 
     @hk.without_apply_rng
-    @hk.transform_with_state
-    def net(rs,return_mos=False):
-        return PauliNet(H)(rs,return_mos=return_mos)
+    @hk.transform
+    def ansatz(phys_conf, return_mos=False):
+        return _ansatz(H)(phys_conf, return_mos=return_mos)
 
 The hyperparameters and their physical meaning are described in the :ref:`api <api>` reference.
 
@@ -99,10 +113,10 @@ Furthermore the training run is logged to the ``workdir``. The ``training`` dire
     >>> with h5py.File('workdir/training/result.h5') as f: print(f.keys())
     <KeysViewHDF5 ['E_ewm', 'E_loc', 'log_psi', 'sign_psi']>
 
-Get the energy
---------------
+Evaluate the energy
+-------------------
 
-The rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the training run. A rigorous estimation with a statistical sampling error can be obtained when sampling the energy expectation value of the trained wavefunction without further optimization, for which the final training checkpoint is passed to the :func:`~deepqmc.train` function, but the optimizer is specified to be ``None``:
+A rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the local energies of the training run. A rigorous estimation of the energy expectation value up to the statistical sampling error can be obtained when evaluating the energy expectation value of the trained wavefunction without further optimization. This is achieved by passing a training checkpoint is passed to the :func:`~deepqmc.train` function, but the optimizer is specified to be ``None``:
 
     >>> import jax.numpy as jnp
     >>> train_state = jnp.load('workdir/training/chkpt-10000.pt',allow_pickle=True)

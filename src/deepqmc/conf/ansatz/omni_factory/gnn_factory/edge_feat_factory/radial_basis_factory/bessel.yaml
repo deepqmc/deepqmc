@@ -1,4 +1,0 @@
-defaults:
-  - envelope_factory: polynomial
-_target_: deepqmc.gnn.edge_features.BesselBasis
-_partial_: true

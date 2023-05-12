@@ -22,7 +22,6 @@ These packages will be installed automatically when installing DeepQMC.
 - `TQDM <https://github.com/tqdm/tqdm>`_ provides progress bars.
 - `kfac <https://github.com/deepmind/kfac-jax>`_ is a jax implementation of the KFAC second order optimizer.
 - `optax <https://github.com/deepmind/optax>`_ provides optimizers and loss functions for jax.
-- `e3nn-jax <https://github.com/e3nn/e3nn-jax>`_ provides functionality for E(3) equivariant neural networks.
 - `h5py <https://www.h5py.org>`_ handles IO for `HDF5 <http://hdfgroup.org>`_ files.
 - `Tensorboard <https://www.tensorflow.org/tensorboard>`_ is a practical tool for monitoring training of neural networks.
 - `hydra <https://hydra.cc/>`_ helps with constructing command-line interfaces.

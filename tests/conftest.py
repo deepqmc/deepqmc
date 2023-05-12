@@ -1,11 +1,13 @@
+import os
 from typing import Sequence
 
 import haiku as hk
 import jax
 import pytest
+from hydra import compose, initialize_config_dir
+from hydra.utils import instantiate
 
 from deepqmc import MolecularHamiltonian, Molecule
-from deepqmc.wf import PauliNet
 
 
 @pytest.fixture(scope='session')
@@ -72,28 +74,23 @@ class Helpers:
         )
 
     @staticmethod
-    def init_model(model, *args, seed=0, batch_dim=False):
+    def init_model(model, *args, seed=0):
         params = model.init(Helpers.rng(seed), *args)
         return params
 
     @staticmethod
-    def create_paulinet(
-        hamil=None,
-        phys_conf=None,
-        init_model_kwargs=None,
-        phys_conf_kwargs=None,
-        paulinet_kwargs=None,
-    ):
+    def create_ansatz(hamil=None):
         hamil = hamil or Helpers.hamil()
-        return_phys_conf = phys_conf is None
-        phys_conf = phys_conf or Helpers.phys_conf(hamil, **(phys_conf_kwargs or {}))
-        paulinet = Helpers.transform_model(PauliNet, hamil, **(paulinet_kwargs or {}))
-        params = Helpers.init_model(paulinet, phys_conf, **(init_model_kwargs or {}))
-        ret = (params, paulinet)
-        if return_phys_conf:
-            ret += (phys_conf,)
-        return ret
+        _ansatz = Helpers.init_conf('ansatz')
+        ansatz = Helpers.transform_model(_ansatz, hamil)
+        params = Helpers.init_model(ansatz, Helpers.phys_conf(hamil))
+        return ansatz, params
 
-
-def pytest_sessionstart(session):
-    jax.config.update('jax_platform_name', 'cpu')
+    @staticmethod
+    def init_conf(config_name):
+        with initialize_config_dir(
+            version_base=None,
+            config_dir=os.path.join(os.path.dirname(__file__), 'conf'),
+        ):
+            cfg = compose(config_name=config_name)
+        return instantiate(cfg, _recursive_=True)
