@@ -81,7 +81,7 @@ class Helpers:
     @staticmethod
     def create_ansatz(hamil=None):
         hamil = hamil or Helpers.hamil()
-        _ansatz = Helpers.init_conf('ansatz.yaml')
+        _ansatz = Helpers.init_conf('ansatz')
         ansatz = Helpers.transform_model(_ansatz, hamil)
         params = Helpers.init_model(ansatz, Helpers.phys_conf(hamil))
         return ansatz, params
@@ -89,7 +89,8 @@ class Helpers:
     @staticmethod
     def init_conf(config_name):
         with initialize_config_dir(
-            version_base=None, config_dir=os.path.abspath('./conf/')
+            version_base=None,
+            config_dir=os.path.join(os.path.dirname(__file__), 'conf'),
         ):
             cfg = compose(config_name=config_name)
         return instantiate(cfg, _recursive_=True)

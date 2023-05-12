@@ -53,7 +53,7 @@ class TestGNN:
         mol = helpers.mol()
         hamil = helpers.hamil(mol)
         phys_conf = helpers.phys_conf(hamil)
-        _gnn = helpers.init_conf('gnn.yaml')
+        _gnn = helpers.init_conf('gnn')
         gnn = helpers.transform_model(_gnn, mol, 8)
         params = helpers.init_model(gnn, phys_conf)
         emb = gnn.apply(params, phys_conf)
