@@ -36,6 +36,7 @@ dependencies = [
     'jaxtyping',
     'jax-dataclasses',
     'kfac-jax',
+    'optax',
     'pyscf',
     'tensorboard',
     'pyyaml',
