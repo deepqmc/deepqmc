@@ -112,6 +112,7 @@ class GraphNeuralNetwork(hk.Module):
         self,
         mol,
         embedding_dim,
+        *,
         n_interactions,
         atom_type_embeddings,
         layer_factories=None,

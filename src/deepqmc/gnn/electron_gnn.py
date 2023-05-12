@@ -65,12 +65,26 @@ class ElectronGNNLayer(MessagePassingLayer):
         **layer_attrs,
     ):
         super().__init__(**layer_attrs)
+        STREAM_DIMS = {
+            'ne': self.two_particle_stream_dim,
+            'same': self.two_particle_stream_dim,
+            'anti': self.two_particle_stream_dim,
+            'ee': self.two_particle_stream_dim,
+            'residual': self.embedding_dim,
+            'nodes_up': self.embedding_dim,
+            'nodes_down': self.embedding_dim,
+        }
         assert update_rule in [
             'concatenate',
             'featurewise',
             'featurewise_shared',
             'sum',
         ]
+        assert all(uf in STREAM_DIMS.keys() for uf in update_features)
+        assert (
+            update_rule not in ['sum', 'featurewise_shared']
+            or self.embedding_dim == self.two_particle_stream_dim
+        )
         self.deep_features = deep_features
         self.update_features = update_features
         self.update_rule = update_rule
@@ -90,7 +104,7 @@ class ElectronGNNLayer(MessagePassingLayer):
                         if self.first_layer
                         else self.embedding_dim
                     ),
-                    self.embedding_dim,
+                    self.two_particle_stream_dim,
                     residual=not self.first_layer,
                     name=f'u{typ}',
                     **subnet_kwargs_by_lbl['u'],
@@ -103,9 +117,9 @@ class ElectronGNNLayer(MessagePassingLayer):
                     (
                         self.edge_feat_dim[typ]
                         if not deep_features
-                        else self.embedding_dim
+                        else self.two_particle_stream_dim
                     ),
-                    self.embedding_dim,
+                    self.two_particle_stream_dim,
                     name=f'w_{typ}',
                     **subnet_kwargs_by_lbl['w'],
                 )
@@ -114,7 +128,7 @@ class ElectronGNNLayer(MessagePassingLayer):
             self.h = {
                 typ: MLP(
                     self.embedding_dim,
-                    self.embedding_dim,
+                    self.two_particle_stream_dim,
                     name=f'h_{typ}',
                     **subnet_kwargs_by_lbl['h'],
                 )
@@ -122,8 +136,11 @@ class ElectronGNNLayer(MessagePassingLayer):
             }
         self.g = (
             MLP(
-                self.embedding_dim
-                * (len(self.update_features) if update_rule == 'concatenate' else 1),
+                (
+                    sum(STREAM_DIMS[uf] for uf in update_features)
+                    if update_rule == 'concatenate'
+                    else self.embedding_dim
+                ),
                 self.embedding_dim,
                 name='g',
                 **subnet_kwargs_by_lbl['g'],
@@ -131,7 +148,7 @@ class ElectronGNNLayer(MessagePassingLayer):
             if not self.update_rule == 'featurewise'
             else {
                 uf: MLP(
-                    self.embedding_dim,
+                    STREAM_DIMS[uf],
                     self.embedding_dim,
                     name=f'g_{uf}',
                     **subnet_kwargs_by_lbl['g'],
@@ -234,7 +251,10 @@ class ElectronGNN(GraphNeuralNetwork):
         n_interactions (int): number of message passing interactions.
         posisional_electron_embeddings(bool): whether to initialize the electron
             embbedings with the concatenated edge features.
-        edge_feat_factory:
+        edge_features: a function or a :data:`dict` of functions for each edge
+            type, embedding the interparticle differences.
+        two_particle_stream_dim (int): the feature dimension of the two particle
+            streams. Only active if :data:`deep_features` are used.
         gnn_kwargs (dict): extra arguments passed to the
             :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork` base class.
     """
@@ -244,9 +264,9 @@ class ElectronGNN(GraphNeuralNetwork):
         mol,
         embedding_dim,
         *,
-        n_interactions,
         positional_electron_embeddings,
         edge_features,
+        two_particle_stream_dim,
         **gnn_kwargs,
     ):
         n_nuc, n_up, n_down = mol.n_particles
@@ -259,8 +279,10 @@ class ElectronGNN(GraphNeuralNetwork):
         super().__init__(
             mol,
             embedding_dim,
-            n_interactions,
-            layer_attrs={'edge_feat_dim': edge_feat_dim},
+            layer_attrs={
+                'edge_feat_dim': edge_feat_dim,
+                'two_particle_stream_dim': two_particle_stream_dim,
+            },
             **gnn_kwargs,
         )
         self.edge_features = edge_features

@@ -33,6 +33,7 @@ omni_factory:
     n_interactions: 4
     positional_electron_embeddings: true
     atom_type_embeddings: false
+    two_particle_stream_dim: 32
     edge_features:
       _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
       edge_features:
