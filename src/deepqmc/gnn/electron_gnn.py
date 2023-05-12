@@ -41,6 +41,7 @@ class ElectronGNNLayer(MessagePassingLayer):
             - ``'featurewise'``: apply different MLP to each feature channel and sum
             - ``'featurewise_shared'``: apply the same MLP across feature channels
             - ``'sum'``: sum features before sending through an MLP
+
             note that `sum` and `featurewise_shared` imply features of same size
 
         subnet_kwargs (dict): extra arguments passed to the

@@ -43,15 +43,15 @@ The Hamiltonian provides the local energy function for the evaluation of the ene
 Create a wave function ansatz
 -----------------------------
 
-The PauliNet wavefunction ansatz is available in the :mod:`deepqmc.wf` subpackage. It is initialized from the molecular Hamiltonian. Being a :mod:`haiku` module the ansatz has to be initialized inside a :func:`haiku.transform`::
+A general neural network wavefunction ansatz is available in the :mod:`deepqmc.wf` subpackage. It is initialized from the molecular Hamiltonian. Being a :mod:`haiku` module the ansatz has to be initialized inside a :func:`haiku.transform`::
     
     import haiku as hk
-    from deepqmc.wf import PauliNet
+    from deepqmc.wf import NeuralNetworkWaveFunction
 
     @hk.without_apply_rng
     @hk.transform_with_state
-    def net(rs,return_mos=False):
-        return PauliNet(H)(rs,return_mos=return_mos)
+    def net(rs, return_mos=False):
+        return NeuralNetworkWaveFunction(H)(rs, return_mos=return_mos)
 
 The hyperparameters and their physical meaning are described in the :ref:`api <api>` reference.
 

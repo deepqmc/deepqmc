@@ -46,6 +46,9 @@ class NeuralNetworkWaveFunction(WaveFunction):
     r"""
     Implements the neural network wave function.
 
+    Configuration files to obtain the PauliNet [HermannNC20]_, FermiNet [PfauPRR20]_,
+    and DeepErwin [Gerard22]_ architectures are provided.
+
     Args:
         hamil (~MolecularHamiltonian): the Hamiltonian of the system.
         envelope (~wf.nn_wave_function.env.ExponentialEnvelopes): the orbital envelopes.
