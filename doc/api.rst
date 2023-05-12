@@ -51,13 +51,13 @@ Wave functions
 Graph neural networks
 ---------------------
 
-A graph neural network is the most important component of the neural network Ansatz.
-This module implements the most useful GNNs used in deep QMC.
+A graph neural network is the most important component of the neural network wave function ansatz.
+This module implements a general gnn framework, that can be configured to obtain a variety of different ansatzes.
 
 Graphs
 ~~~~~~
 
-This submodule implements the basic functionality for working with (truncated) graphs.
+This submodule implements the basic functionality for working with graphs.
 
 .. automodule:: deepqmc.gnn.graph
 
