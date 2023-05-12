@@ -2,8 +2,6 @@ import os
 import subprocess
 from pathlib import Path
 
-import pytest
-
 
 class TestApp:
     ARGS = [
@@ -25,9 +23,6 @@ class TestApp:
             check=True,
         )
         files = os.listdir(tmpdir)
-        print(files)
-        print(result.stdout.decode())
-        print(result)
         assert 'deepqmc.log' in files
         assert 'training' in files
         train_files = os.listdir(tmpdir / 'training')

@@ -13,6 +13,7 @@ class ExponentialEnvelopes(hk.Module):
         self.center_idx = center_idx
         if not isotropic:
             zetas = zetas[..., None, None] * jnp.eye(3)
+
         self.zetas = hk.get_parameter(
             'zetas',
             zetas.shape,
@@ -22,12 +23,12 @@ class ExponentialEnvelopes(hk.Module):
 
     def __call__(self, diffs):
         d = diffs[..., self.center_idx, :-1]
-        R = (
-            self.zetas[..., None] * d
+        exponent = (
+            jnp.abs(self.zetas * norm(d, safe=True))
             if self.isotropic
-            else jnp.einsum('ers,ies->ier', self.zetas, d)
+            else norm(jnp.einsum('ers,ies->ier', self.zetas, d), safe=True)
         )
-        return jnp.exp(-norm(R, safe=True))
+        return jnp.exp(-exponent)
 
     @classmethod
     def from_mol(cls, mol, **kwargs):
