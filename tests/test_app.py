@@ -5,11 +5,10 @@ from pathlib import Path
 import pytest
 
 
-@pytest.mark.skip(reason='TODO: resolve cublas error in pytest subprocss')
 class TestApp:
     ARGS = [
         'deepqmc',
-        'hamil/mol=H2',
+        'hamil/mol=LiH',
         'device=cpu',
         'task.steps=1',
         'task.sample_size=2',
@@ -23,7 +22,7 @@ class TestApp:
             [*self.ARGS, f'hydra.run.dir={tmpdir}'],
             cwd=tmpdir,
             capture_output=True,
-            # check=True,
+            check=True,
         )
         files = os.listdir(tmpdir)
         print(files)
