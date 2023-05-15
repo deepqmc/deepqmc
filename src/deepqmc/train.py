@@ -150,7 +150,7 @@ def train(  # noqa: C901
         h5file.swmr_mode = True
         tables = []
         for i, mol in enumerate(sampler.mols):
-            group = h5file.require_group(str(i))
+            group = h5file.require_group(str(i)) if len(sampler.mols) > 1 else h5file
             group.attrs.create('geometry', mol.coords.tolist())
             table = H5LogTable(group)
             table.resize(init_step)
