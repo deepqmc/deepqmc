@@ -329,10 +329,10 @@ def train(  # noqa: C901
                                 train_state,
                                 stats['per_mol']['E_loc/std'].mean(),
                             )
-                        for table, E, ewm_state, smpl_state in zip(
-                            tables, per_mol_energy, ewm_states, train_state.sampler
+                        for i, (table, ewm_state, smpl_state) in enumerate(
+                            zip(tables, ewm_states, train_state.sampler)
                         ):
-                            table.row['E_mean'] = E
+                            table.row['E_loc'] = E_loc[mol_idx == i]
                             if ewm_state.mean is not None:
                                 table.row['E_ewm'] = ewm_state.mean
                             table.row['sign_psi'] = smpl_state['psi'].sign
