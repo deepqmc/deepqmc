@@ -6,11 +6,17 @@ from jax import ops
 
 from ..hkext import MLP
 from ..utils import flatten
-from .gnn import MessagePassingLayer
-from .graph import Graph, GraphNodes, MolecularGraphEdgeBuilder, difference_callback
+from .graph import (
+    Graph,
+    GraphNodes,
+    GraphUpdate,
+    MolecularGraphEdgeBuilder,
+    difference_callback,
+)
+from .utils import NodeEdgeMapping
 
 
-class ElectronGNNLayer(MessagePassingLayer):
+class ElectronGNNLayer:
     r"""
     The message passing layer of :class:`ElectronGNN`.
 
@@ -56,6 +62,16 @@ class ElectronGNNLayer(MessagePassingLayer):
 
     def __init__(
         self,
+        n_interactions,
+        ilayer,
+        n_nuc,
+        n_up,
+        n_down,
+        embedding_dim,
+        edge_types,
+        node_data,
+        edge_feat_dim,
+        two_particle_stream_dim,
         *,
         residual,
         convolution,
@@ -64,17 +80,23 @@ class ElectronGNNLayer(MessagePassingLayer):
         update_rule,
         subnet_kwargs=None,
         subnet_kwargs_by_lbl=None,
-        **layer_attrs,
     ):
-        super().__init__(**layer_attrs)
+        super().__init__()
+        self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
+        self.first_layer = ilayer == 0
+        last_layer = ilayer == n_interactions - 1
+        self.edge_types = tuple(
+            typ for typ in edge_types if not last_layer or typ not in {'nn', 'en'}
+        )
+        self.mapping = NodeEdgeMapping(self.edge_types, node_data=node_data)
         STREAM_DIMS = {
-            'ne': self.two_particle_stream_dim,
-            'same': self.two_particle_stream_dim,
-            'anti': self.two_particle_stream_dim,
-            'ee': self.two_particle_stream_dim,
-            'residual': self.embedding_dim,
-            'nodes_up': self.embedding_dim,
-            'nodes_down': self.embedding_dim,
+            'ne': two_particle_stream_dim,
+            'same': two_particle_stream_dim,
+            'anti': two_particle_stream_dim,
+            'ee': two_particle_stream_dim,
+            'residual': embedding_dim,
+            'nodes_up': embedding_dim,
+            'nodes_down': embedding_dim,
         }
         assert update_rule in [
             'concatenate',
@@ -85,7 +107,7 @@ class ElectronGNNLayer(MessagePassingLayer):
         assert all(uf in STREAM_DIMS.keys() for uf in update_features)
         assert (
             update_rule not in ['sum', 'featurewise_shared']
-            or self.embedding_dim == self.two_particle_stream_dim
+            or embedding_dim == two_particle_stream_dim
         )
         self.deep_features = deep_features
         self.update_features = update_features
@@ -101,12 +123,8 @@ class ElectronGNNLayer(MessagePassingLayer):
         if deep_features:
             self.u = {
                 typ: MLP(
-                    (
-                        self.edge_feat_dim[typ]
-                        if self.first_layer
-                        else self.embedding_dim
-                    ),
-                    self.two_particle_stream_dim,
+                    (edge_feat_dim[typ] if self.first_layer else embedding_dim),
+                    two_particle_stream_dim,
                     residual=not self.first_layer,
                     name=f'u{typ}',
                     **subnet_kwargs_by_lbl['u'],
@@ -117,11 +135,11 @@ class ElectronGNNLayer(MessagePassingLayer):
             self.w = {
                 typ: MLP(
                     (
-                        self.edge_feat_dim[typ]
+                        edge_feat_dim[typ]
                         if not deep_features
-                        else self.two_particle_stream_dim
+                        else two_particle_stream_dim
                     ),
-                    self.two_particle_stream_dim,
+                    two_particle_stream_dim,
                     name=f'w_{typ}',
                     **subnet_kwargs_by_lbl['w'],
                 )
@@ -129,8 +147,8 @@ class ElectronGNNLayer(MessagePassingLayer):
             }
             self.h = {
                 typ: MLP(
-                    self.embedding_dim,
-                    self.two_particle_stream_dim,
+                    embedding_dim,
+                    two_particle_stream_dim,
                     name=f'h_{typ}',
                     **subnet_kwargs_by_lbl['h'],
                 )
@@ -141,9 +159,9 @@ class ElectronGNNLayer(MessagePassingLayer):
                 (
                     sum(STREAM_DIMS[uf] for uf in update_features)
                     if update_rule == 'concatenate'
-                    else self.embedding_dim
+                    else embedding_dim
                 ),
-                self.embedding_dim,
+                embedding_dim,
                 name='g',
                 **subnet_kwargs_by_lbl['g'],
             )
@@ -151,7 +169,7 @@ class ElectronGNNLayer(MessagePassingLayer):
             else {
                 uf: MLP(
                     STREAM_DIMS[uf],
-                    self.embedding_dim,
+                    embedding_dim,
                     name=f'g_{uf}',
                     **subnet_kwargs_by_lbl['g'],
                 )
@@ -239,6 +257,23 @@ class ElectronGNNLayer(MessagePassingLayer):
             return nodes
 
         return update_nodes
+
+    def __call__(self, graph):
+        r"""
+        Execute the message passing layer.
+
+        Args:
+            graph (:class:`Graph`)
+
+        Returns:
+            :class:`Graph`: updated graph
+        """
+        update_graph = GraphUpdate(
+            update_nodes_fn=self.get_update_nodes_fn(),
+            update_edges_fn=self.get_update_edges_fn(),
+            aggregate_edges_for_nodes_fn=self.get_aggregate_edges_for_nodes_fn(),
+        )
+        return update_graph(graph)
 
 
 class ElectronGNN:
