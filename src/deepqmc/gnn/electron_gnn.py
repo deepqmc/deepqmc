@@ -1,4 +1,5 @@
 from functools import partial
+
 import haiku as hk
 import jax.numpy as jnp
 from jax import ops
@@ -6,7 +7,7 @@ from jax import ops
 from ..hkext import MLP
 from ..utils import flatten
 from .gnn import MessagePassingLayer
-from .graph import GraphNodes, difference_callback, MolecularGraphEdgeBuilder, Graph
+from .graph import Graph, GraphNodes, MolecularGraphEdgeBuilder, difference_callback
 
 
 class ElectronGNNLayer(MessagePassingLayer):
@@ -355,18 +356,17 @@ class ElectronGNN:
 
     def edge_factory(self, phys_conf):
         r"""Compute all the graph edges used in the GNN."""
+
         def feature_callback(typ, *callback_args):
             return self.edge_features[typ](difference_callback(*callback_args))
+
         edge_factory = MolecularGraphEdgeBuilder(
             self.n_nuc,
             self.n_up,
             self.n_down,
             self.edge_types,
-            kwargs_by_edge_type={
-                typ: {
-                    'feature_callback': partial(feature_callback, typ)
-                }
-                for typ in self.edge_types
+            feature_callbacks={
+                typ: partial(feature_callback, typ) for typ in self.edge_types
             },
         )
         return edge_factory(phys_conf)
