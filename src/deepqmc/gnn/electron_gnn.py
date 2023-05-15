@@ -115,7 +115,7 @@ class ElectronGNNLayer:
         self.convolution = convolution
         subnet_kwargs = subnet_kwargs or {}
         subnet_kwargs_by_lbl = subnet_kwargs_by_lbl or {}
-        for lbl in self.subnet_labels:
+        for lbl in ['w', 'h', 'g', 'u']:
             subnet_kwargs_by_lbl.setdefault(lbl, {})
             for k, v in subnet_kwargs.items():
                 subnet_kwargs_by_lbl[lbl].setdefault(k, v)
@@ -177,11 +177,6 @@ class ElectronGNNLayer:
             }
         )
         self.residual = residual
-
-    @classmethod
-    @property
-    def subnet_labels(cls):
-        return ('w', 'h', 'g', 'u')
 
     def get_update_edges_fn(self):
         def update_edges(edges):
