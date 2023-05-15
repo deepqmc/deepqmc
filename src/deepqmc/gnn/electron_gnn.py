@@ -1,11 +1,12 @@
+from functools import partial
 import haiku as hk
 import jax.numpy as jnp
 from jax import ops
 
 from ..hkext import MLP
 from ..utils import flatten
-from .gnn import GraphNeuralNetwork, MessagePassingLayer
-from .graph import GraphNodes, difference_callback
+from .gnn import MessagePassingLayer
+from .graph import GraphNodes, difference_callback, MolecularGraphEdgeBuilder, Graph
 
 
 class ElectronGNNLayer(MessagePassingLayer):
@@ -239,7 +240,7 @@ class ElectronGNNLayer(MessagePassingLayer):
         return update_nodes
 
 
-class ElectronGNN(GraphNeuralNetwork):
+class ElectronGNN:
     r"""
     A neural network acting on graphs defined by electrons and nuclei.
 
@@ -267,24 +268,55 @@ class ElectronGNN(GraphNeuralNetwork):
         positional_electron_embeddings,
         edge_features,
         two_particle_stream_dim,
-        **gnn_kwargs,
+        n_interactions,
+        atom_type_embeddings,
+        layer_kwargs,
+        ghost_coords=None,
     ):
+        super().__init__()
         n_nuc, n_up, n_down = mol.n_particles
-        edge_features = (
-            edge_features
-            if isinstance(edge_features, dict)
-            else {typ: edge_features for typ in self.edge_types}
-        )
         edge_feat_dim = {typ: len(edge_features[typ]) for typ in self.edge_types}
-        super().__init__(
-            mol,
-            embedding_dim,
-            layer_attrs={
-                'edge_feat_dim': edge_feat_dim,
-                'two_particle_stream_dim': two_particle_stream_dim,
+        n_atom_types = mol.n_atom_types
+        charges = mol.charges
+        self.ghost_coords = None
+        if ghost_coords is not None:
+            charges = jnp.concatenate([charges, jnp.zeros(len(ghost_coords))])
+            n_nuc += len(ghost_coords)
+            n_atom_types += 1
+            self.ghost_coords = jnp.asarray(ghost_coords)
+        self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
+        self.embedding_dim = embedding_dim
+        self.node_data = {
+            'n_nodes': {'nuclei': n_nuc, 'electrons': n_up + n_down},
+            'n_node_types': {
+                'nuclei': n_atom_types if atom_type_embeddings else n_nuc,
+                'electrons': 1 if n_up == n_down else 2,
             },
-            **gnn_kwargs,
-        )
+            'node_types': {
+                'nuclei': (
+                    jnp.unique(charges, size=n_nuc, return_inverse=True)[-1]
+                    if atom_type_embeddings
+                    else jnp.arange(n_nuc)
+                ) + (1 if n_up == n_down else 2),
+                'electrons': jnp.array(n_up * [0] + n_down * [int(n_up != n_down)]),
+            },
+        }
+        self.layers = [
+            self.layer_factory(
+                n_interactions=n_interactions,
+                ilayer=i,
+                n_nuc=n_nuc,
+                n_up=n_up,
+                n_down=n_down,
+                embedding_dim=embedding_dim,
+                edge_types=self.edge_types,
+                node_data=self.node_data,
+                edge_feat_dim=edge_feat_dim,
+                two_particle_stream_dim=two_particle_stream_dim,
+                **layer_kwargs,
+            )
+            for i in range(n_interactions)
+        ]
         self.edge_features = edge_features
         self.positional_electron_embeddings = positional_electron_embeddings
 
@@ -321,11 +353,56 @@ class ElectronGNN(GraphNeuralNetwork):
     def edge_types(cls):
         return ('same', 'anti', 'ne')
 
-    def edge_feature_callback(self, typ, *feature_callback_args):
-        r = difference_callback(*feature_callback_args)
-        return self.edge_features[typ](r)
+    def edge_factory(self, phys_conf):
+        r"""Compute all the graph edges used in the GNN."""
+        def feature_callback(typ, *callback_args):
+            return self.edge_features[typ](difference_callback(*callback_args))
+        edge_factory = MolecularGraphEdgeBuilder(
+            self.n_nuc,
+            self.n_up,
+            self.n_down,
+            self.edge_types,
+            kwargs_by_edge_type={
+                typ: {
+                    'feature_callback': partial(feature_callback, typ)
+                }
+                for typ in self.edge_types
+            },
+        )
+        return edge_factory(phys_conf)
 
     @classmethod
     @property
     def layer_factory(cls):
         return ElectronGNNLayer
+
+    def __call__(self, phys_conf):
+        r"""
+        Execute the graph neural network.
+
+        Args:
+            phys_conf (PhysicalConfiguration): the physical configuration
+                of the molecule.
+
+        Returns:
+            float, (:math:`N_\text{elec}`, :data:`embedding_dim`):
+            the final embeddings of the electrons.
+        """
+        if self.ghost_coords is not None:
+            phys_conf = phys_conf._replace(
+                R=jnp.concatenate(
+                    [
+                        phys_conf.R,
+                        jnp.tile(self.ghost_coords[None], (len(phys_conf.R), 1, 1)),
+                    ],
+                    axis=-2,
+                )
+            )
+        graph_edges = self.edge_factory(phys_conf)
+        graph_nodes = self.node_factory(graph_edges)
+        graph = Graph(graph_nodes, graph_edges)
+
+        for layer in self.layers:
+            graph = layer(graph)
+
+        return graph.nodes.electrons

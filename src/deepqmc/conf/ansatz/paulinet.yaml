@@ -44,11 +44,24 @@ omni_factory:
     atom_type_embeddings: false
     two_particle_stream_dim: 64
     edge_features:
-      _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-      edge_features:
-      - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
-        powers: [1]
-      - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+      ne:
+        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+        edge_features:
+        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+          powers: [1]
+        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+      same:
+        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+        edge_features:
+        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+          powers: [1]
+        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+      anti:
+        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+        edge_features:
+        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+          powers: [1]
+        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
     layer_kwargs:
       subnet_kwargs:
         hidden_layers: ['log', 3]
