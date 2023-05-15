@@ -34,13 +34,19 @@ omni_factory:
     positional_electron_embeddings: true
     atom_type_embeddings: false
     two_particle_stream_dim: 32
+    edge_types:
+    - same
+    - anti
+    - ne
     edge_features:
       _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
       edge_features:
       - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
         powers: [1]
       - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
-    layer_kwargs:
+    layer_factory:
+      _target_: deepqmc.gnn.electron_gnn.ElectronGNNLayer
+      _partial_: true
       subnet_kwargs:
         hidden_layers: ['log', 1]
         last_linear: false
@@ -53,10 +59,10 @@ omni_factory:
       deep_features: true
       update_rule: concatenate
       update_features: 
-        - same
-        - anti
-        - residual
-        - nodes_up 
-        - nodes_down
+      - same
+      - anti
+      - residual
+      - nodes_up
+      - nodes_down
 
   

@@ -281,14 +281,27 @@ class ElectronGNN:
         mol (~deepqmc.Molecule): the molecule on which the graph is defined.
         embedding_dim (int): the length of the electron embedding vectors.
         n_interactions (int): number of message passing interactions.
-        posisional_electron_embeddings(bool): whether to initialize the electron
+        positional_electron_embeddings(bool): whether to initialize the electron
             embbedings with the concatenated edge features.
         edge_features: a function or a :data:`dict` of functions for each edge
             type, embedding the interparticle differences.
+        edge_types: the types of edges to consider in the molecular graph. It should
+            be a sequence of unique :data:`str`s from the follwing options:
+                - :data:`'nn'`: nucleus-nucleus edges
+                - :data:`'ne'`: nucleus-electron edges
+                - :data:`'en'`: electron-nucleus edges
+                - :data:`'same'`: electron-electron edges between electrons of the same
+                    spin
+                - :data:`'anti'`: electron-electron edges between electrons of opposite
+                    spins
         two_particle_stream_dim (int): the feature dimension of the two particle
             streams. Only active if :data:`deep_features` are used.
-        gnn_kwargs (dict): extra arguments passed to the
-            :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork` base class.
+        atom_type_embeedings (bool): if :data:`True`, use the same initial embeddings
+            for all atoms with the same atomic number. If :data:`False` use a different
+            initial embedding for all atoms.
+        layer_factory (Callable): a callable that generates a layer of the GNN.
+        ghost_coords: optional, specifies the coordinates of one or more ghost atoms,
+            useful for breaking spatial symmetries of the nuclear geometry.
     """
 
     def __init__(
@@ -296,17 +309,18 @@ class ElectronGNN:
         mol,
         embedding_dim,
         *,
+        n_interactions,
         positional_electron_embeddings,
         edge_features,
+        edge_types,
         two_particle_stream_dim,
-        n_interactions,
         atom_type_embeddings,
-        layer_kwargs,
+        layer_factory,
         ghost_coords=None,
     ):
         super().__init__()
         n_nuc, n_up, n_down = mol.n_particles
-        edge_feat_dim = {typ: len(edge_features[typ]) for typ in self.edge_types}
+        edge_feat_dim = {typ: len(edge_features[typ]) for typ in edge_types}
         n_atom_types = mol.n_atom_types
         charges = mol.charges
         self.ghost_coords = None
@@ -333,22 +347,22 @@ class ElectronGNN:
             },
         }
         self.layers = [
-            self.layer_factory(
+            layer_factory(
                 n_interactions,
                 ilayer,
                 n_nuc,
                 n_up,
                 n_down,
                 embedding_dim,
-                self.edge_types,
+                edge_types,
                 self.node_data,
                 edge_feat_dim,
                 two_particle_stream_dim,
-                **layer_kwargs,
             )
             for ilayer in range(n_interactions)
         ]
         self.edge_features = edge_features
+        self.edge_types = edge_types
         self.positional_electron_embeddings = positional_electron_embeddings
 
     def node_factory(self, edges):
@@ -378,11 +392,6 @@ class ElectronGNN:
         Y = hk.Embed(n_nuc_types, self.embedding_dim, name='NuclearEmbedding')
         y = Y(self.node_data['node_types']['nuclei'] - n_elec_types)
         return GraphNodes(y, x)
-
-    @classmethod
-    @property
-    def edge_types(cls):
-        return ('same', 'anti', 'ne')
 
     def edge_factory(self, phys_conf):
         r"""Compute all the graph edges used in the GNN."""
