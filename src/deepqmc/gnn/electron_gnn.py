@@ -82,8 +82,8 @@ class ElectronGNNLayer:
         subnet_kwargs_by_lbl=None,
     ):
         super().__init__()
-        self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
-        self.first_layer = ilayer == 0
+        self.n_up, self.n_down = n_up, n_down
+        first_layer = ilayer == 0
         last_layer = ilayer == n_interactions - 1
         self.edge_types = tuple(
             typ for typ in edge_types if not last_layer or typ not in {'nn', 'en'}
@@ -123,9 +123,9 @@ class ElectronGNNLayer:
         if deep_features:
             self.u = {
                 typ: MLP(
-                    (edge_feat_dim[typ] if self.first_layer else embedding_dim),
+                    (edge_feat_dim[typ] if first_layer else embedding_dim),
                     two_particle_stream_dim,
-                    residual=not self.first_layer,
+                    residual=not first_layer,
                     name=f'u{typ}',
                     **subnet_kwargs_by_lbl['u'],
                 )
@@ -334,19 +334,19 @@ class ElectronGNN:
         }
         self.layers = [
             self.layer_factory(
-                n_interactions=n_interactions,
-                ilayer=i,
-                n_nuc=n_nuc,
-                n_up=n_up,
-                n_down=n_down,
-                embedding_dim=embedding_dim,
-                edge_types=self.edge_types,
-                node_data=self.node_data,
-                edge_feat_dim=edge_feat_dim,
-                two_particle_stream_dim=two_particle_stream_dim,
+                n_interactions,
+                ilayer,
+                n_nuc,
+                n_up,
+                n_down,
+                embedding_dim,
+                self.edge_types,
+                self.node_data,
+                edge_feat_dim,
+                two_particle_stream_dim,
                 **layer_kwargs,
             )
-            for i in range(n_interactions)
+            for ilayer in range(n_interactions)
         ]
         self.edge_features = edge_features
         self.positional_electron_embeddings = positional_electron_embeddings
@@ -400,11 +400,6 @@ class ElectronGNN:
             },
         )
         return edge_factory(phys_conf)
-
-    @classmethod
-    @property
-    def layer_factory(cls):
-        return ElectronGNNLayer
 
     def __call__(self, phys_conf):
         r"""
