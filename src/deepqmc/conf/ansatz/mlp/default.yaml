@@ -1,0 +1,4 @@
+_target_: deepqmc.hkext.MLP
+_partial_: true
+bias: false
+hidden_layers: ['log', 3]

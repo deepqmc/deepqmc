@@ -21,6 +21,8 @@ class MLP(hk.Module):
     Args:
         in_dim (int): the input dimension.
         out_dim (int): the output dimension.
+        residual (bool): whether to include a residual connection
+        name (str): optional, the name of the network.
         hidden_layers (tuple): optional, either ('log', :math:`N_\text{layers}`),
             in which case the network will have :math:`N_\text{layers}` layers
             with logarithmically changing widths, or a tuple of ints specifying
@@ -34,7 +36,6 @@ class MLP(hk.Module):
         last_linear (bool): optional, if :data:`True` the activation function
             is not applied to the activation of the last layer.
         activation (Callable): optional, the activation function.
-        name (str): optional, the name of the network.
         w_init (str or Callable): optional, specifies the initialization of the
             linear weights. Possible string values are:
 
@@ -47,12 +48,13 @@ class MLP(hk.Module):
         self,
         in_dim,
         out_dim,
+        residual=False,
+        name=None,
+        *,
         hidden_layers=None,
         bias=True,
         last_linear=False,
         activation=ssp,
-        name=None,
-        residual=False,
         w_init='default',
     ):
         assert bias in (True, False, 'not_last')
