@@ -40,10 +40,7 @@ class TestGraph:
         graph_edges = MolecularGraphEdgeBuilder(
             *mol.n_particles,
             edge_types,
-            {
-                edge_type: {'feature_callback': difference_callback}
-                for edge_type in edge_types
-            },
+            {edge_type: difference_callback for edge_type in edge_types},
         )(phys_conf)
         ndarrays_regression.check(helpers.flatten_pytree(graph_edges))
 
