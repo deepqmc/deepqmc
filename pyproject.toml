@@ -35,7 +35,7 @@ dependencies = [
     'jax[cuda]',
     'jaxtyping',
     'jax-dataclasses',
-    'kfac-jax',
+    'kfac-jax<0.0.5',
     'optax',
     'pyscf',
     'tensorboard',
