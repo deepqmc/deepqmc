@@ -31,6 +31,10 @@ omni_factory:
     positional_electron_embeddings: true
     atom_type_embeddings: true
     two_particle_stream_dim: 32
+    edge_types:
+    - same
+    - anti
+    - ne
     edge_features:
       ne:
         _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
@@ -44,7 +48,9 @@ omni_factory:
       anti:
         _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
         powers: [1]
-    layer_kwargs:
+    layer_factory:
+      _target_: deepqmc.gnn.electron_gnn.ElectronGNNLayer
+      _partial_: true
       subnet_kwargs:
         hidden_layers: ['log', 1]
         last_linear: false

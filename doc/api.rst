@@ -63,13 +63,6 @@ This submodule implements the basic functionality for working with graphs.
 
 .. automodule:: deepqmc.gnn.edge_features
 
-GNNs
-~~~~
-
-This submodule provides the base classes that all GNN instances should inherit from.
-
-.. automodule:: deepqmc.gnn.gnn
-
 ElectronGNN
 ~~~~~~~~~~~
 

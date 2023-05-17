@@ -146,9 +146,7 @@ def concatenate_edges(edges):
     )
 
 
-def MolecularGraphEdgeBuilder(
-    n_nuc, n_up, n_down, edge_types, kwargs_by_edge_type=None
-):
+def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, feature_callbacks):
     r"""
     Create a function that builds many types of molecular edges.
 
@@ -163,8 +161,8 @@ def MolecularGraphEdgeBuilder(
                 - ``'en'``: electrons->nuclei edges
                 - ``'same'``: edges betwen same-spin electrons
                 - ``'anti'``: edges betwen opposite-spin electrons
-        kwargs_by_edge_type (dict): a mapping from names of edge types to the
-            kwargs to be passed to the :class:`GraphEdgeBuilder` of that edge type.
+        feature_callbacks (dict): a mapping from names of edge types to the
+            feature callbacks passed to the :class:`GraphEdgeBuilder` of that edge type.
     """
     n_elec = n_up + n_down
     builder_mapping = {
@@ -209,8 +207,8 @@ def MolecularGraphEdgeBuilder(
     }
     builders = {
         builder_type: GraphEdgeBuilder(
-            **((kwargs_by_edge_type or {}).get(edge_type)),
             **fix_kwargs_of_builder_type[builder_type],
+            feature_callback=feature_callbacks[edge_type],
         )
         for edge_type in edge_types
         for builder_type in builder_mapping[edge_type]
