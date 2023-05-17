@@ -90,22 +90,16 @@ class ElectronGNNLayer(hk.Module):
             typ for typ in edge_types if not last_layer or typ not in {'nn', 'en'}
         )
         self.mapping = NodeEdgeMapping(self.edge_types, node_data=node_data)
-        STREAM_DIMS = {
-            'ne': two_particle_stream_dim,
-            'same': two_particle_stream_dim,
-            'anti': two_particle_stream_dim,
-            'ee': two_particle_stream_dim,
-            'residual': embedding_dim,
-            'nodes_up': embedding_dim,
-            'nodes_down': embedding_dim,
-        }
         assert update_rule in [
             'concatenate',
             'featurewise',
             'featurewise_shared',
             'sum',
         ]
-        assert all(uf in STREAM_DIMS.keys() for uf in update_features)
+        assert all(
+            uf in ['ne', 'same', 'anti', 'ee', 'residual', 'nodes_up', 'nodes_down']
+            for uf in update_features
+        )
         assert (
             update_rule not in ['sum', 'featurewise_shared']
             or embedding_dim == two_particle_stream_dim
@@ -120,7 +114,6 @@ class ElectronGNNLayer(hk.Module):
         if deep_features:
             self.u = {
                 typ: subnet_factory_by_lbl['u'](
-                    (edge_feat_dim[typ] if first_layer else embedding_dim),
                     two_particle_stream_dim,
                     residual=not first_layer,
                     name=f'u{typ}',
@@ -130,11 +123,6 @@ class ElectronGNNLayer(hk.Module):
         if self.convolution:
             self.w = {
                 typ: subnet_factory_by_lbl['w'](
-                    (
-                        edge_feat_dim[typ]
-                        if not deep_features
-                        else two_particle_stream_dim
-                    ),
                     two_particle_stream_dim,
                     name=f'w_{typ}',
                 )
@@ -142,7 +130,6 @@ class ElectronGNNLayer(hk.Module):
             }
             self.h = {
                 typ: subnet_factory_by_lbl['h'](
-                    embedding_dim,
                     two_particle_stream_dim,
                     name=f'h_{typ}',
                 )
@@ -150,18 +137,12 @@ class ElectronGNNLayer(hk.Module):
             }
         self.g = (
             subnet_factory_by_lbl['g'](
-                (
-                    sum(STREAM_DIMS[uf] for uf in update_features)
-                    if update_rule == 'concatenate'
-                    else embedding_dim
-                ),
                 embedding_dim,
                 name='g',
             )
             if not self.update_rule == 'featurewise'
             else {
                 uf: subnet_factory_by_lbl['g'](
-                    STREAM_DIMS[uf],
                     embedding_dim,
                     name=f'g_{uf}',
                 )
