@@ -278,7 +278,7 @@ class ElectronGNN:
     Derived from :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork`.
 
     Args:
-        mol (~deepqmc.Molecule): the molecule on which the graph is defined.
+        mol (:class:`~deepqmc.Molecule`): the molecule on which the graph is defined.
         embedding_dim (int): the length of the electron embedding vectors.
         n_interactions (int): number of message passing interactions.
         positional_electron_embeddings(bool): whether to initialize the electron
@@ -287,13 +287,11 @@ class ElectronGNN:
             type, embedding the interparticle differences.
         edge_types: the types of edges to consider in the molecular graph. It should
             be a sequence of unique :data:`str`s from the follwing options:
-                - :data:`'nn'`: nucleus-nucleus edges
-                - :data:`'ne'`: nucleus-electron edges
-                - :data:`'en'`: electron-nucleus edges
-                - :data:`'same'`: electron-electron edges between electrons of the same
-                    spin
-                - :data:`'anti'`: electron-electron edges between electrons of opposite
-                    spins
+            - ``'nn'``: nucleus-nucleus edges
+            - ``'ne'``: nucleus-electron edges
+            - ``'en'``: electron-nucleus edges
+            - ``'same'``: electron-electron edges between electrons of the same spin
+            - ``'anti'``: electron-electron edges between electrons of opposite spins
         two_particle_stream_dim (int): the feature dimension of the two particle
             streams. Only active if :data:`deep_features` are used.
         atom_type_embeedings (bool): if :data:`True`, use the same initial embeddings
