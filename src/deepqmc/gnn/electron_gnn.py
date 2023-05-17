@@ -16,7 +16,7 @@ from .graph import (
 from .utils import NodeEdgeMapping
 
 
-class ElectronGNNLayer:
+class ElectronGNNLayer(hk.Module):
     r"""
     The message passing layer of :class:`ElectronGNN`.
 
@@ -271,7 +271,7 @@ class ElectronGNNLayer:
         return update_graph(graph)
 
 
-class ElectronGNN:
+class ElectronGNN(hk.Module):
     r"""
     A neural network acting on graphs defined by electrons and nuclei.
 
