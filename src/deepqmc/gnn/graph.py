@@ -208,7 +208,6 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, feature_callbacks
     builders = {
         builder_type: GraphEdgeBuilder(
             **fix_kwargs_of_builder_type[builder_type],
-            #  **((kwargs_by_edge_type or {}).get(edge_type)),
             feature_callback=feature_callbacks[edge_type],
         )
         for edge_type in edge_types
