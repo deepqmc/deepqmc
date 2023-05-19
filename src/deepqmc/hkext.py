@@ -50,11 +50,11 @@ class MLP(hk.Module):
         residual=False,
         name=None,
         *,
-        hidden_layers=None,
-        bias=True,
-        last_linear=False,
-        activation=ssp,
-        w_init='default',
+        hidden_layers,
+        bias,
+        last_linear,
+        activation,
+        w_init,
     ):
         assert bias in (True, False, 'not_last')
         super().__init__(name=name)

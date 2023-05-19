@@ -24,11 +24,12 @@ omni_factory:
       _target_: deepqmc.hkext.MLP
       _partial_: true
       hidden_layers: ['log', 3]
-      last_linear: true
       bias: 'not_last'
-      activation: 
+      last_linear: true
+      activation:
         _target_: deepqmc.hkext.ssp
         _partial_: true
+      w_init: default
   backflow_factory:  
     _target_: deepqmc.wf.nn_wave_function.omni.Backflow
     _partial_: true
@@ -36,10 +37,12 @@ omni_factory:
       _target_: deepqmc.hkext.MLP
       _partial_: true
       hidden_layers: ['log', 3]
+      bias: true
       last_linear: true
       activation:
         _target_: deepqmc.hkext.ssp
         _partial_: true
+      w_init: default
   gnn_factory:
     _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
@@ -77,20 +80,23 @@ omni_factory:
         _target_: deepqmc.hkext.MLP
         _partial_: true
         hidden_layers: ['log', 3]
+        bias: true
         last_linear: false
         activation:
           _target_: jax.numpy.tanh
           _partial_: true
+        w_init: default
       subnet_factory_by_lbl:
         w:
           _target_: deepqmc.hkext.MLP
           _partial_: true
-          bias: false
           hidden_layers: ['log', 3]
+          bias: false
           last_linear: false
           activation:
             _target_: jax.numpy.tanh
             _partial_: true
+          w_init: default
       residual: true
       convolution: true
       deep_features: false
