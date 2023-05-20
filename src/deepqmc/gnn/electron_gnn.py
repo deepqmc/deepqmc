@@ -4,7 +4,6 @@ import haiku as hk
 import jax.numpy as jnp
 from jax import ops
 
-from ..hkext import MLP
 from ..utils import flatten
 from .graph import (
     Graph,
@@ -52,11 +51,13 @@ class ElectronGNNLayer(hk.Module):
 
             note that `sum` and `featurewise_shared` imply features of same size
 
-        subnet_kwargs (dict): extra arguments passed to the
-            :class:`~deepqmc.hkext.MLP` constructor of the subnetworks.
-        subnet_kwargs_by_lbl (dict): optional, extra arguments passed to the
-            :class:`~deepqmc.hkext.MLP` constructor of the subnetworks. Arguments
-            can be specified independently for each subnet
+        subnet_factory (Callable): A function that constructs the subnetworks of
+            the GNN layer.
+        subnet_factory_by_lbl (dict): optional, a dictionary of functions that construct
+            subnetworks of the GNN layer. If both this and :data:`subnet_factory` is
+            specified, the specified values of :data:`subnet_factory_by_lbl` will take
+            precedence. If some keys are missing, the default value of
+            :data:`subnet_factory` will be used in their place. Possible keys are:
             (:data:`w`, :data:`h`, :data:`g` or :data:`u`).
     """
 
@@ -78,8 +79,8 @@ class ElectronGNNLayer(hk.Module):
         deep_features,
         update_features,
         update_rule,
-        subnet_kwargs=None,
-        subnet_kwargs_by_lbl=None,
+        subnet_factory=None,
+        subnet_factory_by_lbl=None,
     ):
         super().__init__()
         self.n_up, self.n_down = n_up, n_down
@@ -89,22 +90,16 @@ class ElectronGNNLayer(hk.Module):
             typ for typ in edge_types if not last_layer or typ not in {'nn', 'en'}
         )
         self.mapping = NodeEdgeMapping(self.edge_types, node_data=node_data)
-        STREAM_DIMS = {
-            'ne': two_particle_stream_dim,
-            'same': two_particle_stream_dim,
-            'anti': two_particle_stream_dim,
-            'ee': two_particle_stream_dim,
-            'residual': embedding_dim,
-            'nodes_up': embedding_dim,
-            'nodes_down': embedding_dim,
-        }
         assert update_rule in [
             'concatenate',
             'featurewise',
             'featurewise_shared',
             'sum',
         ]
-        assert all(uf in STREAM_DIMS.keys() for uf in update_features)
+        assert all(
+            uf in ['ne', 'same', 'anti', 'ee', 'residual', 'nodes_up', 'nodes_down']
+            for uf in update_features
+        )
         assert (
             update_rule not in ['sum', 'featurewise_shared']
             or embedding_dim == two_particle_stream_dim
@@ -113,65 +108,43 @@ class ElectronGNNLayer(hk.Module):
         self.update_features = update_features
         self.update_rule = update_rule
         self.convolution = convolution
-        subnet_kwargs = subnet_kwargs or {}
-        subnet_kwargs_by_lbl = subnet_kwargs_by_lbl or {}
+        subnet_factory_by_lbl = subnet_factory_by_lbl or {}
         for lbl in ['w', 'h', 'g', 'u']:
-            subnet_kwargs_by_lbl.setdefault(lbl, {})
-            for k, v in subnet_kwargs.items():
-                subnet_kwargs_by_lbl[lbl].setdefault(k, v)
-            subnet_kwargs_by_lbl[lbl].setdefault('bias', lbl != 'w')
+            subnet_factory_by_lbl.setdefault(lbl, subnet_factory)
         if deep_features:
             self.u = {
-                typ: MLP(
-                    (edge_feat_dim[typ] if first_layer else embedding_dim),
+                typ: subnet_factory_by_lbl['u'](
                     two_particle_stream_dim,
                     residual=not first_layer,
                     name=f'u{typ}',
-                    **subnet_kwargs_by_lbl['u'],
                 )
                 for typ in self.edge_types
             }
         if self.convolution:
             self.w = {
-                typ: MLP(
-                    (
-                        edge_feat_dim[typ]
-                        if not deep_features
-                        else two_particle_stream_dim
-                    ),
+                typ: subnet_factory_by_lbl['w'](
                     two_particle_stream_dim,
                     name=f'w_{typ}',
-                    **subnet_kwargs_by_lbl['w'],
                 )
                 for typ in self.edge_types
             }
             self.h = {
-                typ: MLP(
-                    embedding_dim,
+                typ: subnet_factory_by_lbl['h'](
                     two_particle_stream_dim,
                     name=f'h_{typ}',
-                    **subnet_kwargs_by_lbl['h'],
                 )
                 for typ in self.edge_types
             }
         self.g = (
-            MLP(
-                (
-                    sum(STREAM_DIMS[uf] for uf in update_features)
-                    if update_rule == 'concatenate'
-                    else embedding_dim
-                ),
+            subnet_factory_by_lbl['g'](
                 embedding_dim,
                 name='g',
-                **subnet_kwargs_by_lbl['g'],
             )
             if not self.update_rule == 'featurewise'
             else {
-                uf: MLP(
-                    STREAM_DIMS[uf],
+                uf: subnet_factory_by_lbl['g'](
                     embedding_dim,
                     name=f'g_{uf}',
-                    **subnet_kwargs_by_lbl['g'],
                 )
                 for uf in (self.update_features)
             }

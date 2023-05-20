@@ -1,7 +1,6 @@
 import haiku as hk
 import jax.numpy as jnp
 
-from ...hkext import MLP
 from ...utils import unflatten
 
 
@@ -23,10 +22,10 @@ class Jastrow(hk.Module):
         *,
         sum_first,
         name='Jastrow',
-        subnet_kwargs=None,
+        subnet_factory=None,
     ):
         super().__init__(name=name)
-        self.net = MLP(embedding_dim, 1, **(subnet_kwargs or {}))
+        self.net = subnet_factory(1)
         self.sum_first = sum_first
 
     def __call__(self, xs):
@@ -61,28 +60,15 @@ class Backflow(hk.Module):
         *,
         name='Backflow',
         param_scaling=1.0,
-        subnet_kwargs=None,
+        subnet_factory=None,
     ):
         super().__init__(name=name)
         self.multi_head = multi_head
         if multi_head:
-            self.nets = [
-                MLP(
-                    embedding_dim,
-                    n_orbitals,
-                    w_init=hk.initializers.VarianceScaling(param_scaling),
-                    **(subnet_kwargs or {}),
-                )
-                for _ in range(n_backflows)
-            ]
+            self.nets = [subnet_factory(n_orbitals) for _ in range(n_backflows)]
         else:
             self.n_orbitals = n_orbitals
-            self.net = MLP(
-                embedding_dim,
-                n_backflows * n_orbitals,
-                w_init=hk.initializers.VarianceScaling(param_scaling),
-                **subnet_kwargs,
-            )
+            self.net = subnet_factory(n_backflows * n_orbitals)
 
     def __call__(self, xs):
         if self.multi_head:
