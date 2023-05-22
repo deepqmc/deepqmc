@@ -68,7 +68,8 @@ class NeuralNetworkWaveFunction(WaveFunction):
             - ``'add'``: the backflow is an additive term
             - ``'both'``: the backflow consist of a multiplicative factor
                 and an additive term
-        conf_coeff (bool): whether to use trainable determinant coefficients.
+        conf_coeff (Callable): returns a function that combines the determinants
+            to obtain the WF value
     """
 
     def __init__(
@@ -90,11 +91,7 @@ class NeuralNetworkWaveFunction(WaveFunction):
         self.n_det = n_determinants
         self.full_determinant = full_determinant
         self.envelope = envelope(hamil.mol, n_determinants)
-        self.conf_coeff = (
-            hk.Linear(1, with_bias=False, w_init=jnp.ones, name='conf_coeff')
-            if conf_coeff
-            else conf_coeff
-        )
+        self.conf_coeff = conf_coeff(1, name='conf_coeff')
         self.cusp_same, self.cusp_anti = (
             (ElectronicAsymptotic(cusp=cusp, alpha=cusp_alpha) for cusp in (0.25, 0.5))
             if cusp_electrons
@@ -155,7 +152,7 @@ class NeuralNetworkWaveFunction(WaveFunction):
         xs_shift = jnp.where(~jnp.isinf(xs_shift), xs_shift, jnp.zeros_like(xs_shift))
         # replace -inf shifts, to avoid running into nans (see sloglindet)
         xs = sign * jnp.exp(xs - xs_shift)
-        psi = self.conf_coeff(xs).squeeze() if self.conf_coeff else xs.sum()
+        psi = self.conf_coeff(xs).squeeze()
         log_psi = jnp.log(jnp.abs(psi)) + xs_shift
         sign_psi = jax.lax.stop_gradient(jnp.sign(psi))
         if self.cusp_same:
