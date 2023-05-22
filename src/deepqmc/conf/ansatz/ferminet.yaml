@@ -3,12 +3,12 @@ _partial_: true
 envelope:
   _target_: deepqmc.wf.nn_wave_function.env.ExponentialEnvelopes.from_mol
   _partial_: true
-  isotropic: false
+  isotropic: true
 backflow_op:
   _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
   _partial_: true
 n_determinants: 16
-full_determinant: false
+full_determinant: true
 cusp_electrons: false
 cusp_alpha: null
 backflow_transform: mult
