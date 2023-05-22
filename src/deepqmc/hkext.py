@@ -48,7 +48,6 @@ class MLP(hk.Module):
     def __init__(
         self,
         out_dim,
-        residual=False,
         name=None,
         *,
         hidden_layers,
@@ -61,7 +60,6 @@ class MLP(hk.Module):
         super().__init__(name=name)
         self.activation = activation
         self.last_linear = last_linear
-        self.residual = residual
         self.bias = bias
         self.out_dim = out_dim
         if isinstance(w_init, str):
@@ -99,7 +97,7 @@ class MLP(hk.Module):
             out = layer(out)
             if i < (n_layers - 1) or not self.last_linear:
                 out = self.activation(out)
-        return out + inputs if self.residual else out
+        return out
 
 
 class ResidualConnection:

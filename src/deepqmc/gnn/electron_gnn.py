@@ -84,7 +84,6 @@ class ElectronGNNLayer(hk.Module):
     ):
         super().__init__()
         self.n_up, self.n_down = n_up, n_down
-        first_layer = ilayer == 0
         self.last_layer = ilayer == n_interactions - 1
         self.edge_types = tuple(
             typ for typ in edge_types if not self.last_layer or typ not in {'nn', 'en'}
@@ -114,9 +113,7 @@ class ElectronGNNLayer(hk.Module):
             subnet_factory_by_lbl.setdefault(lbl, subnet_factory)
         if deep_features:
             self.u = (
-                subnet_factory_by_lbl['u'](
-                    two_particle_stream_dim, residual=not first_layer, name='u'
-                )
+                subnet_factory_by_lbl['u'](two_particle_stream_dim, name='u')
                 if deep_features == 'shared'
                 else {
                     typ: subnet_factory_by_lbl['u'](
