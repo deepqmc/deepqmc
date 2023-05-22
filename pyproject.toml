@@ -32,7 +32,7 @@ dependencies = [
     'dm-haiku',
     'h5py',
     'hydra-core',
-    'jax[cuda]',
+    'jax',
     'jaxtyping',
     'jax-dataclasses',
     'kfac-jax',

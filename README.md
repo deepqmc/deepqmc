@@ -17,7 +17,7 @@ DeepQMC implements variational quantum Monte Carlo for electrons in molecules, u
 Install and update to the latest release using [Pip](https://pip.pypa.io/en/stable/quickstart/):
 
 ```
-pip install -U deepqmc -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install -U deepqmc
 ```
 
 To install DeepQMC from a local Git repository run:
@@ -25,10 +25,22 @@ To install DeepQMC from a local Git repository run:
 ```
 git clone https://github.com/deepqmc/deepqmc
 cd deepqmc
-pip install -e .[dev] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install -e .[dev]
 ```
 
-If pip complains about `setup.py` not being found, please make sure to update to the latest pip version.
+If Pip complains about `setup.py` not being found, please update to the latest Pip version.
+
+The above installation will result in the CPU version of JAX. However, running DeepQMC on the GPU is highly recomended. To enable GPU support make sure to upgrade JAX to match the CUDA and cuDNN versions of your system. For most users this can be achieved with:
+
+```
+# CUDA 12 installation
+pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+# CUDA 11 installation
+pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+```
+
+If issues arise during the JAX installation visit the [JAX Install Guide](https://github.com/google/jax#installation).
 
 ### Documentation and exemplary usage
 
