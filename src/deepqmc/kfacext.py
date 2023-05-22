@@ -36,6 +36,7 @@ class DenseBlock(kfac_jax.DenseTwoKroneckerFactored):
                 for a in (x, dy)
             )
             batch_size = x.size // x.shape[-1]
+            estimation_data['inputs'], estimation_data['outputs_tangent'] = (x,), (dy,)
 
         return super()._update_curvature_matrix_estimate(
             state, estimation_data, ema_old, ema_new, batch_size
