@@ -85,9 +85,9 @@ class ElectronGNNLayer(hk.Module):
         super().__init__()
         self.n_up, self.n_down = n_up, n_down
         first_layer = ilayer == 0
-        last_layer = ilayer == n_interactions - 1
+        self.last_layer = ilayer == n_interactions - 1
         self.edge_types = tuple(
-            typ for typ in edge_types if not last_layer or typ not in {'nn', 'en'}
+            typ for typ in edge_types if not self.last_layer or typ not in {'nn', 'en'}
         )
         self.mapping = NodeEdgeMapping(self.edge_types, node_data=node_data)
         assert update_rule in [
@@ -238,7 +238,7 @@ class ElectronGNNLayer(hk.Module):
         """
         update_graph = GraphUpdate(
             update_nodes_fn=self.get_update_nodes_fn(),
-            update_edges_fn=self.get_update_edges_fn(),
+            update_edges_fn=None if self.last_layer else self.get_update_edges_fn(),
             aggregate_edges_for_nodes_fn=self.get_aggregate_edges_for_nodes_fn(),
         )
         return update_graph(graph)

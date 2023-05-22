@@ -280,12 +280,12 @@ def GraphUpdate(
     def update_graph(graph):
         nodes, edges = graph
 
-        if update_edges_fn:
-            edges = update_edges_fn(edges)
-
         if update_nodes_fn:
             aggregated_edges = aggregate_edges_for_nodes_fn(nodes, edges)
             nodes = update_nodes_fn(nodes, aggregated_edges)
+
+        if update_edges_fn:
+            edges = update_edges_fn(edges)
 
         return Graph(nodes, edges)
 
