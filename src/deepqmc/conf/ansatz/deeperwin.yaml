@@ -5,6 +5,7 @@ envelope:
   _partial_: true
   isotropic: true
   per_shell: true
+  per_orbital_exponent: true
 backflow_op:
   _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
   _partial_: true
