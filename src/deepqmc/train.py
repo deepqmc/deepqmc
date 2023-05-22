@@ -53,14 +53,13 @@ def train(  # noqa: C901
     ansatz,
     opt,
     sampler,
-    mols,
-    workdir=None,
-    train_state=None,
-    init_step=0,
-    *,
     steps,
     sample_size,
     seed,
+    mols=None,
+    workdir=None,
+    train_state=None,
+    init_step=0,
     max_restarts=3,
     max_eq_steps=1000,
     pretrain_steps=None,
@@ -96,16 +95,17 @@ def train(  # noqa: C901
             - :data:`None`: no optimizer is used, e.g. the evaluation of the Ansatz
                 is performed.
         sampler (~deepqmc.sampling.Sampler): a sampler instance
-        mols (~deepqmc.molecule.Molecule): a molecule or a sequence of molecules to
-            consider.
+        steps (int): number of optimization steps.
+        sample_size (int): the number of samples considered in a batch
+        seed (int): the seed used for PRNG.
+        mols (Sequence(~deepqmc.molecule.Molecule)): optional, a sequence of molecules
+            to consider for transferable training. If None the default molecule from
+            hamil is used.
         workdir (str): optional, path, where results should be saved.
         train_state (~deepqmc.fit.TrainState): optional, training checkpoint to
             restore training or run evaluation.
         init_step (int): optional, initial step index, useful if
             calculation is restarted from checkpoint saved on disk.
-        steps (int): optional, number of optimization steps.
-        sample_size (int): the number of samples considered in a batch
-        seed (int): the seed used for PRNG.
         max_restarts (int): optional, the maximum number of times the training is
             retried before a :class:`NaNError` is raised.
         max_eq_steps (int): optional, maximum number of equilibration steps if not
@@ -129,6 +129,7 @@ def train(  # noqa: C901
 
     rng = jax.random.PRNGKey(seed)
     mode = 'evaluation' if opt is None else 'training'
+    mols = mols or hamil.mol
     sampler = MultimoleculeSampler(sampler, mols, mol_idx_factory)
     if isinstance(opt, str):
         opt_kwargs = OPT_KWARGS.get(opt, {}) | (opt_kwargs or {})
