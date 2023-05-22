@@ -358,27 +358,34 @@ class ElectronGNN(hk.Module):
         self.edge_types = edge_types
         self.positional_electron_embeddings = positional_electron_embeddings
 
-    def node_factory(self, edges):
+    def node_factory(self, phys_conf):
         n_elec_types = self.node_data['n_node_types']['electrons']
         n_nuc_types = self.node_data['n_node_types']['nuclei']
         if self.positional_electron_embeddings:
-            X = hk.Linear(
-                output_size=self.embedding_dim,
-                with_bias=False,
-                name='ElectronicEmbedding',
+            edge_factory = MolecularGraphEdgeBuilder(
+                self.n_nuc,
+                self.n_up,
+                self.n_down,
+                ['ne'],
+                feature_callbacks={
+                    'ne': lambda *args: self.edge_features['ne'](
+                        difference_callback(*args)
+                    )
+                },
             )
+            ne_edges = edge_factory(phys_conf)['ne']
             ne_pos_feat = (
                 jnp.zeros(
                     (
                         self.n_up + self.n_down + 1,
                         self.n_nuc + 1,
-                        edges['ne'].features.shape[-1],
+                        ne_edges.features.shape[-1],
                     )
                 )
-                .at[edges['ne'].receivers, edges['ne'].senders]
-                .set(edges['ne'].features)[: self.n_up + self.n_down, : self.n_nuc]
+                .at[ne_edges.receivers, ne_edges.senders]
+                .set(ne_edges.features)[: self.n_up + self.n_down, : self.n_nuc]
             )  # [n_elec, n_nuc, n_edge_feat_dim]
-            x = X(flatten(ne_pos_feat, start_axis=1))
+            x = flatten(ne_pos_feat, start_axis=1)
         else:
             X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
             x = X(self.node_data['node_types']['electrons'])
@@ -426,7 +433,7 @@ class ElectronGNN(hk.Module):
                 )
             )
         graph_edges = self.edge_factory(phys_conf)
-        graph_nodes = self.node_factory(graph_edges)
+        graph_nodes = self.node_factory(phys_conf)
         graph = Graph(graph_nodes, graph_edges)
 
         for layer in self.layers:
