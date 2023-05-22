@@ -51,6 +51,7 @@ class NeuralNetworkWaveFunction(WaveFunction):
 
     Args:
         hamil (~MolecularHamiltonian): the Hamiltonian of the system.
+        omni_factory (Callable): creates the omni net.
         envelope (~wf.nn_wave_function.env.ExponentialEnvelopes): the orbital envelopes.
         backflow_op (Callable): specifies how the backflow is applied to the
             orbitals.
@@ -67,7 +68,7 @@ class NeuralNetworkWaveFunction(WaveFunction):
             - ``'add'``: the backflow is an additive term
             - ``'both'``: the backflow consist of a multiplicative factor
                 and an additive term
-        omni_factory (Callable): creates the omni net.
+        conf_coeff (bool): whether to use trainable determinant coefficients.
     """
 
     def __init__(
@@ -82,6 +83,7 @@ class NeuralNetworkWaveFunction(WaveFunction):
         cusp_electrons,
         cusp_alpha,
         backflow_transform,
+        conf_coeff,
     ):
         super().__init__(hamil.mol)
         n_up, n_down = self.n_up, self.n_down
@@ -95,8 +97,10 @@ class NeuralNetworkWaveFunction(WaveFunction):
             + jnp.ones(s),
             name='mo_coeff',
         )
-        self.conf_coeff = hk.Linear(
-            1, with_bias=False, w_init=jnp.ones, name='conf_coeff'
+        self.conf_coeff = (
+            hk.Linear(1, with_bias=False, w_init=jnp.ones, name='conf_coeff')
+            if conf_coeff
+            else conf_coeff
         )
         self.cusp_same, self.cusp_anti = (
             (ElectronicAsymptotic(cusp=cusp, alpha=cusp_alpha) for cusp in (0.25, 0.5))
@@ -159,7 +163,7 @@ class NeuralNetworkWaveFunction(WaveFunction):
         xs_shift = jnp.where(~jnp.isinf(xs_shift), xs_shift, jnp.zeros_like(xs_shift))
         # replace -inf shifts, to avoid running into nans (see sloglindet)
         xs = sign * jnp.exp(xs - xs_shift)
-        psi = self.conf_coeff(xs).squeeze()
+        psi = self.conf_coeff(xs).squeeze() if self.conf_coeff else xs.sum()
         log_psi = jnp.log(jnp.abs(psi)) + xs_shift
         sign_psi = jax.lax.stop_gradient(jnp.sign(psi))
         if self.cusp_same:

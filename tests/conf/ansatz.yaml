@@ -12,6 +12,7 @@ full_determinant: false
 cusp_electrons: true
 cusp_alpha: 10.0
 backflow_transform: mult
+conf_coeff: true
 omni_factory:
   _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
   _partial_: true
