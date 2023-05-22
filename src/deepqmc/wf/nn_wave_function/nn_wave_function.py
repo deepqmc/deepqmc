@@ -89,14 +89,7 @@ class NeuralNetworkWaveFunction(WaveFunction):
         n_up, n_down = self.n_up, self.n_down
         self.n_det = n_determinants
         self.full_determinant = full_determinant
-        self.envelope = envelope(hamil.mol)
-        self.mo_coeff = hk.Linear(
-            n_determinants * (n_up + n_down),
-            with_bias=False,
-            w_init=lambda s, d: hk.initializers.VarianceScaling(1.0)(s, d)
-            + jnp.ones(s),
-            name='mo_coeff',
-        )
+        self.envelope = envelope(hamil.mol, n_determinants)
         self.conf_coeff = (
             hk.Linear(1, with_bias=False, w_init=jnp.ones, name='conf_coeff')
             if conf_coeff
@@ -133,8 +126,7 @@ class NeuralNetworkWaveFunction(WaveFunction):
         diffs_nuc = pairwise_diffs(phys_conf.r, phys_conf.R)
         dists_nuc = jnp.sqrt(diffs_nuc[..., -1])
         dists_elec = pairwise_self_distance(phys_conf.r, full=True)
-        aos = self.envelope(diffs_nuc)
-        orb = self.mo_coeff(aos)
+        orb = self.envelope(diffs_nuc)
         jastrow, fs = self.omni(phys_conf) if self.omni else (None, None)
         orb_up, orb_down = (
             (orb, orb)
