@@ -121,7 +121,6 @@ class ElectronGNNLayer(hk.Module):
                 else {
                     typ: subnet_factory_by_lbl['u'](
                         two_particle_stream_dim,
-                        residual=not first_layer,
                         name=f'u{typ}',
                     )
                     for typ in self.edge_types
@@ -160,27 +159,32 @@ class ElectronGNNLayer(hk.Module):
 
     def get_update_edges_fn(self):
         def update_edges(edges):
-            if self.deep_features == 'shared':
-                idx = 0
-                split_idxs, features = [], []
-                for edge in edges.values():
-                    idx += len(edge.features)
-                    split_idxs.append(idx)
-                    features.append(edge.features)
-                updated_edges = self.u(jnp.concatenate(features))
-                updated_edges = {
-                    typ: edges[typ]._replace(features=updated_edge)
-                    for typ, updated_edge in zip(
-                        edges.keys(), jnp.split(updated_edges, split_idxs)
+            if self.deep_features:
+                features = {typ: edge.features for typ, edge in edges.items()}
+                if self.deep_features == 'shared':
+                    idx = 0
+                    split_idxs = []
+                    for feat in features.values():
+                        idx += len(feat)
+                        split_idxs.append(idx)
+                    updated_features = self.u(jnp.concatenate(list(features.values())))
+                    updated_features = dict(
+                        zip(edges.keys(), jnp.split(updated_features, split_idxs))
                     )
+                elif self.deep_features == 'separate':
+                    updated_features = {
+                        typ: self.u[typ](edge.features) for typ, edge in edges.items()
+                    }
+
+                updated_features = (
+                    self.residual(features, updated_features)
+                    if self.residual
+                    else updated_features
+                )
+                return {
+                    typ: edges[typ]._replace(features=updated_features[typ])
+                    for typ in edges.keys()
                 }
-                return updated_edges
-            elif self.deep_features == 'separate':
-                updated_edges = {
-                    typ: edge._replace(features=self.u[typ](edge.features))
-                    for typ, edge in edges.items()
-                }
-                return updated_edges
             else:
                 return edges
 
@@ -242,7 +246,7 @@ class ElectronGNNLayer(hk.Module):
             elif self.update_rule == 'featurewise_shared':
                 updated = jnp.sum(self.g(jnp.stack(list(f.values()))), axis=0)
             if self.residual:
-                updated = updated + nodes.electrons
+                updated = self.residual(nodes.electrons, updated)
             nodes = GraphNodes(nodes.nuclei, updated)
 
             return nodes

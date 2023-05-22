@@ -51,7 +51,9 @@ layer_factory:
         _target_: jax.numpy.tanh
         _partial_: true
       w_init: default
-  residual: true
+  residual:
+    _target_: deepqmc.hkext.ResidualConnection
+    normalize: false
   convolution: true
   deep_features: false
   update_rule: featurewise

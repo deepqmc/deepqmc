@@ -85,7 +85,9 @@ omni_factory:
             _target_: jax.numpy.tanh
             _partial_: true
           w_init: default
-      residual: true
+      residual:
+        _target_: deepqmc.hkext.ResidualConnection
+        normalize: true
       convolution: false
       deep_features: shared
       update_rule: concatenate
