@@ -86,7 +86,7 @@ omni_factory:
           w_init: default
       residual: true
       convolution: false
-      deep_features: true
+      deep_features: shared
       update_rule: concatenate
       update_features: 
       - same

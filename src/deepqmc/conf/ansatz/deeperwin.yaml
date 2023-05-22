@@ -80,7 +80,7 @@ omni_factory:
           w_init: deeperwin
       residual: true
       convolution: true
-      deep_features: true
+      deep_features: separate
       update_rule: concatenate
       update_features: 
         - residual

@@ -104,6 +104,7 @@ class ElectronGNNLayer(hk.Module):
             update_rule not in ['sum', 'featurewise_shared']
             or embedding_dim == two_particle_stream_dim
         )
+        assert deep_features in [False, 'shared', 'separate']
         self.deep_features = deep_features
         self.update_features = update_features
         self.update_rule = update_rule
@@ -112,14 +113,20 @@ class ElectronGNNLayer(hk.Module):
         for lbl in ['w', 'h', 'g', 'u']:
             subnet_factory_by_lbl.setdefault(lbl, subnet_factory)
         if deep_features:
-            self.u = {
-                typ: subnet_factory_by_lbl['u'](
-                    two_particle_stream_dim,
-                    residual=not first_layer,
-                    name=f'u{typ}',
+            self.u = (
+                subnet_factory_by_lbl['u'](
+                    two_particle_stream_dim, residual=not first_layer, name='u'
                 )
-                for typ in self.edge_types
-            }
+                if deep_features == 'shared'
+                else {
+                    typ: subnet_factory_by_lbl['u'](
+                        two_particle_stream_dim,
+                        residual=not first_layer,
+                        name=f'u{typ}',
+                    )
+                    for typ in self.edge_types
+                }
+            )
         if self.convolution:
             self.w = {
                 typ: subnet_factory_by_lbl['w'](
@@ -153,7 +160,22 @@ class ElectronGNNLayer(hk.Module):
 
     def get_update_edges_fn(self):
         def update_edges(edges):
-            if self.deep_features:
+            if self.deep_features == 'shared':
+                idx = 0
+                split_idxs, features = [], []
+                for edge in edges.values():
+                    idx += len(edge.features)
+                    split_idxs.append(idx)
+                    features.append(edge.features)
+                updated_edges = self.u(jnp.concatenate(features))
+                updated_edges = {
+                    typ: edges[typ]._replace(features=updated_edge)
+                    for typ, updated_edge in zip(
+                        edges.keys(), jnp.split(updated_edges, split_idxs)
+                    )
+                }
+                return updated_edges
+            elif self.deep_features == 'separate':
                 updated_edges = {
                     typ: edge._replace(features=self.u[typ](edge.features))
                     for typ, edge in edges.items()
