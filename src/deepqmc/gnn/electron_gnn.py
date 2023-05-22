@@ -229,8 +229,9 @@ class ElectronGNNLayer(hk.Module):
                 'same': z['same'],
                 'anti': z['anti'],
                 'ee': z['same'] + z['anti'],
-                'ne': z['ne'],
             }
+            if 'ne' in self.edge_types:
+                FEATURE_MAPPING = {**FEATURE_MAPPING, 'ne': z['ne']}
             f = {uf: FEATURE_MAPPING[uf] for uf in self.update_features}
             if self.update_rule == 'concatenate':
                 updated = self.g(jnp.concatenate(list(f.values()), axis=-1))
@@ -389,8 +390,13 @@ class ElectronGNN(hk.Module):
         else:
             X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
             x = X(self.node_data['node_types']['electrons'])
-        Y = hk.Embed(n_nuc_types, self.embedding_dim, name='NuclearEmbedding')
-        y = Y(self.node_data['node_types']['nuclei'] - n_elec_types)
+        y = (
+            hk.Embed(n_nuc_types, self.embedding_dim, name='NuclearEmbedding')(
+                self.node_data['node_types']['nuclei'] - n_elec_types
+            )
+            if 'ne' in self.edge_types
+            else None
+        )
         return GraphNodes(y, x)
 
     def edge_factory(self, phys_conf):
