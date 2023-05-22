@@ -14,7 +14,9 @@ full_determinant: false
 cusp_electrons: false
 cusp_alpha: null
 backflow_transform: mult
-conf_coeff: false
+conf_coeff:
+  _target_: deepqmc.hkext.SumPool
+  _partial_: true
 omni_factory:
   _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
   _partial_: true

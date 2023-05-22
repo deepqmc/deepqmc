@@ -125,3 +125,13 @@ class ResidualConnection:
             return z / jnp.sqrt(2) if self.normalize else z
 
         return tree_util.tree_map(leaf_residual, inp, update)
+
+
+class SumPool:
+    r"""Represent a global sum pooling operation."""
+
+    def __init__(self, out_dim, name=None):
+        assert out_dim == 1
+
+    def __call__(self, x):
+        return tree_util.tree_map(lambda leaf: leaf.sum(axis=-1, keepdims=True), x)
