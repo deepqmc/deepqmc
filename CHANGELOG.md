@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [Unreleased] - 2023-05-22
+
+###Changed
+
+- Refactor simplifying the PauliNet
+- Generalize the GNN framework
+- Remove wave function state and cutoff mechanism
+- Remove defaults from code and fully transition to ansatz initialization through hydra
+- Implement pseudo potentials
+- Implement training on multiple molecular configurations (undocumented)
+- Add configuration files for PauliNet, FermiNet and DeepErwin
+- Enable reequilibration of walkers during training
+
+###Fixed
+
+- Remove deepcopys slowing down the execution
+- Improve logging
+- Explicit creation of logging directories
+
+###Removed
+
+- Remove specification of orbital configurations in wave function ansatz
+- Remove GraphNeuralNetwork base class
+
+###Renamed
+
+- PauliNet -> NeuralNetworkWaveFunction
+- SchNet -> ElectronGNN
+
 ## [1.0.1] - 2023-01-02
 
 ### Fixed
