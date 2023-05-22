@@ -4,6 +4,7 @@ envelope:
   _target_: deepqmc.wf.nn_wave_function.env.ExponentialEnvelopes
   _partial_: true
   isotropic: true
+  per_shell: true
 backflow_op:
   _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
   _partial_: true
@@ -98,7 +99,9 @@ omni_factory:
             _target_: jax.numpy.tanh
             _partial_: true
           w_init: default
-      residual: true
+      residual:
+        _target_: deepqmc.hkext.ResidualConnection
+        normalize: false
       convolution: true
       deep_features: false
       update_rule: featurewise

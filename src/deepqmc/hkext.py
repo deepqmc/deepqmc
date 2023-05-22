@@ -1,6 +1,7 @@
 import haiku as hk
 import jax.numpy as jnp
 from haiku.initializers import VarianceScaling
+from jax import tree_util
 from jax.nn import softplus
 
 
@@ -99,3 +100,28 @@ class MLP(hk.Module):
             if i < (n_layers - 1) or not self.last_linear:
                 out = self.activation(out)
         return out + inputs if self.residual else out
+
+
+class ResidualConnection:
+    r"""
+    Represent a residual connection between pytrees.
+
+    The residual connection is only added if :data:`inp` and :data:`update`
+    have the same shape.
+
+    Args:
+        - normalize (bool): if :data:`True` the sum of :data:`inp` and :data:`update`
+            is normalized with :data:`sqrt(2)`.
+    """
+
+    def __init__(self, *, normalize):
+        self.normalize = normalize
+
+    def __call__(self, inp, update):
+        def leaf_residual(x, y):
+            if x.shape != y.shape:
+                return y
+            z = x + y
+            return z / jnp.sqrt(2) if self.normalize else z
+
+        return tree_util.tree_map(leaf_residual, inp, update)

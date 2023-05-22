@@ -80,7 +80,9 @@ omni_factory:
             _target_: jax.numpy.tanh
             _partial_: true
           w_init: deeperwin
-      residual: true
+      residual:
+        _target_: deepqmc.hkext.ResidualConnection
+        normalize: false
       convolution: true
       deep_features: separate
       update_rule: concatenate
