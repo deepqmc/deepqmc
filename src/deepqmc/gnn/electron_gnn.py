@@ -1,4 +1,5 @@
 from functools import partial
+from itertools import accumulate
 
 import haiku as hk
 import jax.numpy as jnp
@@ -159,25 +160,19 @@ class ElectronGNNLayer(hk.Module):
             if self.deep_features:
                 features = {typ: edge.features for typ, edge in edges.items()}
                 if self.deep_features == 'shared':
-                    idx = 0
-                    split_idxs = []
-                    for feat in features.values():
-                        idx += len(feat)
-                        split_idxs.append(idx)
-                    updated_features = self.u(jnp.concatenate(list(features.values())))
-                    updated_features = dict(
-                        zip(edges.keys(), jnp.split(updated_features, split_idxs))
-                    )
+                    # combine features along leading dim, apply MLP and split
+                    # into channels again to please kfac
+                    keys, feats = zip(*features.items())
+                    split_idxs = list(accumulate([len(f) for f in feats]))
+                    feats = jnp.split(self.u(jnp.concatenate(feats)), split_idxs)
+                    updated_features = dict(zip(keys, feats))
                 elif self.deep_features == 'separate':
                     updated_features = {
                         typ: self.u[typ](edge.features) for typ, edge in edges.items()
                     }
 
-                updated_features = (
-                    self.residual(features, updated_features)
-                    if self.residual
-                    else updated_features
-                )
+                if self.residual:
+                    updated_features = self.residual(features, updated_features)
                 return {
                     typ: edges[typ]._replace(features=updated_features[typ])
                     for typ in edges.keys()
