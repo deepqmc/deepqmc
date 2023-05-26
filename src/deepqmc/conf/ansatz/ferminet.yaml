@@ -30,11 +30,9 @@ omni_factory:
       _target_: deepqmc.hkext.MLP
       _partial_: true
       hidden_layers: ['log', 1]
-      bias: true
+      bias: false
       last_linear: true
-      activation:
-        _target_: deepqmc.hkext.ssp
-        _partial_: true
+      activation: null
       w_init: default
   gnn_factory:
     _target_: deepqmc.gnn.ElectronGNN
