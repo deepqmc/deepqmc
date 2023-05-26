@@ -22,9 +22,7 @@ __all__ = ()
 TrainState = namedtuple('TrainState', 'sampler params opt')
 
 
-def median_clip_and_mask(
-    E_loc, clip_width=5.0, median_center=False, exclude_width=jnp.inf
-):
+def median_clip_and_mask(E_loc, clip_width, median_center, exclude_width=jnp.inf):
     clip_center = jnp.nanmedian(E_loc) if median_center else jnp.nanmean(E_loc)
     deviation = jnp.abs(E_loc - clip_center)
     sigma = jnp.nanmean(deviation)
@@ -204,7 +202,7 @@ def fit_wf(  # noqa: C901
             include_norms_in_stats=True,
             estimation_mode='fisher_exact',
             num_burnin_steps=0,
-            min_damping=5e-4,
+            min_damping=1e-4,
             inverse_update_period=1,
         )
 

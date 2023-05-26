@@ -1,0 +1,16 @@
+defaults:
+  - sampler: decorr_metropolis_ferminet
+  - opt: kfac_ferminet
+_target_: deepqmc.app.train_from_factories
+hamil: ${hamil}
+ansatz: ${ansatz}
+mols: ${hamil.mol}
+steps: 100000
+sample_size: 4096
+seed: 0
+fit_kwargs:
+  clip_mask_fn:
+    _target_: deepqmc.fit.median_clip_and_mask
+    _partial_: true
+    clip_width: 5.0
+    median_center: false
