@@ -76,6 +76,10 @@ def InverseSchedule(init_value, decay_rate):
     return lambda n: init_value / (1 + n / decay_rate)
 
 
+def ConstantSchedule(value):
+    return lambda n: value
+
+
 def argmax_random_choice(rng, x):
     mask = x == x.max()
     return jax.random.choice(rng, jnp.arange(len(x))[mask])
