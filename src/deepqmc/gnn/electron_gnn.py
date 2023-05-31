@@ -34,12 +34,14 @@ class ElectronGNNLayer(hk.Module):
             Possible values:
 
             - ``'residual'``: electron embedding from the previous interaction layer
-            - ``'ne'``: sum over messages from nuclei
-            - ``'same'``: sum over messages from electrons with same spin
-            - ``'anti'``: sum over messages from electrons with opposite spin
-            - ``'ee'``: sum of same and anti messeages
-            - ``'nodes_up'``: sum over embeddings from spin-up electrons
-            - ``'nodes_down'``: sum over embeddings from spin-down electrons
+            - ``'edge_ne'``: sum over messages from nuclei
+            - ``'edge_same'``: sum over messages from electrons with same spin
+            - ``'edge_anti'``: sum over messages from electrons with opposite spin
+            - ``'edge_up'``: sum over messages from spin up electrons
+            - ``'edge_down'``: sum over messages from spin down electrons
+            - ``'edge_ee'``: sum of over messages from all electrons
+            - ``'node_up'``: sum over embeddings from spin-up electrons
+            - ``'node_down'``: sum over embeddings from spin-down electrons
 
         update_rule (str): how to combine features for the update of the
             electron embeddings.
@@ -97,7 +99,18 @@ class ElectronGNNLayer(hk.Module):
             'sum',
         ]
         assert all(
-            uf in ['ne', 'same', 'anti', 'ee', 'residual', 'nodes_up', 'nodes_down']
+            uf
+            in [
+                'residual',
+                'edge_ne',
+                'edge_same',
+                'edge_anti',
+                'edge_up',
+                'edge_down',
+                'edge_ee',
+                'node_up',
+                'node_down',
+            ]
             for uf in update_features
         )
         assert (
@@ -211,26 +224,29 @@ class ElectronGNNLayer(hk.Module):
     def get_update_nodes_fn(self):
         def update_nodes(nodes, z):
             FEATURE_MAPPING = {
-                'residual': nodes.electrons,
-                'nodes_up': (
+                'residual': lambda: nodes.electrons,
+                'node_up': lambda: (
                     nodes.electrons[: self.n_up]
                     .mean(axis=0, keepdims=True)
                     .repeat(self.n_up + self.n_down, axis=0)
                 ),
-                'nodes_down': (
+                'node_down': lambda: (
                     nodes.electrons[self.n_up :]
                     .mean(axis=0, keepdims=True)
                     .repeat(self.n_up + self.n_down, axis=0)
                 ),
-                'same': z['same'],
-                'anti': z['anti'],
-                'ee': z['same'] + z['anti'],
+                'edge_same': lambda: z['same'],  # TODO: normalization?
+                'edge_anti': lambda: z['anti'],  # TODO: normalization?
+                'edge_up': lambda: z['up'] / self.n_up,
+                'edge_down': lambda: z['down'] / self.n_down,
+                'edge_ee': lambda: z['same'] + z['anti'],  # TODO: normalization?
+                'edge_ne': lambda: z['ne'],  # TODO: normalization?
             }
-            if 'ne' in self.edge_types:
-                FEATURE_MAPPING = {**FEATURE_MAPPING, 'ne': z['ne']}
-            f = {uf: FEATURE_MAPPING[uf] for uf in self.update_features}
+            f = {uf: FEATURE_MAPPING[uf]() for uf in self.update_features}
             if self.update_rule == 'concatenate':
-                updated = self.g(jnp.concatenate(list(f.values()), axis=-1))
+                updated = self.g(
+                    jnp.concatenate([f[uf] for uf in self.update_features], axis=-1)
+                )
             elif self.update_rule == 'featurewise':
                 updated = sum(self.g[uf](f[uf]) for uf in self.update_features)
             elif self.update_rule == 'sum':
