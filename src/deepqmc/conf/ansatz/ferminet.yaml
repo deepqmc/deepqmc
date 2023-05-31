@@ -42,16 +42,16 @@ omni_factory:
     atom_type_embeddings: false
     two_particle_stream_dim: 32
     edge_types:
-    - same
-    - anti
+    - up
+    - down
     edge_features:
-      same:
+      up:
         _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
         edge_features:
         - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
           powers: [1]
         - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
-      anti:
+      down:
         _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
         edge_features:
         - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
@@ -94,10 +94,9 @@ omni_factory:
       deep_features: shared
       update_rule: concatenate
       update_features: 
-      - same
-      - anti
       - residual
-      - nodes_up
-      - nodes_down
-
+      - node_up
+      - node_down
+      - edge_up
+      - edge_down
   
