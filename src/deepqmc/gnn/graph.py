@@ -171,6 +171,8 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, feature_callbacks
         'en': ['en'],
         'same': ['uu', 'dd'],
         'anti': ['ud', 'du'],
+        'up': ['up'],
+        'down': ['down'],
     }
     fix_kwargs_of_builder_type = {
         'nn': {
@@ -203,6 +205,12 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, feature_callbacks
             'mask_self': False,
             'mask_vals': (n_elec, n_elec),
             'offsets': (n_up, 0),
+        },
+        'up': {'mask_self': False, 'offsets': (0, 0), 'mask_vals': (n_elec, n_elec)},
+        'down': {
+            'mask_self': False,
+            'offsets': (n_up, 0),
+            'mask_vals': (n_elec, n_elec),
         },
     }
     builders = {
@@ -238,6 +246,8 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, feature_callbacks
         'en': lambda pc: builders['en'](pc.r, pc.R),
         'same': build_same,
         'anti': build_anti,
+        'up': lambda pc: builders['up'](pc.r[:n_up], pc.r),
+        'down': lambda pc: builders['down'](pc.r[n_up:], pc.r),
     }
 
     def build(phys_conf):

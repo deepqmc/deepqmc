@@ -103,6 +103,8 @@ class NodeEdgeMapping:
             'ne': 'electrons',
             'en': 'nuclei',
             'nn': 'nuclei',
+            'up': 'electrons',
+            'down': 'electrons',
         }[edge]
         return node
 
@@ -113,5 +115,7 @@ class NodeEdgeMapping:
             'ne': 'nuclei',
             'en': 'electrons',
             'nn': 'nuclei',
+            'up': 'electrons',
+            'down': 'electrons',
         }[edge]
         return node
