@@ -14,7 +14,9 @@ __all__ = ['NeuralNetworkWaveFunction']
 class BackflowOp(hk.Module):
     def __init__(self, mult_act=None, add_act=None, with_envelope=True):
         super().__init__()
-        self.mult_act = mult_act or (lambda x: 1 + 2 * jnp.tanh(x / 4))
+        # TODO: implement the `eval` resolver in hydra configs
+        # self.mult_act = mult_act or (lambda x: 1 + 2 * jnp.tanh(x / 4))
+        self.mult_act = mult_act or (lambda x: x)
         self.add_act = add_act or (lambda x: 0.1 * jnp.tanh(x / 4))
         self.with_envelope = with_envelope
 
