@@ -11,51 +11,23 @@ __all__ = [
     'GraphEdgeBuilder',
     'MolecularGraphEdgeBuilder',
     'GraphUpdate',
-    'difference_callback',
 ]
 
 
-def all_graph_edges(pos_sender, pos_receiver):
-    r"""Create all graph edges.
-
-    Args:
-        pos_sender (float, (:math:`N_\text{nodes}`, 3)): coordinates of graph
-            nodes that send edges.
-        pos_receiver (float, (:math:`M_\text{nodes}`, 3)): coordinates of graph
-            nodes that receive edges.
-
-    Returns:
-        int, (:math:`N`, :math:`M`): matrix of node indeces, indicating
-        the receiver node of the :math:`N \cdot M` possible edges.
-    """
-    idx = jnp.arange(pos_receiver.shape[0])
-    return jnp.broadcast_to(idx[None, :], (pos_sender.shape[0], pos_receiver.shape[0]))
+def offdiagonal_sender_idx(n_node):
+    return (
+        jnp.arange(n_node)[None, :] <= jnp.arange(n_node - 1)[:, None]
+    ) + jnp.arange(n_node - 1)[:, None]
 
 
-def mask_self_edges(idx):
-    r"""Mask the edges where sender and receiver nodes have the same index.
-
-    Args:
-        idx (int, (:math:`N_\text{nodes}`, :math:`N_\text{nodes}`)):
-            index of receiving nodes, assumed to be square since sets of sender
-            and receiver nodes should be identical.
-
-    Returns:
-        int, (:math:`N_\text{nodes}`, :math:`N_\text{nodes}`): matrix of
-        receiving node indeces, the appropriate entries masked with
-        :math:`N_\text{nodes}`.
-    """
-    self_mask = idx == jnp.reshape(
-        jnp.arange(idx.shape[0], dtype=jnp.int32), (idx.shape[0], 1)
-    )
-    return jnp.where(self_mask, idx.shape[0], idx)
-
-
-def difference_callback(pos_sender, pos_receiver, sender_idx, receiver_idx):
-    r"""feature_callback computing the Euclidian difference vector for each edge."""
-    if len(pos_sender) == 0 or len(pos_receiver) == 0:
-        return jnp.zeros((len(sender_idx), 3))
-    diffs = pos_receiver[receiver_idx] - pos_sender[sender_idx]
+def compute_edges(pos_sender, pos_receiver, filter_diagonal):
+    diffs = pos_receiver[..., None, :, :] - pos_sender[..., None, :]
+    if filter_diagonal:
+        assert pos_sender.shape[-2] == pos_receiver.shape[-2]
+        n_node = pos_sender.shape[-2]
+        receiver_idx = jnp.broadcast_to(jnp.arange(n_node)[None], (n_node - 1, n_node))
+        sender_idx = offdiagonal_sender_idx(n_node)
+        diffs = diffs[..., sender_idx, receiver_idx, :]
     return diffs
 
 
@@ -63,13 +35,12 @@ def GraphEdgeBuilder(
     mask_self,
     offsets,
     mask_vals,
-    feature_callback,
 ):
     r"""
     Create a function that builds graph edges.
 
     Args:
-        mask_self (bool): whether to mask edges between nodes of the same index.
+        filter_self (bool): whether to filter edges between nodes of the same index.
         offsets ((int, int)): node index offset to be added to the returned
             sender and receiver node indeces respectively.
         mask_vals ((int, int)): if ``occupancy_limit`` is larger than the number
@@ -98,35 +69,7 @@ def GraphEdgeBuilder(
         assert len(pos_sender.shape) == 2
         assert not mask_self or pos_sender.shape[0] == pos_receiver.shape[0]
 
-        N_sender, N_receiver = pos_sender.shape[0], pos_receiver.shape[0]
-
-        edges_idx = all_graph_edges(pos_sender, pos_receiver)
-
-        if mask_self:
-            edges_idx = mask_self_edges(edges_idx)
-
-        sender_idx = jnp.broadcast_to(jnp.arange(N_sender)[:, None], edges_idx.shape)
-        sender_idx = jnp.reshape(sender_idx, (-1,))
-        receiver_idx = jnp.reshape(edges_idx, (-1,))
-
-        if mask_self:
-            N_edge = N_sender * (N_sender - 1)
-            mask = receiver_idx < N_receiver
-            cumsum = jnp.cumsum(mask)
-            index = jnp.where(mask, cumsum - 1, N_edge)
-
-            # edge buffer is one larger than number of edges:
-            # masked edges assigned to last position and discarded
-            sender_idx_buf, receiver_idx_buf = (
-                (mask_val - offset) * jnp.ones(N_edge + 1, jnp.int32)
-                for mask_val, offset in zip(mask_vals, offsets)
-            )
-            sender_idx = sender_idx_buf.at[index].set(sender_idx)[:N_edge]
-            receiver_idx = receiver_idx_buf.at[index].set(receiver_idx)[:N_edge]
-
-        features = feature_callback(pos_sender, pos_receiver, sender_idx, receiver_idx)
-
-        return GraphEdges(sender_idx + offsets[0], receiver_idx + offsets[1], features)
+        return compute_edges(pos_sender, pos_receiver, mask_self)
 
     return build
 
@@ -142,13 +85,13 @@ def concatenate_edges(edges):
         tree_structure([0] * len(edges)), tree_structure(edges[0]), edges
     )
     return tree_map(
-        jnp.concatenate, edge_of_lists, is_leaf=lambda x: isinstance(x, list)
+        lambda xs: jnp.concatenate([x.reshape(-1, x.shape[-1]) for x in xs]),
+        edge_of_lists,
+        is_leaf=lambda x: isinstance(x, list),
     )
 
 
-def MolecularGraphEdgeBuilder(
-    n_nuc, n_up, n_down, edge_types, feature_callbacks, *, self_interaction
-):
+def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interaction):
     r"""
     Create a function that builds many types of molecular edges.
 
@@ -163,8 +106,6 @@ def MolecularGraphEdgeBuilder(
                 - ``'en'``: electrons->nuclei edges
                 - ``'same'``: edges betwen same-spin electrons
                 - ``'anti'``: edges betwen opposite-spin electrons
-        feature_callbacks (dict): a mapping from names of edge types to the
-            feature callbacks passed to the :class:`GraphEdgeBuilder` of that edge type.
     """
     n_elec = n_up + n_down
     builder_mapping = {
@@ -222,7 +163,6 @@ def MolecularGraphEdgeBuilder(
     builders = {
         builder_type: GraphEdgeBuilder(
             **fix_kwargs_of_builder_type[builder_type],
-            feature_callback=feature_callbacks[edge_type],
         )
         for edge_type in edge_types
         for builder_type in builder_mapping[edge_type]
