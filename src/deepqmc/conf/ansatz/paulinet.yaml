@@ -114,7 +114,7 @@ omni_factory:
       deep_features: false
       update_rule: featurewise
       update_features: 
-        - same
-        - anti
-        - ne
+        - edge_same
+        - edge_anti
+        - edge_ne
   
