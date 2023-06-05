@@ -94,9 +94,11 @@ def make_dense_pattern(
 ):
     r"""Create :class:`GraphPattern`s matching dense layers."""
     n_extra_dims = len(extra_dims or ())
-    x_shape = (2, *(extra_dims or ()), in_dim)
+    x_shape = (*(extra_dims or ()), 11, in_dim)
     p_shapes = [[in_dim, out_dim], [out_dim]] if with_bias else [[in_dim, out_dim]]
-    compute_func = vmap(_dense, in_axes=(0, None))
+    compute_func = _dense
+    for _ in range(n_extra_dims):
+        compute_func = vmap(compute_func, in_axes=(0, None))
     return kfac_jax.tag_graph_matcher.GraphPattern(
         name=(
             f'repeated{n_extra_dims}_dense_with_bias'
