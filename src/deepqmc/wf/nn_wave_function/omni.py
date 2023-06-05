@@ -42,6 +42,7 @@ class Backflow(hk.Module):
     Args:
         embedding_dim (int): the length of the electron embedding vectors.
         n_orbitals (int): the number of orbitals to compute backflow factors for.
+        n_determinants (int): the number of determinants of the ansatz.
         n_backflow (int): the number of independent backflow factors for each orbital.
         multi_head (bool): if :data:`True`, create separate MLPs for the
             :data:`n_backflow` many backflows, otherwise use a single larger MLP
@@ -55,6 +56,7 @@ class Backflow(hk.Module):
         self,
         embedding_dim,
         n_orbitals,
+        n_determinants,
         n_backflows,
         multi_head=True,
         *,
@@ -64,20 +66,25 @@ class Backflow(hk.Module):
     ):
         super().__init__(name=name)
         self.multi_head = multi_head
+        self.n_orbitals = n_orbitals
+        self.n_determinants = n_determinants
         if multi_head:
-            self.nets = [subnet_factory(n_orbitals) for _ in range(n_backflows)]
+            self.nets = [
+                subnet_factory(n_orbitals * n_determinants) for _ in range(n_backflows)
+            ]
         else:
-            self.n_orbitals = n_orbitals
-            self.net = subnet_factory(n_backflows * n_orbitals)
+            self.net = subnet_factory(n_backflows * n_orbitals * n_determinants)
 
     def __call__(self, xs):
         if self.multi_head:
-            return jnp.stack([net(xs) for net in self.nets], axis=-3)
+            xs = jnp.stack([net(xs) for net in self.nets], axis=-3)
         else:
             xs = self.net(xs)
-            xs = unflatten(xs, -1, (-1, self.n_orbitals))
+            xs = unflatten(xs, -1, (-1, self.n_orbitals * self.n_determinants))
             xs = xs.swapaxes(-2, -3)
-            return xs
+        xs = unflatten(xs, -1, (-1, self.n_orbitals))
+        xs = xs.swapaxes(-2, -3)
+        return xs
 
 
 class OmniNet(hk.Module):
@@ -126,7 +133,7 @@ class OmniNet(hk.Module):
         self.jastrow = jastrow_factory(embedding_dim) if jastrow_factory else None
         self.backflow = (
             {
-                l: backflow_factory(embedding_dim, n_determinants * n, n_backflows)
+                l: backflow_factory(embedding_dim, n, n_determinants, n_backflows)
                 for l, n in zip(['up', 'down'], [n_orb_up, n_orb_down])
             }
             if backflow_factory

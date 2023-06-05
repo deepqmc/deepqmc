@@ -21,7 +21,7 @@ class BackflowOp(hk.Module):
     def __call__(self, xs, fs_mult, fs_add, dists_nuc):
         if fs_add is not None:
             if self.with_envelope:
-                envel = jnp.sqrt((xs**2).sum(axis=-1, keepdims=True))
+                envel = jnp.sqrt((xs**2).sum(axis=(-1, -3), keepdims=True))
             else:
                 envel = 1
         if fs_mult is not None:
@@ -31,8 +31,7 @@ class BackflowOp(hk.Module):
             cutoff = jnp.where(
                 R < 1, R**2 * (6 - 8 * R + 3 * R**2), jnp.ones_like(R)
             )
-            idx = (slice(None), *([None] * (len(xs.shape) - 3)), slice(None), None)
-            xs = xs + cutoff[idx] * envel * self.add_act(fs_add)
+            xs = xs + cutoff[None, :] * envel * self.add_act(fs_add)
         return xs
 
 
@@ -103,8 +102,8 @@ class NeuralNetworkWaveFunction(WaveFunction):
             2 if backflow_transform == 'both' else 1,
         ]
         self.backflow_transform = backflow_transform
-        self.backflow_op = backflow_op()
-        self.omni = omni_factory(hamil.mol, *backflow_spec)
+        self.backflow_op = backflow_op() if backflow_op else None
+        self.omni = omni_factory(hamil.mol, *backflow_spec) if omni_factory else None
 
     def _backflow_op(self, xs, fs, dists_nuc):
         if self.backflow_transform == 'mult':
@@ -112,10 +111,10 @@ class NeuralNetworkWaveFunction(WaveFunction):
         elif self.backflow_transform == 'add':
             fs_mult, fs_add = None, fs
         elif self.backflow_transform == 'both':
-            fs_mult, fs_add = jnp.split(fs, 2, axis=-3)
+            fs_mult, fs_add = jnp.split(fs, 2, axis=0)
 
-        fs_add = fs_add.squeeze(axis=-3) if fs_add is not None else fs_add
-        fs_mult = fs_mult.squeeze(axis=-3) if fs_mult is not None else fs_mult
+        fs_add = fs_add.squeeze(axis=0) if fs_add is not None else fs_add
+        fs_mult = fs_mult.squeeze(axis=0) if fs_mult is not None else fs_mult
 
         return self.backflow_op(xs, fs_mult, fs_add, dists_nuc)
 
@@ -123,30 +122,25 @@ class NeuralNetworkWaveFunction(WaveFunction):
         diffs_nuc = pairwise_diffs(phys_conf.r, phys_conf.R)
         dists_nuc = jnp.sqrt(diffs_nuc[..., -1])
         dists_elec = pairwise_self_distance(phys_conf.r, full=True)
-        orb = self.envelope(diffs_nuc)
+        orb = self.envelope(phys_conf)
         jastrow, fs = self.omni(phys_conf) if self.omni else (None, None)
         orb_up, orb_down = (
             (orb, orb)
             if self.full_determinant
-            else jnp.split(orb, (self.n_up * self.n_det,), axis=-1)
+            else jnp.split(orb, [self.n_up], axis=-1)
         )
-        orb_up = orb_up[: self.n_up]
-        orb_down = orb_down[self.n_up :]
+        orb_up, orb_down = orb_up[:, : self.n_up], orb_down[:, self.n_up :]
         if fs is not None:
             orb_up = self._backflow_op(orb_up, fs[0], dists_nuc[: self.n_up])
             orb_down = self._backflow_op(orb_down, fs[1], dists_nuc[self.n_up :])
-        orb_up = orb_up.reshape(self.n_up, self.n_det, -1).swapaxes(-2, -3)
-        orb_down = orb_down.reshape(self.n_down, self.n_det, -1).swapaxes(-2, -3)
         if return_mos:
             return orb_up, orb_down
-
         if self.full_determinant:
             sign, xs = eval_log_slater(jnp.concatenate([orb_up, orb_down], axis=-2))
         else:
             sign_up, det_up = eval_log_slater(orb_up)
             sign_down, det_down = eval_log_slater(orb_down)
             sign, xs = sign_up * sign_down, det_up + det_down
-
         xs_shift = xs.max()
         # the exp-normalize trick, to avoid over/underflow of the exponential
         xs_shift = jnp.where(~jnp.isinf(xs_shift), xs_shift, jnp.zeros_like(xs_shift))
