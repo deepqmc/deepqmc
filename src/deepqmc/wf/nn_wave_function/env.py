@@ -1,7 +1,8 @@
 import haiku as hk
 import jax.numpy as jnp
 
-from ...utils import norm
+from ...physics import pairwise_diffs
+from ...utils import norm, unflatten
 
 
 class ExponentialEnvelopes(hk.Module):
@@ -43,6 +44,7 @@ class ExponentialEnvelopes(hk.Module):
         self.per_orbital_exponent = per_orbital_exponent
         self.spin_restricted = spin_restricted
         self.n_up = mol.n_up
+        self.n_det = n_determinants
 
     def _call_for_one_spin(self, zeta, pi, diffs):
         d = diffs[..., self.center_idx, :-1]
@@ -57,9 +59,11 @@ class ExponentialEnvelopes(hk.Module):
             )  # [n_el, n_env] or [n_el, n_orb, n_env]
         if not self.per_orbital_exponent:
             exponent = exponent[:, None]  # [n_el, 1, n_env]
-        return (pi * jnp.exp(-exponent)).sum(axis=-1)  # [n_el, n_orb]
+        orbs = (pi * jnp.exp(-exponent)).sum(axis=-1)  # [n_el, n_orb]
+        return unflatten(orbs, -1, (self.n_det, -1)).swapaxes(-2, -3)
 
-    def __call__(self, diffs):
+    def __call__(self, phys_conf):
+        diffs = pairwise_diffs(phys_conf.r, phys_conf.R)
         if self.spin_restricted:
             return self._call_for_one_spin(self.zetas[0], self.pi[0], diffs)
         else:
@@ -69,7 +73,7 @@ class ExponentialEnvelopes(hk.Module):
                     self.zetas, self.pi, jnp.split(diffs, (self.n_up,))
                 )
             ]
-            return jnp.concatenate(orbs)
+            return jnp.concatenate(orbs, axis=-2)
 
 
 def _get_pi_for_one_spin(name, n_determinants, n_up, n_down, n_env):
