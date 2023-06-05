@@ -92,7 +92,7 @@ omni_factory:
       update_rule: concatenate
       update_features: 
         - residual
-        - nodes_up
-        - nodes_down
-        - ee
-        - ne
+        - node_up
+        - node_down
+        - edge_ee
+        - edge_ne
