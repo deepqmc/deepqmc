@@ -10,6 +10,7 @@ envelope:
 backflow_op:
   _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
   _partial_: true
+  mult_act: '${eval:"lambda x: x"}'
 n_determinants: 32
 full_determinant: false
 cusp_electrons: false

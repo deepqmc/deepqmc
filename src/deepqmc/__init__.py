@@ -1,4 +1,3 @@
-import jax  # noqa: F401
 from omegaconf import OmegaConf
 
 from .hamil import MolecularHamiltonian
