@@ -2,9 +2,9 @@ from typing import Sequence
 
 import haiku as hk
 import jax.numpy as jnp
+from jax.nn import one_hot
 
 from ...physics import pairwise_diffs
-from ...types import Psi
 from ..base import WaveFunction
 from .gto import GTOBasis
 from .pyscfext import confs_from_mc, pyscf_from_mol
@@ -12,47 +12,47 @@ from .pyscfext import confs_from_mc, pyscf_from_mol
 __all__ = ['Baseline']
 
 
-def eval_log_slater(xs):
-    if xs.shape[-1] == 0:
-        return jnp.ones(xs.shape[:-2]), jnp.zeros(xs.shape[:-2])
-    return jnp.linalg.slogdet(xs)
-
-
 class Baseline(WaveFunction):
     r"""Represent an (MC-)SCF wave function, used as baseline."""
 
-    def __init__(self, mol, centers, shells, mo_coeffs, confs, conf_coeffs):
+    def __init__(
+        self,
+        mol,
+        n_determinants,
+        centers,
+        shells,
+        mo_coeffs,
+        confs,
+        conf_coeffs,
+    ):
         super().__init__(mol)
         self.basis = GTOBasis(centers, shells)
-        mo_coeffs = jnp.asarray(mo_coeffs)
+        mo_coeffs = mo_coeffs[:n_determinants]
+        conf_coeffs = conf_coeffs[:n_determinants]
         self.mo_coeffs = hk.get_parameter(
             'mo_coeffs', mo_coeffs.shape, init=lambda s, d: mo_coeffs
         )
         self.conf_coeffs = hk.get_parameter(
             'conf_coeffs', conf_coeffs.shape, init=lambda s, d: conf_coeffs
         )
-        self.confs = confs
+        self.confs = confs[:n_determinants]
 
-    def __call__(self, phys_conf, return_mos=False):
+    def __call__(self, phys_conf):
+        mol_idx = phys_conf.mol_idx
         diffs = pairwise_diffs(phys_conf.r, phys_conf.R)
+        n_el = diffs.shape[-3]
         aos = self.basis(diffs)
-        mos = jnp.einsum('...mo,...em->...eo', self.mo_coeffs[phys_conf.mol_idx], aos)
-        confs = self.confs[phys_conf.mol_idx]
-        conf_up, conf_down = confs[..., : self.n_up], confs[..., self.n_up :]
-        det_up = mos[..., : self.n_up, conf_up].swapaxes(-2, -3)
-        det_down = mos[..., self.n_up :, conf_down].swapaxes(-2, -3)
-        if return_mos:
-            return det_up, det_down
-        sign_up, det_up = eval_log_slater(det_up)
-        sign_down, det_down = eval_log_slater(det_down)
-        dets = sign_up * sign_down * jnp.exp(det_up + det_down)
-        psi = jnp.einsum(
-            '...id,...d->...i', self.conf_coeffs[phys_conf.mol_idx], dets
-        ).squeeze(axis=-1)
-        return Psi(jnp.sign(psi), jnp.log(jnp.abs(psi)))
+        mos = jnp.einsum('...mo,...em->...eo', self.mo_coeffs[mol_idx], aos)
+        mos = mos[:, self.confs[mol_idx]].swapaxes(-2, -3)
+        # ci coefficients are included in the orbitals of the respective determinant
+        factors = (jnp.abs(self.conf_coeffs[mol_idx]) ** (1 / n_el))[:, None] * (
+            one_hot(0, n_el)[None, :] * jnp.sign(self.conf_coeffs[mol_idx])[:, None]
+            + (1 - one_hot(0, n_el)[None, :])
+        )
+        return mos * factors[:, None, :]
 
     @classmethod
-    def from_mol(cls, mols, *, basis='6-31G', cas=None, **kwargs):
+    def from_mol(cls, mols, *, basis='6-31G', cas=None, **pyscf_kwargs):
         r"""Create input to the constructor from a :class:`~deepqmc.Molecule`.
 
         Args:
@@ -64,7 +64,7 @@ class Baseline(WaveFunction):
         mols = mols if isinstance(mols, Sequence) else [mols]
         mo_coeffs, confs, conf_coeffs = [], [], []
         for mol in mols:
-            mol_pyscf, (mf, mc) = pyscf_from_mol(mol, basis, cas, **kwargs)
+            mol_pyscf, (mf, mc) = pyscf_from_mol(mol, basis, cas, **pyscf_kwargs)
             centers, shells = GTOBasis.from_pyscf(mol_pyscf)
             mo_coeff = jnp.asarray(mc.mo_coeff if mc else mf.mo_coeff)
             ao_overlap = jnp.asarray(mf.mol.intor('int1e_ovlp_cart'))
@@ -74,14 +74,13 @@ class Baseline(WaveFunction):
                 if mc is None
                 else zip(*confs_from_mc(mc))
             )
-            conf_coeff, conf = jnp.array(conf_coeff).reshape(-1, 1), jnp.array(conf)
             mo_coeffs.append(mo_coeff)
-            confs.append(conf)
-            conf_coeffs.append(conf_coeff)
-        return (
-            centers,
-            shells,
-            jnp.stack(mo_coeffs),
-            jnp.stack(confs),
-            jnp.stack(conf_coeffs),
-        )
+            confs.append(jnp.array(conf))
+            conf_coeffs.append(jnp.array(conf_coeff))
+        return {
+            'centers': centers,
+            'shells': shells,
+            'mo_coeffs': jnp.stack(mo_coeffs),
+            'confs': jnp.stack(confs),
+            'conf_coeffs': jnp.stack(conf_coeffs),
+        }
