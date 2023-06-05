@@ -33,6 +33,7 @@ dependencies = [
     'h5py',
     'hydra-core',
     'jax<0.4.11',
+    'jaxlib<0.4.11',
     'jaxtyping',
     'jax-dataclasses',
     'kfac-jax',
