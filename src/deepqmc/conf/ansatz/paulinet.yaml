@@ -118,7 +118,7 @@ omni_factory:
       mean_aggregate_edges: false
       update_rule: featurewise
       update_features: 
-        - edge_same
-        - edge_anti
-        - edge_ne
+        - convolution_same
+        - convolution_anti
+        - convolution_ne
   
