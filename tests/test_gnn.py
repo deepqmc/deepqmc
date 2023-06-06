@@ -4,7 +4,6 @@ import pytest
 from deepqmc.gnn.graph import (
     GraphEdgeBuilder,
     MolecularGraphEdgeBuilder,
-    difference_callback,
 )
 
 
@@ -29,7 +28,7 @@ class TestGraph:
         ndarrays_regression,
     ):
         graph_edges = GraphEdgeBuilder(
-            mask_self, offsets, mask_vals, difference_callback
+            mask_self, offsets, mask_vals
         )(nodes, nodes)
         ndarrays_regression.check(helpers.flatten_pytree(graph_edges))
 
@@ -40,8 +39,6 @@ class TestGraph:
         graph_edges = MolecularGraphEdgeBuilder(
             *mol.n_particles,
             edge_types,
-            {edge_type: difference_callback for edge_type in edge_types},
-            self_interaction=False,
         )(phys_conf)
         ndarrays_regression.check(helpers.flatten_pytree(graph_edges))
 
