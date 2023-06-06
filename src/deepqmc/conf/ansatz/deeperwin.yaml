@@ -95,5 +95,5 @@ omni_factory:
         - residual
         - node_up
         - node_down
-        - edge_ee
-        - edge_ne
+        - convolution_ee
+        - convolution_ne
