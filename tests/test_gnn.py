@@ -27,11 +27,9 @@ class TestGraph:
         mask_vals,
         ndarrays_regression,
     ):
-        graph_edges = GraphEdgeBuilder(
-            mask_self, offsets, mask_vals
-        )(nodes, nodes)
+        graph_edges = GraphEdgeBuilder(mask_self, offsets, mask_vals)(nodes, nodes)
         print(graph_edges)
-        ndarrays_regression.check(helpers.flatten_pytree(graph_edges))
+        ndarrays_regression.check({'graph_edges': graph_edges})
 
     def test_molecular_graph_edge_builder(self, helpers, ndarrays_regression):
         mol = helpers.mol()
@@ -41,7 +39,7 @@ class TestGraph:
             *mol.n_particles,
             edge_types,
         )(phys_conf)
-        ndarrays_regression.check(helpers.flatten_pytree(graph_edges))
+        ndarrays_regression.check(graph_edges)
 
 
 class TestGNN:
