@@ -58,7 +58,8 @@ def train_from_checkpoint(workdir, restdir, evaluate, chkpt='LAST', **kwargs):
         cfg.task.opt = None
     else:
         cfg.task.init_step = step
-    call(cfg.task, _convert_='all', train_state=train_state, **kwargs)
+    cfg = OmegaConf.to_object(cfg)
+    call(cfg['task'], _convert_='all', train_state=train_state, **kwargs)
 
 
 def task_from_workdir(workdir, chkpt):
@@ -122,7 +123,8 @@ def main(cfg):
     cfg.task.workdir = str(Path.cwd())
     log.info(f'Will work in {cfg.task.workdir}')
     maybe_log_code_version()
-    call(cfg.task, _convert_='all')
+    cfg = OmegaConf.to_object(cfg)
+    call(cfg['task'], _convert_='all')
 
 
 @hydra.main(config_path='conf', config_name='config', version_base=None)
