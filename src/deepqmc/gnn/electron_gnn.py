@@ -227,13 +227,13 @@ class ElectronGNNLayer(hk.Module):
                 wh = jnp.concatenate(
                     [
                         reduce_fn(
-                            w_uu.reshape(self.n_up - 1, self.n_up, -1)
+                            w_uu.reshape(self.n_up - 1, self.n_up, w_uu.shape[-1])
                             #  * h[: self.n_up, None]
                             * h[offdiagonal_sender_idx(self.n_up)],
                             axis=0
                         ),
                         reduce_fn(
-                            w_dd.reshape(self.n_down - 1, self.n_down, -1)
+                            w_dd.reshape(self.n_down - 1, self.n_down, w_dd.shape[-1])
                             #  * h[self.n_up :, None]
                             * h[self.n_up + offdiagonal_sender_idx(self.n_down)],
                             axis=0
@@ -261,8 +261,8 @@ class ElectronGNNLayer(hk.Module):
                 return wh
 
             def convolution(edge_type):
-                hx = self.h[edge_type](self.mapping.sender_data_of(edge_type, nodes))
                 we = self.w[edge_type](edges[edge_type])
+                hx = self.h[edge_type](self.mapping.sender_data_of(edge_type, nodes))
                 return {
                     'same': convolve_same,
                     'anti': convolve_anti,
@@ -430,7 +430,11 @@ class ElectronGNN(hk.Module):
         n_elec_types = self.node_data['n_node_types']['electrons']
         if self.positional_electron_embeddings:
             edge_factory = MolecularGraphEdgeBuilder(
-                self.n_nuc, self.n_up, self.n_down, self.positional_electron_embeddings.keys(), self_interaction=self.self_interaction,
+                self.n_nuc,
+                self.n_up,
+                self.n_down,
+                self.positional_electron_embeddings.keys(),
+                self_interaction=self.self_interaction,
             )
             feats = tree_util.tree_map(
                 lambda f, e: f(e).swapaxes(0, 1).reshape(self.n_up + self.n_down, -1),
