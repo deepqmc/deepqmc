@@ -12,7 +12,7 @@ backflow_op:
   _partial_: true
   mult_act: '${eval:"lambda x: x"}'
 n_determinants: 32
-full_determinant: false
+full_determinant: true
 cusp_electrons: false
 cusp_alpha: null
 backflow_transform: mult
@@ -74,20 +74,9 @@ omni_factory:
           _target_: jax.numpy.tanh
           _partial_: true
         w_init: deeperwin
-      subnet_factory_by_lbl:
-        w:
-          _target_: deepqmc.hkext.MLP
-          _partial_: true
-          hidden_layers: ['log', 1]
-          bias: false
-          last_linear: false
-          activation:
-            _target_: jax.numpy.tanh
-            _partial_: true
-          w_init: deeperwin
       residual:
         _target_: deepqmc.hkext.ResidualConnection
-        normalize: false
+        normalize: true
       convolution: true
       deep_features: separate
       update_rule: concatenate
