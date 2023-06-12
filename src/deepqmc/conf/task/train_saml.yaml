@@ -9,6 +9,11 @@ sample_size: 2048
 seed: 0
 pretrain_steps: 5000
 pretrain_kwargs:
+  opt: adam
+  opt_kwargs:
+    learning_rate: 3.e-4
+    b1: 0.9
+    b2: 0.999
   baseline_kwargs:
     basis: 6-311G
 fit_kwargs:
