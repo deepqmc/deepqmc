@@ -436,13 +436,8 @@ def crossover_parameter(z, f, charge):
 
 
 def clean_force(force, phys_conf, mol, *, tau):
-    z, idx = diffs_to_nearest_nuc(
-        jnp.reshape(phys_conf.r, (-1, 3)), phys_conf.R.reshape(-1, 3)
-    )
-    a = crossover_parameter(z, jnp.reshape(force, (-1, 3)), mol.charges[idx])
-    z, a = jnp.reshape(z, (len(phys_conf.r), -1, 4)), jnp.reshape(
-        a, (len(phys_conf.r), -1)
-    )
+    z, idx = jax.vmap(diffs_to_nearest_nuc)(phys_conf.r, phys_conf.R)
+    a = crossover_parameter(z, force, mol.charges[idx])
     av2tau = a * jnp.sum(force**2, axis=-1) * tau
     # av2tau can be small or zero, so the following expression must handle that
     factor = 2 / (jnp.sqrt(1 + 2 * av2tau) + 1)
