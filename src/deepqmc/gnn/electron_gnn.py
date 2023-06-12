@@ -86,7 +86,7 @@ class ElectronGNNLayer(hk.Module):
         subnet_factory_by_lbl=None,
     ):
         super().__init__()
-        self.n_up, self.n_down = n_up, n_down
+        self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
         self.last_layer = ilayer == n_interactions - 1
         self.edge_types = tuple(
             typ for typ in edge_types if not self.last_layer or typ not in {'nn', 'en'}
@@ -223,6 +223,7 @@ class ElectronGNNLayer(hk.Module):
 
     def get_update_nodes_fn(self):
         def update_nodes(nodes, z):
+            n_up, n_down = self.n_up, self.n_down
             FEATURE_MAPPING = {
                 'residual': lambda: nodes.electrons,
                 'node_up': lambda: (
@@ -235,12 +236,18 @@ class ElectronGNNLayer(hk.Module):
                     .mean(axis=0, keepdims=True)
                     .repeat(self.n_up + self.n_down, axis=0)
                 ),
-                'edge_same': lambda: z['same'],  # TODO: normalization?
-                'edge_anti': lambda: z['anti'],  # TODO: normalization?
+                'edge_same': lambda: z['same'] / jnp.clip(
+                    jnp.array(n_up * [[n_up - 1]] + n_down * [[n_down - 1]]), 1
+                ),
+                'edge_anti': lambda: z['anti'] / jnp.clip(
+                    jnp.array(n_up * [[n_down]] + n_down * [[n_up]]), 1
+                ),
                 'edge_up': lambda: z['up'] / self.n_up,
                 'edge_down': lambda: z['down'] / self.n_down,
-                'edge_ee': lambda: z['same'] + z['anti'],  # TODO: normalization?
-                'edge_ne': lambda: z['ne'],  # TODO: normalization?
+                'edge_ee': lambda: (z['same'] + z['anti']) / (
+                    self.n_up + self.n_down - 1
+                ),
+                'edge_ne': lambda: z['ne'] / self.n_nuc,
             }
             f = {uf: FEATURE_MAPPING[uf]() for uf in self.update_features}
             if self.update_rule == 'concatenate':
