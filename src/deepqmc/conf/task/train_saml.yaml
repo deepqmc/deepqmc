@@ -1,0 +1,19 @@
+defaults:
+  - sampler: langevin_saml
+  - opt: kfac
+_target_: deepqmc.app.train_from_factories
+hamil: ${hamil}
+ansatz: ${ansatz}
+steps: 50000
+sample_size: 2048
+seed: 0
+pretrain_steps: 5000
+pretrain_kwargs:
+  baseline_kwargs:
+    basis: 6-311G
+fit_kwargs:
+  clip_mask_fn:
+    _target_: deepqmc.fit.median_clip_and_mask
+    _partial_: true
+    clip_width: 5.0
+    median_center: false
