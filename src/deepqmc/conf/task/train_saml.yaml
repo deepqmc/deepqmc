@@ -1,6 +1,6 @@
 defaults:
-  - sampler: langevin_saml
-  - opt: kfac
+  - sampler: metropolis_saml
+  - opt: kfac_saml
 _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
 ansatz: ${ansatz}
