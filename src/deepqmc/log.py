@@ -24,28 +24,20 @@ class CheckpointStore:
     PATTERN = 'chkpt-{}.pt'
 
     def __init__(
-        self, workdir, *, size=3, threshold=0.95, min_interval=100, max_interval=10000
+        self, workdir, *, size=3, threshold=0.95, interval=1000
     ):
         self.workdir = Path(workdir)
         for p in self.workdir.glob(self.PATTERN.format('*')):
             p.unlink()
         self.size = size
-        self.min_interval = min_interval
-        self.max_interval = max_interval
+        self.interval = interval
         self.threshold = threshold
         self.chkpts = []
         self.buffer = None
 
     def update(self, step, state, loss=jnp.inf):
         self.buffer = (step, state, loss)
-        if (
-            not self.chkpts
-            or (
-                step > self.min_interval + self.chkpts[-1].step
-                and loss <= self.threshold * self.chkpts[-1].loss
-            )
-            or ((step - self.chkpts[-1].step) >= self.max_interval)
-        ):
+        if not self.chkpts or (step >= self.interval + self.chkpts[-1].step):
             self.dump()
         while len(self.chkpts) > self.size:
             self.chkpts.pop(0).path.unlink()
