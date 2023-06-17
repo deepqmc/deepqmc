@@ -45,7 +45,6 @@ def pretrain(  # noqa: C901
     def loss_fn(params, phys_config):
         orbs = jax.vmap(ansatz.apply, (None, 0, None))(params, phys_config, True)
         _, n_det, n_up, n_orb_up = orbs[0].shape
-        *_, n_down, _ = orbs[1].shape
         target = jax.vmap(baseline)(phys_config)
         n_det_target = target.shape[-3]
         target = jnp.tile(target, (math.ceil(n_det / n_det_target), 1, 1))[:, :n_det]
@@ -53,20 +52,8 @@ def pretrain(  # noqa: C901
         target = (target[..., :n_up, :n_up], target[..., n_up:, n_up:])
         if n_orb_up != n_up:
             target = (
-                jnp.concatenate(
-                    (
-                        target[0],
-                        jnp.zeros((*target[0].shape[:-1], n_down)),
-                    ),
-                    axis=-1,
-                ),
-                jnp.concatenate(
-                    (
-                        jnp.zeros((*target[1].shape[:-1], n_up)),
-                        target[1],
-                    ),
-                    axis=-1,
-                ),
+                jnp.apply_along_axis(jnp.pad, -1, target[0], (0, n_orb_up - n_up)),
+                jnp.apply_along_axis(jnp.pad, -1, target[1], (n_up, 0)),
             )
         # in full determinant mode off diagonal elements are pretrained against zero
         losses = jax.tree_util.tree_map(lambda o, t: (o - t) ** 2, orbs, target)
