@@ -45,6 +45,7 @@ def pretrain(  # noqa: C901
     def loss_fn(params, phys_config):
         orbs = jax.vmap(ansatz.apply, (None, 0, None))(params, phys_config, True)
         _, n_det, n_up, n_orb_up = orbs[0].shape
+        *_, n_down, _ = orbs[1].shape
         target = jax.vmap(baseline)(phys_config)
         n_det_target = target.shape[-3]
         target = jnp.tile(target, (math.ceil(n_det / n_det_target), 1, 1))[:, :n_det]
@@ -52,12 +53,26 @@ def pretrain(  # noqa: C901
         target = (target[..., :n_up, :n_up], target[..., n_up:, n_up:])
         if n_orb_up != n_up:
             target = (
-                jnp.concatenate((target[0], jnp.zeros_like(target[0])), axis=-1),
-                jnp.concatenate((jnp.zeros_like(target[1]), target[1]), axis=-1),
+                jnp.concatenate(
+                    (
+                        target[0],
+                        jnp.zeros((*target[0].shape[:-1], n_down)),
+                    ),
+                    axis=-1,
+                ),
+                jnp.concatenate(
+                    (
+                        jnp.zeros((*target[1].shape[:-1], n_down)),
+                        target[1],
+                    ),
+                    axis=-1,
+                ),
             )
         # in full determinant mode off diagonal elements are pretrained against zero
-        loss = sum((o - t) ** 2 for o, t in zip(orbs, target))
-        return loss.mean(), loss.mean(axis=(-3, -2, -1))
+        losses = jax.tree_util.tree_map(lambda o, t: (o - t) ** 2, orbs, target)
+        loss = sum(map(jnp.mean, losses))
+        per_sample_losses = sum(map(partial(jnp.mean, axis=(-3, -2, -1)), losses))
+        return loss, per_sample_losses
 
     loss_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
 
