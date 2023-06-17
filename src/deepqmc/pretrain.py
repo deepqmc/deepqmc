@@ -62,7 +62,7 @@ def pretrain(  # noqa: C901
                 ),
                 jnp.concatenate(
                     (
-                        jnp.zeros((*target[1].shape[:-1], n_down)),
+                        jnp.zeros((*target[1].shape[:-1], n_up)),
                         target[1],
                     ),
                     axis=-1,
