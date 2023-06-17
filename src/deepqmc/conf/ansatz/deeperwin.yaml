@@ -4,7 +4,7 @@ envelope:
   _target_: deepqmc.wf.nn_wave_function.env.ExponentialEnvelopes
   _partial_: true
   isotropic: true
-  per_shell: true
+  per_shell: false
   per_orbital_exponent: true
   spin_restricted: false
   init_to_ones: true
