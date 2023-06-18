@@ -50,6 +50,7 @@ omni_factory:
       embedding_dim: 32
       atom_type_embedding: true
       subnet_type: mlp
+    self_interaction: true
     edge_types:
     - same
     - anti

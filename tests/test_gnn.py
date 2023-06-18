@@ -41,6 +41,7 @@ class TestGraph:
             *mol.n_particles,
             edge_types,
             {edge_type: difference_callback for edge_type in edge_types},
+            self_interaction=False,
         )(phys_conf)
         ndarrays_regression.check(helpers.flatten_pytree(graph_edges))
 
