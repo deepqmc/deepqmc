@@ -5,8 +5,7 @@ import haiku as hk
 import jax.numpy as jnp
 from jax import ops
 
-from ..hkext import MLP
-
+from ..hkext import MLP, Identity
 from ..utils import flatten
 from .graph import (
     Graph,
@@ -87,6 +86,7 @@ class ElectronGNNLayer(hk.Module):
         mean_aggregate_edges,
         update_features,
         update_rule,
+        w_for_ne=True,
         subnet_factory=None,
         subnet_factory_by_lbl=None,
     ):
@@ -144,15 +144,23 @@ class ElectronGNNLayer(hk.Module):
             )
         if self.convolution:
             self.w = {
-                typ: subnet_factory_by_lbl['w'](
-                    two_particle_stream_dim,
-                    name=f'w_{typ}',
+                typ: (
+                    subnet_factory_by_lbl['w'](
+                        two_particle_stream_dim,
+                        name=f'w_{typ}',
+                    )
+                    if w_for_ne or typ != 'ne'
+                    else Identity()
                 )
                 for typ in self.edge_types
             }
             self.h = {
                 typ: subnet_factory_by_lbl['h'](
-                    two_particle_stream_dim,
+                    (
+                        edge_feat_dim['ne']
+                        if not w_for_ne and typ == 'ne' and ilayer == 0
+                        else two_particle_stream_dim
+                    ),
                     name=f'h_{typ}',
                 )
                 for typ in self.edge_types

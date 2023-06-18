@@ -94,3 +94,4 @@ omni_factory:
         - node_down
         - edge_ee
         - edge_ne
+      w_for_ne: false
