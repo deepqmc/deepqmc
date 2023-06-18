@@ -5,6 +5,8 @@ import haiku as hk
 import jax.numpy as jnp
 from jax import ops
 
+from ..hkext import MLP
+
 from ..utils import flatten
 from .graph import (
     Graph,
@@ -313,9 +315,6 @@ class ElectronGNN(hk.Module):
             - ``'anti'``: electron-electron edges between electrons of opposite spins
         two_particle_stream_dim (int): the feature dimension of the two particle
             streams. Only active if :data:`deep_features` are used.
-        atom_type_embeedings (bool): if :data:`True`, use the same initial embeddings
-            for all atoms with the same atomic number. If :data:`False` use a different
-            initial embedding for all atoms.
         layer_factory (Callable): a callable that generates a layer of the GNN.
         ghost_coords: optional, specifies the coordinates of one or more ghost atoms,
             useful for breaking spatial symmetries of the nuclear geometry.
@@ -331,7 +330,7 @@ class ElectronGNN(hk.Module):
         edge_features,
         edge_types,
         two_particle_stream_dim,
-        atom_type_embeddings,
+        nuclei_embedding,
         layer_factory,
         ghost_coords=None,
     ):
@@ -350,17 +349,9 @@ class ElectronGNN(hk.Module):
         self.embedding_dim = embedding_dim
         self.node_data = {
             'n_nodes': {'nuclei': n_nuc, 'electrons': n_up + n_down},
-            'n_node_types': {
-                'nuclei': n_atom_types if atom_type_embeddings else n_nuc,
-                'electrons': 1 if n_up == n_down else 2,
-            },
+            'n_node_types': {'electrons': 1 if n_up == n_down else 2},
             'node_types': {
-                'nuclei': (
-                    jnp.unique(charges, size=n_nuc, return_inverse=True)[-1]
-                    if atom_type_embeddings
-                    else jnp.arange(n_nuc)
-                ) + (1 if n_up == n_down else 2),
-                'electrons': jnp.array(n_up * [0] + n_down * [int(n_up != n_down)]),
+                'electrons': jnp.array(n_up * [0] + n_down * [int(n_up != n_down)])
             },
         }
         self.layers = [
@@ -381,10 +372,10 @@ class ElectronGNN(hk.Module):
         self.edge_features = edge_features
         self.edge_types = edge_types
         self.positional_electron_embeddings = positional_electron_embeddings
+        self.nuclei_embedding = nuclei_embedding(charges, n_atom_types)
 
     def node_factory(self, phys_conf):
         n_elec_types = self.node_data['n_node_types']['electrons']
-        n_nuc_types = self.node_data['n_node_types']['nuclei']
         if self.positional_electron_embeddings:
             edge_factory = MolecularGraphEdgeBuilder(
                 self.n_nuc,
@@ -413,14 +404,11 @@ class ElectronGNN(hk.Module):
         else:
             X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
             x = X(self.node_data['node_types']['electrons'])
-        y = (
-            hk.Embed(n_nuc_types, self.embedding_dim, name='NuclearEmbedding')(
-                self.node_data['node_types']['nuclei'] - n_elec_types
-            )
-            if 'ne' in self.edge_types
-            else None
+        return (
+            GraphNodes(self.nuclei_embedding(), x)
+            if self.nuclei_embedding
+            else GraphNodes(None, x)
         )
-        return GraphNodes(y, x)
 
     def edge_factory(self, phys_conf):
         r"""Compute all the graph edges used in the GNN."""
@@ -469,3 +457,38 @@ class ElectronGNN(hk.Module):
             graph = layer(graph)
 
         return graph.nodes.electrons
+
+
+class NucleiEmbedding(hk.Module):
+    def __init__(
+        self, charges, n_atom_types, *, embedding_dim, atom_type_embedding, subnet_type
+    ):
+        super().__init__()
+        assert subnet_type in ['mlp', 'embed']
+        n_nuc_types = n_atom_types if atom_type_embedding else len(charges)
+        if subnet_type == 'mlp':
+            self.subnet = MLP(
+                embedding_dim,
+                hidden_layers=['log', 1],
+                bias=True,
+                last_linear=False,
+                activation=jnp.tanh,
+                w_init='deeperwin',
+            )
+        elif subnet_type == 'embed':
+            self.subnet = hk.Embed(n_nuc_types, embedding_dim)
+
+        self.input = (
+            jnp.arange(len(charges))
+            if not atom_type_embedding
+            else (
+                charges
+                if subnet_type == 'mlp'
+                else jnp.unique(charges, size=len(charges), return_inverse=True)[-1]
+            )
+        )
+        if subnet_type == 'mlp':
+            self.input = self.input[:, None]
+
+    def __call__(self):
+        return self.subnet(self.input)
