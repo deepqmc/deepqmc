@@ -43,8 +43,13 @@ omni_factory:
     _partial_: true
     n_interactions: 4
     positional_electron_embeddings: true
-    atom_type_embeddings: true
     two_particle_stream_dim: 32
+    nuclei_embedding:
+      _target_: deepqmc.gnn.electron_gnn.NucleiEmbedding
+      _partial_: true
+      embedding_dim: 32
+      atom_type_embedding: true
+      subnet_type: mlp
     edge_types:
     - same
     - anti
