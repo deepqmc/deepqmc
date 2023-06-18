@@ -142,3 +142,8 @@ class SumPool:
 
     def __call__(self, x):
         return tree_util.tree_map(lambda leaf: leaf.sum(axis=-1, keepdims=True), x)
+
+
+class Identity:
+    def __call__(self, x):
+        return x
