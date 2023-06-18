@@ -77,7 +77,8 @@ class ElectronGNNLayer(hk.Module):
         edge_feat_dim,
         two_particle_stream_dim,
         *,
-        residual,
+        one_particle_residual,
+        two_particle_residual,
         convolution,
         deep_features,
         update_features,
@@ -166,7 +167,8 @@ class ElectronGNNLayer(hk.Module):
                 for uf in (self.update_features)
             }
         )
-        self.residual = residual
+        self.one_particle_residual = one_particle_residual
+        self.two_particle_residual = two_particle_residual
 
     def get_update_edges_fn(self):
         def update_edges(edges):
@@ -184,8 +186,10 @@ class ElectronGNNLayer(hk.Module):
                         typ: self.u[typ](edge.features) for typ, edge in edges.items()
                     }
 
-                if self.residual:
-                    updated_features = self.residual(features, updated_features)
+                if self.two_particle_residual:
+                    updated_features = self.two_particle_residual(
+                        features, updated_features
+                    )
                 return {
                     typ: edges[typ]._replace(features=updated_features[typ])
                     for typ in edges.keys()
@@ -260,8 +264,8 @@ class ElectronGNNLayer(hk.Module):
                 updated = self.g(sum(f.values()))
             elif self.update_rule == 'featurewise_shared':
                 updated = jnp.sum(self.g(jnp.stack(list(f.values()))), axis=0)
-            if self.residual:
-                updated = self.residual(nodes.electrons, updated)
+            if self.one_particle_residual:
+                updated = self.one_particle_residual(nodes.electrons, updated)
             nodes = GraphNodes(nodes.nuclei, updated)
 
             return nodes

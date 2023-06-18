@@ -74,7 +74,8 @@ omni_factory:
           _target_: jax.numpy.tanh
           _partial_: true
         w_init: deeperwin
-      residual:
+      one_particle_residual: false
+      two_particle_residual:
         _target_: deepqmc.hkext.ResidualConnection
         normalize: true
       convolution: true
