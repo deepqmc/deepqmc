@@ -1,5 +1,6 @@
 import haiku as hk
 import jax.numpy as jnp
+from jax.nn import softplus
 
 from ...physics import pairwise_diffs
 from ...utils import norm, unflatten
@@ -18,6 +19,7 @@ class ExponentialEnvelopes(hk.Module):
         per_orbital_exponent,
         spin_restricted,
         init_to_ones,
+        softplus_zeta,
     ):
         super().__init__()
         shells = []
@@ -49,6 +51,7 @@ class ExponentialEnvelopes(hk.Module):
         self.spin_restricted = spin_restricted
         self.n_up = mol.n_up
         self.n_det = n_determinants
+        self.softplus_zeta = softplus_zeta
 
     def _call_for_one_spin(self, zeta, pi, diffs):
         d = diffs[..., self.center_idx, :-1]
@@ -56,7 +59,9 @@ class ExponentialEnvelopes(hk.Module):
             d = norm(d, safe=True)  # [n_el, n_env]
             if self.per_orbital_exponent:
                 d = d[:, None]  # [n_el, 1, n_env]
-            exponent = jnp.abs(zeta * d)  # [n_el, n_env] or [n_el, n_orb, n_env]
+            exponent = (
+                (softplus(zeta) * d) if self.softplus_zeta else jnp.abs(zeta * d)
+            )  # [n_el, n_env] or [n_el, n_orb, n_env]
         else:
             exponent = norm(
                 jnp.einsum('...ers,ies->i...er', zeta, d), safe=True
