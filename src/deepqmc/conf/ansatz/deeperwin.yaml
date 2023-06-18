@@ -87,6 +87,7 @@ omni_factory:
         normalize: true
       convolution: true
       deep_features: separate
+      mean_aggregate_edges: false
       update_rule: concatenate
       update_features: 
         - residual

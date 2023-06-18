@@ -84,6 +84,7 @@ class ElectronGNNLayer(hk.Module):
         two_particle_residual,
         convolution,
         deep_features,
+        mean_aggregate_edges,
         update_features,
         update_rule,
         subnet_factory=None,
@@ -173,6 +174,7 @@ class ElectronGNNLayer(hk.Module):
         self.one_particle_residual = one_particle_residual
         self.two_particle_residual = two_particle_residual
         self.self_interaction = self_interaction
+        self.mean_aggregate_edges = mean_aggregate_edges
 
     def get_update_edges_fn(self):
         def update_edges(edges):
@@ -231,6 +233,9 @@ class ElectronGNNLayer(hk.Module):
 
     def get_update_nodes_fn(self):
         def update_nodes(nodes, z):
+            def one_or(n_edge):
+                return n_edge if self.mean_aggregate_edges else 1
+
             n_up, n_down = self.n_up, self.n_down
             self_mod = 0 if self.self_interaction else 1
             FEATURE_MAPPING = {
@@ -245,21 +250,23 @@ class ElectronGNNLayer(hk.Module):
                     .mean(axis=0, keepdims=True)
                     .repeat(self.n_up + self.n_down, axis=0)
                 ),
-                'edge_same': lambda: z['same'] / jnp.clip(
-                    jnp.array(
-                        n_up * [[n_up - self_mod]] + n_down * [[n_down - self_mod]]
-                    ),
-                    1,
+                'edge_same': lambda: z['same'] / one_or(
+                    jnp.clip(
+                        jnp.array(
+                            n_up * [[n_up - self_mod]] + n_down * [[n_down - self_mod]]
+                        ),
+                        1,
+                    )
                 ),
-                'edge_anti': lambda: z['anti'] / jnp.clip(
-                    jnp.array(n_up * [[n_down]] + n_down * [[n_up]]), 1
+                'edge_anti': lambda: z['anti'] / one_or(
+                    jnp.clip(jnp.array(n_up * [[n_down]] + n_down * [[n_up]]), 1)
                 ),
-                'edge_up': lambda: z['up'] / self.n_up,
-                'edge_down': lambda: z['down'] / self.n_down,
-                'edge_ee': lambda: (z['same'] + z['anti']) / (
+                'edge_up': lambda: z['up'] / one_or(self.n_up),
+                'edge_down': lambda: z['down'] / one_or(self.n_down),
+                'edge_ee': lambda: (z['same'] + z['anti']) / one_or(
                     self.n_up + self.n_down - self_mod
                 ),
-                'edge_ne': lambda: z['ne'] / self.n_nuc,
+                'edge_ne': lambda: z['ne'] / one_or(self.n_nuc),
             }
             f = {uf: FEATURE_MAPPING[uf]() for uf in self.update_features}
             if self.update_rule == 'concatenate':

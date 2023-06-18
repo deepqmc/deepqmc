@@ -120,6 +120,7 @@ omni_factory:
       two_particle_residual: false
       convolution: true
       deep_features: false
+      mean_aggregate_edges: false
       update_rule: featurewise
       update_features: 
         - edge_same
