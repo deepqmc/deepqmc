@@ -75,6 +75,7 @@ class ElectronGNNLayer(hk.Module):
         n_down,
         embedding_dim,
         edge_types,
+        self_interaction,
         node_data,
         edge_feat_dim,
         two_particle_stream_dim,
@@ -171,6 +172,7 @@ class ElectronGNNLayer(hk.Module):
         )
         self.one_particle_residual = one_particle_residual
         self.two_particle_residual = two_particle_residual
+        self.self_interaction = self_interaction
 
     def get_update_edges_fn(self):
         def update_edges(edges):
@@ -230,6 +232,7 @@ class ElectronGNNLayer(hk.Module):
     def get_update_nodes_fn(self):
         def update_nodes(nodes, z):
             n_up, n_down = self.n_up, self.n_down
+            self_mod = 0 if self.self_interaction else 1
             FEATURE_MAPPING = {
                 'residual': lambda: nodes.electrons,
                 'node_up': lambda: (
@@ -243,7 +246,10 @@ class ElectronGNNLayer(hk.Module):
                     .repeat(self.n_up + self.n_down, axis=0)
                 ),
                 'edge_same': lambda: z['same'] / jnp.clip(
-                    jnp.array(n_up * [[n_up - 1]] + n_down * [[n_down - 1]]), 1
+                    jnp.array(
+                        n_up * [[n_up - self_mod]] + n_down * [[n_down - self_mod]]
+                    ),
+                    1,
                 ),
                 'edge_anti': lambda: z['anti'] / jnp.clip(
                     jnp.array(n_up * [[n_down]] + n_down * [[n_up]]), 1
@@ -251,7 +257,7 @@ class ElectronGNNLayer(hk.Module):
                 'edge_up': lambda: z['up'] / self.n_up,
                 'edge_down': lambda: z['down'] / self.n_down,
                 'edge_ee': lambda: (z['same'] + z['anti']) / (
-                    self.n_up + self.n_down - 1
+                    self.n_up + self.n_down - self_mod
                 ),
                 'edge_ne': lambda: z['ne'] / self.n_nuc,
             }
@@ -329,6 +335,7 @@ class ElectronGNN(hk.Module):
         positional_electron_embeddings,
         edge_features,
         edge_types,
+        self_interaction,
         two_particle_stream_dim,
         nuclei_embedding,
         layer_factory,
@@ -363,6 +370,7 @@ class ElectronGNN(hk.Module):
                 n_down,
                 embedding_dim,
                 edge_types,
+                self_interaction,
                 self.node_data,
                 edge_feat_dim,
                 two_particle_stream_dim,
@@ -373,6 +381,7 @@ class ElectronGNN(hk.Module):
         self.edge_types = edge_types
         self.positional_electron_embeddings = positional_electron_embeddings
         self.nuclei_embedding = nuclei_embedding(charges, n_atom_types)
+        self.self_interaction = self_interaction
 
     def node_factory(self, phys_conf):
         n_elec_types = self.node_data['n_node_types']['electrons']
@@ -387,6 +396,7 @@ class ElectronGNN(hk.Module):
                         difference_callback(*args)
                     )
                 },
+                self_interaction=self.self_interaction,
             )
             ne_edges = edge_factory(phys_conf)['ne']
             ne_pos_feat = (
@@ -424,6 +434,7 @@ class ElectronGNN(hk.Module):
             feature_callbacks={
                 typ: partial(feature_callback, typ) for typ in self.edge_types
             },
+            self_interaction=self.self_interaction,
         )
         return edge_factory(phys_conf)
 

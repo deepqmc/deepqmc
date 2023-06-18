@@ -42,6 +42,7 @@ omni_factory:
     positional_electron_embeddings: true
     nuclei_embedding: null
     two_particle_stream_dim: 32
+    self_interaction: true
     edge_types:
     - up
     - down

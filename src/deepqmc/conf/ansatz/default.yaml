@@ -62,6 +62,7 @@ omni_factory:
       atom_type_embedding: true
       subnet_type: embed
     two_particle_stream_dim: 32
+    self_interaction: false
     edge_types:
     - same
     - anti

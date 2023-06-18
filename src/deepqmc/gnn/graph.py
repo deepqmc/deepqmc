@@ -146,7 +146,9 @@ def concatenate_edges(edges):
     )
 
 
-def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, feature_callbacks):
+def MolecularGraphEdgeBuilder(
+    n_nuc, n_up, n_down, edge_types, feature_callbacks, *, self_interaction
+):
     r"""
     Create a function that builds many types of molecular edges.
 
@@ -190,9 +192,13 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, feature_callbacks
             'offsets': (0, 0),
             'mask_vals': (n_elec, n_nuc),
         },
-        'uu': {'mask_self': True, 'offsets': (0, 0), 'mask_vals': (n_elec, n_elec)},
+        'uu': {
+            'mask_self': not self_interaction,
+            'offsets': (0, 0),
+            'mask_vals': (n_elec, n_elec),
+        },
         'dd': {
-            'mask_self': True,
+            'mask_self': not self_interaction,
             'offsets': (n_up, n_up),
             'mask_vals': (n_elec, n_elec),
         },
