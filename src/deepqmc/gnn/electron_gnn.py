@@ -486,6 +486,20 @@ class ElectronGNN(hk.Module):
 
 
 class NucleiEmbedding(hk.Module):
+    r"""Create initial embeddings for nuclei.
+
+    Args:
+        charges (jnp.ndarray): the nuclear charges of the molecule.
+        n_atom_types (int): the number of different atom types in the molecule.
+        embedding_dim (int): the length of the output embedding vector
+        atom_type_embedding (bool): if :data:`True`, initial embeddings are the same
+            for atoms of the same type (nuclear charge), otherwise they are different
+            for all nuclei.
+        subnet_type (str): the type of subnetwork to use for the embedding generation:
+            - ``'mlp'``: an MLP is used
+            - ``'embed'``: a :class:`haiku.Embed` block is used
+    """
+
     def __init__(
         self, charges, n_atom_types, *, embedding_dim, atom_type_embedding, subnet_type
     ):

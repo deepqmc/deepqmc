@@ -145,5 +145,7 @@ class SumPool:
 
 
 class Identity:
+    r"""Represent the identity operation."""
+
     def __call__(self, x):
         return x
