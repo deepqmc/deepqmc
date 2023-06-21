@@ -27,15 +27,14 @@ class Baseline(WaveFunction):
     ):
         super().__init__(mol)
         self.basis = GTOBasis(centers, shells)
-        mo_coeffs = mo_coeffs[:n_determinants]
-        conf_coeffs = conf_coeffs[:n_determinants]
+        conf_coeffs = conf_coeffs[:, :n_determinants]
         self.mo_coeffs = hk.get_parameter(
             'mo_coeffs', mo_coeffs.shape, init=lambda s, d: mo_coeffs
         )
         self.conf_coeffs = hk.get_parameter(
             'conf_coeffs', conf_coeffs.shape, init=lambda s, d: conf_coeffs
         )
-        self.confs = confs[:n_determinants]
+        self.confs = confs[:, :n_determinants]
 
     def __call__(self, phys_conf):
         mol_idx = phys_conf.mol_idx
