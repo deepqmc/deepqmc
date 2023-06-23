@@ -53,6 +53,10 @@ def train_from_checkpoint(workdir, restdir, evaluate, chkpt='LAST', **kwargs):
     if not restdir.is_dir():
         raise ValueError(f'restdir {restdir!r} is not a directory')
     cfg, step, train_state = task_from_workdir(restdir, chkpt)
+    while cfg.task.get('restdir', False):
+        prev_restdir = Path(to_absolute_path(get_original_cwd())) / cfg.task.restdir
+        cfg, *_ = task_from_workdir(prev_restdir, chkpt)
+    log.info(f'Found original config file in {prev_restdir}')
     cfg.task.workdir = workdir
     if evaluate:
         cfg.task.opt = None
