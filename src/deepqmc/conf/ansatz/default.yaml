@@ -54,7 +54,7 @@ omni_factory:
     _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
     n_interactions: 3
-    positional_electron_embeddings: false
+    positional_electron_embeddings: true
     atom_type_embeddings: true
     two_particle_stream_dim: 32
     edge_types:
@@ -116,5 +116,4 @@ omni_factory:
       - node_down
       - edge_same
       - edge_anti
-      - edge_ne
   
