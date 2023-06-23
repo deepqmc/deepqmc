@@ -60,7 +60,6 @@ omni_factory:
     edge_types:
     - same
     - anti
-    - ne
     edge_features:
       same:
         _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
