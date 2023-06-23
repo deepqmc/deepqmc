@@ -31,7 +31,7 @@ class BackflowOp(hk.Module):
             cutoff = jnp.where(
                 R < 1, R**2 * (6 - 8 * R + 3 * R**2), jnp.ones_like(R)
             )
-            xs = xs + cutoff[None, :] * envel * self.add_act(fs_add)
+            xs = xs + cutoff[None, :, None] * envel * self.add_act(fs_add)
         return xs
 
 
