@@ -16,20 +16,17 @@ class CheckpointStore:
     Args:
         workdir (str): path where checkpoints are stored.
         size (int): maximum number of checkpoints stored at any time.
-        threshold (float): treshold for decrease in criterion for new checkpoint.
-        min_interval (str): minimum number of steps between two checkpoints.
-        max_interval (str): maximum number of steps between two chcekpoints.
+        interval (int): number of steps between two checkpoints.
     """
 
     PATTERN = 'chkpt-{}.pt'
 
-    def __init__(self, workdir, *, size=3, threshold=0.95, interval=1000):
+    def __init__(self, workdir, *, size=3, interval=1000):
         self.workdir = Path(workdir)
         for p in self.workdir.glob(self.PATTERN.format('*')):
             p.unlink()
         self.size = size
         self.interval = interval
-        self.threshold = threshold
         self.chkpts = []
         self.buffer = None
 
