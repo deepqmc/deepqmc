@@ -35,11 +35,11 @@ class MolecularHamiltonian(Hamiltonian):
         of the spread of electrons around the nuclei.
     """
 
-    def __init__(self, *, mol, elec_std=1):
+    def __init__(self, *, mol, elec_std=1.0):
         self.mol = mol
         self.elec_std = elec_std
 
-    def init_sample(self, rng, Rs, n, elec_std=1.0):
+    def init_sample(self, rng, Rs, n, elec_std=None):
         r"""
         Guess some initial electron positions.
 
@@ -92,7 +92,7 @@ class MolecularHamiltonian(Hamiltonian):
             )
         idxs = jnp.stack(idxs)
         centers = Rs[jnp.broadcast_to(jnp.arange(n)[:, None], idxs.shape), idxs]
-        std = elec_std * jnp.sqrt(self.mol.charges)[idxs][..., None]
+        std = (elec_std or self.elec_std) * jnp.sqrt(self.mol.charges)[idxs][..., None]
         rs = centers + std * random.normal(rng_normal, centers.shape)
         return PhysicalConfiguration(Rs, rs, jnp.zeros(n, dtype=jnp.int32))
 
