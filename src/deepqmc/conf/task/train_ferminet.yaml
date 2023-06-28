@@ -8,6 +8,15 @@ mols: ${hamil.mol}
 steps: 100000
 sample_size: 4096
 seed: 0
+pretrain_steps: 1000
+pretrain_kwargs:
+  opt: adam
+  opt_kwargs:
+    learning_rate: 3.e-4
+    b1: 0.9
+    b2: 0.999
+  baseline_kwargs:
+    basis: sto-6g
 fit_kwargs:
   clip_mask_fn:
     _target_: deepqmc.fit.median_clip_and_mask
