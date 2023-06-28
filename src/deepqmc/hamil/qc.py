@@ -35,9 +35,10 @@ class MolecularHamiltonian(Hamiltonian):
         of the spread of electrons around the nuclei.
     """
 
-    def __init__(self, *, mol, elec_std=1.0):
+    def __init__(self, *, mol, elec_std=1.0, ferminet_init=False):
         self.mol = mol
         self.elec_std = elec_std
+        self.ferminet_init = ferminet_init
 
     def init_sample(self, rng, Rs, n, elec_std=None):
         r"""
@@ -58,43 +59,90 @@ class MolecularHamiltonian(Hamiltonian):
         """
 
         Rs = jnp.tile(Rs[None], (n, 1, 1)) if Rs.ndim == 2 else Rs
-        rng_remainder, rng_normal, rng_spin = random.split(rng, 3)
-        valence_electrons = self.mol.ns_valence - self.mol.charge / self.mol.n_nuc
-        base = jnp.floor(valence_electrons).astype(jnp.int32)
-        prob = valence_electrons - base
-        electrons_of_atom = jnp.tile(base[None], (n, 1))
-        n_remainder = int(self.mol.ns_valence.sum() - self.mol.charge - base.sum())
-        idxs = jnp.tile(
-            jnp.concatenate(
-                [i_atom * jnp.ones(b, jnp.int32) for i_atom, b in enumerate(base)]
-            )[None],
-            (n, 1),
-        )
-        if n_remainder > 0:
-            extra = random.categorical(rng_remainder, prob, shape=(n, n_remainder))
-            n_extra = vmap(partial(jnp.bincount, length=base.shape[-1]))(extra)
-            electrons_of_atom += n_extra
-        idxs = []
-        rng_spin = random.split(rng_spin, len(electrons_of_atom))
-        for rng_spin, elec_of_atom, R in zip(rng_spin, electrons_of_atom, Rs):
-            up, down = self.distribute_spins(rng_spin, R, elec_of_atom)
-            idxs.append(
-                jnp.concatenate(
-                    [
-                        i_atom * jnp.ones(n_up, jnp.int32)
-                        for i_atom, n_up in enumerate(up)
-                    ]
-                    + [
-                        i_atom * jnp.ones(n_down, jnp.int32)
-                        for i_atom, n_down in enumerate(down)
-                    ]
-                )
+        if self.ferminet_init:
+
+            def element_spin_config(Z):
+                return [(1, 0), (1, 1), (2, 1), (2, 2), (3, 2), (4, 2), (5, 2), (5, 3)][
+                    Z.astype(int) - 1
+                ]
+
+            electrons = (self.mol.n_up, self.mol.n_down)
+            if self.mol.charge != 0:
+                if len(self.mol.charges) == 1:
+                    atomic_spin_configs = [electrons]
+                else:
+                    raise NotImplementedError(
+                        'No initialization policy yet exists for charged molecules.'
+                    )
+            else:
+                atomic_spin_configs = [
+                    element_spin_config(charge) for charge in self.mol.charges
+                ]
+                assert sum(sum(x) for x in atomic_spin_configs) == sum(electrons)
+                while tuple(sum(x) for x in zip(*atomic_spin_configs)) != electrons:
+                    i = random.randint(rng, (), 0, len(atomic_spin_configs))
+                    nalpha, nbeta = atomic_spin_configs[i]
+                    atomic_spin_configs[i] = nbeta, nalpha
+
+            # Assign each electron to an atom initially.
+            electron_positions = []
+            for i in range(2):
+                for j in range(len(self.mol.charges)):
+                    atom_position = jnp.asarray(self.mol.coords[j])
+                    electron_positions.append(
+                        jnp.tile(atom_position, atomic_spin_configs[j][i])
+                    )
+            electron_positions = jnp.concatenate(electron_positions)
+            # Create a batch of configurations with a Gaussian distribution about each
+            # atom.
+            rng, rng_sub = random.split(rng)
+            electron_positions += random.normal(
+                rng_sub, shape=(n, electron_positions.size)
+            ) * (elec_std or self.elec_std)
+
+            return PhysicalConfiguration(
+                Rs, electron_positions.reshape(n, -1, 3), jnp.zeros(n, dtype=int)
             )
-        idxs = jnp.stack(idxs)
-        centers = Rs[jnp.broadcast_to(jnp.arange(n)[:, None], idxs.shape), idxs]
-        std = (elec_std or self.elec_std) * jnp.sqrt(self.mol.charges)[idxs][..., None]
-        rs = centers + std * random.normal(rng_normal, centers.shape)
-        return PhysicalConfiguration(Rs, rs, jnp.zeros(n, dtype=jnp.int32))
+        else:
+            rng_remainder, rng_normal, rng_spin = random.split(rng, 3)
+            valence_electrons = self.mol.ns_valence - self.mol.charge / self.mol.n_nuc
+            base = jnp.floor(valence_electrons).astype(jnp.int32)
+            prob = valence_electrons - base
+            electrons_of_atom = jnp.tile(base[None], (n, 1))
+            n_remainder = int(self.mol.ns_valence.sum() - self.mol.charge - base.sum())
+            idxs = jnp.tile(
+                jnp.concatenate(
+                    [i_atom * jnp.ones(b, jnp.int32) for i_atom, b in enumerate(base)]
+                )[None],
+                (n, 1),
+            )
+            if n_remainder > 0:
+                extra = random.categorical(rng_remainder, prob, shape=(n, n_remainder))
+                n_extra = vmap(partial(jnp.bincount, length=base.shape[-1]))(extra)
+                electrons_of_atom += n_extra
+            idxs = []
+            rng_spin = random.split(rng_spin, len(electrons_of_atom))
+            for rng_spin, elec_of_atom, R in zip(rng_spin, electrons_of_atom, Rs):
+                up, down = self.distribute_spins(rng_spin, R, elec_of_atom)
+                idxs.append(
+                    jnp.concatenate(
+                        [
+                            i_atom * jnp.ones(n_up, jnp.int32)
+                            for i_atom, n_up in enumerate(up)
+                        ]
+                        + [
+                            i_atom * jnp.ones(n_down, jnp.int32)
+                            for i_atom, n_down in enumerate(down)
+                        ]
+                    )
+                )
+            idxs = jnp.stack(idxs)
+            centers = Rs[jnp.broadcast_to(jnp.arange(n)[:, None], idxs.shape), idxs]
+            std = (elec_std or self.elec_std) * jnp.sqrt(self.mol.charges)[idxs][
+                ..., None
+            ]
+            rs = centers + std * random.normal(rng_normal, centers.shape)
+            return PhysicalConfiguration(Rs, rs, jnp.zeros(n, dtype=jnp.int32))
 
     def distribute_spins(self, rng, R, elec_of_atom):
         up, down = jnp.zeros_like(elec_of_atom), jnp.zeros_like(elec_of_atom)
