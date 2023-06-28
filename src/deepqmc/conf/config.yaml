@@ -18,4 +18,4 @@ device: cuda
 logging:
   deepqmc: 20
   jax: 40
-  kfac: 40
+  kfac: 20
