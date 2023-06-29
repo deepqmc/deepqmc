@@ -18,6 +18,7 @@ def pretrain(  # noqa: C901
     *,
     steps,
     sample_size,
+    smpl_state=None,
     baseline_kwargs=None,
 ):
     r"""Perform pretraining of the Ansatz to (MC-)SCF orbitals.
@@ -75,7 +76,8 @@ def pretrain(  # noqa: C901
     else:
         raise NotImplementedError
 
-    smpl_state = sampler.init(rng, partial(ansatz.apply, params), sample_size)
+    if not smpl_state:
+        smpl_state = sampler.init(rng, partial(ansatz.apply, params), sample_size)
     opt_state = opt.init(params)
 
     @jax.jit

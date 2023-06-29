@@ -64,6 +64,7 @@ def train(  # noqa: C901
     max_eq_steps=1000,
     pretrain_steps=None,
     pretrain_kwargs=None,
+    force_pretrain=False,
     opt_kwargs=None,
     fit_kwargs=None,
     chkptdir=None,
@@ -160,7 +161,7 @@ def train(  # noqa: C901
 
     pbar = None
     try:
-        if train_state:
+        if train_state and not force_pretrain:
             log.info(
                 {
                     'training': f'Restart training from step {init_step}',
@@ -170,7 +171,13 @@ def train(  # noqa: C901
             params = train_state[1]
         else:
             rng, rng_init = jax.random.split(rng, 2)
-            params = init_wf_params(rng_init, hamil, ansatz)
+            if train_state:
+                log.info(f'Start pretraining from step {init_step}')
+                smpl_state = train_state[0]
+                params = train_state[1]
+            else:
+                smpl_state = None
+                params = init_wf_params(rng_init, hamil, ansatz)
             num_params = tree_util.tree_reduce(
                 operator.add, tree_util.tree_map(lambda x: x.size, params)
             )
@@ -199,6 +206,7 @@ def train(  # noqa: C901
                     sampler,
                     steps=pbar,
                     sample_size=sample_size,
+                    smpl_state=smpl_state,
                     baseline_kwargs=pretrain_kwargs.pop('baseline_kwargs', {}),
                 ):
                     mol_idx = sampler.mol_idx(sample_size, step)
@@ -225,7 +233,7 @@ def train(  # noqa: C901
                         metric_logger.update(step, pretrain_stats, prefix='pretraining')
                 log.info(f'Pretraining completed with MSE = {mse_rep}')
 
-        if not train_state or train_state[0] is None:
+        if not train_state or train_state[0] is None or force_pretrain:
             rng, rng_eq, rng_smpl_init = jax.random.split(rng, 3)
             smpl_state = sampler.init(
                 rng_smpl_init,
