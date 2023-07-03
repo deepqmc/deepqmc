@@ -70,7 +70,7 @@ class MLP(hk.Module):
             }[init]
             self.b_init = {
                 'deeperwin': VarianceScaling(0.0),
-                'default':  VarianceScaling(0.0),
+                'default': VarianceScaling(0.0),
                 'ferminet': VarianceScaling(1.0, 'fan_out', 'normal'),
             }[init]
         else:
