@@ -17,6 +17,7 @@ class ExponentialEnvelopes(hk.Module):
         per_shell,
         per_orbital_exponent,
         spin_restricted,
+        init_to_ones,
     ):
         super().__init__()
         shells = []
@@ -26,8 +27,11 @@ class ExponentialEnvelopes(hk.Module):
             for k in range(n_pp_shell, n_shell if per_shell else n_pp_shell + 1):
                 shells.append((i, z / (k + 1)))
         self.center_idx, zetas = map(jnp.array, zip(*shells))  # [n_env]
+        self.init_to_ones = init_to_ones
         self.pi = [
-            _get_pi_for_one_spin(name, n_determinants, mol.n_up, mol.n_down, len(zetas))
+            self.get_pi_for_one_spin(
+                name, n_determinants, mol.n_up, mol.n_down, len(zetas)
+            )
             for name in (['pi'] if spin_restricted else ['pi_up', 'pi_down'])
         ]  # [n_orb, n_env]
         if per_orbital_exponent:
@@ -37,7 +41,7 @@ class ExponentialEnvelopes(hk.Module):
         if not isotropic:
             zetas = zetas[..., None, None] * jnp.eye(3)
         self.zetas = [
-            _get_zeta_for_one_spin(name, zetas)
+            self.get_zeta_for_one_spin(name, zetas)
             for name in (['zetas'] if spin_restricted else ['zetas_up', 'zetas_down'])
         ]  # [n_env] or [n_orb, n_env] or [n_env, 3, 3] or [n_orb, n_env, 3, 3]
         self.isotropic = isotropic
@@ -62,6 +66,23 @@ class ExponentialEnvelopes(hk.Module):
         orbs = (pi * jnp.exp(-exponent)).sum(axis=-1)  # [n_el, n_orb]
         return unflatten(orbs, -1, (self.n_det, -1)).swapaxes(-2, -3)
 
+    def get_pi_for_one_spin(self, name, n_determinants, n_up, n_down, n_env):
+        return hk.get_parameter(
+            name,
+            (n_determinants * (n_up + n_down), n_env),
+            init=lambda s, d: jnp.ones(s)
+            + (0 if self.init_to_ones else hk.initializers.VarianceScaling(1.0)(s, d)),
+        )
+
+    def get_zeta_for_one_spin(self, name, zeta):
+        return hk.get_parameter(
+            name,
+            zeta.shape,
+            init=lambda shape, dtype: (
+                jnp.ones(shape) if self.init_to_ones else jnp.copy(zeta)
+            ),
+        )
+
     def __call__(self, phys_conf):
         diffs = pairwise_diffs(phys_conf.r, phys_conf.R)
         if self.spin_restricted:
@@ -74,15 +95,3 @@ class ExponentialEnvelopes(hk.Module):
                 )
             ]
             return jnp.concatenate(orbs, axis=-2)
-
-
-def _get_pi_for_one_spin(name, n_determinants, n_up, n_down, n_env):
-    return hk.get_parameter(
-        name,
-        (n_determinants * (n_up + n_down), n_env),
-        init=lambda s, d: hk.initializers.VarianceScaling(1.0)(s, d) + jnp.ones(s),
-    )
-
-
-def _get_zeta_for_one_spin(name, zeta):
-    return hk.get_parameter(name, zeta.shape, init=lambda shape, dtype: jnp.copy(zeta))

@@ -7,6 +7,7 @@ envelope:
   per_shell: false
   per_orbital_exponent: true
   spin_restricted: false
+  init_to_ones: true
 backflow_op:
   _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
   _partial_: true
@@ -34,7 +35,7 @@ omni_factory:
       bias: false
       last_linear: true
       activation: null
-      w_init: default
+      init: ferminet
   gnn_factory:
     _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
@@ -76,7 +77,7 @@ omni_factory:
         activation:
           _target_: jax.numpy.tanh
           _partial_: true
-        w_init: default
+        init: ferminet
       subnet_factory_by_lbl:
         w:
           _target_: deepqmc.hkext.MLP
@@ -87,7 +88,7 @@ omni_factory:
           activation:
             _target_: jax.numpy.tanh
             _partial_: true
-          w_init: default
+          init: ferminet
       residual:
         _target_: deepqmc.hkext.ResidualConnection
         normalize: true
