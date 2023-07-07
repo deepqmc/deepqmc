@@ -69,8 +69,8 @@ class MLP(hk.Module):
                 'ferminet': VarianceScaling(1.0, 'fan_in', 'normal'),
             }[init]
             self.b_init = {
-                'deeperwin': VarianceScaling(0.0),
-                'default': VarianceScaling(0.0),
+                'deeperwin': lambda s, d: jnp.zeros(shape=s, dtype=d),
+                'default': lambda s, d: jnp.zeros(shape=s, dtype=d),
                 'ferminet': VarianceScaling(1.0, 'fan_out', 'normal'),
             }[init]
         else:
