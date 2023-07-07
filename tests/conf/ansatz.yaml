@@ -20,7 +20,7 @@ conf_coeff:
   _target_: haiku.Linear
   _partial_: true
   with_bias: false
-  w_init:
+  init:
     _target_: jax.numpy.ones
     _partial_: true
 omni_factory:
