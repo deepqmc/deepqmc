@@ -195,6 +195,7 @@ def train(  # noqa: C901
                     rng_pretrain,
                     hamil,
                     ansatz,
+                    params,
                     opt_pretrain,
                     sampler,
                     steps=pbar,

@@ -13,6 +13,7 @@ def pretrain(  # noqa: C901
     rng,
     hamil,
     ansatz,
+    params,
     opt,
     sampler,
     *,
@@ -24,6 +25,10 @@ def pretrain(  # noqa: C901
 
     Args:
         rng (~deepqmc.types.RNGSeed): key used for PRNG.
+        hamil (~deepqmc.hamil.qc.MolecularHamiltonian): hamiltonian of the molecule.
+        ansatz (~deepqmc.wf.WaveFunction): the wave function Ansatz.
+        params (dict): the (initial) parameters of the Ansatz.
+        opt (``optax`` optimizers): the optimizer.
         sampler (~deepqmc.sampling.Sampler): the sampler instance to use.
         steps: an iterable yielding the step numbers for the pretraining.
         sample_size (int): the number of samples to use in a batch.
@@ -38,7 +43,6 @@ def pretrain(  # noqa: C901
         return Baseline(hamil.mol, None, **baseline_init)(phys_conf)
 
     init_pc = hamil.init_sample(rng, sampler.mols[0].coords, 1)[0]
-    params = ansatz.init(rng, init_pc, False)
     params_baseline = baseline.init(rng, init_pc)
     baseline = partial(baseline.apply, params_baseline)
 
