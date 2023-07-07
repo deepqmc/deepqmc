@@ -7,7 +7,7 @@ envelope:
   per_shell: true
   per_orbital_exponent: true
   spin_restricted: false
-  init_to_ones: false
+  init_to_ones: true
 backflow_op:
   _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
   _partial_: true
