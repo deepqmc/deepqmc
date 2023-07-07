@@ -54,7 +54,7 @@ class MLP(hk.Module):
         bias,
         last_linear,
         activation,
-        w_init,
+        init,
     ):
         assert bias in (True, False, 'not_last')
         super().__init__(name=name)
@@ -62,12 +62,20 @@ class MLP(hk.Module):
         self.last_linear = last_linear
         self.bias = bias
         self.out_dim = out_dim
-        if isinstance(w_init, str):
-            w_init = {
+        if isinstance(init, str):
+            self.w_init = {
                 'deeperwin': VarianceScaling(1.0, 'fan_avg', 'uniform'),
                 'default': VarianceScaling(1.0, 'fan_in', 'truncated_normal'),
-            }[w_init]
-        self.w_init = w_init
+                'ferminet': VarianceScaling(1.0, 'fan_in', 'normal'),
+            }[init]
+            self.b_init = {
+                'deeperwin': lambda s, d: jnp.zeros(shape=s, dtype=d),
+                'default': lambda s, d: jnp.zeros(shape=s, dtype=d),
+                'ferminet': VarianceScaling(1.0, 'fan_out', 'normal'),
+            }[init]
+        else:
+            self.w_init = init
+            self.b_init = init
         self.hidden_layers = hidden_layers or []
 
     def __call__(self, inputs):
@@ -89,6 +97,7 @@ class MLP(hk.Module):
                     with_bias=with_bias,
                     name='linear_%d' % idx,
                     w_init=self.w_init,
+                    b_init=self.b_init,
                 )
             )
 

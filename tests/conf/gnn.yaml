@@ -39,7 +39,7 @@ layer_factory:
     activation: 
       _target_: jax.numpy.tanh
       _partial_: true
-    w_init: default
+    init: default
   subnet_factory_by_lbl:
     w:
       _target_: deepqmc.hkext.MLP
@@ -50,7 +50,7 @@ layer_factory:
       activation: 
         _target_: jax.numpy.tanh
         _partial_: true
-      w_init: default
+      init: default
   residual:
     _target_: deepqmc.hkext.ResidualConnection
     normalize: false
