@@ -1,6 +1,7 @@
 import haiku as hk
 import jax.numpy as jnp
 from jax.nn import softplus
+from kfac_jax import register_scale_and_shift
 
 from ...physics import pairwise_diffs
 from ...utils import norm, unflatten
@@ -62,6 +63,8 @@ class ExponentialEnvelopes(hk.Module):
             exponent = (
                 (softplus(zeta) * d) if self.softplus_zeta else jnp.abs(zeta * d)
             )  # [n_el, n_env] or [n_el, n_orb, n_env]
+            if self.softplus_zeta:
+                exponent = register_scale_and_shift(exponent, d, scale=zeta, shift=None)
         else:
             exponent = norm(
                 jnp.einsum('...ers,ies->i...er', zeta, d), safe=True
