@@ -40,7 +40,7 @@ omni_factory:
       activation: 
         _target_: deepqmc.hkext.ssp
         _partial_: true
-      w_init: default
+      init: default
   backflow_factory:  
     _target_: deepqmc.wf.nn_wave_function.omni.Backflow
     _partial_: true
@@ -53,7 +53,7 @@ omni_factory:
       activation:
         _target_: deepqmc.hkext.ssp
         _partial_: true
-      w_init: default
+      init: default
   gnn_factory:
     _target_: deepqmc.gnn.electron_gnn.ElectronGNN
     _partial_: true
@@ -96,7 +96,7 @@ omni_factory:
         activation: 
           _target_: jax.numpy.tanh
           _partial_: true
-        w_init: default
+        init: default
       subnet_factory_by_lbl:
         w:
           _target_: deepqmc.hkext.MLP
@@ -107,7 +107,7 @@ omni_factory:
           activation: 
             _target_: jax.numpy.tanh
             _partial_: true
-          w_init: default
+          init: default
       residual:
         _target_: deepqmc.hkext.ResidualConnection
         normalize: false
