@@ -513,7 +513,7 @@ class NucleiEmbedding(hk.Module):
                 bias=True,
                 last_linear=False,
                 activation=jnp.tanh,
-                w_init='deeperwin',
+                init='deeperwin',
             )
         elif subnet_type == 'embed':
             self.subnet = hk.Embed(n_nuc_types, embedding_dim)
