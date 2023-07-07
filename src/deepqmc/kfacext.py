@@ -23,6 +23,11 @@ class DenseBlock(kfac_jax.DenseTwoKroneckerFactored):
     Expand the input to include batch dimension, if necessary.
     """
 
+    def fixed_scale(self):
+        (x_shape,) = self.inputs_shapes
+        assert len(x_shape) == 2
+        return x_shape[0]
+
     def _update_curvature_matrix_estimate(
         self,
         state,
