@@ -18,7 +18,7 @@ from .fit import fit_wf
 from .log import CheckpointStore, H5LogTable, TensorboardMetricLogger
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
-from .sampling import MultimoleculeSampler, equilibrate
+from .sampling import MultimoleculeSampler, chain, equilibrate
 from .utils import ConstantSchedule, InverseSchedule, segment_nanmean
 from .wf.base import init_wf_params
 
@@ -64,6 +64,7 @@ def train(  # noqa: C901
     max_eq_steps=1000,
     pretrain_steps=None,
     pretrain_kwargs=None,
+    pretrain_sampler=None,
     opt_kwargs=None,
     fit_kwargs=None,
     chkptdir=None,
@@ -131,6 +132,11 @@ def train(  # noqa: C901
     mode = 'evaluation' if opt is None else 'training'
     mols = mols or hamil.mol
     sampler = MultimoleculeSampler(sampler, mols, mol_idx_factory)
+    if pretrain_sampler is None:
+        pretrain_sampler = sampler
+    else:
+        pretrain_sampler = chain(*pretrain_sampler[:-1], pretrain_sampler[-1](hamil))
+        pretrain_sampler = MultimoleculeSampler(pretrain_sampler, mols, mol_idx_factory)
     if isinstance(opt, str):
         opt_kwargs = OPT_KWARGS.get(opt, {}) | (opt_kwargs or {})
         opt = (
@@ -189,7 +195,7 @@ def train(  # noqa: C901
                     opt_pretrain = getattr(optax, opt_pretrain)
                 opt_pretrain = opt_pretrain(**opt_pretrain_kwargs)
                 ewm_state, update_ewm = init_ewm(decay_alpha=1.0)
-                ewm_states = len(sampler) * [ewm_state]
+                ewm_states = len(pretrain_sampler) * [ewm_state]
                 pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
                 for step, params, losses in pretrain(  # noqa: B007
                     rng_pretrain,
@@ -197,13 +203,15 @@ def train(  # noqa: C901
                     ansatz,
                     params,
                     opt_pretrain,
-                    sampler,
+                    pretrain_sampler,
                     steps=pbar,
                     sample_size=sample_size,
                     baseline_kwargs=pretrain_kwargs.pop('baseline_kwargs', {}),
                 ):
-                    mol_idx = sampler.mol_idx(sample_size, step)
-                    per_mol_losses = segment_nanmean(losses, mol_idx, len(sampler))
+                    mol_idx = pretrain_sampler.mol_idx(sample_size, step)
+                    per_mol_losses = segment_nanmean(
+                        losses, mol_idx, len(pretrain_sampler)
+                    )
                     ewm_states = [
                         ewm_state if jnp.isnan(loss) else update_ewm(loss, ewm_state)
                         for loss, ewm_state in zip(per_mol_losses, ewm_states)

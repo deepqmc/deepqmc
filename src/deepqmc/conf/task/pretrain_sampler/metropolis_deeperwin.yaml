@@ -1,0 +1,7 @@
+- _target_: deepqmc.sampling.DecorrSampler
+  length: 2
+- _target_: deepqmc.sampling.MetropolisSampler
+  _partial_: true
+  tau: 0.02
+  target_acceptance: null
+  max_age: 20
