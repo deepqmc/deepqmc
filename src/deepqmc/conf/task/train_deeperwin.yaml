@@ -6,7 +6,7 @@ _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
 ansatz: ${ansatz}
 mols: ${hamil.mol}
-steps: 60000
+steps: 50000
 sample_size: 2048
 seed: 0
 pretrain_steps: 1000
