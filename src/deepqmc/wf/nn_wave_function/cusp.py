@@ -1,9 +1,9 @@
-class ElectronicAsymptotic:
-    r"""Calculate a multiplicative factor, that ensures correct electronic cusps.
+class CuspAsymptotic:
+    r"""Calculate a multiplicative factor, that implements the cusps.
 
     Computes the factor:
     :math:`-\frac{\text{cusp}}{\sum_{i<j}\alpha * (1 + \alpha r_{ij})}`, where
-    :math:`r_{ij}` are the electron-electron distances.
+    :math:`r_{ij}` are the electron-electron or electron-nuclei distances.
 
     Args:
         cusp (float): the cusp parameter in the above equation.
