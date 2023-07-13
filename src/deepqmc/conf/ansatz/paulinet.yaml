@@ -16,7 +16,7 @@ n_determinants: 16
 full_determinant: false
 cusp_electrons: true
 cusp_alpha: 10.0
-backflow_transform: mult
+backflow_transform: both
 conf_coeff:
   _target_: haiku.Linear
   _partial_: true
@@ -74,23 +74,20 @@ omni_factory:
     - ne
     edge_features:
       ne:
-        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-        edge_features:
-        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
-          powers: [1]
-        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+        _target_: deepqmc.gnn.edge_features.GaussianEdgeFeature
+        n_gaussian: 16
+        radius: 30
+        offset: False
       same:
-        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-        edge_features:
-        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
-          powers: [1]
-        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+        _target_: deepqmc.gnn.edge_features.GaussianEdgeFeature
+        n_gaussian: 16
+        radius: 30
+        offset: False
       anti:
-        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-        edge_features:
-        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
-          powers: [1]
-        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+        _target_: deepqmc.gnn.edge_features.GaussianEdgeFeature
+        n_gaussian: 16
+        radius: 30
+        offset: False
     layer_factory:
       _target_: deepqmc.gnn.electron_gnn.ElectronGNNLayer
       _partial_: true
@@ -114,7 +111,7 @@ omni_factory:
           activation:
             _target_: jax.numpy.tanh
             _partial_: true
-          w_init: default
+          init: default
       one_particle_residual:
         _target_: deepqmc.hkext.ResidualConnection
         normalize: false
