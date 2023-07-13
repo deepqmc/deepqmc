@@ -24,15 +24,22 @@ class Baseline(WaveFunction):
         mo_coeffs,
         confs,
         conf_coeffs,
+        trainable=False,
     ):
         super().__init__(mol)
         self.basis = GTOBasis(centers, shells)
         conf_coeffs = conf_coeffs[:, :n_determinants]
-        self.mo_coeffs = hk.get_parameter(
-            'mo_coeffs', mo_coeffs.shape, init=lambda s, d: mo_coeffs
+        self.mo_coeffs = (
+            hk.get_parameter('mo_coeffs', mo_coeffs.shape, init=lambda s, d: mo_coeffs)
+            if trainable
+            else mo_coeffs
         )
-        self.conf_coeffs = hk.get_parameter(
-            'conf_coeffs', conf_coeffs.shape, init=lambda s, d: conf_coeffs
+        self.conf_coeffs = (
+            hk.get_parameter(
+                'conf_coeffs', conf_coeffs.shape, init=lambda s, d: conf_coeffs
+            )
+            if trainable
+            else conf_coeffs
         )
         self.confs = confs[:, :n_determinants]
 
