@@ -6,7 +6,7 @@ from ...physics import pairwise_diffs, pairwise_self_distance
 from ...types import Psi
 from ...utils import flatten, triu_flat
 from ..base import WaveFunction
-from .cusp import ElectronicAsymptotic
+from .cusp import CuspAsymptotic
 
 __all__ = ['NeuralNetworkWaveFunction']
 
@@ -81,20 +81,31 @@ class NeuralNetworkWaveFunction(WaveFunction):
         n_determinants,
         full_determinant,
         cusp_electrons,
-        cusp_alpha,
+        cusp_alpha_electrons,
+        cusp_nuclei,
+        cusp_alpha_nuclei,
         backflow_transform,
         conf_coeff,
     ):
         super().__init__(hamil.mol)
+        self.charges = hamil.mol.charges
         n_up, n_down = self.n_up, self.n_down
         self.n_det = n_determinants
         self.full_determinant = full_determinant
         self.envelope = envelope(hamil.mol, n_determinants)
         self.conf_coeff = conf_coeff(1, name='conf_coeff')
         self.cusp_same, self.cusp_anti = (
-            (ElectronicAsymptotic(cusp=cusp, alpha=cusp_alpha) for cusp in (0.25, 0.5))
+            (
+                CuspAsymptotic(cusp=cusp, alpha=cusp_alpha_electrons)
+                for cusp in (0.25, 0.5)
+            )
             if cusp_electrons
             else (None, None)
+        )
+        self.cusp_nuclei = (
+            [CuspAsymptotic(cusp=-Z, alpha=cusp_alpha_nuclei) for Z in self.charges]
+            if cusp_nuclei
+            else None
         )
         backflow_spec = [
             *((n_up + n_down, n_up + n_down) if full_determinant else (n_up, n_down)),
@@ -158,6 +169,11 @@ class NeuralNetworkWaveFunction(WaveFunction):
             )
             cusp_anti = self.cusp_anti(flatten(dists_elec[: self.n_up, self.n_up :]))
             log_psi = log_psi + cusp_same + cusp_anti
+        if self.cusp_nuclei is not None:
+            cusp_nuclei = sum(
+                self.cusp_nuclei[i](dists_nuc[:, i]) for i in range(len(self.charges))
+            )
+            log_psi = log_psi + cusp_nuclei
         if jastrow is not None:
             log_psi = log_psi + jastrow
 
