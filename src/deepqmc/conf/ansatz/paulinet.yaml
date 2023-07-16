@@ -15,7 +15,9 @@ backflow_op:
 n_determinants: 16
 full_determinant: false
 cusp_electrons: true
-cusp_alpha: 10.0
+cusp_alpha_electrons: 10.0
+cusp_nuclei: true
+cusp_alpha_nuclei: 10.0
 backflow_transform: both
 conf_coeff:
   _target_: haiku.Linear
