@@ -1,9 +1,9 @@
 defaults:
   - sampler: decorr_metropolis
+  - opt: kfac
 _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
 ansatz: ${ansatz}
-opt: kfac
 steps: 1000
 sample_size: 1000
 seed: 0

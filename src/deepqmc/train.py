@@ -19,7 +19,7 @@ from .log import CheckpointStore, H5LogTable, TensorboardMetricLogger
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
 from .sampling import MultimoleculeSampler, equilibrate
-from .utils import InverseSchedule, segment_nanmean
+from .utils import ConstantSchedule, InverseSchedule, segment_nanmean
 from .wf.base import init_wf_params
 
 __all__ = ['train']
@@ -30,8 +30,8 @@ OPT_KWARGS = {
     'adam': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
     'adamw': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
     'kfac': {
-        'learning_rate_schedule': InverseSchedule(0.01, 5000),
-        'damping_schedule': InverseSchedule(0.001, 5000),
+        'learning_rate_schedule': InverseSchedule(0.05, 10000),
+        'damping_schedule': ConstantSchedule(0.001),
         'norm_constraint': 0.001,
     },
 }
