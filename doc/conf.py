@@ -9,7 +9,7 @@ with open('../pyproject.toml') as f:
     metadata = toml.load(f)['project']
 project = 'DeepQMC'
 author = ''  # ' '.join(metadata['authors'][0].split()[:-1])
-release = version = '1.0.0'
+release = version = '1.0.2'
 description = ''  # metadata['description']
 year_range = (2019, datetime.date.today().year)
 year_str = (
@@ -41,7 +41,7 @@ html_theme = 'pydata_sphinx_theme'
 html_theme_options = {
     'show_toc_level': 1,
     'secondary_sidebar_items': [],
-    'footer_start': ['copyright', 'sphinx-version', 'theme-version', 'sourcelink'],
+    'footer_start': ['copyright', 'sphinx-version'],
     'icon_links': [
         {
             'name': 'GitHub',
@@ -71,7 +71,6 @@ autodoc_mock_imports = [
     'jax_dataclasses',
     'kfac_jax',
     'haiku',
-    'omegaconf',
     'optax',
     'yaml',
     'tensorboard',

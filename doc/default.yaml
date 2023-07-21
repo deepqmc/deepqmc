@@ -1,0 +1,119 @@
+_target_: deepqmc.wf.NeuralNetworkWaveFunction
+_partial_: true
+envelope:
+  _target_: deepqmc.wf.nn_wave_function.env.ExponentialEnvelopes
+  _partial_: true
+  isotropic: true
+  per_shell: false
+  per_orbital_exponent: true
+  spin_restricted: false
+  init_to_ones: true
+backflow_op:
+  _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
+  _partial_: true
+  mult_act: '${eval:"lambda x: x"}'
+n_determinants: 16
+full_determinant: true
+cusp_electrons: true
+cusp_alpha: 10
+backflow_transform: mult
+conf_coeff:
+  _target_: haiku.Linear
+  _partial_: true
+  with_bias: false
+  w_init:
+    _target_: jax.numpy.ones
+    _partial_: true
+omni_factory:
+  _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
+  _partial_: true
+  embedding_dim: 128
+  jastrow_factory: 
+    _target_: deepqmc.wf.nn_wave_function.omni.Jastrow
+    _partial_: true
+    sum_first: true
+    subnet_factory:
+      _target_: deepqmc.hkext.MLP
+      _partial_: true
+      hidden_layers: ['log', 1]
+      bias: false
+      last_linear: true
+      activation: null
+      init: default
+  backflow_factory:  
+    _target_: deepqmc.wf.nn_wave_function.omni.Backflow
+    _partial_: true
+    subnet_factory:
+      _target_: deepqmc.hkext.MLP
+      _partial_: true
+      hidden_layers: ['log', 1]
+      bias: false
+      last_linear: true
+      activation: null
+      init: default
+  gnn_factory:
+    _target_: deepqmc.gnn.ElectronGNN
+    _partial_: true
+    n_interactions: 3
+    positional_electron_embeddings: true
+    atom_type_embeddings: true
+    two_particle_stream_dim: 32
+    edge_types:
+    - same
+    - anti
+    edge_features:
+      same:
+        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+        edge_features:
+        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+          powers: [1]
+        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+      anti:
+        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+        edge_features:
+        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+          powers: [1]
+        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+      ne:
+        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+        edge_features:
+        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+          powers: [1]
+        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+    layer_factory:
+      _target_: deepqmc.gnn.electron_gnn.ElectronGNNLayer
+      _partial_: true
+      subnet_factory:
+        _target_: deepqmc.hkext.MLP
+        _partial_: true
+        hidden_layers: ['log', 2]
+        bias: true
+        last_linear: false
+        activation:
+          _target_: jax.numpy.tanh
+          _partial_: true
+        init: default
+      subnet_factory_by_lbl:
+        g:
+          _target_: deepqmc.hkext.MLP
+          _partial_: true
+          hidden_layers: ['log', 1]
+          bias: false
+          last_linear: false
+          activation:
+            _target_: jax.numpy.tanh
+            _partial_: true
+          init: default
+      residual:
+        _target_: deepqmc.hkext.ResidualConnection
+        normalize: true
+      convolution: true
+      deep_features: shared
+      update_rule: concatenate
+      update_features: 
+      - residual
+      - node_up
+      - node_down
+      - edge_same
+      - edge_anti
+  

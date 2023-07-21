@@ -57,7 +57,7 @@ The neural network wave function ansatz is available in the :mod:`deepqmc.wf` su
     config_dir = os.path.join(deepqmc_dir, 'conf/ansatz')
 
     with initialize_config_dir(version_base=None, config_dir=config_dir):
-        cfg = compose(config_name='paulinet')
+        cfg = compose(config_name='default')
 
     _ansatz = instantiate(cfg, _recursive_=True)
 
@@ -83,10 +83,10 @@ Different samplers can be chained together via the :func:`~deepqmc.sampling.chai
 Optimize the ansatz
 -------------------
 
-The high-level :func:`~deepqmc.train` function is used to train the deep neural networks in the ansatz. The train function takes a :class:`~deepqmc.hamil.MolecularHamiltonian`, a :class:`~deepqmc.wf.WaveFunction` and a :class:`~deepqmc.sampling.Sampler`. Further necessary arguments are an optimizer (``opt``), the number of training steps (``steps``), the number of samples used in a training batch (``sample_size``), and a seed (``seed``)::
+The high-level :func:`~deepqmc.train` function is used to train the deep neuransatznetworks in the ansatz. The train function takes a :class:`~deepqmc.hamil.MolecularHamiltonian`, a :class:`~deepqmc.wf.WaveFunction` and a :class:`~deepqmc.sampling.Sampler`. Further necessary arguments are an optimizer (``opt``), the number of training steps (``steps``), the number of samples used in a training batch (``sample_size``), and a seed (``seed``)::
 
     >>> from deepqmc import train
-    >>> train(H, net, 'kfac', sampler, steps=10000, sample_size=2000, seed=42)
+    >>> train(H, ansatz, 'kfac', sampler, steps=10000, sample_size=2000, seed=42)
     training:   0%|▋       | 102/10000 [01:00<23:01, 7.16it/s, E=-8.042(10)]
 
 If the argument ``pretrain_steps`` is set, the ansatz is pretrained with respect to a Hartree-Fock or CASSCF baseline obtained with :mod:`pyscf`. For more details as well as further training hyperparameters consult the :ref:`api <api>` reference.
@@ -96,7 +96,7 @@ Logging
 
 The terminal output shows only how far has the training progressed and the current estimate of the energy. More detailed monitoring of the training is available via `Tensorboard <https://www.tensorflow.org/tensorboard>`_. When :func:`~deepqmc.train` is called with an optional ``workdir`` argument, the training run creates a Tensorboard event file::
 
-    >>> train(net, workdir='runs/01')
+    >>> train(ansatz, workdir='runs/01')
 
 .. code:: none
 
@@ -120,7 +120,7 @@ A rough estimate of the expectation value of the energy of a trained wave functi
 
     >>> import jax.numpy as jnp
     >>> train_state = jnp.load('workdir/training/chkpt-10000.pt',allow_pickle=True)
-    >>> train(H, net, None, sampler, train_state=train_state, steps=500, sample_size=2000, seed=42)
+    >>> train(H, ansatz, None, sampler, train_state=train_state, steps=500, sample_size=2000, seed=42)
     evaluating: 100%|█████████| 500/500 [01:20<00:00,  6.20it/s, E=-8.07000(19)]
 
 The evaluation generates the same type of logs as the training, but writes to ``workdir/evaluation`` instead. The final energy can be read from the progress bar, the Tensorboard event file or computed from the local enregies in the hdf5 file respectively.

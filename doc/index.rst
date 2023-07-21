@@ -16,8 +16,8 @@ User guide
     :maxdepth: 1
 
     installation
-    tutorial
     cli
+    tutorial
 
 API reference
 =============
