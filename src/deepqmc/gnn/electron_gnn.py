@@ -395,7 +395,9 @@ class ElectronGNN(hk.Module):
         self.edge_features = edge_features
         self.edge_types = edge_types
         self.positional_electron_embeddings = positional_electron_embeddings
-        self.nuclei_embedding = nuclei_embedding(charges, n_atom_types)
+        self.nuclei_embedding = (
+            nuclei_embedding(charges, n_atom_types) if nuclei_embedding else None
+        )
         self.self_interaction = self_interaction
 
     def node_factory(self, phys_conf):

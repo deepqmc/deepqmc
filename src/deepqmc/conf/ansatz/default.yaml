@@ -57,7 +57,7 @@ omni_factory:
     _partial_: true
     n_interactions: 3
     positional_electron_embeddings: true
-    atom_type_embeddings: false
+    nuclei_embedding: null
     two_particle_stream_dim: 32
     self_interaction: false
     edge_types:
