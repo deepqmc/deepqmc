@@ -140,7 +140,7 @@ DeepQMC currently supports ``bfd`` [Burkatzki07]_ and ``ccECP`` [Bennett17]_ pse
         pp_mask=[True,False],
     )
 
-The systems containing heavier atoms sometimes tend to produce NaN errors. To avoid these issues, it was found useful to use a smaller initial variance of electrons (via the ``elec_std`` argument) and a larger decorrelation length for sampling::
+The systems containing heavier atoms sometimes tend to produce NaN errors. To avoid these issues, it was found useful to use a smaller variance for the initial distribution of electrons around the nuclei (via the ``elec_std`` argument) and a larger decorrelation length for sampling::
 
     H = MolecularHamiltonian(mol=mol, elec_std=0.1)
     sampler = chain(DecorrSampler(length=100),MetropolisSampler(H))
