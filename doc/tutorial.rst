@@ -116,7 +116,7 @@ Furthermore the training run is logged to the ``workdir``. The ``training`` dire
 Evaluate the energy
 -------------------
 
-A rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the local energies of the training run. A rigorous estimation of the energy expectation value up to the statistical sampling error can be obtained when evaluating the energy expectation value of the trained wavefunction without further optimization. This is achieved by passing a training checkpoint is passed to the :func:`~deepqmc.train` function, but the optimizer is specified to be ``None``:
+A rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the local energies of the training run. A rigorous estimation of the energy expectation value up to the statistical sampling error can be obtained when evaluating the energy expectation value of the trained wavefunction without further optimization. This is achieved by passing a training checkpoint to the :func:`~deepqmc.train` function, and specifying the optimizer to be ``None``:
 
     >>> import jax.numpy as jnp
     >>> step, train_state = jnp.load('runs/01/training/chkpt-10000.pt',allow_pickle=True)
