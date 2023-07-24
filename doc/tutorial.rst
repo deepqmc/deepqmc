@@ -157,4 +157,4 @@ Pretraining for a couple of thousands ``pretrain_steps`` is also very beneficial
     >>> train(H, ansatz, 'kfac', sampler, steps=10000, sample_size=2000, seed=42, pretrain_steps=3000)
     pratrain: 100%|█████████| 3000/3000 [54:27<00:00,  1.02it/s, MSE=5.82e-05]
     equilibrate sampler: 18%|██      | 176/1000 [02:59<13:42,  1.00it/s, tau=0.045]
-    train: 1%|▋       | 98/10000 [10:10<16:32:54,  6.03it/s, E=-132.796(25)]
+    train: 19%|██      | 1914/10000 [2:52:27<13:31:35,  6.03it/s, E=-133.2503(29)]

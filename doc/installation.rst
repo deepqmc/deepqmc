@@ -30,7 +30,7 @@ These packages will be installed automatically when installing DeepQMC.
 Optional dependencies
 ~~~~~~~~~~~~~~~~~~~~~
 
-The following dependencies are used for developement and their installation must be requested explicitly, as documented below.
+The following dependencies are used for development and their installation must be requested explicitly, as documented below.
 
 - `black <https://github.com/psf/black>`_ formats code according to PEP 8 standard.
 - `flake8 <https://github.com/PyCQA/flake8>`_ implement style guidelines.
@@ -62,7 +62,7 @@ The latest official release of DeepQMC can be installed from the Python Package 
 Developing
 ----------
 
-In order to have access to the source code and stay up-to-date with the latest developements, DeepQMC can be installed directly from the https://github.com/deepqmc/deepqmc GitHub repository. 
+In order to have access to the source code and stay up-to-date with the latest developments, DeepQMC can be installed directly from the https://github.com/deepqmc/deepqmc GitHub repository. 
 
 To install DeepQMC from the Git repository run::
 
@@ -70,11 +70,11 @@ To install DeepQMC from the Git repository run::
     $ cd deepqmc
     $ pip install -e .[dev] 
 
-Note that the ``-e`` option installs the repository in editable mode and the ``.[dev]`` specification includes the optional dependencies for developement.
+Note that the ``-e`` option installs the repository in editable mode and the ``.[dev]`` specification includes the optional dependencies for development.
 
 If `Pip <https://pip.pypa.io/en/stable/quickstart/>`_ complains about ``setup.py`` not being found, please update to the latest version.
 
-The above installation will result in the CPU version of JAX. However, running DeepQMC on the GPU is highly recomended. To enable GPU support make sure to upgrade JAX to match the CUDA and cuDNN versions of your system. For most users this can be achieved with::
+The above installation will result in the CPU version of JAX. However, running DeepQMC on the GPU is highly recommended. To enable GPU support make sure to upgrade JAX to match the CUDA and cuDNN versions of your system. For most users this can be achieved with::
 
     $ # CUDA 12 installation
     $ pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
@@ -82,4 +82,4 @@ The above installation will result in the CPU version of JAX. However, running D
     $ # CUDA 11 installation
     $ pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
-If issues arise during the installation of JAX, please visit the `JAX Install Guide <https://github.com/google/jax#installation>`_.
+If issues arise during the installation of JAX, or if errors related to CUDA or cuDNN occur at runtime, please visit the `JAX Install Guide <https://github.com/google/jax#installation>`_.

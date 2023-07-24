@@ -52,7 +52,7 @@ ____
 
 DeepQMC provides the above mentioned conigurations for the ``train``, ``evaluate`` and ``restart`` task. In order to override default hyperparameters of the experimental setup, such as the ``sample_size`` or the number of training ``steps`` or ``pretrain_steps``, hydra provides a simple syntax::
 
-        $ deepqmc task=train task.sample_size=2048 task.steps=50_000 task.pretrain_steps
+        $ deepqmc task=train task.sample_size=2048 task.steps=50_000 +task.pretrain_steps=1000
 
 The working directory for logging and checkpointing is is defined through::
 
@@ -73,7 +73,7 @@ The predefined configurations can be extended with custom molecules. Alternative
 
 Furthermore, DeepQMC implements the option to use pseudopotentials, which can be used via::
 
-        $ deepqmc hamil.mol.coords=[[0,0,0]] hamil.mol.charges=[20] hamil.mol.charge=0 hamil.mol.spin=0 hamil.mol.unit=angstrom +hamil.mol.pp_type='ccECP'
+        $ deepqmc hamil.mol.coords=[[0,0,0]] hamil.mol.charges=[21] hamil.mol.charge=0 hamil.mol.spin=1 hamil.mol.unit=angstrom +hamil.mol.pp_type='ccECP'
 
 Sampling
 ________
