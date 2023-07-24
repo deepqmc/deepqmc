@@ -98,7 +98,7 @@ The hyperparameters of the training and the wave function ansatz are specified t
 
 The hyperparameters of such a predifined ansatz can also be overwritten at the command line::
 
-    $ deepqmc ansatz.omni_factory.gnn_factory.n_interactions=2
+    $ deepqmc ansatz=ferminet ansatz.omni_factory.gnn_factory.n_interactions=2
 
 For convenience the configuration of the ``default`` ansatz is reproduced here:
 
