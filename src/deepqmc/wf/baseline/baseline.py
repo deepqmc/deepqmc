@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Sequence
 
 import haiku as hk
@@ -58,7 +59,9 @@ class Baseline(WaveFunction):
         return mos * factors[:, None, :]
 
     @classmethod
-    def from_mol(cls, mols, *, basis='6-31G', cas=None, **pyscf_kwargs):
+    def from_mol(
+        cls, mols, *, basis='6-31G', cas=None, is_baseline=True, **pyscf_kwargs
+    ):
         r"""Create input to the constructor from a :class:`~deepqmc.Molecule`.
 
         Args:
@@ -66,6 +69,9 @@ class Baseline(WaveFunction):
                 consider.
             basis (str): the name of a Gaussian basis set.
             cas (Tuple[int,int]): optional the active space specification for CAS-SCF.
+            is_baseline (bool): dummy argument to indicate to the CLI that this class
+                requires instantiation, due to interplay of haiku and pyscf. See
+                :class:`~deepqmc.app.instantiate_ansatz` for the custom instantiation.
         """
         mols = mols if isinstance(mols, Sequence) else [mols]
         mo_coeffs, confs, conf_coeffs = [], [], []
@@ -83,10 +89,13 @@ class Baseline(WaveFunction):
             mo_coeffs.append(mo_coeff)
             confs.append(jnp.array(conf))
             conf_coeffs.append(jnp.array(conf_coeff))
-        return {
-            'centers': centers,
-            'shells': shells,
-            'mo_coeffs': jnp.stack(mo_coeffs),
-            'confs': jnp.stack(confs),
-            'conf_coeffs': jnp.stack(conf_coeffs),
-        }
+        return partial(
+            cls,
+            **{
+                'centers': centers,
+                'shells': shells,
+                'mo_coeffs': jnp.stack(mo_coeffs),
+                'confs': jnp.stack(confs),
+                'conf_coeffs': jnp.stack(conf_coeffs),
+            },
+        )

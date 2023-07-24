@@ -1,14 +1,9 @@
 _target_: deepqmc.wf.NeuralNetworkWaveFunction
 _partial_: true
 envelope:
-  _target_: deepqmc.wf.nn_wave_function.env.ExponentialEnvelopes
+  _target_: deepqmc.wf.baseline.baseline.Baseline.from_mol
   _partial_: true
-  isotropic: true
-  per_shell: true
-  per_orbital_exponent: false
-  spin_restricted: true
-  init_to_ones: false
-  softplus_zeta: false
+  is_baseline: true
 backflow_op:
   _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
   _partial_: true

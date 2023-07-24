@@ -32,6 +32,11 @@ warnings.filterwarnings(
 def instantiate_ansatz(hamil, ansatz):
     import haiku as hk
 
+    envelope = ansatz.keywords['envelope']
+    if envelope.keywords.get('is_baseline', False):
+        # envelope returns a partial(Baseline, **baseline_params) object
+        ansatz.keywords['envelope'] = envelope(hamil.mol)
+
     return hk.without_apply_rng(
         hk.transform(
             lambda phys_conf, return_mos=False: ansatz(hamil)(phys_conf, return_mos)
