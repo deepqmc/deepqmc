@@ -15,3 +15,14 @@ References
     solutions to the Schrödinger equation using deep learning:
     How much physics do we need?
     `arXiv:2205.09438 <https://arxiv.org/abs/2205.09438>`_ (2022).
+
+.. [Burkatzki07] M. Burkatzki, C. Filippi, and M. Dolg, Energy-consistent
+    pseudopotentials for quantum Monte Carlo calculations `Journal of Chemical
+    Physics 126, 234105 
+    <https://doi.org/10.1063/1.2741534>`_ (2007)
+
+.. [Bennett17] M. C. Bennett, C. A. Melton, A. Annaberdiyev, G. Wang, L. Shulenburger,
+    and L. Mitas, A new generation of effective core potentials for correlated
+    calculations 
+    `Journal of Chemical Physics 147, 224106
+    <https://doi.org/10.1063/1.4995643>`_ (2017).

@@ -83,7 +83,7 @@ Different samplers can be chained together via the :func:`~deepqmc.sampling.chai
 Optimize the ansatz
 -------------------
 
-The high-level :func:`~deepqmc.train` function is used to train the deep neuransatznetworks in the ansatz. The train function takes a :class:`~deepqmc.hamil.MolecularHamiltonian`, a :class:`~deepqmc.wf.WaveFunction` and a :class:`~deepqmc.sampling.Sampler`. Further necessary arguments are an optimizer (``opt``), the number of training steps (``steps``), the number of samples used in a training batch (``sample_size``), and a seed (``seed``)::
+The high-level :func:`~deepqmc.train` function is used to train the deep neural networks in the ansatz. The train function takes a :class:`~deepqmc.hamil.MolecularHamiltonian`, a :class:`~deepqmc.wf.WaveFunction` and a :class:`~deepqmc.sampling.Sampler`. Further necessary arguments are an optimizer (``opt``), the number of training steps (``steps``), the number of samples used in a training batch (``sample_size``), and a seed (``seed``)::
 
     >>> from deepqmc import train
     >>> train(H, ansatz, 'kfac', sampler, steps=10000, sample_size=2000, seed=42)
@@ -96,7 +96,7 @@ Logging
 
 The terminal output shows only how far has the training progressed and the current estimate of the energy. More detailed monitoring of the training is available via `Tensorboard <https://www.tensorflow.org/tensorboard>`_. When :func:`~deepqmc.train` is called with an optional ``workdir`` argument, the training run creates a Tensorboard event file::
 
-    >>> train(ansatz, workdir='runs/01')
+    >>> train(H, ansatz, 'kfac', sampler, steps=10000, sample_size=2000, seed=42, workdir='runs/01')
 
 .. code:: none
 
@@ -110,7 +110,7 @@ This launches a Tensorboard server which can be accessed via a web browser at th
 Furthermore the training run is logged to the ``workdir``. The ``training`` directory contains training checkpoints as well as an hdf5 file ``result.h5`` that holds the local energies throughout the training, an exponential moving average of the training energy and the values of the wave function at every iteration::
 
     >>> import h5py
-    >>> with h5py.File('workdir/training/result.h5') as f: print(f.keys())
+    >>> with h5py.File('runs/01/training/result.h5') as f: print(f.keys())
     <KeysViewHDF5 ['E_ewm', 'E_loc', 'log_psi', 'sign_psi']>
 
 Evaluate the energy
@@ -119,8 +119,42 @@ Evaluate the energy
 A rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the local energies of the training run. A rigorous estimation of the energy expectation value up to the statistical sampling error can be obtained when evaluating the energy expectation value of the trained wavefunction without further optimization. This is achieved by passing a training checkpoint is passed to the :func:`~deepqmc.train` function, but the optimizer is specified to be ``None``:
 
     >>> import jax.numpy as jnp
-    >>> train_state = jnp.load('workdir/training/chkpt-10000.pt',allow_pickle=True)
+    >>> step, train_state = jnp.load('runs/01/training/chkpt-10000.pt',allow_pickle=True)
     >>> train(H, ansatz, None, sampler, train_state=train_state, steps=500, sample_size=2000, seed=42)
     evaluating: 100%|█████████| 500/500 [01:20<00:00,  6.20it/s, E=-8.07000(19)]
 
 The evaluation generates the same type of logs as the training, but writes to ``workdir/evaluation`` instead. The final energy can be read from the progress bar, the Tensorboard event file or computed from the local enregies in the hdf5 file respectively.
+
+Pseudopotentials
+-------------------
+
+DeepQMC currently supports ``bfd`` [Burkatzki07]_ and ``ccECP`` [Bennett17]_ pseudopotentials, which can be enabled by passing the ``pp_type`` argument to the molecule definition. This replaces a certain number of core electrons with a pseudopotential, reducing the total number of electrons explicitly treated and thus decreasing the computational cost. If the argument ``pp_type`` is passed, the pseudopotentials are used for all the nuclei in the molecule considered, but can be turned off for individual nuclei by specifying ``pp_mask``, a boolean array with ``True`` for each nucleus with pseudopotential turned on. The following example defines a TiO molecule where the titanium core is replaced by a pseudopotential and the oxygen core is left unaffected::
+
+    mol = Molecule(  # TiO
+        coords=[[0.0, 0.0, 0.0], [1.668, 0.0, 0.0]],
+        charges=[22, 8],
+        charge=0,
+        spin=2,
+        unit='angstrom',
+        pp_type='ccECP',
+        pp_mask=[True,False],
+    )
+
+The systems containing heavier atoms sometimes tend to produce NaN errors. To avoid these issues, it was found useful to use a smaller initial variance of electrons (via the ``elec_std`` argument) and a larger decorrelation length for sampling::
+
+    H = MolecularHamiltonian(mol=mol, elec_std=0.1)
+    sampler = chain(DecorrSampler(length=100),MetropolisSampler(H))
+
+.. code::
+
+    @hk.without_apply_rng
+    @hk.transform
+    def ansatz(phys_conf, return_mos=False):
+        return _ansatz(H)(phys_conf, return_mos=return_mos)
+
+Pretraining for a couple of thousands ``pretrain_steps`` is also very beneficial for systems with heavier atoms. The following command starts the 3000-step pretraining followed by 10000 training steps, however more steps are usually necessary to reach a good accuracy::
+
+    >>> train(H, ansatz, 'kfac', sampler, steps=10000, sample_size=2000, seed=42, pretrain_steps=3000)
+    pratrain: 100%|█████████| 3000/3000 [54:27<00:00,  1.02it/s, MSE=5.82e-05]
+    equilibrate sampler: 18%|██      | 176/1000 [02:59<13:42,  1.00it/s, tau=0.045]
+    train: 1%|▋       | 98/10000 [10:10<16:32:54,  6.03it/s, E=-132.796(25)]
