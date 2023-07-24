@@ -63,7 +63,7 @@ Note that the working directory of an ``evaluate`` and ``restart`` task cannot m
 Hamiltonian
 ___________
 
-DeepQMC aims at solving the molecular Hamiltonian. Molecules can be selected from a range of predefined configurations located in ``.../deepqmc/src/deepqmc/conf/ansatz``::
+DeepQMC aims at solving the molecular Hamiltonian. Molecules can be selected from a range of predefined configurations located in ``.../deepqmc/src/deepqmc/conf/hamil/mol``::
 
         $ deepqmc hamil/mol=LiH
 
