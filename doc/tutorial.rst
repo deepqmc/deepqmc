@@ -152,7 +152,7 @@ The systems containing heavier atoms sometimes tend to produce NaN errors. To av
     def ansatz(phys_conf, return_mos=False):
         return _ansatz(H)(phys_conf, return_mos=return_mos)
 
-Pretraining for a couple of thousands ``pretrain_steps`` is also very beneficial for systems with heavier atoms. The following command starts the 3000-step pretraining followed by 10000 training steps, however more steps are usually necessary to reach a good accuracy::
+Pretraining for a couple of thousands ``pretrain_steps`` is also very beneficial for systems with heavier atoms. The following command starts the 3000-step pretraining followed by 10000 training steps, however more variational training steps are usually necessary to reach a good accuracy::
 
     >>> train(H, ansatz, 'kfac', sampler, steps=10000, sample_size=2000, seed=42, pretrain_steps=3000)
     pratrain: 100%|█████████| 3000/3000 [54:27<00:00,  1.02it/s, MSE=5.82e-05]
