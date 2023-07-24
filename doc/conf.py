@@ -41,7 +41,7 @@ html_theme = 'pydata_sphinx_theme'
 html_theme_options = {
     'show_toc_level': 1,
     'secondary_sidebar_items': [],
-    'footer_start': ['copyright', 'sphinx-version'],
+    'footer_start': ['copyright'],
     'icon_links': [
         {
             'name': 'GitHub',
