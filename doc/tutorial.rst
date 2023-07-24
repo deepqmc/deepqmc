@@ -107,7 +107,7 @@ The terminal output shows only how far has the training progressed and the curre
 
 This launches a Tensorboard server which can be accessed via a web browser at the printed URL.
 
-Furthermore the training run is logged to the ``workdir``. The ``training`` directory contains training checkpoints as well as an hdf5 file ``result.h5`` that holds the local energies throughout the training, an exponential moving average of the training energy and the values of the wave function at every iteration::
+Furthermore the training run is logged to the ``workdir``. The ``training`` directory contains training checkpoints as well as an HDF5 file ``result.h5`` that holds the local energies throughout the training, an exponential moving average of the training energy and the values of the wave function at every iteration::
 
     >>> import h5py
     >>> with h5py.File('runs/01/training/result.h5') as f: print(f.keys())
