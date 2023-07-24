@@ -71,6 +71,7 @@ autodoc_mock_imports = [
     'jax_dataclasses',
     'kfac_jax',
     'haiku',
+    'omegaconf',
     'optax',
     'yaml',
     'tensorboard',
