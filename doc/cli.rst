@@ -58,7 +58,7 @@ The working directory for logging and checkpointing is is defined through::
 
         $ deepqmc hydra.run.dir=workdir
 
-Note that the working directory of an ``evaluate`` and ``restart`` task cannot match the ``restdir``.
+Note that the working directory of an ``evaluate`` and ``restart`` task cannot match the value of their ``restdir`` option (which specifies the working directory of the previous job that we want to evaluate or restart).
 
 Hamiltonian
 ___________
