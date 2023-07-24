@@ -16,7 +16,9 @@ backflow_op:
 n_determinants: 16
 full_determinant: true
 cusp_electrons: false
-cusp_alpha: null
+cusp_alpha_electrons: null
+cusp_nuclei: false
+cusp_alpha_nuclei: null
 backflow_transform: mult
 conf_coeff:
   _target_: deepqmc.hkext.SumPool
