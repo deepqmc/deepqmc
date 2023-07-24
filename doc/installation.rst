@@ -55,20 +55,31 @@ This code creates a virtual environment in the ``venv`` directory and actives it
 Install DeepQMC
 ---------------
 
-Within the activated virtual environment, DeepQMC can be installed with::
+The latest official release of DeepQMC can be installed from the Python Package Index using `Pip <https://pip.pypa.io/en/stable/quickstart/>`_::
 
-    $ pip install -U deepqmc -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
-Where specifying the additional URL is necessary, as the CUDA compatible versions of `jaxlib <https://github.com/google/jax>`_ are not hosted `pypi <https://pypi.org/>`_.
-To install all optional dependencies, use::
-
-    $ pip install -U deepqmc[dev] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+    $ pip install -U deepqmc
 
 Developing
 ----------
 
-To install DeepQMC from a local Git repository run::
+In order to have access to the source code and stay up-to-date with the latest developements, DeepQMC can be installed directly from the https://github.com/deepqmc/deepqmc GitHub repository. 
+
+To install DeepQMC from the Git repository run::
 
     $ git clone https://github.com/deepqmc/deepqmc
     $ cd deepqmc
-    $ pip install -e .[dev] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+    $ pip install -e .[dev] 
+
+Note that the ``-e`` option installs the repository in editable mode and the ``.[dev]`` specification includes the optional dependencies for developement.
+
+If `Pip <https://pip.pypa.io/en/stable/quickstart/>`_ complains about ``setup.py`` not being found, please update to the latest version.
+
+The above installation will result in the CPU version of JAX. However, running DeepQMC on the GPU is highly recomended. To enable GPU support make sure to upgrade JAX to match the CUDA and cuDNN versions of your system. For most users this can be achieved with::
+
+    $ # CUDA 12 installation
+    $ pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+    $ # CUDA 11 installation
+    $ pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+If issues arise during the installation of JAX, please visit the `JAX Install Guide <https://github.com/google/jax#installation>`_.
