@@ -28,18 +28,15 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    'chex<0.1.6',  # TypeError: Subscripted generics cannot be used with class and instance checks
     'dm-haiku',
     'h5py',
     'hydra-core',
-    'jax<0.4.11',
-    'jaxlib<0.4.11',
-    'jaxtyping',
+    'jax',
+    'jaxlib',
     'jax-dataclasses',
     'kfac-jax',
     'optax',
     'pyscf',
-    'scipy<1.11.0',
     'tensorboard',
     'pyyaml',
     'tqdm',
