@@ -72,7 +72,7 @@ The hyperparameters and their physical meaning are described in the :ref:`api <a
 Instantiate a sampler
 ---------------------
 
-The variational Monte Carlo method requires sampling the propability density associated with the square of the wave function. A :class:`~deepqmc.sampling.Sampler` can be instantiated from a :class:`~deepqmc.wf.WaveFunction`::
+The variational Monte Carlo method requires sampling the propability density associated with the square of the wave function. A :class:`~deepqmc.sampling.Sampler` can be instantiated from a :class:`~deepqmc.hamil.MolecularHamiltonian`::
 
     from deepqmc.sampling import chain, MetropolisSampler, DecorrSampler
 
