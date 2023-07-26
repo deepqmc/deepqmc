@@ -140,11 +140,12 @@ def fit_wf(  # noqa: C901
 
     elif isinstance(opt, optax.GradientTransformation):
 
-        @jax.jit
+        @partial(jax.pmap, axis_name='device_axis')
         def _step(rng, params, opt_state, batch):
             (loss, (E_loc, per_mol_stats)), grads = energy_and_grad_fn(
                 params, rng, batch
             )
+            grads = jax.lax.pmean(grads, 'device_axis')
             updates, opt_state = opt.update(grads, opt_state, params)
             param_norm, update_norm, grad_norm = map(
                 tree_norm, [params, updates, grads]
@@ -158,6 +159,7 @@ def fit_wf(  # noqa: C901
             }
             return params, opt_state, E_loc, stats
 
+        @jax.pmap
         def init_opt(rng, params, batch):
             opt_state = opt.init(params)
             return opt_state
@@ -204,13 +206,14 @@ def fit_wf(  # noqa: C901
             num_burnin_steps=0,
             min_damping=1e-4,
             inverse_update_period=1,
+            multi_device=True,
         )
 
     @jax.pmap
     def sample_wf(state, rng, params, select_idxs):
         return sampler.sample(rng, state, partial(ansatz.apply, params), select_idxs)
 
-    @jax.jit
+    @jax.pmap
     def update_sampler(state, params):
         return sampler.update(state, partial(ansatz.apply, params))
 
@@ -251,18 +254,21 @@ def fit_wf(  # noqa: C901
         rng, rng_init_fit = jax.random.split(rng)
         params, smpl_state = init_fit(rng_init_fit, hamil, ansatz, sampler, sample_size)
         opt_state = None
+    params = replicate_on_devices(params)
     if opt is not None and opt_state is None:
         rng, rng_opt = jax.random.split(rng)
-        init_select_idxs = sampler.select_idxs(sample_size, 0)
+        init_select_idxs = sampler.select_idxs(sample_size // jax.device_count(), 0)
+        init_select_idxs = replicate_on_devices(init_select_idxs)
+        init_phys_conf  = jax.pmap(sampler.phys_conf)(smpl_state, init_select_idxs)
+        rngs_opt = jax.random.split(rng_opt, jax.device_count())
         opt_state = init_opt(
-            rng_opt,
+            rngs_opt,
             params,
             (
-                sampler.phys_conf(smpl_state, init_select_idxs),
-                jnp.ones(sample_size),
+                init_phys_conf,
+                jnp.ones((jax.device_count(), sample_size // jax.device_count())),
             ),
         )
-    params = replicate_on_devices(params)
     train_state = smpl_state, params, opt_state
 
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
