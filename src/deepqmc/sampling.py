@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import jax_dataclasses as jdc
 from jax import lax
 
+from .log import gather_stats_on_one_device
 from .physics import pairwise_diffs, pairwise_self_distance
 from .types import PhysicalConfiguration
 from .utils import (
@@ -482,7 +483,7 @@ def equilibrate(
         select_idxs = replicate_on_devices(select_idxs)
         rngs = jax.random.split(rng, jax.device_count())
         state, phys_conf, stats = sample_wf(rngs, state, select_idxs)
-        yield step, state, stats
+        yield step, state, gather_stats_on_one_device(stats)
         buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]
         if len(buffer) < buffer_size:
             continue

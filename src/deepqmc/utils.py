@@ -178,11 +178,30 @@ def broadcast_to_devices(pytree):
     return jax.pmap(lambda x: x)(pytree)
 
 
-def gather_on_first_device(pytree, gather_fn=jax.lax.all_gather, flatten=False):
+def select_one_device(pytree, idx=0):
+    return jax.tree_util.tree_map(lambda x: x[idx], pytree)
+
+
+def gather_on_one_device(
+    pytree, gather_fn=jax.lax.all_gather, flatten_device_axis=False
+):
     all_gathered = jax.pmap(
         lambda x: gather_fn(x, 'gather_axis'), axis_name='gather_axis'
     )(pytree)
-    on_first_device = jax.tree_util.tree_map(lambda x: x[0], all_gathered)
-    if flatten:
-        on_first_device = jax.tree_util.tree_map(lambda x: x.reshape(-1, *x.shape[2:]), on_first_device)
-    return on_first_device
+    on_one_device = select_one_device(all_gathered)
+    if flatten_device_axis:
+        on_one_device = jax.tree_util.tree_map(
+            lambda x: x.reshape(-1, *x.shape[2:]), on_one_device
+        )
+    return on_one_device
+
+
+def split_rng_key_to_devices(rng):
+    rngs = jax.random.split(rng, jax.device_count())
+    return broadcast_to_devices(rngs)
+
+
+def rng_iterator(rng):
+    while True:
+        rng_yield, rng = jax.pmap(lambda key: tuple(jax.random.split(key)))(rng)
+        yield rng_yield

@@ -15,16 +15,17 @@ from uncertainties import ufloat
 
 from .ewm import init_ewm
 from .fit import fit_wf
-from .log import CheckpointStore, H5LogTable, TensorboardMetricLogger, gather_multi_device_stats
+from .log import CheckpointStore, H5LogTable, TensorboardMetricLogger
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
 from .sampling import MultimoleculeSampler, chain, equilibrate, smpl_state_to_devices
 from .utils import (
     ConstantSchedule,
     InverseSchedule,
-    gather_on_first_device,
+    gather_on_one_device,
     replicate_on_devices,
     segment_nanmean,
+    select_one_device,
 )
 from .wf.base import init_wf_params
 
@@ -183,6 +184,7 @@ def train(  # noqa: C901
         else:
             rng, rng_init = jax.random.split(rng, 2)
             params = init_wf_params(rng_init, hamil, ansatz)
+            params = replicate_on_devices(params)
             num_params = tree_util.tree_reduce(
                 operator.add, tree_util.tree_map(lambda x: x.size, params)
             )
@@ -215,7 +217,6 @@ def train(  # noqa: C901
                     baseline_kwargs=pretrain_kwargs.pop('baseline_kwargs', {}),
                 ):
                     mol_idx = pretrain_sampler.mol_idx(sample_size, step)
-                    losses = gather_on_first_device(losses, flatten=True)
                     per_mol_losses = segment_nanmean(
                         losses, mol_idx, len(pretrain_sampler)
                     )
@@ -239,19 +240,12 @@ def train(  # noqa: C901
                     }
                     if metric_logger:
                         metric_logger.update(step, pretrain_stats, prefix='pretraining')
-                params = jax.tree_util.tree_map(lambda x: x[0], params)
                 log.info(f'Pretraining completed with MSE = {mse_rep}')
 
         if not train_state or train_state[0] is None:
             rng, rng_eq, rng_smpl_init = jax.random.split(rng, 3)
-            # rngs_smpl_init = jax.random.split(rng_smpl_init, jax.device_count())
-            # initializer = partial(sampler.init, wf=partial(ansatz.apply, params), n=sample_size // jax.device_count())
-            # smpl_state = jax.pmap(initializer)(rngs_smpl_init)
-            smpl_state = sampler.init(
-                rng_smpl_init,
-                partial(ansatz.apply, params),
-                sample_size,
-            )
+            wf = partial(ansatz.apply, select_one_device(params))
+            smpl_state = sampler.init(rng_smpl_init, wf, sample_size)
             smpl_state = smpl_state_to_devices(smpl_state)
             log.info('Equilibrating sampler...')
             pbar = tqdm(
@@ -261,7 +255,7 @@ def train(  # noqa: C901
             )
             for step, smpl_state, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
-                partial(ansatz.apply, params),
+                wf,
                 sampler,
                 smpl_state,
                 lambda phys_conf: pairwise_self_distance(phys_conf.r).mean(),
@@ -275,7 +269,6 @@ def train(  # noqa: C901
                 )
                 pbar.set_postfix(tau=tau_rep)
                 if metric_logger:
-                    smpl_stats = gather_multi_device_stats(smpl_stats)
                     metric_logger.update(step, smpl_stats, prefix='equilibration')
             pbar.close()
             train_state = smpl_state, params, None
@@ -306,10 +299,13 @@ def train(  # noqa: C901
                     train_state,
                     **(fit_kwargs or {}),
                 ):
-                    E_loc = gather_on_first_device(E_loc, flatten=True)
-                    select_idxs = replicate_on_devices(sampler.select_idxs(sample_size, step))
-                    psi = jax.pmap(partial(sampler.get_state, 'psi'))(train_state.sampler, select_idxs)
-                    psi = gather_on_first_device(psi, flatten=True)
+                    select_idxs = replicate_on_devices(
+                        sampler.select_idxs(sample_size, step)
+                    )
+                    psi = jax.pmap(partial(sampler.get_state, 'psi'))(
+                        train_state.sampler, select_idxs
+                    )
+                    psi = gather_on_one_device(psi, flatten_device_axis=True)
                     if jnp.isnan(psi.log).any():
                         raise NanError()
                     mol_idx = sampler.mol_idx(sample_size, step)
@@ -318,7 +314,6 @@ def train(  # noqa: C901
                         ewm_state if jnp.isnan(ene) else update_ewm(ene, ewm_state)
                         for ene, ewm_state in zip(per_mol_energy, ewm_states)
                     ]
-                    stats = gather_multi_device_stats(stats)
                     stats['per_mol'] = {
                         'energy/ewm': jnp.array(
                             [ewm_state.mean for ewm_state in ewm_states]
@@ -359,13 +354,14 @@ def train(  # noqa: C901
                             table.row['E_loc'] = E_loc[mol_idx == i]
                             if ewm_state.mean is not None:
                                 table.row['E_ewm'] = ewm_state.mean
-                            psi = gather_on_first_device(smpl_state['psi'], flatten=True)
+                            psi = gather_on_one_device(
+                                smpl_state['psi'], flatten_device_axis=True
+                            )
                             table.row['sign_psi'] = psi.sign
                             table.row['log_psi'] = psi.log
                         h5file.flush()
-                        # if metric_logger:
-                            # stats = gather_on_first_device(stats, flatten=True)
-                            # metric_logger.update(step, stats)
+                        if metric_logger:
+                            metric_logger.update(step, stats)
                 log.info(f'The {mode} has been completed!')
                 return train_state
             except NanError:
