@@ -12,6 +12,7 @@ from .utils import (
     exp_normalize_mean,
     masked_mean,
     per_mol_stats,
+    replicate_on_devices,
     segment_nanmean,
     tree_norm,
 )
@@ -132,9 +133,8 @@ def fit_wf(  # noqa: C901
 
     if opt is None:
 
-        @jax.jit
         def _step(_rng_opt, params, _opt_state, batch):
-            loss, (E_loc, stats) = loss_fn(params, _rng_opt, batch)
+            loss, (E_loc, stats) = jax.pmap(loss_fn)(params, _rng_opt, batch)
 
             return params, None, E_loc, {'per_mol': stats}
 
@@ -206,7 +206,7 @@ def fit_wf(  # noqa: C901
             inverse_update_period=1,
         )
 
-    @jax.jit
+    @jax.pmap
     def sample_wf(state, rng, params, select_idxs):
         return sampler.sample(rng, state, partial(ansatz.apply, params), select_idxs)
 
@@ -216,20 +216,25 @@ def fit_wf(  # noqa: C901
 
     def train_step(rng, step, smpl_state, params, opt_state):
         rng_sample, rng_kfac = jax.random.split(rng)
-        select_idxs = sampler.select_idxs(sample_size, step)
+        select_idxs = sampler.select_idxs(sample_size // jax.device_count(), step)
+        select_idxs = replicate_on_devices(select_idxs)
+        rngs_sample = jax.random.split(rng_sample, jax.device_count())
         smpl_state, phys_conf, smpl_stats = sample_wf(
-            smpl_state, rng_sample, params, select_idxs
+            smpl_state, rngs_sample, params, select_idxs
         )
         weight = exp_normalize_mean(
             sampler.get_state(
                 'log_weight',
                 smpl_state,
                 select_idxs,
-                default=jnp.zeros(sample_size),
+                default=jnp.zeros(
+                    (jax.device_count(), sample_size // jax.device_count())
+                ),
             )
         )
+        rngs_kfac = jax.random.split(rng_kfac, jax.device_count())
         params, opt_state, E_loc, stats = _step(
-            rng_kfac,
+            rngs_kfac,
             params,
             opt_state,
             (phys_conf, weight),
@@ -257,6 +262,7 @@ def fit_wf(  # noqa: C901
                 jnp.ones(sample_size),
             ),
         )
+    params = replicate_on_devices(params)
     train_state = smpl_state, params, opt_state
 
     for step, rng in zip(steps, hk.PRNGSequence(rng)):

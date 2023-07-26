@@ -168,3 +168,23 @@ def pad_list_of_3D_arrays_to_one_array(list_of_arrays):
         for array in list_of_arrays
     ]
     return jnp.array(padded_arrays)
+
+
+def replicate_on_devices(pytree):
+    return jax.device_put_replicated(pytree, devices=jax.devices())
+
+
+def broadcast_to_devices(pytree):
+    return jax.pmap(lambda x: x)(pytree)
+
+
+def gather_on_first_device(pytree):
+    all_gathered = jax.pmap(
+        lambda x: jax.lax.all_gather(x, 'gather_axis'), axis_name='gather_axis'
+    )(pytree)
+    on_first_device = jax.tree_util.tree_map(lambda x: x[0], all_gathered)
+    return on_first_device
+
+
+def flatten_batch_dimensions(pytree):
+    return jax.tree_util.tree_map(lambda x: x.reshape(-1, *x.shape[2:]), pytree)

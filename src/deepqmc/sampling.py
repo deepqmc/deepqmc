@@ -11,7 +11,12 @@ from jax import lax
 
 from .physics import pairwise_diffs, pairwise_self_distance
 from .types import PhysicalConfiguration
-from .utils import multinomial_resampling, split_dict
+from .utils import (
+    broadcast_to_devices,
+    multinomial_resampling,
+    replicate_on_devices,
+    split_dict,
+)
 
 __all__ = [
     'MetropolisSampler',
@@ -466,15 +471,17 @@ def equilibrate(
 ):
     criterion = jax.jit(criterion)
 
-    @jax.jit
+    @jax.pmap
     def sample_wf(rng, state, select_idxs):
         return sampler.sample(rng, state, wf, select_idxs)
 
     buffer_size = block_size * n_blocks
     buffer = []
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
-        select_idxs = sampler.select_idxs(sample_size, step)
-        state, phys_conf, stats = sample_wf(rng, state, select_idxs)
+        select_idxs = sampler.select_idxs(sample_size // jax.device_count(), step)
+        select_idxs = replicate_on_devices(select_idxs)
+        rngs = jax.random.split(rng, jax.device_count())
+        state, phys_conf, stats = sample_wf(rngs, state, select_idxs)
         yield step, state, stats
         buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]
         if len(buffer) < buffer_size:
@@ -482,3 +489,19 @@ def equilibrate(
         b1, b2 = buffer[:block_size], buffer[-block_size:]
         if abs(mean(b1) - mean(b2)) < min(stdev(b1), stdev(b2)):
             break
+
+
+def smpl_state_to_devices(smpl_state):
+    r"""Reshapes and broadcasts entries of the sampler state to multiple devices."""
+    device_count = jax.device_count()
+
+    def replicate_or_reshape(x):
+        if x.ndim == 0:
+            return replicate_on_devices(x)
+        elif not x.shape[0] % device_count:
+            x = x.reshape(device_count, -1, *x.shape[1:])
+            return broadcast_to_devices(x)
+        else:
+            raise ValueError(f'Unexpected shape of entry in smpl_state: {x.shape}')
+
+    return jax.tree_util.tree_map(replicate_or_reshape, smpl_state)
