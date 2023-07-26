@@ -178,13 +178,11 @@ def broadcast_to_devices(pytree):
     return jax.pmap(lambda x: x)(pytree)
 
 
-def gather_on_first_device(pytree):
+def gather_on_first_device(pytree, gather_fn=jax.lax.all_gather, flatten=False):
     all_gathered = jax.pmap(
-        lambda x: jax.lax.all_gather(x, 'gather_axis'), axis_name='gather_axis'
+        lambda x: gather_fn(x, 'gather_axis'), axis_name='gather_axis'
     )(pytree)
     on_first_device = jax.tree_util.tree_map(lambda x: x[0], all_gathered)
+    if flatten:
+        on_first_device = jax.tree_util.tree_map(lambda x: x.reshape(-1, *x.shape[2:]), on_first_device)
     return on_first_device
-
-
-def flatten_batch_dimensions(pytree):
-    return jax.tree_util.tree_map(lambda x: x.reshape(-1, *x.shape[2:]), pytree)
