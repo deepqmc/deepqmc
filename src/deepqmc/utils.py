@@ -81,8 +81,8 @@ def ConstantSchedule(value):
 
 
 def argmax_random_choice(rng, x):
-    mask = x == x.max()
-    return jax.random.choice(rng, jnp.arange(len(x))[mask])
+    logits = jnp.where(x == x.max(), 0, -jnp.inf)
+    return jax.random.categorical(rng, logits, shape=())
 
 
 def segment_nanmean(data, segment_ids, num_segments=None):
