@@ -184,11 +184,11 @@ def train(  # noqa: C901
         else:
             rng, rng_init = jax.random.split(rng, 2)
             params = init_wf_params(rng_init, hamil, ansatz)
-            params = replicate_on_devices(params)
             num_params = tree_util.tree_reduce(
                 operator.add, tree_util.tree_map(lambda x: x.size, params)
             )
             log.info(f'Number of model parameters: {num_params}')
+            params = replicate_on_devices(params)
             if pretrain_steps and mode == 'training':
                 log.info('Pretraining wrt. baseline wave function')
                 rng, rng_pretrain = jax.random.split(rng)

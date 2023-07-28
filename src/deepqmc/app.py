@@ -129,6 +129,8 @@ def main(cfg):
     log.info('Entering application')
     jax.config.update('jax_platform_name', cfg.device)
     log.info(f'Running on {cfg.device.upper()}')
+    if cfg.device.upper() == 'CUDA':
+        log.info(f'Detected {jax.device_count()} {cfg.device.upper()} devices')
     cfg.task.workdir = str(Path.cwd())
     log.info(f'Will work in {cfg.task.workdir}')
     maybe_log_code_version()
