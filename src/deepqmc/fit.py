@@ -8,8 +8,10 @@ import kfac_jax
 import optax
 
 from .kfacext import make_graph_patterns
+from .log import gather_stats_on_one_device
 from .utils import (
     exp_normalize_mean,
+    gather_on_one_device,
     masked_mean,
     per_mol_stats,
     replicate_on_devices,
@@ -72,7 +74,7 @@ def fit_wf(  # noqa: C901
     sampler,
     sample_size,
     steps,
-    train_state=None,
+    train_state,
     *,
     clip_mask_fn=None,
     clip_mask_kwargs=None,
@@ -248,18 +250,12 @@ def fit_wf(  # noqa: C901
         stats['per_mol'] = {**stats['per_mol'], **smpl_stats['per_mol']}
         return smpl_state, params, opt_state, E_loc, stats
 
-    if train_state:
-        smpl_state, params, opt_state = train_state
-    else:
-        rng, rng_init_fit = jax.random.split(rng)
-        params, smpl_state = init_fit(rng_init_fit, hamil, ansatz, sampler, sample_size)
-        opt_state = None
-    params = replicate_on_devices(params)
+    smpl_state, params, opt_state = train_state
     if opt is not None and opt_state is None:
         rng, rng_opt = jax.random.split(rng)
         init_select_idxs = sampler.select_idxs(sample_size // jax.device_count(), 0)
         init_select_idxs = replicate_on_devices(init_select_idxs)
-        init_phys_conf  = jax.pmap(sampler.phys_conf)(smpl_state, init_select_idxs)
+        init_phys_conf = jax.pmap(sampler.phys_conf)(smpl_state, init_select_idxs)
         rngs_opt = jax.random.split(rng_opt, jax.device_count())
         opt_state = init_opt(
             rngs_opt,
@@ -273,4 +269,6 @@ def fit_wf(  # noqa: C901
 
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
         *train_state, E_loc, stats = train_step(rng, step, *train_state)
+        E_loc = gather_on_one_device(E_loc, flatten_device_axis=True)
+        stats = gather_stats_on_one_device(stats)
         yield step, TrainState(*train_state), E_loc, stats

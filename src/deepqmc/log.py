@@ -2,10 +2,13 @@ import pickle
 from collections import namedtuple
 from pathlib import Path
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import tensorboard.summary
 from jax.tree_util import tree_map
+
+from .utils import gather_on_one_device
 
 Checkpoint = namedtuple('Checkpoint', 'step loss path')
 
@@ -127,3 +130,10 @@ class TensorboardMetricLogger:
         self.global_writer.close()
         for writer in self.per_mol_writers:
             writer.close()
+
+
+def gather_stats_on_one_device(stats):
+    per_mol = stats.pop('per_mol', {})
+    stats = tree_map(lambda x: x[0], stats)
+    per_mol = gather_on_one_device(per_mol, gather_fn=jax.lax.pmean)
+    return {**stats, 'per_mol': per_mol}

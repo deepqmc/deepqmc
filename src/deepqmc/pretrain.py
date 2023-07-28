@@ -6,9 +6,15 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from .wf.baseline import Baseline
 from .sampling import smpl_state_to_devices
-from .utils import replicate_on_devices
+from .utils import (
+    gather_on_one_device,
+    replicate_on_devices,
+    rng_iterator,
+    select_one_device,
+    split_rng_key_to_devices,
+)
+from .wf.baseline import Baseline
 
 
 def pretrain(  # noqa: C901
@@ -71,7 +77,6 @@ def pretrain(  # noqa: C901
 
     if isinstance(opt, optax.GradientTransformation):
 
-        @partial(jax.pmap, axis_name='device_axis')
         def _step(rng, params, opt_state, phys_config):
             (_, losses), grads = loss_and_grad_fn(params, phys_config)
             grads = jax.lax.pmean(grads, 'device_axis')
@@ -82,21 +87,21 @@ def pretrain(  # noqa: C901
     else:
         raise NotImplementedError
 
-    smpl_state = sampler.init(rng, partial(ansatz.apply, params), sample_size)
+    smpl_state = sampler.init(
+        rng, partial(ansatz.apply, select_one_device(params)), sample_size
+    )
+
+    rng = split_rng_key_to_devices(rng)
     smpl_state = smpl_state_to_devices(smpl_state)
-    params = replicate_on_devices(params)
     opt_state = jax.pmap(opt.init)(params)
 
-    @jax.pmap
     def sample_wf(state, rng, params, select_idxs):
         return sampler.sample(rng, state, partial(ansatz.apply, params), select_idxs)
 
-    for step, rng in zip(steps, hk.PRNGSequence(rng)):
+    @partial(jax.pmap, axis_name='device_axis')
+    def pretrain_step(step, rng, params, smpl_state, opt_state):
         rng, rng_sample = jax.random.split(rng)
-        rng_sample = jax.random.split(rng_sample, jax.device_count())
-        rng = jax.random.split(rng, jax.device_count())
         select_idxs = sampler.select_idxs(sample_size // jax.device_count(), step)
-        select_idxs = replicate_on_devices(select_idxs)
         smpl_state, phys_config, smpl_stats = sample_wf(
             smpl_state, rng_sample, params, select_idxs
         )
@@ -107,4 +112,13 @@ def pretrain(  # noqa: C901
             opt_state,
             phys_config,
         )
-        yield step, params, losses
+        return params, opt_state, losses
+
+    for step, rng in zip(steps, rng_iterator(rng)):
+        step = replicate_on_devices(jnp.array(step))
+        params, opt_state, losses = pretrain_step(
+            step, rng, params, smpl_state, opt_state
+        )
+        yield select_one_device(step).item(), params, gather_on_one_device(
+            losses, flatten_device_axis=True
+        )
