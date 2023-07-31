@@ -6,12 +6,12 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from .sampling import smpl_state_to_devices
 from .utils import (
     gather_on_one_device,
     replicate_on_devices,
     rng_iterator,
     select_one_device,
+    split_on_devices,
     split_rng_key_to_devices,
 )
 from .wf.baseline import Baseline
@@ -50,8 +50,9 @@ def pretrain(  # noqa: C901
     def baseline(phys_conf):
         return partial_baseline(hamil.mol, None)(phys_conf)
 
-    init_pc = hamil.init_sample(rng, sampler.mols[0].coords, 1)[0]
-    params_baseline = baseline.init(rng, init_pc)
+    rng, rng_hamil, rng_baseline = jax.random.split(rng, 3)
+    init_pc = hamil.init_sample(rng_hamil, sampler.mols[0].coords, 1)[0]
+    params_baseline = baseline.init(rng_baseline, init_pc)
     baseline = partial(baseline.apply, params_baseline)
 
     def loss_fn(params, phys_config):
@@ -87,12 +88,13 @@ def pretrain(  # noqa: C901
     else:
         raise NotImplementedError
 
-    smpl_state = sampler.init(
-        rng, partial(ansatz.apply, select_one_device(params)), sample_size
+    rng, rng_smpl_init = split_on_devices(split_rng_key_to_devices(rng))
+    wf = partial(ansatz.apply, select_one_device(params))
+    sample_initializer = partial(
+        sampler.init, wf=wf, n=sample_size // jax.device_count()
     )
+    smpl_state = jax.pmap(sample_initializer)(rng_smpl_init)
 
-    rng = split_rng_key_to_devices(rng)
-    smpl_state = smpl_state_to_devices(smpl_state)
     opt_state = jax.pmap(opt.init)(params)
 
     def sample_wf(state, rng, params, select_idxs):

@@ -26,6 +26,7 @@ from .utils import (
     replicate_on_devices,
     segment_nanmean,
     select_one_device,
+    split_on_devices,
     split_rng_key_to_devices,
 )
 from .wf.base import init_wf_params
@@ -187,7 +188,7 @@ def train(  # noqa: C901
             )
             params = train_state[1]
         else:
-            rng, rng_init = jax.random.split(rng, 2)
+            rng, rng_init = jax.random.split(rng)
             params = init_wf_params(rng_init, hamil, ansatz)
             num_params = tree_util.tree_reduce(
                 operator.add, tree_util.tree_map(lambda x: x.size, params)
@@ -250,12 +251,13 @@ def train(  # noqa: C901
                 log.info(f'Pretraining completed with MSE = {mse_rep}')
 
         if not train_state or train_state[0] is None:
-            rng, rng_eq, rng_smpl_init = jax.random.split(rng, 3)
+            rng, rng_eq, rng_smpl_init = split_on_devices(
+                split_rng_key_to_devices(rng), 3
+            )
             wf = partial(ansatz.apply, select_one_device(params))
             sample_initializer = partial(
                 sampler.init, wf=wf, n=sample_size // jax.device_count()
             )
-            rng_smpl_init = split_rng_key_to_devices(rng_smpl_init)
             smpl_state = jax.pmap(sample_initializer)(rng_smpl_init)
             log.info('Equilibrating sampler...')
             pbar = tqdm(
@@ -309,15 +311,6 @@ def train(  # noqa: C901
                     train_state,
                     **(fit_kwargs or {}),
                 ):
-                    select_idxs = replicate_on_devices(
-                        sampler.select_idxs(sample_size, step)
-                    )
-                    psi = jax.pmap(partial(sampler.get_state, 'psi'))(
-                        train_state.sampler, select_idxs
-                    )
-                    psi = gather_on_one_device(psi, flatten_device_axis=True)
-                    if jnp.isnan(psi.log).any():
-                        raise NanError()
                     mol_idx = sampler.mol_idx(sample_size, step)
                     per_mol_energy = segment_nanmean(E_loc, mol_idx, len(sampler))
                     ewm_states = [
@@ -358,6 +351,8 @@ def train(  # noqa: C901
                             psi = gather_on_one_device(
                                 smpl_state['psi'], flatten_device_axis=True
                             )
+                            if jnp.isnan(psi.log).any():
+                                raise NanError()
                             table.row['sign_psi'] = psi.sign
                             table.row['log_psi'] = psi.log
                         h5file.flush()

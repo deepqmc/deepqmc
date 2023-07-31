@@ -11,7 +11,12 @@ from jax import lax
 
 from .physics import pairwise_diffs, pairwise_self_distance
 from .types import PhysicalConfiguration
-from .utils import multinomial_resampling, replicate_on_devices, split_dict
+from .utils import (
+    multinomial_resampling,
+    replicate_on_devices,
+    rng_iterator,
+    split_dict,
+)
 
 __all__ = [
     'MetropolisSampler',
@@ -472,11 +477,10 @@ def equilibrate(
 
     buffer_size = block_size * n_blocks
     buffer = []
-    for step, rng in zip(steps, hk.PRNGSequence(rng)):
+    for step, rng in zip(steps, rng_iterator(rng)):
         select_idxs = sampler.select_idxs(sample_size // jax.device_count(), step)
         select_idxs = replicate_on_devices(select_idxs)
-        rngs = jax.random.split(rng, jax.device_count())
-        state, phys_conf, stats = sample_wf(rngs, state, select_idxs)
+        state, phys_conf, stats = sample_wf(rng, state, select_idxs)
         yield step, state, stats
         buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]
         if len(buffer) < buffer_size:

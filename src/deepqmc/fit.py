@@ -1,7 +1,6 @@
 from collections import namedtuple
 from functools import partial
 
-import haiku as hk
 import jax
 import jax.numpy as jnp
 import kfac_jax
@@ -14,7 +13,9 @@ from .utils import (
     masked_mean,
     per_mol_stats,
     replicate_on_devices,
+    rng_iterator,
     segment_nanmean,
+    split_on_devices,
     tree_norm,
 )
 from .wf.base import init_wf_params
@@ -79,6 +80,7 @@ def fit_wf(  # noqa: C901
     clip_mask_kwargs=None,
 ):
     stats_fn = partial(per_mol_stats, len(sampler))
+    device_count = jax.device_count()
 
     @partial(jax.custom_jvp, nondiff_argnums=(1, 2))
     def loss_fn(params, rng, batch):
@@ -134,8 +136,9 @@ def fit_wf(  # noqa: C901
 
     if opt is None:
 
+        @jax.pmap
         def _step(_rng_opt, params, _opt_state, batch):
-            loss, (E_loc, stats) = jax.pmap(loss_fn)(params, _rng_opt, batch)
+            loss, (E_loc, stats) = loss_fn(params, _rng_opt, batch)
 
             return params, None, E_loc, {'per_mol': stats}
 
@@ -219,26 +222,22 @@ def fit_wf(  # noqa: C901
         return sampler.update(state, partial(ansatz.apply, params))
 
     def train_step(rng, step, smpl_state, params, opt_state):
-        rng_sample, rng_kfac = jax.random.split(rng)
-        select_idxs = sampler.select_idxs(sample_size // jax.device_count(), step)
+        rng_sample, rng_kfac = split_on_devices(rng)
+        select_idxs = sampler.select_idxs(sample_size // device_count, step)
         select_idxs = replicate_on_devices(select_idxs)
-        rngs_sample = jax.random.split(rng_sample, jax.device_count())
         smpl_state, phys_conf, smpl_stats = sample_wf(
-            smpl_state, rngs_sample, params, select_idxs
+            smpl_state, rng_sample, params, select_idxs
         )
         weight = exp_normalize_mean(
             sampler.get_state(
                 'log_weight',
                 smpl_state,
                 select_idxs,
-                default=jnp.zeros(
-                    (jax.device_count(), sample_size // jax.device_count())
-                ),
+                default=jnp.zeros((device_count, sample_size // device_count)),
             )
         )
-        rngs_kfac = jax.random.split(rng_kfac, jax.device_count())
         params, opt_state, E_loc, stats = _step(
-            rngs_kfac,
+            rng_kfac,
             params,
             opt_state,
             (phys_conf, weight),
@@ -251,22 +250,21 @@ def fit_wf(  # noqa: C901
 
     smpl_state, params, opt_state = train_state
     if opt is not None and opt_state is None:
-        rng, rng_opt = jax.random.split(rng)
-        init_select_idxs = sampler.select_idxs(sample_size // jax.device_count(), 0)
+        rng, rng_opt = split_on_devices(rng)
+        init_select_idxs = sampler.select_idxs(sample_size // device_count, 0)
         init_select_idxs = replicate_on_devices(init_select_idxs)
         init_phys_conf = jax.pmap(sampler.phys_conf)(smpl_state, init_select_idxs)
-        rngs_opt = jax.random.split(rng_opt, jax.device_count())
         opt_state = init_opt(
-            rngs_opt,
+            rng_opt,
             params,
             (
                 init_phys_conf,
-                jnp.ones((jax.device_count(), sample_size // jax.device_count())),
+                jnp.ones((device_count, sample_size // device_count)),
             ),
         )
     train_state = smpl_state, params, opt_state
 
-    for step, rng in zip(steps, hk.PRNGSequence(rng)):
+    for step, rng in zip(steps, rng_iterator(rng)):
         *train_state, E_loc, stats = train_step(rng, step, *train_state)
         E_loc = gather_on_one_device(E_loc, flatten_device_axis=True)
         yield step, TrainState(*train_state), E_loc, stats

@@ -201,7 +201,11 @@ def split_rng_key_to_devices(rng):
     return broadcast_to_devices(rngs)
 
 
+def split_on_devices(rng, num=2):
+    return jax.pmap(lambda key: tuple(jax.random.split(key, num)))(rng)
+
+
 def rng_iterator(rng):
     while True:
-        rng_yield, rng = jax.pmap(lambda key: tuple(jax.random.split(key)))(rng)
+        rng_yield, rng = split_on_devices(rng)
         yield rng_yield

@@ -121,8 +121,9 @@ class TensorboardMetricLogger:
         """
         if step % self.period:
             return
-        stats = gather_stats_on_one_device(stats)
-        per_mol = stats.pop('per_mol')
+        if stats:
+            stats = gather_stats_on_one_device(stats)
+        per_mol = stats.pop('per_mol', {})
         if single_device_stats:
             single_device_per_mol = single_device_stats.pop('per_mol', {})
             stats.update(single_device_stats)
