@@ -56,9 +56,11 @@ class MolecularHamiltonian(Hamiltonian):
         """
 
         Rs = jnp.tile(Rs[None], (n, 1, 1)) if Rs.ndim == 2 else Rs
-        return vmap(self.init_single_sample)(random.split(rng, n), Rs)
+        return vmap(self.init_single_sample, (0, 0, None))(
+            random.split(rng, n), Rs, elec_std
+        )
 
-    def init_single_sample(self, rng, R):
+    def init_single_sample(self, rng, R, elec_std):
         rng_remainder, rng_normal, rng_spin = random.split(rng, 3)
         valence_electrons = self.mol.ns_valence - self.mol.charge / self.mol.n_nuc
         electrons_of_atom = jnp.floor(valence_electrons).astype(jnp.int32)
@@ -88,7 +90,8 @@ class MolecularHamiltonian(Hamiltonian):
         down = (jnp.cumsum(down)[:, None] <= jnp.arange(self.mol.n_down)).sum(axis=0)
         idxs = jnp.concatenate([up, down])
         centers = R[idxs]
-        r = centers + random.normal(rng_normal, centers.shape)
+        std = (elec_std or self.elec_std) * jnp.sqrt(self.mol.charges)[idxs][..., None]
+        r = centers + std * random.normal(rng_normal, centers.shape)
         return PhysicalConfiguration(R, r, jnp.array(0))
 
     def distribute_spins(self, rng, R, elec_of_atom):
