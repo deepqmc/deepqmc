@@ -105,20 +105,28 @@ class H5LogTable:
 class TensorboardMetricLogger:
     r"""An interface for writing metrics to Tensorboard."""
 
-    def __init__(self, workdir, n_mol):
+    def __init__(self, workdir, n_mol, *, period):
         self.global_writer = tensorboard.summary.Writer(workdir)
         self.per_mol_writers = [
             tensorboard.summary.Writer(f'{workdir}/{i}') for i in range(n_mol)
         ]
+        self.period = period
 
-    def update(self, step, stats, prefix=None):
+    def update(self, step, stats, single_device_stats=None, prefix=None):
         r"""Update tensorboard writer with a dictionary of scalar entries.
 
         Args:
             step (int): the step at which to add the new entries.
             stats (dict): a dictionary containing the scalar entries to add.
         """
+        if step % self.period:
+            return
+        stats = gather_stats_on_one_device(stats)
         per_mol = stats.pop('per_mol')
+        if single_device_stats:
+            single_device_per_mol = single_device_stats.pop('per_mol', {})
+            stats.update(single_device_stats)
+            per_mol.update(single_device_per_mol)
         for k, v in per_mol.items():
             for i, writer in enumerate(self.per_mol_writers):
                 if not (jnp.isnan(v[i]) or jnp.isinf(v[i])):

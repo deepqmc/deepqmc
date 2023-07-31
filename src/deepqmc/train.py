@@ -18,7 +18,7 @@ from .fit import fit_wf
 from .log import CheckpointStore, H5LogTable, TensorboardMetricLogger
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
-from .sampling import MultimoleculeSampler, chain, equilibrate, smpl_state_to_devices
+from .sampling import MultimoleculeSampler, chain, equilibrate
 from .utils import (
     ConstantSchedule,
     InverseSchedule,
@@ -26,6 +26,7 @@ from .utils import (
     replicate_on_devices,
     segment_nanmean,
     select_one_device,
+    split_rng_key_to_devices,
 )
 from .wf.base import init_wf_params
 
@@ -157,8 +158,12 @@ def train(  # noqa: C901
         os.makedirs(workdir, exist_ok=True)
         os.makedirs(chkptdir, exist_ok=True)
         chkpts = CheckpointStore(chkptdir, **(chkpts_kwargs or {}))
-        if metric_logger is None and workdir:
-            metric_logger = TensorboardMetricLogger(workdir, len(sampler))
+        if workdir:
+            metric_logger = (metric_logger or TensorboardMetricLogger)(
+                workdir, len(sampler)
+            )
+        else:
+            metric_logger = None
         log.debug('Setting up HDF5 file...')
         h5file = h5py.File(os.path.join(workdir, 'result.h5'), 'a', libver='v110')
         h5file.swmr_mode = True
@@ -239,14 +244,19 @@ def train(  # noqa: C901
                         }
                     }
                     if metric_logger:
-                        metric_logger.update(step, pretrain_stats, prefix='pretraining')
+                        metric_logger.update(
+                            step, {}, pretrain_stats, prefix='pretraining'
+                        )
                 log.info(f'Pretraining completed with MSE = {mse_rep}')
 
         if not train_state or train_state[0] is None:
             rng, rng_eq, rng_smpl_init = jax.random.split(rng, 3)
             wf = partial(ansatz.apply, select_one_device(params))
-            smpl_state = sampler.init(rng_smpl_init, wf, sample_size)
-            smpl_state = smpl_state_to_devices(smpl_state)
+            sample_initializer = partial(
+                sampler.init, wf=wf, n=sample_size // jax.device_count()
+            )
+            rng_smpl_init = split_rng_key_to_devices(rng_smpl_init)
+            smpl_state = jax.pmap(sample_initializer)(rng_smpl_init)
             log.info('Equilibrating sampler...')
             pbar = tqdm(
                 count() if max_eq_steps is None else range(max_eq_steps),
@@ -314,20 +324,11 @@ def train(  # noqa: C901
                         ewm_state if jnp.isnan(ene) else update_ewm(ene, ewm_state)
                         for ene, ewm_state in zip(per_mol_energy, ewm_states)
                     ]
-                    stats['per_mol'] = {
-                        'energy/ewm': jnp.array(
-                            [ewm_state.mean for ewm_state in ewm_states]
-                        ),
-                        'energy/ewm_error': jnp.sqrt(
-                            jnp.array([ewm_state.sqerr for ewm_state in ewm_states])
-                        ),
-                        **stats['per_mol'],
-                    }
                     ene = [
                         ufloat(e, s)
                         for e, s in zip(
-                            stats['per_mol']['energy/ewm'],
-                            stats['per_mol']['energy/ewm_error'],
+                            [ewm_state.mean for ewm_state in ewm_states],
+                            [jnp.sqrt(ewm_state.sqerr) for ewm_state in ewm_states],
                         )
                     ]
                     if all(e.s for e in ene):
@@ -361,7 +362,13 @@ def train(  # noqa: C901
                             table.row['log_psi'] = psi.log
                         h5file.flush()
                         if metric_logger:
-                            metric_logger.update(step, stats)
+                            single_device_stats = {
+                                'per_mol': {
+                                    'energy/ewm': jnp.array([e.n for e in ene]),
+                                    'energy/ewm_error': jnp.array([e.s for e in ene]),
+                                }
+                            }
+                            metric_logger.update(step, stats, single_device_stats)
                 log.info(f'The {mode} has been completed!')
                 return train_state
             except NanError:

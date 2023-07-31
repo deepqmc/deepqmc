@@ -8,7 +8,6 @@ import kfac_jax
 import optax
 
 from .kfacext import make_graph_patterns
-from .log import gather_stats_on_one_device
 from .utils import (
     exp_normalize_mean,
     gather_on_one_device,
@@ -270,5 +269,4 @@ def fit_wf(  # noqa: C901
     for step, rng in zip(steps, hk.PRNGSequence(rng)):
         *train_state, E_loc, stats = train_step(rng, step, *train_state)
         E_loc = gather_on_one_device(E_loc, flatten_device_axis=True)
-        stats = gather_stats_on_one_device(stats)
         yield step, TrainState(*train_state), E_loc, stats
