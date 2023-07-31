@@ -7,6 +7,15 @@ ansatz: ${ansatz}
 steps: 1000
 sample_size: 1000
 seed: 0
+pretrain_steps: 5000
+pretrain_kwargs:
+  opt: adam
+  opt_kwargs:
+    learning_rate: 3.e-4
+    b1: 0.9
+    b2: 0.999
+  baseline_kwargs:
+    basis: 6-311G
 metric_logger:
   _target_: deepqmc.log.TensorboardMetricLogger
   _partial_: true
