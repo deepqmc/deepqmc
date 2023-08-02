@@ -58,7 +58,13 @@ omni_factory:
     _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
     n_interactions: 3
-    positional_electron_embeddings: true
+    positional_electron_embeddings:
+      ne:
+        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+        edge_features:
+        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+          powers: [1]
+        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
     nuclei_embedding: null
     two_particle_stream_dim: 32
     self_interaction: false
@@ -73,12 +79,6 @@ omni_factory:
           powers: [1]
         - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
       anti:
-        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-        edge_features:
-        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
-          powers: [1]
-        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
-      ne:
         _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
         edge_features:
         - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
@@ -114,14 +114,37 @@ omni_factory:
       two_particle_residual:
         _target_: deepqmc.hkext.ResidualConnection
         normalize: true
-      convolution: true
       deep_features: shared
-      mean_aggregate_edges: true
       update_rule: concatenate
       update_features: 
-      - residual
-      - node_up
-      - node_down
-      - edge_same
-      - edge_anti
+      - _target_: deepqmc.gnn.update_features.ResidualUpdateFeature
+        _partial_: true
+      - _target_: deepqmc.gnn.update_features.NodeSumUpdateFeature
+        _partial_: true
+        node_types: [up, down]
+        normalize: true
+      - _target_: deepqmc.gnn.update_features.ConvolutionUpdateFeature
+        _partial_: true
+        edge_types: [same, anti]
+        normalize: false
+        w_factory:
+          _target_: deepqmc.hkext.MLP
+          _partial_: true
+          hidden_layers: ['log', 2]
+          bias: true
+          last_linear: false
+          activation:
+            _target_: jax.numpy.tanh
+            _partial_: true
+          init: default
+        h_factory:
+          _target_: deepqmc.hkext.MLP
+          _partial_: true
+          hidden_layers: ['log', 2]
+          bias: true
+          last_linear: false
+          activation:
+            _target_: jax.numpy.tanh
+            _partial_: true
+          init: default
   

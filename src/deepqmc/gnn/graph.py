@@ -158,7 +158,6 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interacti
         'ne': lambda pc: SimpleGraphEdges(builders['ne'](pc.R, pc.r)),
         'en': lambda pc: SimpleGraphEdges(builders['en'](pc.r, pc.R)),
         'same': lambda pc: SameGraphEdges(
-            self_interaction,
             builders['uu'](pc.r[:n_up], pc.r[:n_up]),
             builders['dd'](pc.r[n_up:], pc.r[n_up:]),
         ),
@@ -272,7 +271,6 @@ class DownGraphEdges(SimpleGraphEdges):
 
 @jdc.pytree_dataclass
 class SameGraphEdges(GraphEdges):
-    self_interaction: bool
     uu: jnp.ndarray
     dd: jnp.ndarray
 
@@ -290,11 +288,12 @@ class SameGraphEdges(GraphEdges):
     def update_from_single_array(self, array):
         n_up = self.uu.shape[-2]
         n_down = self.dd.shape[-2]
-        self_inc = 0 if self.self_interaction else -1
-        uu, dd = jnp.split(array, (n_up * (n_up + self_inc),), axis=-2)
-        uu = uu.reshape(*uu.shape[:-2], n_up + self_inc, n_up, uu.shape[-1])
-        dd = dd.reshape(*dd.shape[:-2], n_down + self_inc, n_down, uu.shape[-1])
-        return self.__class__(self.self_interaction, uu, dd)
+        n_sender_up = self.uu.shape[-3]
+        n_sender_down = self.uu.shape[-3]
+        uu, dd = jnp.split(array, (n_up * n_sender_up,), axis=-2)
+        uu = uu.reshape(*uu.shape[:-2], n_sender_up, n_up, uu.shape[-1])
+        dd = dd.reshape(*dd.shape[:-2], n_sender_down, n_down, uu.shape[-1])
+        return self.__class__(uu, dd)
 
     def sum_senders(self, normalize=False):
         reduce_fn = jnp.mean if normalize else jnp.sum
@@ -302,19 +301,20 @@ class SameGraphEdges(GraphEdges):
         return jnp.concatenate([up, down], axis=-2)
 
     def convolve(self, nodes, normalize=False):
+        self_interaction = self.uu.shape[-3] == self.uu.shape[-2]
         up_node_idx = (
             (slice(None, self.uu.shape[-2]), None)
-            if self.self_interaction
+            if self_interaction
             else offdiagonal_sender_idx(self.uu.shape[-2])
         )
         down_node_idx = (
             (slice(self.uu.shape[-2], None), None)
-            if self.self_interaction
+            if self_interaction
             else self.uu.shape[-2] + offdiagonal_sender_idx(self.dd.shape[-2])
         )
         uu = self.uu * nodes[up_node_idx]
         dd = self.dd * nodes[down_node_idx]
-        return self.__class__(self.self_interaction, uu, dd).sum_senders(normalize)
+        return self.__class__(uu, dd).sum_senders(normalize)
 
 
 @jdc.pytree_dataclass
