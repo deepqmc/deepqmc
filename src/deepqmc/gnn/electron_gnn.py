@@ -6,14 +6,7 @@ import jax.numpy as jnp
 from jax import tree_util
 
 from ..hkext import MLP, Identity
-from ..utils import flatten
-from .graph import (
-    Graph,
-    GraphNodes,
-    GraphUpdate,
-    MolecularGraphEdgeBuilder,
-    offdiagonal_sender_idx,
-)
+from .graph import Graph, GraphNodes, GraphUpdate, MolecularGraphEdgeBuilder
 from .utils import NodeEdgeMapping
 
 
@@ -117,6 +110,8 @@ class ElectronGNNLayer(hk.Module):
                 'node_down',
                 'convolution_same',
                 'convolution_anti',
+                'convolution_up',
+                'convolution_down',
                 'convolution_ne',
             ]
             for uf in update_features
@@ -193,13 +188,21 @@ class ElectronGNNLayer(hk.Module):
                 if self.deep_features == 'shared':
                     # combine features along leading dim, apply MLP and split
                     # into channels again to please kfac
-                    keys, feats = zip(*edges.items())
+                    keys, edge_objects = zip(*edges.items())
+                    feats = [e.single_array for e in edge_objects]
                     split_idxs = list(accumulate(len(f) for f in feats))
                     feats = jnp.split(self.u(jnp.concatenate(feats)), split_idxs)
-                    updated_edges = dict(zip(keys, feats))
+                    edge_objects = [
+                        e.update_from_single_array(f)
+                        for e, f in zip(edge_objects, feats)
+                    ]
+                    updated_edges = dict(zip(keys, edge_objects))
                 elif self.deep_features == 'separate':
                     updated_edges = {
-                        typ: self.u[typ](edge) for typ, edge in edges.items()
+                        typ: edge.update_from_single_array(
+                            self.u[typ](edge.single_array)
+                        )
+                        for typ, edge in edges.items()
                     }
 
                 if self.two_particle_residual:
@@ -214,60 +217,13 @@ class ElectronGNNLayer(hk.Module):
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes(nodes, edges):
-            reduce_fn = jnp.mean if self.mean_aggregate_edges else jnp.sum
             def edge_update_feature(edge_type):
-                return edges[edge_type].mean(axis=0)
-
-            def convolve_ne(w, h):
-                return reduce_fn(w * h[:, None], axis=0)
-
-            def convolve_same(w, h):
-                #  w_uu, w_dd = jnp.split(w, (self.n_up**2,))
-                w_uu, w_dd = jnp.split(w, (self.n_up * (self.n_up - 1),))
-                wh = jnp.concatenate(
-                    [
-                        reduce_fn(
-                            w_uu.reshape(self.n_up - 1, self.n_up, w_uu.shape[-1])
-                            #  * h[: self.n_up, None]
-                            * h[offdiagonal_sender_idx(self.n_up)],
-                            axis=0
-                        ),
-                        reduce_fn(
-                            w_dd.reshape(self.n_down - 1, self.n_down, w_dd.shape[-1])
-                            #  * h[self.n_up :, None]
-                            * h[self.n_up + offdiagonal_sender_idx(self.n_down)],
-                            axis=0
-                        )
-                    ]
-                )
-                return wh
-
-            def convolve_anti(w, h):
-                w_ud, w_du = jnp.split(w, 2)
-                wh = jnp.concatenate(
-                    [
-                        reduce_fn(
-                            w_du.reshape(self.n_down, self.n_up, -1)
-                            * h[self.n_up :, None],
-                            axis=0
-                        ),
-                       reduce_fn(
-                            w_ud.reshape(self.n_up, self.n_down, -1)
-                            * h[: self.n_up, None],
-                            axis=0
-                        )
-                    ]
-                )
-                return wh
+                return edges[edge_type].sum_senders(normalize=True)
 
             def convolution(edge_type):
-                we = self.w[edge_type](edges[edge_type])
+                we = self.w[edge_type](edges[edge_type].single_array)
                 hx = self.h[edge_type](self.mapping.sender_data_of(edge_type, nodes))
-                return {
-                    'same': convolve_same,
-                    'anti': convolve_anti,
-                    'ne': convolve_ne,
-                }[edge_type](we, hx)
+                return edges[edge_type].update_from_single_array(we).convolve(hx)
 
             UPDATE_FEATURES = {
                 'residual': lambda: nodes.electrons,
@@ -291,6 +247,8 @@ class ElectronGNNLayer(hk.Module):
                 ),
                 'convolution_same': partial(convolution, 'same'),
                 'convolution_anti': partial(convolution, 'anti'),
+                'convolution_up': partial(convolution, 'up'),
+                'convolution_down': partial(convolution, 'down'),
                 'convolution_ne': partial(convolution, 'ne'),
                 'convolution_ee': lambda: 0.5 * (
                     convolution('same') + convolution('anti')
@@ -437,7 +395,9 @@ class ElectronGNN(hk.Module):
                 self_interaction=self.self_interaction,
             )
             feats = tree_util.tree_map(
-                lambda f, e: f(e).swapaxes(0, 1).reshape(self.n_up + self.n_down, -1),
+                lambda f, e: f(e.single_array)
+                .swapaxes(0, 1)
+                .reshape(self.n_up + self.n_down, -1),
                 self.positional_electron_embeddings,
                 edge_factory(phys_conf),
             )
@@ -462,7 +422,12 @@ class ElectronGNN(hk.Module):
             self_interaction=self.self_interaction,
         )
         edges = edge_factory(phys_conf)
-        return {typ: self.edge_features[typ](edges[typ]) for typ in self.edge_types}
+        return {
+            typ: edges[typ].update_from_single_array(
+                self.edge_features[typ](edges[typ].single_array)
+            )
+            for typ in self.edge_types
+        }
 
     def __call__(self, phys_conf):
         r"""
