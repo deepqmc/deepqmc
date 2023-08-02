@@ -113,7 +113,9 @@ def get_quadrature_points(rng, nucleus_position, phys_conf):
 
     N = len(phys_conf)
     norm = jnp.linalg.norm(phys_conf.r - nucleus_position, axis=-1)
-    theta = jnp.arccos((phys_conf.r - nucleus_position)[..., 2] / norm)
+    theta = jnp.arccos(
+        jnp.clip((phys_conf.r - nucleus_position)[..., 2] / norm, a_min=-1.0, a_max=1.0)
+    )
     phi = jnp.arctan2(
         (phys_conf.r - nucleus_position)[..., 1],
         (phys_conf.r - nucleus_position)[..., 0],
