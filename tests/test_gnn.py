@@ -38,6 +38,7 @@ class TestGraph:
         graph_edges = MolecularGraphEdgeBuilder(
             *mol.n_particles,
             edge_types,
+            False,
         )(phys_conf)
         graph_edges = {k: edge.single_array for k, edge in graph_edges.items()}
         ndarrays_regression.check(graph_edges)

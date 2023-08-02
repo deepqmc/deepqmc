@@ -392,7 +392,7 @@ class ElectronGNN(hk.Module):
                 self.n_up,
                 self.n_down,
                 self.positional_electron_embeddings.keys(),
-                self_interaction=self.self_interaction,
+                self_interaction=False,
             )
             feats = tree_util.tree_map(
                 lambda f, e: f(e.single_array)
