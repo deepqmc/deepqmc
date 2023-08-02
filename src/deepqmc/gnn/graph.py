@@ -2,7 +2,6 @@ from collections import namedtuple
 
 import jax.numpy as jnp
 import jax_dataclasses as jdc
-from jax.tree_util import tree_map, tree_structure, tree_transpose
 
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
@@ -74,23 +73,6 @@ def GraphEdgeBuilder(
     return build
 
 
-def concatenate_edges(edges):
-    r"""
-    Concatenate two edge lists.
-
-    Utility function used only internally, e.g. to concatenate ``uu`` and ``dd``
-    edges to get all ``same`` edges.
-    """
-    edge_of_lists = tree_transpose(
-        tree_structure([0] * len(edges)), tree_structure(edges[0]), edges
-    )
-    return tree_map(
-        lambda xs: jnp.concatenate([x.reshape(-1, x.shape[-1]) for x in xs]),
-        edge_of_lists,
-        is_leaf=lambda x: isinstance(x, list),
-    )
-
-
 def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interaction):
     r"""
     Create a function that builds many types of molecular edges.
@@ -106,6 +88,8 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interacti
                 - ``'en'``: electrons->nuclei edges
                 - ``'same'``: edges betwen same-spin electrons
                 - ``'anti'``: edges betwen opposite-spin electrons
+        self_interaction (bool): whether edges between a particle and itself are
+            considered
     """
     n_elec = n_up + n_down
     builder_mapping = {
@@ -119,7 +103,7 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interacti
     }
     fix_kwargs_of_builder_type = {
         'nn': {
-            'mask_self': True,
+            'mask_self': not self_interaction,
             'offsets': (0, 0),
             'mask_vals': (n_nuc, n_nuc),
         },
@@ -303,9 +287,11 @@ class SameGraphEdges(GraphEdges):
     def update_from_single_array(self, array):
         n_up = self.uu.shape[-2]
         n_down = self.dd.shape[-2]
-        uu, dd = jnp.split(array, (n_up * (n_up - 1),), axis=-2)
-        uu = uu.reshape(*uu.shape[:-2], n_up - 1, n_up, uu.shape[-1])
-        dd = dd.reshape(*dd.shape[:-2], n_down - 1, n_down, uu.shape[-1])
+        n_sender_up = self.uu.shape[-3]
+        n_sender_down = self.dd.shape[-3]
+        uu, dd = jnp.split(array, (n_up * n_sender_up,), axis=-2)
+        uu = uu.reshape(*uu.shape[:-2], n_sender_up, n_up, uu.shape[-1])
+        dd = dd.reshape(*dd.shape[:-2], n_sender_down, n_down, dd.shape[-1])
         return self.__class__(uu, dd)
 
     def sum_senders(self, normalize=False):
@@ -319,11 +305,19 @@ class SameGraphEdges(GraphEdges):
         return jnp.concatenate([up, down], axis=-2)
 
     def convolve(self, nodes, normalize=False):
-        uu = self.uu * nodes[offdiagonal_sender_idx(self.uu.shape[-2])]
-        dd = (
-            self.dd
-            * nodes[self.uu.shape[-2] + offdiagonal_sender_idx(self.dd.shape[-2])]
+        self_interaction = self.uu.shape[-3] == self.uu.shape[-2]
+        up_node_idx = (
+            (slice(None, self.uu.shape[-2]), None)
+            if self_interaction
+            else offdiagonal_sender_idx(self.uu.shape[-2])
         )
+        down_node_idx = (
+            (slice(self.uu.shape[-2], None), None)
+            if self_interaction
+            else self.uu.shape[-2] + offdiagonal_sender_idx(self.dd.shape[-2])
+        )
+        uu = self.uu * nodes[up_node_idx]
+        dd = self.dd * nodes[down_node_idx]
         return self.__class__(uu, dd).sum_senders(normalize)
 
 
