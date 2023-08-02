@@ -1,6 +1,7 @@
 from collections import namedtuple
 
 import jax.numpy as jnp
+import jax_dataclasses as jdc
 from jax.tree_util import tree_map, tree_structure, tree_transpose
 
 GraphEdges = namedtuple('GraphEdges', 'senders receivers features')
@@ -168,32 +169,20 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interacti
         for builder_type in builder_mapping[edge_type]
     }
 
-    def build_same(phys_conf):
-        r = phys_conf.r
-        return concatenate_edges(
-            [
-                builders['uu'](r[:n_up], r[:n_up]),
-                builders['dd'](r[n_up:], r[n_up:]),
-            ]
-        )
-
-    def build_anti(phys_conf):
-        r = phys_conf.r
-        return concatenate_edges(
-            [
-                builders['ud'](r[:n_up], r[n_up:]),
-                builders['du'](r[n_up:], r[:n_up]),
-            ]
-        )
-
     build_rules = {
-        'nn': lambda pc: builders['nn'](pc.R, pc.R),
-        'ne': lambda pc: builders['ne'](pc.R, pc.r),
-        'en': lambda pc: builders['en'](pc.r, pc.R),
-        'same': build_same,
-        'anti': build_anti,
-        'up': lambda pc: builders['up'](pc.r[:n_up], pc.r),
-        'down': lambda pc: builders['down'](pc.r[n_up:], pc.r),
+        'nn': lambda pc: SimpleGraphEdges(builders['nn'](pc.R, pc.R)),
+        'ne': lambda pc: SimpleGraphEdges(builders['ne'](pc.R, pc.r)),
+        'en': lambda pc: SimpleGraphEdges(builders['en'](pc.r, pc.R)),
+        'same': lambda pc: SameGraphEdges(
+            builders['uu'](pc.r[:n_up], pc.r[:n_up]),
+            builders['dd'](pc.r[n_up:], pc.r[n_up:]),
+        ),
+        'anti': lambda pc: AntiGraphEdges(
+            builders['du'](pc.r[n_up:], pc.r[:n_up]),
+            builders['ud'](pc.r[:n_up], pc.r[n_up:]),
+        ),
+        'up': lambda pc: UpGraphEdges(builders['up'](pc.r[:n_up], pc.r)),
+        'down': lambda pc: DownGraphEdges(builders['down'](pc.r[n_up:], pc.r)),
     }
 
     def build(phys_conf):
@@ -246,3 +235,134 @@ def GraphUpdate(
         return Graph(nodes, edges)
 
     return update_graph
+
+
+class GraphEdges:
+    @property
+    def single_array(self):
+        raise NotImplementedError
+
+    def update_from_single_array(self, array):
+        raise NotImplementedError
+
+    def sum_senders(self, normalize=False):
+        raise NotImplementedError
+
+    def convolve(self, nodes, normalize=False):
+        raise NotImplementedError
+
+
+@jdc.pytree_dataclass
+class SimpleGraphEdges(GraphEdges):
+    edges: jnp.ndarray
+
+    @property
+    def single_array(self):
+        return self.edges
+
+    def update_from_single_array(self, array):
+        return self.__class__(array)
+
+    def sum_senders(self, normalize=False):
+        return (jnp.mean if normalize else jnp.sum)(self.edges, axis=-3)
+
+    def convolve(self, nodes, normalize=False):
+        edge_node_product = self.edges * nodes[:, None]
+        return self.__class__(edge_node_product).sum_senders(normalize)
+
+
+@jdc.pytree_dataclass
+class UpGraphEdges(SimpleGraphEdges):
+    def convolve(self, nodes, normalize=False):
+        up = self.edges * nodes[: self.edges.shape[-3], None]
+        return self.__class__(up).sum_senders(normalize)
+
+
+@jdc.pytree_dataclass
+class DownGraphEdges(SimpleGraphEdges):
+    def convolve(self, nodes, normalize=False):
+        down = self.edges * nodes[-self.edges.shape[-3] :, None]
+        return self.__class__(down).sum_senders(normalize)
+
+
+@jdc.pytree_dataclass
+class SameGraphEdges(GraphEdges):
+    uu: jnp.ndarray
+    dd: jnp.ndarray
+
+    @property
+    def single_array(self):
+        batch_dims = self.uu.shape[:-3]
+        return jnp.concatenate(
+            [
+                self.uu.reshape(*batch_dims, -1, self.uu.shape[-1]),
+                self.dd.reshape(*batch_dims, -1, self.dd.shape[-1]),
+            ],
+            axis=-2,
+        )
+
+    def update_from_single_array(self, array):
+        n_up = self.uu.shape[-2]
+        n_down = self.dd.shape[-2]
+        uu, dd = jnp.split(array, (n_up * (n_up - 1),), axis=-2)
+        uu = uu.reshape(*uu.shape[:-2], n_up - 1, n_up, uu.shape[-1])
+        dd = dd.reshape(*dd.shape[:-2], n_down - 1, n_down, uu.shape[-1])
+        return self.__class__(uu, dd)
+
+    def sum_senders(self, normalize=False):
+        norm_uu, norm_dd = (
+            max(x.shape[-3], 1) if normalize else 1 for x in (self.uu, self.dd)
+        )
+        up, down = (
+            jnp.sum(self.uu, axis=-3) / norm_uu,
+            jnp.sum(self.dd, axis=-3) / norm_dd,
+        )
+        return jnp.concatenate([up, down], axis=-2)
+
+    def convolve(self, nodes, normalize=False):
+        uu = self.uu * nodes[offdiagonal_sender_idx(self.uu.shape[-2])]
+        dd = (
+            self.dd
+            * nodes[self.uu.shape[-2] + offdiagonal_sender_idx(self.dd.shape[-2])]
+        )
+        return self.__class__(uu, dd).sum_senders(normalize)
+
+
+@jdc.pytree_dataclass
+class AntiGraphEdges(GraphEdges):
+    du: jnp.ndarray
+    ud: jnp.ndarray
+
+    @property
+    def single_array(self):
+        batch_dims = self.du.shape[:-3]
+        return jnp.concatenate(
+            [
+                self.du.reshape(*batch_dims, -1, self.du.shape[-1]),
+                self.ud.reshape(*batch_dims, -1, self.ud.shape[-1]),
+            ],
+            axis=-2,
+        )
+
+    def update_from_single_array(self, array):
+        n_up = self.du.shape[-2]
+        n_down = self.ud.shape[-2]
+        du, ud = jnp.split(array, (n_up * n_down,))
+        du = du.reshape(*du.shape[:-2], n_down, n_up, du.shape[-1])
+        ud = ud.reshape(*ud.shape[:-2], n_up, n_down, ud.shape[-1])
+        return self.__class__(du, ud)
+
+    def sum_senders(self, normalize=False):
+        norm_du, norm_ud = (
+            max(x.shape[-3], 1) if normalize else 1 for x in (self.du, self.ud)
+        )
+        up, down = (
+            jnp.sum(self.du, axis=-3) / norm_du,
+            jnp.sum(self.ud, axis=-3) / norm_ud,
+        )
+        return jnp.concatenate([up, down], axis=-2)
+
+    def convolve(self, nodes, normalize=False):
+        du = self.du * nodes[self.du.shape[-2] :, None]
+        ud = self.ud * nodes[: self.du.shape[-2], None]
+        return self.__class__(du, ud).sum_senders(normalize)
