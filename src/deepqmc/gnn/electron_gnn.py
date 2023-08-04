@@ -247,6 +247,7 @@ class ElectronGNN(hk.Module):
         *,
         n_interactions,
         positional_electron_embeddings,
+        spin_electron_embeddings,
         edge_features,
         edge_types,
         self_interaction,
@@ -294,6 +295,7 @@ class ElectronGNN(hk.Module):
         self.edge_features = edge_features
         self.edge_types = edge_types
         self.positional_electron_embeddings = positional_electron_embeddings
+        self.spin_electron_embeddings = spin_electron_embeddings
         self.nuclei_embedding = (
             nuclei_embedding(charges, n_atom_types) if nuclei_embedding else None
         )
@@ -317,6 +319,9 @@ class ElectronGNN(hk.Module):
                 edge_factory(phys_conf),
             )
             x = tree_util.tree_reduce(partial(jnp.concatenate, axis=1), feats)
+            if self.spin_electron_embeddings:
+                spins = jnp.concatenate([jnp.ones(self.n_up), -jnp.ones(self.n_down)])[:, None]
+                x = jnp.concatenate([x, spins], axis=1)
         else:
             X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
             x = X(self.node_data['node_types']['electrons'])

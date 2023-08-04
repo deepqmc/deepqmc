@@ -164,3 +164,10 @@ class ConvolutionUpdateFeature(UpdateFeature):
     @property
     def names(self):
         return [f'conv_{edge_type}' for edge_type in self.edge_types]
+
+
+class NodeAttentionUpdateFeature(UpdateFeature):
+    def __call__(self, nodes, edges):
+        h = nodes.electrons
+        attented = hk.MultiHeadAttention(4, 64, w_init=hk.initializers.VarianceScaling(1), with_bias=False)(h, h, h)
+        return [attented]
