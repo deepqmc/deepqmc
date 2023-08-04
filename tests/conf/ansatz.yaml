@@ -68,6 +68,7 @@ omni_factory:
     _partial_: true
     n_interactions: 1
     positional_electron_embeddings: false
+    spin_electron_embeddings: false
     nuclei_embedding:
       _target_: deepqmc.gnn.electron_gnn.NucleiEmbedding
       _partial_: true

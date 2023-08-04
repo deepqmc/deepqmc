@@ -13,8 +13,13 @@ class EdgeFeature:
 
 class DifferenceEdgeFeature(EdgeFeature):
     """Return the difference vector as the edge features."""
+    def __init__(self, *, log_rescale=False):
+        self.log_rescale = log_rescale
 
     def __call__(self, d):
+        if self.log_rescale:
+            r = norm(d, safe=True)
+            d *= (jnp.log1p(r) / r)[..., None]
         return d
 
     def __len__(self):
@@ -24,11 +29,12 @@ class DifferenceEdgeFeature(EdgeFeature):
 class DistancePowerEdgeFeature(EdgeFeature):
     """Return powers of the distance as edge features."""
 
-    def __init__(self, *, powers, eps=None):
+    def __init__(self, *, powers, eps=None, log_rescale=False):
         if any(p < 0 for p in powers):
             assert eps is not None
         self.powers = jnp.asarray(powers)
         self.eps = eps or 0.0
+        self.log_rescale = log_rescale
 
     def __call__(self, d):
         r = norm(d, safe=True)
@@ -37,6 +43,8 @@ class DistancePowerEdgeFeature(EdgeFeature):
             r[..., None] ** self.powers,
             1 / (r[..., None] ** (-self.powers) + self.eps),
         )
+        if self.log_rescale:
+            powers *= (jnp.log1p(r) / r)[..., None]
         return powers
 
     def __len__(self):
