@@ -1,15 +1,18 @@
 _target_: deepqmc.gnn.electron_gnn.ElectronGNN
 _partial_: true
 n_interactions: 4
-positional_electron_embeddings: false
-spin_electron_embeddings: false
-project_initial_electron_embedding: false
 nuclei_embedding:
   _target_: deepqmc.gnn.electron_gnn.NucleiEmbedding
   _partial_: true
   embedding_dim: 8
   atom_type_embedding: false
   subnet_type: embed
+electron_embedding:
+  _target_: deepqmc.gnn.electron_gnn.ElectronEmbedding
+  _partial_: true
+  positional_embeddings: false
+  use_spin: false
+  project_to_embedding_dim: false
 two_particle_stream_dim: 8
 self_interaction: false
 edge_types:
