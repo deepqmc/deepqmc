@@ -3,6 +3,7 @@ _partial_: true
 n_interactions: 4
 positional_electron_embeddings: false
 spin_electron_embeddings: false
+project_initial_electron_embedding: false
 nuclei_embedding:
   _target_: deepqmc.gnn.electron_gnn.NucleiEmbedding
   _partial_: true

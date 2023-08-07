@@ -164,7 +164,28 @@ class ConvolutionUpdateFeature(UpdateFeature):
 
 
 class NodeAttentionUpdateFeature(UpdateFeature):
+    def __init__(self, *args, num_heads, mlp_factory, attention_residual, mlp_residual):
+        super().__init__(*args)
+        self.num_heads = num_heads
+        self.attention_residual = attention_residual
+        self.mlp_residual = mlp_residual
+        self.mlp_factory = mlp_factory
+
     def __call__(self, nodes, edges):
         h = nodes.electrons
-        attented = hk.MultiHeadAttention(4, 64, w_init=hk.initializers.VarianceScaling(1), with_bias=False)(h, h, h)
-        return [attented]
+        heads_dim = h.shape[-1] // self.num_heads
+        assert heads_dim * self.num_heads == h.shape[-1]
+        attention_layer = hk.MultiHeadAttention(
+            self.num_heads,
+            heads_dim,
+            w_init=hk.initializers.VarianceScaling(1, 'fan_in', 'normal'),
+            with_bias=False,
+        )
+        mlp = self.mlp_factory(h.shape[-1], name='mlp')
+        attented = attention_layer(h, h, h)
+        if self.attention_residual:
+            attented = self.attention_residual(h, attented)
+        mlp_out = mlp(attented)
+        if self.mlp_residual:
+            mlp_out = self.mlp_residual(attented, mlp_out)
+        return [mlp_out]
