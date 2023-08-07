@@ -12,7 +12,7 @@ envelope:
 backflow_op:
   _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
   _partial_: true
-  # mult_act: '${eval:"lambda x: x"}'
+  mult_act: '${eval:"lambda x: x"}'
 n_determinants: 16
 full_determinant: true
 cusp_electrons: true
@@ -42,7 +42,7 @@ omni_factory:
   gnn_factory:
     _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
-    n_interactions: 4
+    n_interactions: 2
     spin_electron_embeddings: true
     positional_electron_embeddings:
       ne:
@@ -54,6 +54,7 @@ omni_factory:
         - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
           log_rescale: true
     nuclei_embedding: null
+    project_initial_electron_embedding: true
     two_particle_stream_dim: 32
     self_interaction: true
     edge_types: []
@@ -64,13 +65,39 @@ omni_factory:
       subnet_factory:
         _target_: deepqmc.hkext.Identity
         _partial_: true
-      one_particle_residual:
-        _target_: deepqmc.hkext.ResidualConnection
-        normalize: false
+        # _target_: deepqmc.hkext.MLP
+        # _partial_: true
+        # hidden_layers: ['log', 2]
+        # bias: true
+        # last_linear: false
+        # activation:
+        #   _target_: jax.numpy.tanh
+        #   _partial_: true
+        # init: ferminet
+      one_particle_residual: false
+        # _target_: deepqmc.hkext.ResidualConnection
+        # normalize: false
       two_particle_residual: false
       deep_features: false
       update_rule: concatenate
       update_features: 
       - _target_: deepqmc.gnn.update_features.NodeAttentionUpdateFeature
         _partial_: true
+        num_heads: 4
+        mlp_factory:
+          _target_: deepqmc.hkext.MLP
+          _partial_: true
+          hidden_layers: ['log', 2]
+          bias: true
+          last_linear: false
+          activation:
+            _target_: jax.numpy.tanh
+            _partial_: true
+          init: ferminet
+        attention_residual:
+          _target_: deepqmc.hkext.ResidualConnection
+          normalize: false
+        mlp_residual:
+          _target_: deepqmc.hkext.ResidualConnection
+          normalize: false
   
