@@ -253,6 +253,7 @@ class ElectronGNN(hk.Module):
         self_interaction,
         two_particle_stream_dim,
         nuclei_embedding,
+        project_initial_electron_embedding,
         layer_factory,
         ghost_coords=None,
     ):
@@ -300,6 +301,7 @@ class ElectronGNN(hk.Module):
             nuclei_embedding(charges, n_atom_types) if nuclei_embedding else None
         )
         self.self_interaction = self_interaction
+        self.project_initial_electron_embedding = project_initial_electron_embedding
 
     def node_factory(self, phys_conf):
         n_elec_types = self.node_data['n_node_types']['electrons']
@@ -311,6 +313,7 @@ class ElectronGNN(hk.Module):
                 self.positional_electron_embeddings.keys(),
                 self_interaction=False,
             )
+            edges = edge_factory(phys_conf)
             feats = tree_util.tree_map(
                 lambda f, e: f(e.single_array)
                 .swapaxes(0, 1)
@@ -322,6 +325,8 @@ class ElectronGNN(hk.Module):
             if self.spin_electron_embeddings:
                 spins = jnp.concatenate([jnp.ones(self.n_up), -jnp.ones(self.n_down)])[:, None]
                 x = jnp.concatenate([x, spins], axis=1)
+            if self.project_initial_electron_embedding:
+                x = hk.Linear(self.embedding_dim, with_bias=False)(x)
         else:
             X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
             x = X(self.node_data['node_types']['electrons'])
