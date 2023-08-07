@@ -246,14 +246,12 @@ class ElectronGNN(hk.Module):
         embedding_dim,
         *,
         n_interactions,
-        positional_electron_embeddings,
-        spin_electron_embeddings,
         edge_features,
         edge_types,
         self_interaction,
         two_particle_stream_dim,
         nuclei_embedding,
-        project_initial_electron_embedding,
+        electron_embedding,
         layer_factory,
         ghost_coords=None,
     ):
@@ -295,46 +293,23 @@ class ElectronGNN(hk.Module):
         ]
         self.edge_features = edge_features
         self.edge_types = edge_types
-        self.positional_electron_embeddings = positional_electron_embeddings
-        self.spin_electron_embeddings = spin_electron_embeddings
         self.nuclei_embedding = (
             nuclei_embedding(charges, n_atom_types) if nuclei_embedding else None
         )
+        self.electron_embedding = electron_embedding(
+            n_nuc,
+            n_up,
+            n_down,
+            embedding_dim,
+            self.node_data['n_node_types']['electrons'],
+            self.node_data['node_types']['electrons'],
+        )
         self.self_interaction = self_interaction
-        self.project_initial_electron_embedding = project_initial_electron_embedding
 
     def node_factory(self, phys_conf):
-        n_elec_types = self.node_data['n_node_types']['electrons']
-        if self.positional_electron_embeddings:
-            edge_factory = MolecularGraphEdgeBuilder(
-                self.n_nuc,
-                self.n_up,
-                self.n_down,
-                self.positional_electron_embeddings.keys(),
-                self_interaction=False,
-            )
-            edges = edge_factory(phys_conf)
-            feats = tree_util.tree_map(
-                lambda f, e: f(e.single_array)
-                .swapaxes(0, 1)
-                .reshape(self.n_up + self.n_down, -1),
-                self.positional_electron_embeddings,
-                edge_factory(phys_conf),
-            )
-            x = tree_util.tree_reduce(partial(jnp.concatenate, axis=1), feats)
-            if self.spin_electron_embeddings:
-                spins = jnp.concatenate([jnp.ones(self.n_up), -jnp.ones(self.n_down)])[:, None]
-                x = jnp.concatenate([x, spins], axis=1)
-            if self.project_initial_electron_embedding:
-                x = hk.Linear(self.embedding_dim, with_bias=False)(x)
-        else:
-            X = hk.Embed(n_elec_types, self.embedding_dim, name='ElectronicEmbedding')
-            x = X(self.node_data['node_types']['electrons'])
-        return (
-            GraphNodes(self.nuclei_embedding(), x)
-            if self.nuclei_embedding
-            else GraphNodes(None, x)
-        )
+        electron_embedding = self.electron_embedding(phys_conf)
+        nucleus_embedding = self.nuclei_embedding() if self.nuclei_embedding else None
+        return GraphNodes(nucleus_embedding, electron_embedding)
 
     def edge_factory(self, phys_conf):
         r"""Compute all the graph edges used in the GNN."""
@@ -433,3 +408,60 @@ class NucleiEmbedding(hk.Module):
 
     def __call__(self):
         return self.subnet(self.input)
+
+
+class ElectronEmbedding(hk.Module):
+    def __init__(
+        self,
+        n_nuc,
+        n_up,
+        n_down,
+        embedding_dim,
+        n_elec_types,
+        elec_types,
+        *,
+        positional_embeddings,
+        use_spin,
+        project_to_embedding_dim,
+    ):
+        super().__init__()
+        self.n_nuc = n_nuc
+        self.n_up = n_up
+        self.n_down = n_down
+        self.embedding_dim = embedding_dim
+        self.n_elec_types = n_elec_types
+        self.elec_types = elec_types
+        self.positional_embeddings = positional_embeddings
+        self.use_spin = use_spin
+        self.project_to_embedding_dim = project_to_embedding_dim
+
+    def __call__(self, phys_conf):
+        if self.positional_embeddings:
+            edge_factory = MolecularGraphEdgeBuilder(
+                self.n_nuc,
+                self.n_up,
+                self.n_down,
+                self.positional_embeddings.keys(),
+                self_interaction=False,
+            )
+            feats = tree_util.tree_map(
+                lambda f, e: f(e.single_array)
+                .swapaxes(0, 1)
+                .reshape(self.n_up + self.n_down, -1),
+                self.positional_embeddings,
+                edge_factory(phys_conf),
+            )
+            x = tree_util.tree_reduce(partial(jnp.concatenate, axis=1), feats)
+            if self.use_spin:
+                spins = jnp.concatenate([jnp.ones(self.n_up), -jnp.ones(self.n_down)])[
+                    :, None
+                ]
+                x = jnp.concatenate([x, spins], axis=1)
+            if self.project_to_embedding_dim:
+                x = hk.Linear(self.embedding_dim, with_bias=False)(x)
+        else:
+            X = hk.Embed(
+                self.n_elec_types, self.embedding_dim, name='ElectronicEmbedding'
+            )
+            x = X(self.elec_types)
+        return x
