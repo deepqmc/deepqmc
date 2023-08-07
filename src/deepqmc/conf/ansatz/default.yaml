@@ -58,14 +58,19 @@ omni_factory:
     _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
     n_interactions: 3
-    positional_electron_embeddings:
-      ne:
-        _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-        edge_features:
-        - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
-          powers: [1]
-        - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
     nuclei_embedding: null
+    electron_embedding:
+      _target_: deepqmc.gnn.electron_gnn.ElectronEmbedding
+      _partial_: true
+      positional_embeddings:
+        ne:
+          _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+          edge_features:
+          - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+            powers: [1]
+          - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+      use_spin: false
+      project_to_embedding_dim: false
     two_particle_stream_dim: 32
     self_interaction: false
     edge_types:
