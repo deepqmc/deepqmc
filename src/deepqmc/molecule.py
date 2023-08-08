@@ -178,7 +178,7 @@ class Molecule:
         return self.n_nuc, self.n_up, self.n_down
 
     @classmethod
-    def from_name(cls, name, pp_type=None, pp_mask=None, **kwargs):
+    def from_name(cls, name, **kwargs):
         """Create a molecule from a database of named molecules.
 
         The available names are in :attr:`Molecule.all_names`.
@@ -189,4 +189,4 @@ class Molecule:
         else:
             raise ValueError(f'Unknown molecule name: {name}')
         coords = system.pop('coords')
-        return cls(coords=coords, **system, pp_type=pp_type, pp_mask=pp_mask)
+        return cls(coords=coords, **system)
