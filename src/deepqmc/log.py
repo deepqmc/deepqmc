@@ -8,7 +8,9 @@ import numpy as np
 import tensorboard.summary
 from jax.tree_util import tree_map
 
-from .utils import gather_on_one_device
+from .utils import gather_on_one_device, select_one_device
+
+__all__ = ['CheckpointStore', 'H5LogTable', 'TensorboardMetricLogger']
 
 Checkpoint = namedtuple('Checkpoint', 'step loss path')
 
@@ -143,6 +145,8 @@ class TensorboardMetricLogger:
 
 def gather_stats_on_one_device(stats):
     per_mol = stats.pop('per_mol', {})
-    stats = tree_map(lambda x: x[0], stats)
+    # Remaining of stats contains only global statistics e.g. param_norm
+    # these are replicated (and thus identical) across all devices
+    stats = select_one_device(stats)
     per_mol = gather_on_one_device(per_mol, gather_fn=jax.lax.pmean)
     return {**stats, 'per_mol': per_mol}
