@@ -8,10 +8,13 @@ import optax
 
 from .kfacext import make_graph_patterns
 from .utils import (
-    exp_normalize_mean,
+    PMAP_AXIS_NAME,
     gather_on_one_device,
     masked_mean,
     per_mol_stats,
+    pexp_normalize_mean,
+    pmap,
+    pmean,
     replicate_on_devices,
     rng_iterator,
     segment_nanmean,
@@ -107,9 +110,9 @@ def fit_wf(  # noqa: C901
         E_loc_s, gradient_mask = (clip_mask_fn or median_log_squeeze_and_mask)(
             E_loc, **(clip_mask_kwargs or {})
         )
-        E_mean = segment_nanmean(E_loc_s * weight, phys_conf.mol_idx, len(sampler))[
-            phys_conf.mol_idx
-        ]
+        E_mean = pmean(
+            segment_nanmean(E_loc_s * weight, phys_conf.mol_idx, len(sampler)),
+        )[phys_conf.mol_idx]
         assert E_loc_s.shape == E_loc.shape, (
             f'Error with clipping function: shape of E_loc {E_loc.shape} '
             f'must equal shape of clipped E_loc {E_loc_s.shape}.'
@@ -136,7 +139,7 @@ def fit_wf(  # noqa: C901
 
     if opt is None:
 
-        @jax.pmap
+        @pmap
         def _step(_rng_opt, params, _opt_state, batch):
             loss, (E_loc, stats) = loss_fn(params, _rng_opt, batch)
 
@@ -144,12 +147,12 @@ def fit_wf(  # noqa: C901
 
     elif isinstance(opt, optax.GradientTransformation):
 
-        @partial(jax.pmap, axis_name='device_axis')
+        @pmap
         def _step(rng, params, opt_state, batch):
             (loss, (E_loc, per_mol_stats)), grads = energy_and_grad_fn(
                 params, rng, batch
             )
-            grads = jax.lax.pmean(grads, 'device_axis')
+            grads = pmean(grads)
             updates, opt_state = opt.update(grads, opt_state, params)
             param_norm, update_norm, grad_norm = map(
                 tree_norm, [params, updates, grads]
@@ -163,7 +166,7 @@ def fit_wf(  # noqa: C901
             }
             return params, opt_state, E_loc, stats
 
-        @jax.pmap
+        @pmap
         def init_opt(rng, params, batch):
             opt_state = opt.init(params)
             return opt_state
@@ -211,13 +214,14 @@ def fit_wf(  # noqa: C901
             min_damping=1e-4,
             inverse_update_period=1,
             multi_device=True,
+            pmap_axis_name=PMAP_AXIS_NAME,
         )
 
-    @jax.pmap
+    @pmap
     def sample_wf(state, rng, params, select_idxs):
         return sampler.sample(rng, state, partial(ansatz.apply, params), select_idxs)
 
-    @jax.pmap
+    @pmap
     def update_sampler(state, params):
         return sampler.update(state, partial(ansatz.apply, params))
 
@@ -228,7 +232,7 @@ def fit_wf(  # noqa: C901
         smpl_state, phys_conf, smpl_stats = sample_wf(
             smpl_state, rng_sample, params, select_idxs
         )
-        weight = exp_normalize_mean(
+        weight = pmap(pexp_normalize_mean)(
             sampler.get_state(
                 'log_weight',
                 smpl_state,
@@ -253,7 +257,7 @@ def fit_wf(  # noqa: C901
         rng, rng_opt = split_on_devices(rng)
         init_select_idxs = sampler.select_idxs(sample_size // device_count, 0)
         init_select_idxs = replicate_on_devices(init_select_idxs)
-        init_phys_conf = jax.pmap(sampler.phys_conf)(smpl_state, init_select_idxs)
+        init_phys_conf = pmap(sampler.phys_conf)(smpl_state, init_select_idxs)
         opt_state = init_opt(
             rng_opt,
             params,
