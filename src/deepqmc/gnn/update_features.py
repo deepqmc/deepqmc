@@ -7,6 +7,8 @@ from ..hkext import Identity
 
 
 class UpdateFeature(hk.Module):
+    r"""Base class for all update features."""
+
     def __init__(self, n_up, n_down, two_particle_stream_dim, node_edge_mapping):
         super().__init__()
         self.n_up = n_up
@@ -23,6 +25,12 @@ class UpdateFeature(hk.Module):
 
 
 class ResidualUpdateFeature(UpdateFeature):
+    r"""Residual update feature.
+
+    Returns the unchanged electron embeddings from the previous layer as
+    a single update feature.
+    """
+
     def __call__(self, nodes, edges) -> Sequence[jnp.ndarray]:
         return [nodes.electrons]
 
@@ -32,6 +40,12 @@ class ResidualUpdateFeature(UpdateFeature):
 
 
 class NodeSumUpdateFeature(UpdateFeature):
+    r"""The (normalized) sum of the node embeddings as an update feature.
+
+    Returns the (normalized) sum of the electron embeddings from the previous layer as
+    a single update feature.
+    """
+
     def __init__(self, *args, node_types, normalize):
         assert all(node_type in {'up', 'down'} for node_type in node_types)
         super().__init__(*args)
@@ -55,6 +69,12 @@ class NodeSumUpdateFeature(UpdateFeature):
 
 
 class EdgeSumUpdateFeature(UpdateFeature):
+    r"""The (normalized) sum of the edge embeddings as an update feature.
+
+    Returns the (normalized) sum of the edge embeddings for various edge types
+    as separate update features.
+    """
+
     def __init__(self, *args, edge_types, normalize):
         assert all(
             edge_type in {'up', 'down', 'same', 'anti', 'ee', 'ne'}
@@ -86,6 +106,12 @@ class EdgeSumUpdateFeature(UpdateFeature):
 
 
 class ConvolutionUpdateFeature(UpdateFeature):
+    r"""The convolution of node and edge embeddings as an update feature.
+
+    Returns the convolution of the node and edge embeddings for various edge types
+    as separate update features.
+    """
+
     def __init__(
         self, *args, edge_types, normalize, w_factory, h_factory, w_for_ne=True
     ):
