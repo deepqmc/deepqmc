@@ -411,6 +411,8 @@ class NucleiEmbedding(hk.Module):
 
 
 class ElectronEmbedding(hk.Module):
+    r"""Create initial embeddings for electrons."""
+
     def __init__(
         self,
         n_nuc,
