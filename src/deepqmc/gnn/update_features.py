@@ -167,6 +167,11 @@ class ConvolutionUpdateFeature(UpdateFeature):
 
 
 class NodeAttentionUpdateFeature(UpdateFeature):
+    r"""Create a single update feature by attenting over the nodes.
+
+    Returns the Psiformer update feature based on attention over the nodes.
+    """
+
     def __init__(self, *args, num_heads, mlp_factory, attention_residual, mlp_residual):
         super().__init__(*args)
         self.num_heads = num_heads

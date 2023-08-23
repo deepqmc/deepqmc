@@ -13,6 +13,7 @@ class EdgeFeature:
 
 class DifferenceEdgeFeature(EdgeFeature):
     """Return the difference vector as the edge features."""
+
     def __init__(self, *, log_rescale=False):
         self.log_rescale = log_rescale
 
