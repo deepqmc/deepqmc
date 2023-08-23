@@ -107,7 +107,7 @@ class H5LogTable:
 class TensorboardMetricLogger:
     r"""An interface for writing metrics to Tensorboard."""
 
-    def __init__(self, workdir, n_mol, *, period):
+    def __init__(self, workdir, n_mol, *, period=10):
         self.global_writer = tensorboard.summary.Writer(workdir)
         self.per_mol_writers = [
             tensorboard.summary.Writer(f'{workdir}/{i}') for i in range(n_mol)

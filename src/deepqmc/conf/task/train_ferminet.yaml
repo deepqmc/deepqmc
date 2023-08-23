@@ -1,6 +1,6 @@
 defaults:
   - sampler: decorr_metropolis_ferminet
-  - opt: kfac_ferminet
+  - opt: kfac
 _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
 ansatz: ${ansatz}
