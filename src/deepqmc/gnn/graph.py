@@ -289,10 +289,10 @@ class SameGraphEdges(GraphEdges):
         n_up = self.uu.shape[-2]
         n_down = self.dd.shape[-2]
         n_sender_up = self.uu.shape[-3]
-        n_sender_down = self.uu.shape[-3]
+        n_sender_down = self.dd.shape[-3]
         uu, dd = jnp.split(array, (n_up * n_sender_up,), axis=-2)
         uu = uu.reshape(*uu.shape[:-2], n_sender_up, n_up, uu.shape[-1])
-        dd = dd.reshape(*dd.shape[:-2], n_sender_down, n_down, uu.shape[-1])
+        dd = dd.reshape(*dd.shape[:-2], n_sender_down, n_down, dd.shape[-1])
         return self.__class__(uu, dd)
 
     def sum_senders(self, normalize=False):
