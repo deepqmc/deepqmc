@@ -198,9 +198,7 @@ class ElectronGNNLayer(hk.Module):
                     }
 
                 if self.two_particle_residual:
-                    updated_edges = self.two_particle_residual(
-                        edges, updated_edges
-                    )
+                    updated_edges = self.two_particle_residual(edges, updated_edges)
                 return updated_edges
             else:
                 return edges
