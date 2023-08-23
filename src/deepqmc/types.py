@@ -28,3 +28,18 @@ class PhysicalConfiguration:
 
     def __len__(self):
         return len(self.r)
+
+
+class Potential:
+    r"""Base class for the (pseudo)potential in which electrons move.
+
+    Does not include the electron-electron repulsion."""
+
+    def local_potential(self, phys_conf):
+        r"""Compute the (local pseudo)potential energy of the electrons.
+
+        Args:
+            phys_conf (:class:`deepqmc.types.PhysicalConfiguration`): electron and
+                nuclear coordinates.
+        """
+        raise NotImplementedError

@@ -5,8 +5,6 @@ from jax import lax, random, vmap
 from ..physics import (
     electronic_potential,
     laplacian,
-    local_potential,
-    nonlocal_potential,
     nuclear_energy,
     pairwise_distance,
 )
@@ -153,7 +151,7 @@ class MolecularHamiltonian(Hamiltonian):
             Es_kin = -0.5 * (lap_log_psis + (quantum_force**2).sum(axis=-1))
             Es_nuc = nuclear_energy(phys_conf, self.mol)
             Vs_el = electronic_potential(phys_conf)
-            Vs_loc = local_potential(phys_conf, self.mol)
+            Vs_loc = self.mol.potential.local_potential(phys_conf)
             Es_loc = Es_kin + Vs_loc + Vs_el + Es_nuc
             stats = {
                 'hamil/V_el': Vs_el,
@@ -162,8 +160,8 @@ class MolecularHamiltonian(Hamiltonian):
                 'hamil/lap': lap_log_psis,
                 'hamil/quantum_force': (quantum_force**2).sum(axis=-1),
             }
-            if self.mol.any_pp:
-                Vs_nl = nonlocal_potential(rng, phys_conf, self.mol, wf)
+            if hasattr(self.mol.potential, 'nonloc_potential'):
+                Vs_nl = self.mol.potential.nonloc_potential(rng, phys_conf, wf)
                 Es_loc += Vs_nl
                 stats = {**stats, 'hamil/V_nl': Vs_nl}
 

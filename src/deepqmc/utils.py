@@ -117,54 +117,6 @@ def per_mol_stats(n_mols, data, mol_idx, prefix, mean_only=False):
     }
 
 
-@jax.vmap
-def sph2cart(sph, r=1):
-    # This function transforms from spherical to cartesian coordinates.
-    theta = sph[0]
-    phi = sph[1]
-    rsin_theta = r * jnp.sin(theta)
-    x = rsin_theta * jnp.cos(phi)
-    y = rsin_theta * jnp.sin(phi)
-    z = r * jnp.cos(theta)
-    return jnp.array([x, y, z])
-
-
-def rot_y(theta):
-    # returns the rotation matrix about y-axis by angle theta
-    return jnp.array(
-        [
-            [jnp.cos(theta), jnp.zeros_like(theta), jnp.sin(theta)],
-            [jnp.zeros_like(theta), jnp.ones_like(theta), jnp.zeros_like(theta)],
-            [-jnp.sin(theta), jnp.zeros_like(theta), jnp.cos(theta)],
-        ]
-    )
-
-
-def rot_z(phi):
-    # returns the rotation matrix about z-axis by angle phi
-    return jnp.array(
-        [
-            [jnp.cos(phi), -jnp.sin(phi), jnp.zeros_like(phi)],
-            [jnp.sin(phi), jnp.cos(phi), jnp.zeros_like(phi)],
-            [jnp.zeros_like(phi), jnp.zeros_like(phi), jnp.ones_like(phi)],
-        ]
-    )
-
-
-def pad_list_of_3D_arrays_to_one_array(list_of_arrays):
-    shapes = [jnp.asarray(arr).shape for arr in list_of_arrays]
-    target_shape = jnp.max(jnp.array(shapes), axis=0)
-    padded_arrays = [
-        jnp.pad(
-            array,
-            [(0, target_shape[i] - array.shape[i]) for i in range(3)],
-            mode='constant',
-        )
-        for array in list_of_arrays
-    ]
-    return jnp.array(padded_arrays)
-
-
 def log_squeeze(x):
     sgn, x = jnp.sign(x), jnp.abs(x)
     return sgn * jnp.log1p((x + 1 / 2 * x**2 + x**3) / (1 + x**2))

@@ -8,7 +8,9 @@ from typing import ClassVar
 import jax.numpy as jnp
 import yaml
 
-from deepqmc.wf.baseline.pyscfext import parse_pp_params
+from .pp.ecp_potential import EcpTypePseudopotential
+from .physics import NuclearCoulombPotential
+from .types import Potential
 
 angstrom = 1 / 0.52917721092
 
@@ -76,24 +78,14 @@ class Molecule:
     n_down: int
     # total numbers of occupied shells
     n_shells: tuple
-    # number of shells fully occupied by 'ns_core' inner electrons (that are replaced
-    # by pseudopotential)
+    # number of shells fully occupied by 'charges - ns_valence' inner electrons (that
+    # are replaced by pseudopotential)
     n_pp_shells: tuple
-    # number of core electrons replaced by the pseudopotential for each core
-    ns_core: jnp.ndarray
     # number of valence electrons for each nucleus (for neutral molecule) or a total
     # number of valence slots in case of charged molecule
     ns_valence: jnp.ndarray
-    # stores the parameters of local potential (loaded from [Burkatzki et al. 2007])
-    pp_loc_params: jnp.ndarray
-    # stores the parameters of non-local potential part
-    pp_nl_params: jnp.ndarray
-
-    # REDUNDANT AUXILIARY PROPERTIES:
-    # True if at least one nucleus uses pseudopotential
-    any_pp: bool
-    # Indices of nuclei with at least one non-local pseudopotential term
-    nuc_with_nl_pot: jnp.ndarray
+    # potential class representing either classical coulomb potential or pseudopotential
+    potential: Potential
 
     def __init__(
         self,
@@ -130,25 +122,24 @@ class Molecule:
         )
 
         # Derived properties
-        ns_core, pp_loc_params, pp_nl_params = parse_pp_params(self)
+        if self.pp_type is None:
+            set_attr(potential = NuclearCoulombPotential(self.charges))
+        else:
+            set_attr(potential = EcpTypePseudopotential(self.charges, self.pp_type, self.pp_mask))
 
-        n_elec = int(sum(charges) - sum(ns_core) - charge)
+        n_elec = int(sum(self.potential.ns_valence) - charge)
         assert not (n_elec + spin) % 2
         set_attr(
             n_nuc=len(charges),
             n_atom_types=len(jnp.unique(jnp.asarray(charges))),
             n_up=(n_elec + spin) // 2,
             n_down=(n_elec - spin) // 2,
-            ns_valence=self.charges - ns_core,
-            ns_core=ns_core,
-            pp_loc_params=pp_loc_params,
-            pp_nl_params=pp_nl_params,
+            ns_valence=self.potential.ns_valence,
             any_pp=any(self.pp_mask),
-            nuc_with_nl_pot=jnp.unique(jnp.nonzero(pp_nl_params)[0]),
         )
 
         shells = [get_shell(z) for z in self.charges]
-        pp_shells = [get_shell(z + 1) - 1 for z in self.ns_core]
+        pp_shells = [get_shell(z + 1) - 1 for z in self.charges - self.ns_valence]
         set_attr(n_shells=tuple(shells))
         set_attr(n_pp_shells=tuple(pp_shells))
 
@@ -165,7 +156,7 @@ class Molecule:
             f'  charges={self.charges},\n'
             f'  charge={self.charge},\n'
             f'  spin={self.spin}\n'
-            f'  ns_core={self.ns_core}\n'
+            f'  ns_valence={self.ns_valence}\n'
             ')'
         )
 

@@ -5,8 +5,6 @@ from pyscf import gto
 from pyscf.mcscf import CASSCF
 from pyscf.scf import RHF
 
-from ...utils import pad_list_of_3D_arrays_to_one_array
-
 log = logging.getLogger(__name__)
 
 
@@ -74,65 +72,3 @@ def confs_from_mc(mc, tol=0):
     confs = jnp.concatenate([jnp.concatenate(cfs, axis=-1) for cfs in confs], axis=-1)
     confs = sorted(zip(conf_coeff, confs), key=lambda x: -x[0] ** 2)
     return confs
-
-
-def parse_pp_params(mol):
-    """Load ane parse the pseudopotential parameters from the pyscf package.
-
-    This function loads the pseudopotential parameters for an atom (given by `charge`
-    argument) from the pyscf package and parses them to jnp arrays.
-
-    Args:
-        mol (~deepqmc.molecule.Molecule): the molecule to consider
-    Returns:
-        tuple: a tuple containing a an array of integers indicating the numbers of core
-            electrons replaced by pseudopotential, an array of local pseudopotential
-            parameters (padded by zeros if each atom has a different shape of local
-            parameters), and an array of nonlocal pseudopotential parameters (also
-            padded by zeros).
-    """
-
-    ns_core, pp_loc_params, pp_nl_params = [], [], []
-    max_number_of_same_type_terms = []
-    for i, atomic_number in enumerate(mol.charges):
-        if mol.pp_mask[i]:
-            _, data = gto.M(
-                atom=[(int(atomic_number), jnp.array([0, 0, 0]))],
-                # spin is just a placeholder, ecp parameters don't depend on the spin
-                spin=atomic_number % 2,
-                ecp=mol.pp_type,
-            )._ecp.popitem()
-            pp_loc_param = data[1][0][1][1:4]
-            if data[0] != 0:
-                pp_nl_param = jnp.array([di[1][2] for di in data[1][1:]]).swapaxes(
-                    -1, -2
-                )
-            else:
-                pp_nl_param = jnp.array([[[]]])
-
-            max_number_of_same_type_terms.append(len(max(pp_loc_param, key=len)))
-            n_core = data[0]
-        else:
-            n_core = 0
-            pp_loc_param = [[], [], []]
-            pp_nl_param = jnp.asarray([[[]]])
-        ns_core.append(n_core)
-        pp_loc_params.append(pp_loc_param)
-        pp_nl_params.append(pp_nl_param)
-
-    ns_core = jnp.asarray(ns_core)
-
-    # We need to pad local parameters with zeros to be able to
-    # convert pp_loc params from list to jnp.array.
-    pad = max(max_number_of_same_type_terms, default=0)
-    pp_loc_param_padded = []
-    for pp_loc_param in pp_loc_params:
-        pp_loc_param = [pi + [[0, 0]] * (pad - len(pi)) for pi in pp_loc_param]
-        pp_loc_param_padded.append(jnp.swapaxes(jnp.array(pp_loc_param), -1, -2))
-        # shape (r^n term, coefficient (β) & exponent (α), no. of terms with the same n)
-    pp_loc_params = jnp.array(pp_loc_param_padded)
-
-    # We also pad the non-local parameters with zeros
-    pp_nl_params = pad_list_of_3D_arrays_to_one_array(pp_nl_params)
-
-    return ns_core, pp_loc_params, jnp.array(pp_nl_params)
