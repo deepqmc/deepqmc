@@ -11,7 +11,7 @@ class TestApp:
         'task.steps=1',
         'task.sample_size=2',
         '+task.max_eq_steps=1',
-        '+task.pretrain_steps=1',
+        'task.pretrain_steps=1',
     ]
 
     def test_train(self, tmpdir):
