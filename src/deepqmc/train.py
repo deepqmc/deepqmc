@@ -250,10 +250,9 @@ def train(  # noqa: C901
                         )
                 log.info(f'Pretraining completed with MSE = {mse_rep}')
 
+        rng = split_rng_key_to_devices(rng)
         if not train_state or train_state[0] is None:
-            rng, rng_eq, rng_smpl_init = split_on_devices(
-                split_rng_key_to_devices(rng), 3
-            )
+            rng, rng_eq, rng_smpl_init = split_on_devices(rng, 3)
             wf = partial(ansatz.apply, select_one_device(params))
             sample_initializer = partial(
                 sampler.init, wf=wf, n=sample_size // jax.device_count()
