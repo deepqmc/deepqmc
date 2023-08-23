@@ -146,6 +146,7 @@ class SumPool:
 
 class Identity:
     r"""Represent the identity operation."""
+
     def __init__(self, *args, **kwargs):
         ...
 
