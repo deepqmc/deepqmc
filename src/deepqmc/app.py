@@ -2,12 +2,16 @@ import logging
 import pickle
 import sys
 import warnings
+from glob import glob
 from pathlib import Path
 
 import hydra
+import yaml
 from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import OmegaConf
 from tqdm.auto import tqdm
+
+from deepqmc import Molecule
 
 __all__ = ()
 log = logging.getLogger(__name__)
@@ -27,6 +31,21 @@ warnings.filterwarnings(
     'Explicitly requested dtype',
     UserWarning,
 )
+
+
+def read_molecules(directory):
+    if directory is None:
+        return None
+    path = Path(directory)
+    if not path.is_absolute():
+        path = to_absolute_path(get_original_cwd()) / path
+    log.info(f'Reading molecules from {path}')
+    molecules = []
+    for f in glob(str(path / '*.yaml')):
+        with open(f, 'r') as stream:
+            molecules.append(Molecule(**yaml.safe_load(stream)))
+    log.info(f'Read {len(molecules)} molecules')
+    return molecules
 
 
 def instantiate_ansatz(hamil, ansatz):
