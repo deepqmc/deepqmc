@@ -20,3 +20,6 @@ metric_logger:
   _target_: deepqmc.log.TensorboardMetricLogger
   _partial_: true
   period: 10
+mols:
+  _target_: deepqmc.app.read_molecules
+  directory: null
