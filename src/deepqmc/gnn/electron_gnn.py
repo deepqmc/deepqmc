@@ -5,7 +5,7 @@ import haiku as hk
 import jax.numpy as jnp
 from jax import tree_util
 
-from ..hkext import MLP, Identity
+from ..hkext import MLP
 from .graph import Graph, GraphNodes, GraphUpdate, MolecularGraphEdgeBuilder
 from .utils import NodeEdgeMapping
 
@@ -19,8 +19,6 @@ class ElectronGNNLayer(hk.Module):
     Args:
         residual (bool): whether a residual connection is used when updating
             the electron embeddings.
-        convolution (bool): if :data:`True` the messages are generated via graph
-            covolutions, else messages are generated from edge featues only.
         deep_features (bool): if :data:`true` edge features are updated through
             an MLP (:data:`u`), else initial edge features are reused.
         update_features (list[str]): which features to collect for the update
@@ -74,12 +72,9 @@ class ElectronGNNLayer(hk.Module):
         *,
         one_particle_residual,
         two_particle_residual,
-        convolution,
         deep_features,
-        mean_aggregate_edges,
         update_features,
         update_rule,
-        w_for_ne=True,
         subnet_factory=None,
         subnet_factory_by_lbl=None,
     ):
@@ -96,37 +91,15 @@ class ElectronGNNLayer(hk.Module):
             'featurewise_shared',
             'sum',
         ]
-        assert all(
-            uf
-            in [
-                'residual',
-                'edge_ne',
-                'edge_same',
-                'edge_anti',
-                'edge_up',
-                'edge_down',
-                'edge_ee',
-                'node_up',
-                'node_down',
-                'convolution_same',
-                'convolution_anti',
-                'convolution_up',
-                'convolution_down',
-                'convolution_ne',
-            ]
-            for uf in update_features
-        )
         assert (
             update_rule not in ['sum', 'featurewise_shared']
             or embedding_dim == two_particle_stream_dim
         )
         assert deep_features in [False, 'shared', 'separate']
         self.deep_features = deep_features
-        self.update_features = update_features
         self.update_rule = update_rule
-        self.convolution = convolution
         subnet_factory_by_lbl = subnet_factory_by_lbl or {}
-        for lbl in ['w', 'h', 'g', 'u']:
+        for lbl in ['g', 'u']:
             subnet_factory_by_lbl.setdefault(lbl, subnet_factory)
         if deep_features:
             self.u = (
@@ -140,29 +113,10 @@ class ElectronGNNLayer(hk.Module):
                     for typ in self.edge_types
                 }
             )
-        if self.convolution:
-            self.w = {
-                typ: (
-                    subnet_factory_by_lbl['w'](
-                        two_particle_stream_dim,
-                        name=f'w_{typ}',
-                    )
-                    if w_for_ne or typ != 'ne'
-                    else Identity()
-                )
-                for typ in self.edge_types
-            }
-            self.h = {
-                typ: subnet_factory_by_lbl['h'](
-                    (
-                        edge_feat_dim['ne']
-                        if not w_for_ne and typ == 'ne' and ilayer == 0
-                        else two_particle_stream_dim
-                    ),
-                    name=f'h_{typ}',
-                )
-                for typ in self.edge_types
-            }
+        self.update_features = [
+            uf(self.n_up, self.n_down, two_particle_stream_dim, self.mapping)
+            for uf in update_features
+        ]
         self.g = (
             subnet_factory_by_lbl['g'](
                 embedding_dim,
@@ -170,17 +124,17 @@ class ElectronGNNLayer(hk.Module):
             )
             if not self.update_rule == 'featurewise'
             else {
-                uf: subnet_factory_by_lbl['g'](
+                name: subnet_factory_by_lbl['g'](
                     embedding_dim,
-                    name=f'g_{uf}',
+                    name=f'g_{name}',
                 )
                 for uf in (self.update_features)
+                for name in uf.names
             }
         )
         self.one_particle_residual = one_particle_residual
         self.two_particle_residual = two_particle_residual
         self.self_interaction = self_interaction
-        self.mean_aggregate_edges = mean_aggregate_edges
 
     def get_update_edges_fn(self):
         def update_edges(edges):
@@ -215,60 +169,23 @@ class ElectronGNNLayer(hk.Module):
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes(nodes, edges):
-            def edge_update_feature(edge_type):
-                return edges[edge_type].sum_senders(normalize=True)
-
-            def convolution(edge_type):
-                we = self.w[edge_type](edges[edge_type].single_array)
-                hx = self.h[edge_type](self.mapping.sender_data_of(edge_type, nodes))
-                return edges[edge_type].update_from_single_array(we).convolve(hx)
-
-            UPDATE_FEATURES = {
-                'residual': lambda: nodes.electrons,
-                'node_up': lambda: (
-                    nodes.electrons[: self.n_up]
-                    .mean(axis=0, keepdims=True)
-                    .repeat(self.n_up + self.n_down, axis=0)
-                ),
-                'node_down': lambda: (
-                    nodes.electrons[self.n_up :]
-                    .mean(axis=0, keepdims=True)
-                    .repeat(self.n_up + self.n_down, axis=0)
-                ),
-                'edge_same': partial(edge_update_feature, 'same'),
-                'edge_anti': partial(edge_update_feature, 'anti'),
-                'edge_up': partial(edge_update_feature, 'up'),
-                'edge_down': partial(edge_update_feature, 'down'),
-                'edge_ne': partial(edge_update_feature, 'ne'),
-                'edge_ee': lambda: 0.5 * (
-                    edge_update_feature('same') + edge_update_feature('anti')
-                ),
-                'convolution_same': partial(convolution, 'same'),
-                'convolution_anti': partial(convolution, 'anti'),
-                'convolution_up': partial(convolution, 'up'),
-                'convolution_down': partial(convolution, 'down'),
-                'convolution_ne': partial(convolution, 'ne'),
-                'convolution_ee': lambda: 0.5 * (
-                    convolution('same') + convolution('anti')
-                ),
-            }
-
-            return {uf: UPDATE_FEATURES[uf]() for uf in self.update_features}
+            f = []
+            for uf in self.update_features:
+                f.extend(uf(nodes, edges))
+            return f
 
         return aggregate_edges_for_nodes
 
     def get_update_nodes_fn(self):
         def update_nodes(nodes, f):
             if self.update_rule == 'concatenate':
-                updated = self.g(
-                    jnp.concatenate([f[uf] for uf in self.update_features], axis=-1)
-                )
+                updated = self.g(jnp.concatenate(f, axis=-1))
             elif self.update_rule == 'featurewise':
-                updated = sum(self.g[uf](f[uf]) for uf in self.update_features)
+                updated = sum(self.g[name](fi) for fi, name in zip(f, self.g.keys()))
             elif self.update_rule == 'sum':
-                updated = self.g(sum(f.values()))
+                updated = self.g(sum(f))
             elif self.update_rule == 'featurewise_shared':
-                updated = jnp.sum(self.g(jnp.stack(list(f.values()))), axis=0)
+                updated = jnp.sum(self.g(jnp.stack(f)), axis=0)
             if self.one_particle_residual:
                 updated = self.one_particle_residual(nodes.electrons, updated)
             nodes = GraphNodes(nodes.nuclei, updated)

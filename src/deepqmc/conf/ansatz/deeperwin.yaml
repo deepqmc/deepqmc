@@ -94,14 +94,37 @@ omni_factory:
       two_particle_residual:
         _target_: deepqmc.hkext.ResidualConnection
         normalize: true
-      convolution: true
       deep_features: separate
-      mean_aggregate_edges: false
       update_rule: concatenate
       update_features: 
-        - residual
-        - node_up
-        - node_down
-        - convolution_ee
-        - convolution_ne
-      w_for_ne: false
+      - _target_: deepqmc.gnn.update_features.ResidualUpdateFeature
+        _partial_: true
+      - _target_: deepqmc.gnn.update_features.NodeSumUpdateFeature
+        _partial_: true
+        node_types: [up, down]
+        normalize: true
+      - _target_: deepqmc.gnn.update_features.ConvolutionUpdateFeature
+        _partial_: true
+        edge_types: [ee, ne]
+        normalize: false
+        w_factory:
+          _target_: deepqmc.hkext.MLP
+          _partial_: true
+          hidden_layers: ['log', 1]
+          bias: true
+          last_linear: false
+          activation:
+            _target_: jax.numpy.tanh
+            _partial_: true
+          init: deeperwin
+        h_factory:
+          _target_: deepqmc.hkext.MLP
+          _partial_: true
+          hidden_layers: ['log', 1]
+          bias: true
+          last_linear: false
+          activation:
+            _target_: jax.numpy.tanh
+            _partial_: true
+          init: deeperwin
+        w_for_ne: false

@@ -106,27 +106,38 @@ omni_factory:
           _target_: jax.numpy.tanh
           _partial_: true
         init: default
-      subnet_factory_by_lbl:
-        w:
+      one_particle_residual:
+        _target_: deepqmc.hkext.ResidualConnection
+        normalize: false
+      two_particle_residual: false
+      deep_features: false
+      update_rule: featurewise
+      update_features:
+      - _target_: deepqmc.gnn.update_features.ConvolutionUpdateFeature
+        _partial_: true
+        normalize: false
+        edge_types:
+          - same
+          - anti
+          - ne
+        w_factory:
           _target_: deepqmc.hkext.MLP
           _partial_: true
           hidden_layers: ['log', 1]
           bias: false
           last_linear: false
-          activation: 
+          activation:
             _target_: jax.numpy.tanh
             _partial_: true
           init: default
-      one_particle_residual:
-        _target_: deepqmc.hkext.ResidualConnection
-        normalize: false
-      two_particle_residual: false
-      convolution: true
-      deep_features: false
-      mean_aggregate_edges: true
-      update_rule: featurewise
-      update_features: 
-        - convolution_same
-        - convolution_anti
-        - convolution_ne
+        h_factory:
+          _target_: deepqmc.hkext.MLP
+          _partial_: true
+          hidden_layers: ['log', 1]
+          bias: true
+          last_linear: false
+          activation:
+            _target_: jax.numpy.tanh
+            _partial_: true
+          init: default
   
