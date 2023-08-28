@@ -140,12 +140,12 @@ def train(  # noqa: C901
     mols = mols or hamil.mol
     mols = mols if isinstance(mols, Sequence) else [mols]
     molecule_sampler = MoleculeSampler(mols, batch_size=1)
-    sampler = MultiNuclearGeometrySampler(sampler, jnp.stack([mol.coords for mol in mols]), mol_idx_factory)
+    sampler = MultiNuclearGeometrySampler(sampler, jnp.stack([mol.coords for mol in mols]))
     if pretrain_sampler is None:
         pretrain_sampler = sampler
     else:
         pretrain_sampler = chain(*pretrain_sampler[:-1], pretrain_sampler[-1](hamil))
-        pretrain_sampler = MultiNuclearGeometrySampler(pretrain_sampler, mols, mol_idx_factory)
+        pretrain_sampler = MultiNuclearGeometrySampler(pretrain_sampler, jnp.stack([mol.coords for mol in mols]))
     if isinstance(opt, str):
         opt_kwargs = OPT_KWARGS.get(opt, {}) | (opt_kwargs or {})
         opt = (
@@ -214,18 +214,20 @@ def train(  # noqa: C901
                 for step, params, losses in pretrain(  # noqa: B007
                     rng_pretrain,
                     hamil,
+                    mols,
                     ansatz,
                     params,
                     opt_pretrain,
+                    molecule_sampler,
                     pretrain_sampler,
                     steps=pbar,
                     sample_size=sample_size,
                     baseline_kwargs=pretrain_kwargs.pop('baseline_kwargs', {}),
                 ):
-                    mol_idx = pretrain_sampler.mol_idx(sample_size, step)
-                    per_mol_losses = segment_nanmean(
-                        losses, mol_idx, len(pretrain_sampler)
-                    )
+                    # per_mol_losses = segment_nanmean(
+                    #     losses, mol_idx, len(pretrain_sampler)
+                    # )
+                    per_mol_losses = jnp.moveaxis(losses, 0, 1).reshape(jax.device_count(), -1).mean(axis=1)
                     ewm_states = [
                         ewm_state if jnp.isnan(loss) else update_ewm(loss, ewm_state)
                         for loss, ewm_state in zip(per_mol_losses, ewm_states)

@@ -285,7 +285,7 @@ class MoleculeSampler:
 
 
 class MultiNuclearGeometrySampler(Sampler):
-    def __init__(self, sampler, nuclear_coordinates, mol_idx_factory=None):
+    def __init__(self, sampler, nuclear_coordinates):
         self.sampler = sampler
         self.nuclear_coordinates = nuclear_coordinates
 
