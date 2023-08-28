@@ -269,131 +269,54 @@ class ResampledSampler(Sampler):
         )
         return state, self.phys_conf(R, state['r']), stats
 
+class MoleculeSampler:
+    def __init__(self, mols, batch_size):
+        self.mols = mols
+        self.batch_size = batch_size
+        self.state = 0
 
-class MultimoleculeSampler(Sampler):
-    def __init__(self, sampler, mols, mol_idx_factory=None):
+    def sample(self):
+        idxs = list(range(self.state, min(self.state+self.batch_size, len(self.mols))))
+        if len(idxs) < self.batch_size:
+            idxs.extend(list(range(self.batch_size - len(idxs))))
+        self.state = idxs[-1] + 1
+        idxs = jnp.array(idxs, dtype=int)
+        return replicate_on_devices(idxs)
+
+
+class MultiNuclearGeometrySampler(Sampler):
+    def __init__(self, sampler, nuclear_coordinates, mol_idx_factory=None):
         self.sampler = sampler
-        self.mols = mols if isinstance(mols, Sequence) else [mols]
+        self.nuclear_coordinates = nuclear_coordinates
 
-        class MolIdxFactory:
-            @staticmethod
-            def max_per_mol(sample_size, n_mol):
-                assert not (sample_size % n_mol)
-                return n_mol * [sample_size // n_mol]
+    def init(self, rng, wf, electron_batch_size):
+        def init_electron_sampler(rng, nuclear_coordinates):
+            return self.sampler.init(rng, wf, electron_batch_size, nuclear_coordinates)
 
-            @staticmethod
-            def n_per_mol(sample_size, n_mol, *args, **kwargs):
-                assert not (sample_size % n_mol)
-                return n_mol * [sample_size // n_mol]
+        rngs = jax.random.split(rng, len(self))
+        smpl_state = jax.vmap(init_electron_sampler)(rngs, self.nuclear_coordinates)
+        return smpl_state
 
-        self.mol_idx_factory = mol_idx_factory or MolIdxFactory()
+    def sample(self, rng, state, wave_function, idxs):
+        def sample_electrons(rng, smpl_state, nuclear_coordinates):
+            return self.sampler.sample(rng, smpl_state, wave_function, nuclear_coordinates)
 
-    def init(self, rng, wf, n):
-        wfs = self.assign_wfs(wf)
-        sample_sizes = self.mol_idx_factory.max_per_mol(n, len(self))
-        states = [
-            self.sampler.init(rng, wf, sample_size, mol.coords)
-            for rng, wf, sample_size, mol in zip(
-                hk.PRNGSequence(rng), wfs, sample_sizes, self.mols
-            )
-        ]
-        return states
+        rngs = jax.random.split(rng, len(idxs))
+        nuclear_coordinates = self.nuclear_coordinates[idxs]
+        states_to_sample = jax.tree_util.tree_map(lambda x: x[idxs], state)
+        sampled_states, phys_conf, stats = jax.vmap(sample_electrons)(rngs, states_to_sample, nuclear_coordinates)
 
-    def sample(self, rng, state, wave_function, select_idxs):
-        phys_confs, stats = [], []
-        wfs = self.assign_wfs(wave_function)
-        for i, rng in zip(range(len(self)), hk.PRNGSequence(rng)):
-            state[i], phys_conf, stat = self.sampler.sample(
-                rng, state[i], wfs[i], self.mols[i].coords
-            )
-            phys_confs.append(phys_conf)
-            stats.append({'per_mol': stat})
-
-        phys_conf = self.join_mols(phys_confs, select_idxs)
-        stats = self.join_mols(stats, None)
+        state = jax.tree_util.tree_map(lambda x, y: x.at[idxs].set(y), state, sampled_states)
         return state, phys_conf, stats
 
-    def assign_wfs(self, wf):
-        r"""Assign WF models to all molecules.
+    def update(self, state, wf):
+        def update_state(state, nuclear_coordinates):
+            return self.sampler.update(state, wf, nuclear_coordinates)
 
-        This allows for using different WFs for each molecule,
-        useful e.g. with HF baselines.
-        """
-        return wf if isinstance(wf, Sequence) else len(self) * [wf]
-
-    def update(self, states, wf):
-        wfs = self.assign_wfs(wf)
-        return [
-            self.sampler.update(state, wf, mol.coords)
-            for state, wf, mol in zip(states, wfs, self.mols)
-        ]
-
-    def get_state(self, key, states, select_idxs, default=None):
-        try:
-            data = [state[key] for state in states]
-        except KeyError:
-            return default
-        data = self.join_mols(data, select_idxs)
-        return data
-
-    def join_mols(self, data_per_mol, select_idxs):
-        if all(isinstance(d, PhysicalConfiguration) for d in data_per_mol):
-            # phys_conf is special because we need to store which molecule the samples
-            # are coming from
-            data_per_mol = [
-                jdc.replace(pc, mol_idx=i * jnp.ones(len(pc), dtype=jnp.int32))
-                for i, pc in enumerate(data_per_mol)
-            ]
-        if select_idxs is None:
-            # data is zero dimensional
-            return jax.tree_util.tree_map(
-                lambda *xs: jnp.concatenate([x[select_idxs] for x in xs]),
-                *data_per_mol,
-            )
-        return jax.tree_util.tree_map(
-            lambda *xs: jnp.concatenate(xs)[select_idxs], *data_per_mol
-        )
-
-    def phys_conf(self, states, select_idxs):
-        phys_confs = [
-            self.sampler.phys_conf(mol.coords, state['r'])
-            for state, mol in zip(states, self.mols)
-        ]
-        return self.join_mols(phys_confs, select_idxs)
-
-    def select_idxs(self, sample_size, *args, **kwargs):
-        n_smpl_per_mol = self.mol_idx_factory.n_per_mol(
-            sample_size, len(self), *args, **kwargs
-        )
-        max_smpl_per_mol = self.mol_idx_factory.max_per_mol(sample_size, len(self))
-        assert all(n <= m for n, m in zip(n_smpl_per_mol, max_smpl_per_mol))
-        start_pos = 0
-        idxs = []
-        for n, m in zip(n_smpl_per_mol, max_smpl_per_mol):
-            idxs.append(start_pos + jnp.arange(n))
-            start_pos += m
-        return jnp.concatenate(idxs)
-
-    def mol_idx(self, sample_size, *args, **kwargs):
-        n_smpl_per_mol = self.mol_idx_factory.n_per_mol(
-            sample_size, len(self), *args, **kwargs
-        )
-        assert all(
-            n <= m
-            for n, m in zip(
-                n_smpl_per_mol,
-                self.mol_idx_factory.max_per_mol(sample_size, len(self)),
-            )
-        )
-        return jnp.concatenate(
-            [
-                i * jnp.ones(n_smpl, dtype=jnp.int32)
-                for i, n_smpl in enumerate(n_smpl_per_mol)
-            ]
-        )
+        return jax.vmap(update_state)(state, self.nuclear_coordinates)
 
     def __len__(self):
-        return len(self.mols)
+        return len(self.nuclear_coordinates)
 
 
 def chain(*samplers):
@@ -456,6 +379,7 @@ def clean_force(force, phys_conf, mol, *, tau):
 def equilibrate(
     rng,
     wf,
+    molecule_sampler,
     sampler,
     state,
     criterion,
@@ -468,15 +392,16 @@ def equilibrate(
     criterion = jax.jit(criterion)
 
     @jax.pmap
-    def sample_wf(rng, state, select_idxs):
-        return sampler.sample(rng, state, wf, select_idxs)
+    def sample_wf(rng, state, idxs):
+        return sampler.sample(rng, state, wf, idxs)
 
     buffer_size = block_size * n_blocks
     buffer = []
     for step, rng in zip(steps, rng_iterator(rng)):
-        select_idxs = sampler.select_idxs(sample_size // jax.device_count(), step)
-        select_idxs = replicate_on_devices(select_idxs)
-        state, phys_conf, stats = sample_wf(rng, state, select_idxs)
+        # select_idxs = sampler.select_idxs(sample_size // jax.device_count(), step)
+        # select_idxs = replicate_on_devices(select_idxs)
+        idxs = molecule_sampler.sample()
+        state, phys_conf, stats = sample_wf(rng, state, idxs)
         yield step, state, stats
         buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]
         if len(buffer) < buffer_size:
