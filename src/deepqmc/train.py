@@ -25,8 +25,13 @@ from .parallel import (
 )
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
-from .sampling import MoleculeSampler, MultiNuclearGeometrySampler, chain, equilibrate
-from .utils import ConstantSchedule, InverseSchedule, segment_nanmean
+from .sampling import (
+    MoleculeSampler,
+    MultiNuclearGeometrySampler,
+    chain,
+    equilibrate,
+)
+from .utils import ConstantSchedule, InverseSchedule
 from .wf.base import init_wf_params
 
 __all__ = ['train']
@@ -139,12 +144,16 @@ def train(  # noqa: C901
     mols = mols or hamil.mol
     mols = mols if isinstance(mols, Sequence) else [mols]
     molecule_sampler = MoleculeSampler(mols, batch_size=1)
-    sampler = MultiNuclearGeometrySampler(sampler, jnp.stack([mol.coords for mol in mols]))
+    sampler = MultiNuclearGeometrySampler(
+        sampler, jnp.stack([mol.coords for mol in mols])
+    )
     if pretrain_sampler is None:
         pretrain_sampler = sampler
     else:
         pretrain_sampler = chain(*pretrain_sampler[:-1], pretrain_sampler[-1](hamil))
-        pretrain_sampler = MultiNuclearGeometrySampler(pretrain_sampler, jnp.stack([mol.coords for mol in mols]))
+        pretrain_sampler = MultiNuclearGeometrySampler(
+            pretrain_sampler, jnp.stack([mol.coords for mol in mols])
+        )
     if isinstance(opt, str):
         opt_kwargs = OPT_KWARGS.get(opt, {}) | (opt_kwargs or {})
         opt = (
@@ -210,7 +219,7 @@ def train(  # noqa: C901
                 ewm_state, update_ewm = init_ewm(decay_alpha=1.0)
                 ewm_states = len(pretrain_sampler) * [ewm_state]
                 pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
-                for step, params, losses in pretrain(  # noqa: B007
+                for step, params, per_sample_losses in pretrain(  # noqa: B007
                     rng_pretrain,
                     hamil,
                     mols,
@@ -223,10 +232,7 @@ def train(  # noqa: C901
                     sample_size=sample_size,
                     baseline_kwargs=pretrain_kwargs.pop('baseline_kwargs', {}),
                 ):
-                    # per_mol_losses = segment_nanmean(
-                    #     losses, mol_idx, len(pretrain_sampler)
-                    # )
-                    per_mol_losses = jnp.moveaxis(losses, 0, 1).reshape(jax.device_count(), -1).mean(axis=1)
+                    per_mol_losses = per_sample_losses.mean(axis=1)
                     ewm_states = [
                         ewm_state if jnp.isnan(loss) else update_ewm(loss, ewm_state)
                         for loss, ewm_state in zip(per_mol_losses, ewm_states)
@@ -256,7 +262,9 @@ def train(  # noqa: C901
             rng, rng_eq, rng_smpl_init = split_on_devices(rng, 3)
             wf = partial(ansatz.apply, select_one_device(params))
             sample_initializer = partial(
-                sampler.init, wf=wf, electron_batch_size=sample_size // jax.device_count()
+                sampler.init,
+                wf=wf,
+                electron_batch_size=sample_size // jax.device_count(),
             )
             smpl_state = jax.pmap(sample_initializer)(rng_smpl_init)
             log.info('Equilibrating sampler...')
@@ -315,7 +323,11 @@ def train(  # noqa: C901
                     **(fit_kwargs or {}),
                 ):
                     # mol_idx = sampler.mol_idx(sample_size, step)
-                    per_mol_energy = jnp.moveaxis(E_loc, 0, 1).reshape(jax.device_count(), -1).mean(axis=1)
+                    per_mol_energy = (
+                        jnp.moveaxis(E_loc, 0, 1)
+                        .reshape(jax.device_count(), -1)
+                        .mean(axis=1)
+                    )
                     # per_mol_energy = segment_nanmean(E_loc, mol_idx, len(sampler))
                     ewm_states = [
                         ewm_state if jnp.isnan(ene) else update_ewm(ene, ewm_state)

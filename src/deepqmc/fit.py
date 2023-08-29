@@ -83,9 +83,9 @@ def fit_wf(  # noqa: C901
         phys_conf, weight = batch
         rng = jax.random.split(rng, len(weight))
         rng_batch = jax.vmap(partial(jax.random.split, num=weight.shape[1]))(rng)
-        E_loc, hamil_stats = jax.vmap(jax.vmap(
-            hamil.local_energy(partial(ansatz.apply, params))
-        ))(rng_batch, phys_conf)
+        E_loc, hamil_stats = jax.vmap(
+            jax.vmap(hamil.local_energy(partial(ansatz.apply, params)))
+        )(rng_batch, phys_conf)
         loss = pmean(jnp.nanmean(E_loc * weight))
         stats = {
             # **stats_fn(E_loc, phys_conf.mol_idx, 'E_loc'),
@@ -104,9 +104,7 @@ def fit_wf(  # noqa: C901
         E_loc_s, gradient_mask = jax.vmap(clip_mask_fn or median_log_squeeze_and_mask)(
             E_loc
         )
-        E_mean = pmean(
-            (E_loc_s * weight).mean(axis=1)
-        )
+        E_mean = pmean((E_loc_s * weight).mean(axis=1))
         assert E_loc_s.shape == E_loc.shape, (
             f'Error with clipping function: shape of E_loc {E_loc.shape} '
             f'must equal shape of clipped E_loc {E_loc_s.shape}.'
@@ -118,12 +116,16 @@ def fit_wf(  # noqa: C901
 
         def log_likelihood(params):  # log(psi(theta))
             # return jax.vmap(ansatz.apply, (None, 0))(params, phys_conf).log
-            flat_phys_conf = jax.tree_util.tree_map(lambda x: x.reshape(-1, *x.shape[2:]), phys_conf)
+            flat_phys_conf = jax.tree_util.tree_map(
+                lambda x: x.reshape(-1, *x.shape[2:]), phys_conf
+            )
             return jax.vmap(ansatz.apply, (None, 0))(params, flat_phys_conf).log
 
         log_psi, log_psi_tangent = jax.jvp(log_likelihood, primals, tangents)
         kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
-        loss_tangent = (E_loc_s - E_mean[:, None]) * log_psi_tangent.reshape(E_loc.shape) * weight
+        loss_tangent = (
+            (E_loc_s - E_mean[:, None]) * log_psi_tangent.reshape(E_loc.shape) * weight
+        )
         loss_tangent = masked_mean(loss_tangent, gradient_mask)
         return (loss, aux), (loss_tangent, aux)
         # jax.custom_jvp has actually no official support for auxiliary output.
@@ -235,7 +237,9 @@ def fit_wf(  # noqa: C901
             smpl_state, rng_sample, params, idxs
         )
         weight = pmap(pexp_normalize_mean)(
-            smpl_state['log_weight'][:, idxs] if 'log_weight' in smpl_state.keys() else jnp.zeros((device_count, len(idxs), sample_size // device_count))
+            smpl_state['log_weight'][:, idxs]
+            if 'log_weight' in smpl_state.keys()
+            else jnp.zeros((device_count, len(idxs), sample_size // device_count))
             # sampler.get_state(
             #     'log_weight',
             #     smpl_state,

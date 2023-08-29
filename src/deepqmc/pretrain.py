@@ -7,8 +7,7 @@ import jax.numpy as jnp
 import optax
 
 from .parallel import (
-    gather_on_one_device,
-    replicate_on_devices,
+    gather_electrons_on_one_device,
     rng_iterator,
     select_one_device,
     split_on_devices,
@@ -58,7 +57,9 @@ def pretrain(  # noqa: C901
     baseline = partial(baseline.apply, params_baseline)
 
     def loss_fn(params, phys_config, idxs):
-        orbs = jax.vmap(jax.vmap(ansatz.apply, (None, 0, None)), (None, 0, None))(params, phys_config, True)
+        orbs = jax.vmap(jax.vmap(ansatz.apply, (None, 0, None)), (None, 0, None))(
+            params, phys_config, True
+        )
         *_, n_det, n_up, n_orb_up = orbs[0].shape
         target = jax.vmap(jax.vmap(baseline, (0, None)))(phys_config, idxs)
         n_det_target = target.shape[-3]
@@ -81,11 +82,11 @@ def pretrain(  # noqa: C901
     if isinstance(opt, optax.GradientTransformation):
 
         def _step(rng, params, opt_state, phys_config, idxs):
-            (_, losses), grads = loss_and_grad_fn(params, phys_config, idxs)
+            (_, per_sample_losses), grads = loss_and_grad_fn(params, phys_config, idxs)
             grads = jax.lax.pmean(grads, 'device_axis')
             updates, opt_state = opt.update(grads, opt_state, params)
             params = optax.apply_updates(params, updates)
-            return params, opt_state, losses
+            return params, opt_state, per_sample_losses
 
     else:
         raise NotImplementedError
@@ -109,20 +110,18 @@ def pretrain(  # noqa: C901
             smpl_state, rng_sample, params, idxs
         )
 
-        params, opt_state, losses = _step(
+        params, opt_state, per_sample_losses = _step(
             rng,
             params,
             opt_state,
             phys_config,
             idxs,
         )
-        return params, opt_state, losses
+        return params, opt_state, per_sample_losses
 
     for step, rng in zip(steps, rng_iterator(rng)):
         idxs = molecule_sampler.sample()
-        params, opt_state, losses = pretrain_step(
+        params, opt_state, per_sample_losses = pretrain_step(
             rng, params, smpl_state, opt_state, idxs
         )
-        yield step, params, gather_on_one_device(
-            losses, flatten_device_axis=False
-        )
+        yield step, params, gather_electrons_on_one_device(per_sample_losses)
