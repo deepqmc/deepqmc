@@ -5,7 +5,8 @@ _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
 ansatz: ${ansatz}
 steps: 200000
-sample_size: 4096
+molecule_batch_size: 1
+electron_batch_size: 4096
 pretrain_steps: 20000
 pretrain_kwargs:
   opt: lamb

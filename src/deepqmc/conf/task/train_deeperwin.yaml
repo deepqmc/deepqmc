@@ -7,7 +7,8 @@ hamil: ${hamil}
 ansatz: ${ansatz}
 mols: ${hamil.mol}
 steps: 50000
-sample_size: 2048
+molecule_batch_size: 1
+electron_batch_size: 2048
 seed: 0
 pretrain_steps: 1000
 pretrain_kwargs:
