@@ -1,15 +1,12 @@
 import logging
 from functools import partial
 from statistics import mean, stdev
-from typing import Sequence
 
-import haiku as hk
 import jax
 import jax.numpy as jnp
-import jax_dataclasses as jdc
 from jax import lax
 
-from .parallel import replicate_on_devices, rng_iterator
+from .parallel import replicate_on_devices, rng_iterator, select_one_device
 from .physics import pairwise_diffs, pairwise_self_distance
 from .types import PhysicalConfiguration
 from .utils import multinomial_resampling, split_dict
@@ -269,6 +266,7 @@ class ResampledSampler(Sampler):
         )
         return state, self.phys_conf(R, state['r']), stats
 
+
 class MoleculeSampler:
     def __init__(self, mols, batch_size):
         self.mols = mols
@@ -276,7 +274,9 @@ class MoleculeSampler:
         self.state = 0
 
     def sample(self):
-        idxs = list(range(self.state, min(self.state+self.batch_size, len(self.mols))))
+        idxs = list(
+            range(self.state, min(self.state + self.batch_size, len(self.mols)))
+        )
         if len(idxs) < self.batch_size:
             idxs.extend(list(range(self.batch_size - len(idxs))))
         self.state = idxs[-1] + 1
@@ -297,16 +297,22 @@ class MultiNuclearGeometrySampler(Sampler):
         smpl_state = jax.vmap(init_electron_sampler)(rngs, self.nuclear_coordinates)
         return smpl_state
 
-    def sample(self, rng, state, wave_function, idxs):
+    def sample(self, rng, state, wave_function, mol_idxs):
         def sample_electrons(rng, smpl_state, nuclear_coordinates):
-            return self.sampler.sample(rng, smpl_state, wave_function, nuclear_coordinates)
+            return self.sampler.sample(
+                rng, smpl_state, wave_function, nuclear_coordinates
+            )
 
-        rngs = jax.random.split(rng, len(idxs))
-        nuclear_coordinates = self.nuclear_coordinates[idxs]
-        states_to_sample = jax.tree_util.tree_map(lambda x: x[idxs], state)
-        sampled_states, phys_conf, stats = jax.vmap(sample_electrons)(rngs, states_to_sample, nuclear_coordinates)
+        rngs = jax.random.split(rng, len(mol_idxs))
+        nuclear_coordinates = self.nuclear_coordinates[mol_idxs]
+        states_to_sample = jax.tree_util.tree_map(lambda x: x[mol_idxs], state)
+        sampled_states, phys_conf, stats = jax.vmap(sample_electrons)(
+            rngs, states_to_sample, nuclear_coordinates
+        )
 
-        state = jax.tree_util.tree_map(lambda x, y: x.at[idxs].set(y), state, sampled_states)
+        state = jax.tree_util.tree_map(
+            lambda x, y: x.at[mol_idxs].set(y), state, sampled_states
+        )
         return state, phys_conf, stats
 
     def update(self, state, wf):
@@ -384,7 +390,6 @@ def equilibrate(
     state,
     criterion,
     steps,
-    sample_size,
     *,
     block_size,
     n_blocks=5,
@@ -392,17 +397,15 @@ def equilibrate(
     criterion = jax.jit(criterion)
 
     @jax.pmap
-    def sample_wf(rng, state, idxs):
-        return sampler.sample(rng, state, wf, idxs)
+    def sample_wf(rng, state, mol_idxs):
+        return sampler.sample(rng, state, wf, mol_idxs)
 
     buffer_size = block_size * n_blocks
     buffer = []
     for step, rng in zip(steps, rng_iterator(rng)):
-        # select_idxs = sampler.select_idxs(sample_size // jax.device_count(), step)
-        # select_idxs = replicate_on_devices(select_idxs)
-        idxs = molecule_sampler.sample()
-        state, phys_conf, stats = sample_wf(rng, state, idxs)
-        yield step, state, stats
+        mol_idxs = molecule_sampler.sample()
+        state, phys_conf, stats = sample_wf(rng, state, mol_idxs)
+        yield step, state, select_one_device(mol_idxs), stats
         buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]
         if len(buffer) < buffer_size:
             continue

@@ -8,9 +8,7 @@ import numpy as np
 import tensorboard.summary
 from jax.tree_util import tree_map
 
-from .parallel import gather_on_one_device, select_one_device
-
-__all__ = ['CheckpointStore', 'H5LogTable', 'TensorboardMetricLogger']
+from .parallel import gather_on_one_device
 
 Checkpoint = namedtuple('Checkpoint', 'step loss path')
 
@@ -108,45 +106,43 @@ class TensorboardMetricLogger:
     r"""An interface for writing metrics to Tensorboard."""
 
     def __init__(self, workdir, n_mol, *, period=10):
-        self.global_writer = tensorboard.summary.Writer(workdir)
-        self.per_mol_writers = [
-            tensorboard.summary.Writer(f'{workdir}/{i}') for i in range(n_mol)
-        ]
+        self.writer = tensorboard.summary.Writer(workdir)
         self.period = period
+        self.n_mol = n_mol
 
-    def update(self, step, stats, single_device_stats=None, prefix=None):
-        r"""Update tensorboard writer with a dictionary of scalar entries.
+    def update(
+        self, step, single_device_stats, multi_device_stats, mol_idxs, prefix=None
+    ):
+        r"""Update tensorboard writer with a dictionary of entries.
 
         Args:
             step (int): the step at which to add the new entries.
-            stats (dict): a dictionary containing the scalar entries to add.
+            single_device_stats (dict): a dictionary containing the entries to add,
+                that are on a single device.
+            multi_device_stats (dict): a dictionary containing the entries to add,
+                that are stored over multiple devices.
+            mol_idxs (Array[int]): indices of molecules considered in the given step.
+            prefix (Optional[str]): an optional prefix to append to the stat keys.
         """
         if step % self.period:
             return
-        if stats:
-            stats = gather_stats_on_one_device(stats)
-        per_mol = stats.pop('per_mol', {})
-        if single_device_stats:
-            single_device_per_mol = single_device_stats.pop('per_mol', {})
-            stats.update(single_device_stats)
-            per_mol.update(single_device_per_mol)
-        for k, v in per_mol.items():
-            for i, writer in enumerate(self.per_mol_writers):
-                if not (jnp.isnan(v[i]) or jnp.isinf(v[i])):
-                    writer.add_scalar(f'{prefix}/{k}' if prefix else k, v[i], step)
+        prefix = f'{prefix}/' if prefix else ''
+        if multi_device_stats:
+            multi_device_stats = gather_on_one_device(
+                multi_device_stats, gather_fn=jax.lax.pmean
+            )
+        stats = {**multi_device_stats, **single_device_stats}
+        self.write_in_full_dataset_format(step, stats, mol_idxs, prefix)
+
+    def write_in_full_dataset_format(self, step, stats, mol_idxs, prefix):
         for k, v in stats.items():
-            self.global_writer.add_scalar(f'{prefix}/{k}' if prefix else k, v, step)
+            if v.ndim == 0:
+                # Global statistic
+                self.writer.add_scalar(f'{prefix}{k}', v, step)
+            if v.ndim == 1:
+                # Per molecule statistic
+                for i, v_i in zip(mol_idxs, v):
+                    self.writer.add_scalar(f'{prefix}{k}/{i}', v_i, step)
 
     def close(self):
-        self.global_writer.close()
-        for writer in self.per_mol_writers:
-            writer.close()
-
-
-def gather_stats_on_one_device(stats):
-    per_mol = stats.pop('per_mol', {})
-    # Remaining of stats contains only global statistics e.g. param_norm
-    # these are replicated (and thus identical) across all devices
-    stats = select_one_device(stats)
-    per_mol = gather_on_one_device(per_mol, gather_fn=jax.lax.pmean)
-    return {**stats, 'per_mol': per_mol}
+        self.writer.close()

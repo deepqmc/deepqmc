@@ -18,6 +18,7 @@ from .ewm import init_ewm
 from .fit import fit_wf
 from .log import CheckpointStore, H5LogTable, TensorboardMetricLogger
 from .parallel import (
+    gather_electrons_on_one_device,
     replicate_on_devices,
     select_one_device,
     split_on_devices,
@@ -66,7 +67,8 @@ def train(  # noqa: C901
     opt,
     sampler,
     steps,
-    sample_size,
+    molecule_batch_size,
+    electron_batch_size,
     seed,
     mols=None,
     workdir=None,
@@ -108,7 +110,8 @@ def train(  # noqa: C901
                 is performed.
         sampler (~deepqmc.sampling.Sampler): a sampler instance
         steps (int): number of optimization steps.
-        sample_size (int): the number of samples considered in a batch
+        molecule_batch_size (int): the number of molecules considered in a batch
+        electron_batch_size (int): the number of electron samples considered in a batch
         seed (int): the seed used for PRNG.
         mols (Sequence(~deepqmc.molecule.Molecule)): optional, a sequence of molecules
             to consider for transferable training. If None the default molecule from
@@ -135,15 +138,14 @@ def train(  # noqa: C901
         metric_logger: optional, an object that consumes metric logging information.
             If not specified, the default `~.log.TensorboardMetricLogger` is used
             to create tensorboard logs.
-        mol_idx_factory (Callable): optional, callback for computing the indices
-            of the molecule from which samples are to be taken in a given step.
     """
-    assert not sample_size % jax.device_count()
+    assert not electron_batch_size % jax.device_count()
     rng = jax.random.PRNGKey(seed)
     mode = 'evaluation' if opt is None else 'training'
     mols = mols or hamil.mol
     mols = mols if isinstance(mols, Sequence) else [mols]
-    molecule_sampler = MoleculeSampler(mols, batch_size=1)
+    assert molecule_batch_size <= len(mols)
+    molecule_sampler = MoleculeSampler(mols, batch_size=molecule_batch_size)
     sampler = MultiNuclearGeometrySampler(
         sampler, jnp.stack([mol.coords for mol in mols])
     )
@@ -176,13 +178,8 @@ def train(  # noqa: C901
         log.debug('Setting up HDF5 file...')
         h5file = h5py.File(os.path.join(workdir, 'result.h5'), 'a', libver='v110')
         h5file.swmr_mode = True
-        tables = []
-        for i, mol in enumerate(mols):
-            group = h5file.require_group(str(i)) if len(mols) > 1 else h5file
-            group.attrs.create('geometry', mol.coords.tolist())
-            table = H5LogTable(group)
-            table.resize(init_step)
-            tables.append(table)
+        table = H5LogTable(h5file)
+        table.resize(init_step)
         h5file.flush()
 
     pbar = None
@@ -219,7 +216,7 @@ def train(  # noqa: C901
                 ewm_state, update_ewm = init_ewm(decay_alpha=1.0)
                 ewm_states = len(pretrain_sampler) * [ewm_state]
                 pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
-                for step, params, per_sample_losses in pretrain(  # noqa: B007
+                for step, params, per_sample_losses, mol_idxs in pretrain(  # noqa: B007
                     rng_pretrain,
                     hamil,
                     mols,
@@ -229,31 +226,26 @@ def train(  # noqa: C901
                     molecule_sampler,
                     pretrain_sampler,
                     steps=pbar,
-                    sample_size=sample_size,
+                    electron_batch_size=electron_batch_size,
                     baseline_kwargs=pretrain_kwargs.pop('baseline_kwargs', {}),
                 ):
                     per_mol_losses = per_sample_losses.mean(axis=1)
-                    ewm_states = [
-                        ewm_state if jnp.isnan(loss) else update_ewm(loss, ewm_state)
-                        for loss, ewm_state in zip(per_mol_losses, ewm_states)
-                    ]
-                    ewm_means = [
-                        ewm_state.mean if ewm_state.mean is not None else 0.0
-                        for ewm_state in ewm_states
-                    ]
-                    mse_rep = '|'.join(f'{mean:0.2e}' for mean in ewm_means)
-                    pbar.set_postfix(MSE=mse_rep)
+                    ewm_means = []
+                    for loss, mol_idx in zip(per_mol_losses, mol_idxs):
+                        ewm_states[mol_idx] = update_ewm(loss, ewm_states[mol_idx])
+                        ewm_means.append(ewm_states[mol_idx].mean)
                     pretrain_stats = {
-                        'per_mol': {
-                            'MSE': per_mol_losses,
-                            'MSE/ewm': jnp.array(
-                                [ewm_state.mean for ewm_state in ewm_states]
-                            ),
-                        }
+                        'MSE': per_mol_losses,
+                        'MSE/ewm': jnp.array(ewm_means),
                     }
+                    mse_rep = '|'.join(
+                        f'{ewm.mean if ewm.mean is not None else jnp.nan:0.2e}'
+                        for ewm in ewm_states
+                    )
+                    pbar.set_postfix(MSE=mse_rep)
                     if metric_logger:
                         metric_logger.update(
-                            step, {}, pretrain_stats, prefix='pretraining'
+                            step, pretrain_stats, {}, mol_idxs, prefix='pretraining'
                         )
                 log.info(f'Pretraining completed with MSE = {mse_rep}')
 
@@ -264,7 +256,7 @@ def train(  # noqa: C901
             sample_initializer = partial(
                 sampler.init,
                 wf=wf,
-                electron_batch_size=sample_size // jax.device_count(),
+                electron_batch_size=electron_batch_size // jax.device_count(),
             )
             smpl_state = jax.pmap(sample_initializer)(rng_smpl_init)
             log.info('Equilibrating sampler...')
@@ -273,7 +265,7 @@ def train(  # noqa: C901
                 desc='equilibrate sampler',
                 disable=None,
             )
-            for step, smpl_state, smpl_stats in equilibrate(  # noqa: B007
+            for step, smpl_state, mol_idxs, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
                 wf,
                 molecule_sampler,
@@ -281,17 +273,16 @@ def train(  # noqa: C901
                 smpl_state,
                 lambda phys_conf: pairwise_self_distance(phys_conf.r).mean(),
                 pbar,
-                sample_size,
                 block_size=10,
             ):
                 tau_rep = '|'.join(
-                    f'{tau:.3f}'
-                    # for tau in sampler.get_state('tau', smpl_state, None)
-                    for tau in smpl_state['tau'].mean(axis=0)
+                    f'{tau:.3f}' for tau in smpl_state['tau'].mean(axis=0)
                 )
                 pbar.set_postfix(tau=tau_rep)
-                # if metric_logger:
-                #     metric_logger.update(step, smpl_stats, prefix='equilibration')
+                if metric_logger:
+                    metric_logger.update(
+                        step, {}, smpl_stats, mol_idxs, prefix='equilibration'
+                    )
             pbar.close()
             train_state = smpl_state, params, None
             if workdir and mode == 'training':
@@ -310,35 +301,30 @@ def train(  # noqa: C901
                     desc=mode,
                     disable=None,
                 )
-                for step, train_state, E_loc, stats in fit_wf(  # noqa: B007
+                for step, train_state, E_loc, mol_idxs, stats in fit_wf(  # noqa: B007
                     rng,
                     hamil,
                     ansatz,
                     opt,
                     molecule_sampler,
                     sampler,
-                    sample_size,
+                    electron_batch_size,
                     pbar,
                     train_state,
                     **(fit_kwargs or {}),
                 ):
-                    # mol_idx = sampler.mol_idx(sample_size, step)
-                    per_mol_energy = (
-                        jnp.moveaxis(E_loc, 0, 1)
-                        .reshape(jax.device_count(), -1)
-                        .mean(axis=1)
-                    )
-                    # per_mol_energy = segment_nanmean(E_loc, mol_idx, len(sampler))
-                    ewm_states = [
-                        ewm_state if jnp.isnan(ene) else update_ewm(ene, ewm_state)
-                        for ene, ewm_state in zip(per_mol_energy, ewm_states)
-                    ]
+                    per_mol_energy = E_loc.mean(axis=1)
+                    ewm_energies = []
+                    for energy, mol_idx in zip(per_mol_energy, mol_idxs):
+                        ewm_states[mol_idx] = update_ewm(energy, ewm_states[mol_idx])
+                        ewm_energies.append(ewm_states[mol_idx].mean)
                     ene = [
-                        ufloat(e, s)
-                        for e, s in zip(
-                            [ewm_state.mean for ewm_state in ewm_states],
-                            [jnp.sqrt(ewm_state.sqerr) for ewm_state in ewm_states],
+                        (
+                            ufloat(ewm.mean, jnp.sqrt(ewm.sqerr))
+                            if ewm.mean
+                            else ufloat(jnp.nan, 0)
                         )
+                        for ewm in ewm_states
                     ]
                     if all(e.s for e in ene):
                         energies = '|'.join(f'{e:S}' for e in ene)
@@ -350,36 +336,31 @@ def train(  # noqa: C901
                             log.info(
                                 f'Progress: {step + 1}/{steps}, energy = {energies}'
                             )
-                    # if workdir:
-                    #     if mode == 'training':
-                    #         # the convention is that chkpt-i contains the step i-1 -> i
-                    #         chkpts.update(
-                    #             step + 1,
-                    #             train_state,
-                    #             stats['per_mol']['E_loc/std'].mean(),
-                    #         )
-                    #     for i, (table, ewm_state, smpl_state) in enumerate(
-                    #         zip(tables, ewm_states, train_state.sampler)
-                    #     ):
-                    #         table.row['E_loc'] = E_loc[mol_idx == i]
-                    #         if ewm_state.mean is not None:
-                    #             table.row['E_ewm'] = ewm_state.mean
-                    #         psi = gather_on_one_device(
-                    #             smpl_state['psi'], flatten_device_axis=True
-                    #         )
-                    #         if jnp.isnan(psi.log).any():
-                    #             raise NanError()
-                    #         table.row['sign_psi'] = psi.sign
-                    #         table.row['log_psi'] = psi.log
-                    #     h5file.flush()
-                    #     if metric_logger:
-                    #         single_device_stats = {
-                    #             'per_mol': {
-                    #                 'energy/ewm': jnp.array([e.n for e in ene]),
-                    #                 'energy/ewm_error': jnp.array([e.s for e in ene]),
-                    #             }
-                    #         }
-                    #         metric_logger.update(step, stats, single_device_stats)
+                    if workdir:
+                        if mode == 'training':
+                            # the convention is that chkpt-i contains the step i-1 -> i
+                            chkpts.update(
+                                step + 1,
+                                train_state,
+                                stats['E_loc/std'].mean(),
+                            )
+                        table.row['mol_idxs'] = mol_idxs
+                        table.row['E_loc'] = E_loc
+                        table.row['E_ewm'] = jnp.array(ewm_energies)
+                        psi = gather_electrons_on_one_device(train_state.sampler['psi'])
+                        if jnp.isnan(psi.log).any():
+                            raise NanError()
+                        table.row['sign_psi'] = psi.sign[mol_idxs]
+                        table.row['log_psi'] = psi.log[mol_idxs]
+                        h5file.flush()
+                        if metric_logger:
+                            single_device_stats = {
+                                'energy/ewm': jnp.array([e.n for e in ene]),
+                                'energy/ewm_error': jnp.array([e.s for e in ene]),
+                            }
+                            metric_logger.update(
+                                step, single_device_stats, stats, mol_idxs
+                            )
                 log.info(f'The {mode} has been completed!')
                 return train_state
             except NanError:

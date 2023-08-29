@@ -155,3 +155,31 @@ def all_device_quantile(x, quantile, axis_name=PMAP_AXIS_NAME):
         axis_name: optional, name of pmap-ed axis.
     """
     return jax.numpy.quantile(jax.lax.all_gather(x, axis_name), quantile)
+
+
+def gather_electrons_on_one_device(pytree):
+    r"""Gather electron sample type arrays on one device.
+
+    Many arrays (e.g. local energies, wave function values, etc.) are of the shape
+    :data:`[n_device, molecule_batch_size, electron_batch_size / n_device, ...]`. The
+    total :data:`electron_batch_size` many samples are stored across the devices. This
+    function gathers arrays like these from the devices, and merges the electron batch
+    axes to arrive at the output shape
+    :data:`[molecule_batch_size, electron_batch_size]`.
+
+    Args:
+        pytree: a pytree of arrays all with shape:
+            :data:`[n_device, molecule_batch_size, electron_batch_size / n_device, ...]`
+
+    Result:
+        a pytree of arrays all with shape:
+            :data:`[molecule_batch_size, electron_batch_size]`.
+    """
+    all_gathered = jax.pmap(
+        lambda x: jax.lax.all_gather(x, PMAP_AXIS_NAME), axis_name=PMAP_AXIS_NAME
+    )(pytree)
+    on_one_device = select_one_device(all_gathered)
+    return jax.tree_util.tree_map(
+        lambda x: jax.numpy.moveaxis(x, 0, 1).reshape(x.shape[1], -1, *x.shape[3:]),
+        on_one_device,
+    )

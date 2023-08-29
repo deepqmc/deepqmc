@@ -27,7 +27,7 @@ def pretrain(  # noqa: C901
     sampler,
     *,
     steps,
-    sample_size,
+    electron_batch_size,
     baseline_kwargs=None,
 ):
     r"""Perform pretraining of the Ansatz to (MC-)SCF orbitals.
@@ -40,7 +40,7 @@ def pretrain(  # noqa: C901
         opt (``optax`` optimizers): the optimizer.
         sampler (~deepqmc.sampling.Sampler): the sampler instance to use.
         steps: an iterable yielding the step numbers for the pretraining.
-        sample_size (int): the number of samples to use in a batch.
+        electron_batch_size (int): the number of electron samples to use in a batch.
         baseline_kwargs (dict): optional, additional keyword arguments passed to the
             baseline wave function.
     """
@@ -94,7 +94,9 @@ def pretrain(  # noqa: C901
     rng, rng_smpl_init = split_on_devices(split_rng_key_to_devices(rng))
     wf = partial(ansatz.apply, select_one_device(params))
     sample_initializer = partial(
-        sampler.init, wf=wf, electron_batch_size=sample_size // jax.device_count()
+        sampler.init,
+        wf=wf,
+        electron_batch_size=electron_batch_size // jax.device_count(),
     )
     smpl_state = jax.pmap(sample_initializer)(rng_smpl_init)
 
@@ -104,10 +106,10 @@ def pretrain(  # noqa: C901
         return sampler.sample(rng, state, partial(ansatz.apply, params), idxs)
 
     @partial(jax.pmap, axis_name='device_axis')
-    def pretrain_step(rng, params, smpl_state, opt_state, idxs):
+    def pretrain_step(rng, params, smpl_state, opt_state, mol_idxs):
         rng, rng_sample = jax.random.split(rng)
         smpl_state, phys_config, smpl_stats = sample_wf(
-            smpl_state, rng_sample, params, idxs
+            smpl_state, rng_sample, params, mol_idxs
         )
 
         params, opt_state, per_sample_losses = _step(
@@ -115,13 +117,15 @@ def pretrain(  # noqa: C901
             params,
             opt_state,
             phys_config,
-            idxs,
+            mol_idxs,
         )
         return params, opt_state, per_sample_losses
 
     for step, rng in zip(steps, rng_iterator(rng)):
-        idxs = molecule_sampler.sample()
+        mol_idxs = molecule_sampler.sample()
         params, opt_state, per_sample_losses = pretrain_step(
-            rng, params, smpl_state, opt_state, idxs
+            rng, params, smpl_state, opt_state, mol_idxs
         )
-        yield step, params, gather_electrons_on_one_device(per_sample_losses)
+        yield step, params, gather_electrons_on_one_device(
+            per_sample_losses
+        ), select_one_device(mol_idxs)

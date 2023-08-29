@@ -12,21 +12,15 @@ from .parallel import (
     all_device_mean,
     all_device_median,
     all_device_quantile,
-    gather_on_one_device,
+    gather_electrons_on_one_device,
     pexp_normalize_mean,
     pmap,
     pmean,
-    replicate_on_devices,
     rng_iterator,
+    select_one_device,
     split_on_devices,
 )
-from .utils import (
-    log_squeeze,
-    masked_mean,
-    per_mol_stats,
-    segment_nanmean,
-    tree_norm,
-)
+from .utils import log_squeeze, masked_mean, tree_norm
 from .wf.base import init_wf_params
 
 __all__ = ()
@@ -56,9 +50,9 @@ def median_log_squeeze_and_mask(
     return x_clip, gradient_mask
 
 
-def init_fit(rng, hamil, ansatz, sampler, sample_size):
+def init_fit(rng, hamil, ansatz, sampler, electron_batch_size):
     params = init_wf_params(rng, hamil, ansatz)
-    smpl_state = sampler.init(rng, partial(ansatz.apply, params), sample_size)
+    smpl_state = sampler.init(rng, partial(ansatz.apply, params), electron_batch_size)
     return params, smpl_state
 
 
@@ -69,13 +63,12 @@ def fit_wf(  # noqa: C901
     opt,
     molecule_sampler,
     sampler,
-    sample_size,
+    electron_batch_size,
     steps,
     train_state,
     *,
     clip_mask_fn=None,
 ):
-    stats_fn = partial(per_mol_stats, len(sampler))
     device_count = jax.device_count()
 
     @partial(jax.custom_jvp, nondiff_argnums=(1, 2))
@@ -88,11 +81,14 @@ def fit_wf(  # noqa: C901
         )(rng_batch, phys_conf)
         loss = pmean(jnp.nanmean(E_loc * weight))
         stats = {
-            # **stats_fn(E_loc, phys_conf.mol_idx, 'E_loc'),
-            # **{
-            #     k_hamil: stats_fn(v_hamil, phys_conf.mol_idx, k_hamil, mean_only=True)
-            #     for k_hamil, v_hamil in hamil_stats.items()
-            # },
+            'E_loc/mean': jnp.nanmean(E_loc, axis=1),
+            'E_loc/std': jnp.nanstd(E_loc, axis=1),
+            'E_loc/min': jnp.nanmin(E_loc, axis=1),
+            'E_loc/max': jnp.nanmax(E_loc, axis=1),
+            **{
+                k_hamil: v_hamil.mean(axis=1)
+                for k_hamil, v_hamil in hamil_stats.items()
+            },
         }
         return loss, (E_loc, stats)
 
@@ -115,7 +111,6 @@ def fit_wf(  # noqa: C901
         )
 
         def log_likelihood(params):  # log(psi(theta))
-            # return jax.vmap(ansatz.apply, (None, 0))(params, phys_conf).log
             flat_phys_conf = jax.tree_util.tree_map(
                 lambda x: x.reshape(-1, *x.shape[2:]), phys_conf
             )
@@ -147,9 +142,7 @@ def fit_wf(  # noqa: C901
 
         @pmap
         def _step(rng, params, opt_state, batch):
-            (loss, (E_loc, per_mol_stats)), grads = energy_and_grad_fn(
-                params, rng, batch
-            )
+            (loss, (E_loc, stats)), grads = energy_and_grad_fn(params, rng, batch)
             grads = pmean(grads)
             updates, opt_state = opt.update(grads, opt_state, params)
             param_norm, update_norm, grad_norm = map(
@@ -160,7 +153,7 @@ def fit_wf(  # noqa: C901
                 'opt/param_norm': param_norm,
                 'opt/grad_norm': grad_norm,
                 'opt/update_norm': update_norm,
-                'per_mol': per_mol_stats,
+                **stats,
             }
             return params, opt_state, E_loc, stats
 
@@ -183,7 +176,7 @@ def fit_wf(  # noqa: C901
                 'opt/param_norm': opt_stats['param_norm'],
                 'opt/grad_norm': opt_stats['precon_grad_norm'],
                 'opt/update_norm': opt_stats['update_norm'],
-                'per_mol': opt_stats['aux'][1],
+                **opt_stats['aux'][1],
             }
             return (
                 params,
@@ -230,22 +223,20 @@ def fit_wf(  # noqa: C901
 
     def train_step(rng, step, smpl_state, params, opt_state):
         rng_sample, rng_kfac = split_on_devices(rng)
-        # select_idxs = sampler.select_idxs(sample_size // device_count, step)
-        # select_idxs = replicate_on_devices(select_idxs)
-        idxs = molecule_sampler.sample()
+        mol_idxs = molecule_sampler.sample()
         smpl_state, phys_conf, smpl_stats = sample_wf(
-            smpl_state, rng_sample, params, idxs
+            smpl_state, rng_sample, params, mol_idxs
         )
         weight = pmap(pexp_normalize_mean)(
-            smpl_state['log_weight'][:, idxs]
+            smpl_state['log_weight'][jnp.arange(device_count)[:, None], mol_idxs]
             if 'log_weight' in smpl_state.keys()
-            else jnp.zeros((device_count, len(idxs), sample_size // device_count))
-            # sampler.get_state(
-            #     'log_weight',
-            #     smpl_state,
-            #     select_idxs,
-            #     default=jnp.zeros((device_count, sample_size // device_count)),
-            # )
+            else jnp.zeros(
+                (
+                    device_count,
+                    molecule_sampler.batch_size,
+                    electron_batch_size // device_count,
+                )
+            )
         )
         params, opt_state, E_loc, stats = _step(
             rng_kfac,
@@ -256,28 +247,32 @@ def fit_wf(  # noqa: C901
         if opt is not None:
             # WF was changed in _step, update psi values stored in smpl_state
             smpl_state = update_sampler(smpl_state, params)
-        # stats['per_mol'] = {**stats['per_mol'], **smpl_stats['per_mol']}
-        return smpl_state, params, opt_state, E_loc, stats
+        stats = {**stats, **smpl_stats}
+        return smpl_state, params, opt_state, E_loc, mol_idxs, stats
 
     smpl_state, params, opt_state = train_state
     if opt is not None and opt_state is None:
         rng, rng_sample, rng_opt = split_on_devices(rng, 3)
-        # init_select_idxs = sampler.select_idxs(sample_size // device_count, 0)
-        # init_select_idxs = replicate_on_devices(init_select_idxs)
         idxs = molecule_sampler.sample()
         _, init_phys_conf, _ = sample_wf(smpl_state, rng_sample, params, idxs)
-        # init_phys_conf = pmap(sampler.phys_conf)(smpl_state, init_select_idxs)
         opt_state = init_opt(
             rng_opt,
             params,
             (
                 init_phys_conf,
-                jnp.ones((device_count, len(idxs), sample_size // device_count)),
+                jnp.ones(
+                    (
+                        device_count,
+                        molecule_sampler.batch_size,
+                        electron_batch_size // device_count,
+                    )
+                ),
             ),
         )
     train_state = smpl_state, params, opt_state
 
     for step, rng in zip(steps, rng_iterator(rng)):
-        *train_state, E_loc, stats = train_step(rng, step, *train_state)
-        E_loc = gather_on_one_device(E_loc, flatten_device_axis=False)
-        yield step, TrainState(*train_state), E_loc, stats
+        *train_state, E_loc, mol_idxs, stats = train_step(rng, step, *train_state)
+        yield step, TrainState(*train_state), gather_electrons_on_one_device(
+            E_loc
+        ), select_one_device(mol_idxs), stats
