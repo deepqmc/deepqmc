@@ -1,12 +1,13 @@
 from functools import partial
 
+import jax.numpy as jnp
 import pytest
 
 from deepqmc.sampling import (
     DecorrSampler,
     LangevinSampler,
     MetropolisSampler,
-    MultimoleculeSampler,
+    MultiNuclearGeometrySampler,
     ResampledSampler,
     chain,
 )
@@ -77,27 +78,31 @@ class TestMultimoleculeSampling:
     SAMPLE_SIZE = 10
     N_CONFIG = 2
 
-    def test_multimolecule_sampler_init(self, helpers, samplers, ndarrays_regression):
-        sampler = MultimoleculeSampler(
+    def test_multi_nuclear_geometry_sampler_init(
+        self, helpers, samplers, ndarrays_regression
+    ):
+        sampler = MultiNuclearGeometrySampler(
             chain(*samplers[:-1], samplers[-1](self.hamil)),
-            [self.mol for _ in range(self.N_CONFIG)],
+            jnp.stack([self.mol.coords for _ in range(self.N_CONFIG)]),
         )
         smpl_state = sampler.init(helpers.rng(), self.wf, self.SAMPLE_SIZE)
         ndarrays_regression.check(
-            helpers.flatten_pytree(smpl_state),
+            smpl_state,
             default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
         )
 
-    def test_multimolecule_sampler_sample(self, helpers, samplers, ndarrays_regression):
-        sampler = MultimoleculeSampler(
+    def test_multi_nuclear_geometry_sampler_sample(
+        self, helpers, samplers, ndarrays_regression
+    ):
+        sampler = MultiNuclearGeometrySampler(
             chain(*samplers[:-1], samplers[-1](self.hamil)),
-            [self.mol for _ in range(self.N_CONFIG)],
+            jnp.stack([self.mol.coords for _ in range(self.N_CONFIG)]),
         )
         smpl_state = sampler.init(helpers.rng(), self.wf, self.SAMPLE_SIZE)
-        select_idxs = sampler.select_idxs(self.SAMPLE_SIZE, 0)
+        mol_idxs = jnp.arange(2)
         for step in range(4):
             smpl_state, phys_conf, stats = sampler.sample(
-                helpers.rng(step), smpl_state, self.wf, select_idxs
+                helpers.rng(step), smpl_state, self.wf, mol_idxs
             )
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),

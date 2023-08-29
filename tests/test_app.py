@@ -9,7 +9,7 @@ class TestApp:
         'hamil/mol=H2',
         'device=cpu',
         'task.steps=1',
-        'task.sample_size=2',
+        'task.electron_batch_size=2',
         '+task.max_eq_steps=1',
         'task.pretrain_steps=1',
     ]
