@@ -77,7 +77,6 @@ def train(  # noqa: C901
     chkptdir=None,
     chkpts_kwargs=None,
     metric_logger=None,
-    mol_idx_factory=None,
 ):
     r"""Train or evaluate a JAX wave function model.
 
