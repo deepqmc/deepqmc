@@ -34,7 +34,7 @@ omni_factory:
   _partial_: true
   embedding_dim: 256
   jastrow_factory: null
-  backflow_factory:  
+  backflow_factory:
     _target_: deepqmc.wf.nn_wave_function.omni.Backflow
     _partial_: true
     subnet_factory:
@@ -48,7 +48,7 @@ omni_factory:
   gnn_factory:
     _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
-    n_interactions: 2
+    n_interactions: 4
     nuclei_embedding: null
     electron_embedding:
       _target_: deepqmc.gnn.electron_gnn.ElectronEmbedding
@@ -78,7 +78,7 @@ omni_factory:
       two_particle_residual: false
       deep_features: false
       update_rule: concatenate
-      update_features: 
+      update_features:
       - _target_: deepqmc.gnn.update_features.NodeAttentionUpdateFeature
         _partial_: true
         num_heads: 4
@@ -98,4 +98,3 @@ omni_factory:
         mlp_residual:
           _target_: deepqmc.hkext.ResidualConnection
           normalize: false
-  

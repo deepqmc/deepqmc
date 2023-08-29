@@ -1,11 +1,20 @@
 defaults:
-  - sampler: decorr_metropolis
-  - opt: kfac
+  - sampler: decorr_metropolis_psiformer
+  - opt: kfac_psiformer
 _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
 ansatz: ${ansatz}
-steps: 1000
-sample_size: 1000
+steps: 200000
+sample_size: 4096
+pretrain_steps: 20000
+pretrain_kwargs:
+  opt: lamb
+  opt_kwargs:
+    learning_rate: 3.e-4
+    b1: 0.9
+    b2: 0.999
+  baseline_kwargs:
+    basis: sto-6g
 seed: 0
 fit_kwargs:
   clip_mask_fn:
@@ -13,3 +22,7 @@ fit_kwargs:
     _partial_: true
     clip_width: 5
     median_center: true
+metric_logger:
+  _target_: deepqmc.log.TensorboardMetricLogger
+  _partial_: true
+  period: 10
