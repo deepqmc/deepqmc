@@ -103,7 +103,7 @@ def pretrain(  # noqa: C901
         return sampler.sample(rng, state, partial(ansatz.apply, params), idxs)
 
     @partial(jax.pmap, axis_name='device_axis')
-    def pretrain_step(step, rng, params, smpl_state, opt_state, idxs):
+    def pretrain_step(rng, params, smpl_state, opt_state, idxs):
         rng, rng_sample = jax.random.split(rng)
         smpl_state, phys_config, smpl_stats = sample_wf(
             smpl_state, rng_sample, params, idxs
@@ -119,11 +119,10 @@ def pretrain(  # noqa: C901
         return params, opt_state, losses
 
     for step, rng in zip(steps, rng_iterator(rng)):
-        step = replicate_on_devices(jnp.array(step))
         idxs = molecule_sampler.sample()
         params, opt_state, losses = pretrain_step(
-            step, rng, params, smpl_state, opt_state, idxs
+            rng, params, smpl_state, opt_state, idxs
         )
-        yield select_one_device(step).item(), params, gather_on_one_device(
+        yield step, params, gather_on_one_device(
             losses, flatten_device_axis=False
         )
