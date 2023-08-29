@@ -27,7 +27,7 @@ from .parallel import (
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
 from .sampling import (
-    MoleculeSampler,
+    MoleculeIdxSampler,
     MultiNuclearGeometrySampler,
     chain,
     equilibrate,
@@ -145,7 +145,10 @@ def train(  # noqa: C901
     mols = mols or hamil.mol
     mols = mols if isinstance(mols, Sequence) else [mols]
     assert molecule_batch_size <= len(mols)
-    molecule_sampler = MoleculeSampler(mols, batch_size=molecule_batch_size)
+    rng, rng_mol_smpl = jax.random.split(rng)
+    molecule_idx_sampler = MoleculeIdxSampler(
+        rng_mol_smpl, len(mols), molecule_batch_size, True
+    )
     sampler = MultiNuclearGeometrySampler(
         sampler, jnp.stack([mol.coords for mol in mols])
     )
@@ -223,7 +226,7 @@ def train(  # noqa: C901
                     ansatz,
                     params,
                     opt_pretrain,
-                    molecule_sampler,
+                    molecule_idx_sampler,
                     pretrain_sampler,
                     steps=pbar,
                     electron_batch_size=electron_batch_size,
@@ -268,7 +271,7 @@ def train(  # noqa: C901
             for step, smpl_state, mol_idxs, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
                 wf,
-                molecule_sampler,
+                molecule_idx_sampler,
                 sampler,
                 smpl_state,
                 lambda phys_conf: pairwise_self_distance(phys_conf.r).mean(),
@@ -306,7 +309,7 @@ def train(  # noqa: C901
                     hamil,
                     ansatz,
                     opt,
-                    molecule_sampler,
+                    molecule_idx_sampler,
                     sampler,
                     electron_batch_size,
                     pbar,

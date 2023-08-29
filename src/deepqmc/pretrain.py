@@ -23,7 +23,7 @@ def pretrain(  # noqa: C901
     ansatz,
     params,
     opt,
-    molecule_sampler,
+    molecule_idx_sampler,
     sampler,
     *,
     steps,
@@ -38,6 +38,8 @@ def pretrain(  # noqa: C901
         ansatz (~deepqmc.wf.WaveFunction): the wave function Ansatz.
         params (dict): the (initial) parameters of the Ansatz.
         opt (``optax`` optimizers): the optimizer.
+        molecule_idx_sampler (~deepqmc.samplint.MoleculeIdxSampler): an object that
+            iterates (samples) the indeces of the molecule dataset.
         sampler (~deepqmc.sampling.Sampler): the sampler instance to use.
         steps: an iterable yielding the step numbers for the pretraining.
         electron_batch_size (int): the number of electron samples to use in a batch.
@@ -122,7 +124,7 @@ def pretrain(  # noqa: C901
         return params, opt_state, per_sample_losses
 
     for step, rng in zip(steps, rng_iterator(rng)):
-        mol_idxs = molecule_sampler.sample()
+        mol_idxs = molecule_idx_sampler.sample()
         params, opt_state, per_sample_losses = pretrain_step(
             rng, params, smpl_state, opt_state, mol_idxs
         )

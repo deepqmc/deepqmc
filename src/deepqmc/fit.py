@@ -61,7 +61,7 @@ def fit_wf(  # noqa: C901
     hamil,
     ansatz,
     opt,
-    molecule_sampler,
+    molecule_idx_sampler,
     sampler,
     electron_batch_size,
     steps,
@@ -223,7 +223,7 @@ def fit_wf(  # noqa: C901
 
     def train_step(rng, step, smpl_state, params, opt_state):
         rng_sample, rng_kfac = split_on_devices(rng)
-        mol_idxs = molecule_sampler.sample()
+        mol_idxs = molecule_idx_sampler.sample()
         smpl_state, phys_conf, smpl_stats = sample_wf(
             smpl_state, rng_sample, params, mol_idxs
         )
@@ -233,7 +233,7 @@ def fit_wf(  # noqa: C901
             else jnp.zeros(
                 (
                     device_count,
-                    molecule_sampler.batch_size,
+                    molecule_idx_sampler.batch_size,
                     electron_batch_size // device_count,
                 )
             )
@@ -253,7 +253,7 @@ def fit_wf(  # noqa: C901
     smpl_state, params, opt_state = train_state
     if opt is not None and opt_state is None:
         rng, rng_sample, rng_opt = split_on_devices(rng, 3)
-        idxs = molecule_sampler.sample()
+        idxs = molecule_idx_sampler.sample()
         _, init_phys_conf, _ = sample_wf(smpl_state, rng_sample, params, idxs)
         opt_state = init_opt(
             rng_opt,
@@ -263,7 +263,7 @@ def fit_wf(  # noqa: C901
                 jnp.ones(
                     (
                         device_count,
-                        molecule_sampler.batch_size,
+                        molecule_idx_sampler.batch_size,
                         electron_batch_size // device_count,
                     )
                 ),

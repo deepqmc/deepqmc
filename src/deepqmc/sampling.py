@@ -267,21 +267,34 @@ class ResampledSampler(Sampler):
         return state, self.phys_conf(R, state['r']), stats
 
 
-class MoleculeSampler:
-    def __init__(self, mols, batch_size):
-        self.mols = mols
+class MoleculeIdxSampler:
+    def __init__(self, rng, n_mols, batch_size, shuffle=False):
+        self.rng = rng
+        self.n_mols = n_mols
         self.batch_size = batch_size
         self.state = 0
+        self.shuffle = shuffle
+        self.permutation = self.new_permutation()
 
     def sample(self):
-        idxs = list(
-            range(self.state, min(self.state + self.batch_size, len(self.mols)))
+        idx = jnp.array(
+            range(self.state, min(self.state + self.batch_size, self.n_mols))
         )
-        if len(idxs) < self.batch_size:
-            idxs.extend(list(range(self.batch_size - len(idxs))))
-        self.state = idxs[-1] + 1
-        idxs = jnp.array(idxs, dtype=int)
-        return replicate_on_devices(idxs)
+        value = [self.permutation[idx]]
+        if len(idx) < self.batch_size:
+            self.permutation = self.new_permutation()
+            idx = jnp.array(range(self.batch_size - len(idx)))
+            value.append(self.permutation[idx])
+        self.state = (self.state + self.batch_size) % self.n_mols
+        value = jnp.concatenate(value)
+        return replicate_on_devices(value)
+
+    def new_permutation(self):
+        permutation = jnp.arange(self.n_mols)
+        if self.shuffle:
+            self.rng, rng = jax.random.split(self.rng)
+            permutation = jax.random.permutation(rng, permutation)
+        return permutation
 
 
 class MultiNuclearGeometrySampler(Sampler):
@@ -385,7 +398,7 @@ def clean_force(force, phys_conf, mol, *, tau):
 def equilibrate(
     rng,
     wf,
-    molecule_sampler,
+    molecule_idx_sampler,
     sampler,
     state,
     criterion,
@@ -403,7 +416,7 @@ def equilibrate(
     buffer_size = block_size * n_blocks
     buffer = []
     for step, rng in zip(steps, rng_iterator(rng)):
-        mol_idxs = molecule_sampler.sample()
+        mol_idxs = molecule_idx_sampler.sample()
         state, phys_conf, stats = sample_wf(rng, state, mol_idxs)
         yield step, state, select_one_device(mol_idxs), stats
         buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]
