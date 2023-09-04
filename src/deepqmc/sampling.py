@@ -4,6 +4,7 @@ from statistics import mean, stdev
 
 import jax
 import jax.numpy as jnp
+import jax_dataclasses as jdc
 from jax import lax
 
 from .parallel import replicate_on_devices, rng_iterator, select_one_device
@@ -328,6 +329,9 @@ class MultiNuclearGeometrySampler(Sampler):
 
         state = jax.tree_util.tree_map(
             lambda x, y: x.at[mol_idxs].set(y), state, sampled_states
+        )
+        phys_conf = jdc.replace(
+            phys_conf, mol_idx=mol_idxs[:, None].repeat(phys_conf.r.shape[1], 1)
         )
         return state, phys_conf, stats
 

@@ -50,20 +50,20 @@ def pretrain(  # noqa: C901
 
     @hk.without_apply_rng
     @hk.transform
-    def baseline(phys_conf, mol_idx):
-        return partial_baseline(hamil.mol, None)(phys_conf, mol_idx)
+    def baseline(phys_conf):
+        return partial_baseline(hamil.mol, None)(phys_conf)
 
     rng, rng_hamil, rng_baseline = jax.random.split(rng, 3)
     init_pc = hamil.init_sample(rng_hamil, mols[0].coords, 1)[0]
-    params_baseline = baseline.init(rng_baseline, init_pc, jnp.array(0))
+    params_baseline = baseline.init(rng_baseline, init_pc)
     baseline = partial(baseline.apply, params_baseline)
 
-    def loss_fn(params, phys_config, idxs):
+    def loss_fn(params, phys_config):
         orbs = jax.vmap(jax.vmap(ansatz.apply, (None, 0, None)), (None, 0, None))(
             params, phys_config, True
         )
         *_, n_det, n_up, n_orb_up = orbs[0].shape
-        target = jax.vmap(jax.vmap(baseline, (0, None)))(phys_config, idxs)
+        target = jax.vmap(jax.vmap(baseline))(phys_config)
         n_det_target = target.shape[-3]
         target = jnp.tile(target, (math.ceil(n_det / n_det_target), 1, 1))[:, :, :n_det]
         # if the baseline has fewer determinatns than the ansatz targets are repeated
@@ -83,8 +83,8 @@ def pretrain(  # noqa: C901
 
     if isinstance(opt, optax.GradientTransformation):
 
-        def _step(rng, params, opt_state, phys_config, idxs):
-            (_, per_sample_losses), grads = loss_and_grad_fn(params, phys_config, idxs)
+        def _step(rng, params, opt_state, phys_config):
+            (_, per_sample_losses), grads = loss_and_grad_fn(params, phys_config)
             grads = jax.lax.pmean(grads, 'device_axis')
             updates, opt_state = opt.update(grads, opt_state, params)
             params = optax.apply_updates(params, updates)
@@ -119,7 +119,6 @@ def pretrain(  # noqa: C901
             params,
             opt_state,
             phys_config,
-            mol_idxs,
         )
         return params, opt_state, per_sample_losses
 

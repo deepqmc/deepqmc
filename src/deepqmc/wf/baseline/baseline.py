@@ -44,7 +44,8 @@ class Baseline(WaveFunction):
         )
         self.confs = confs[:, :n_determinants]
 
-    def __call__(self, phys_conf, mol_idx):
+    def __call__(self, phys_conf):
+        mol_idx = phys_conf.mol_idx
         diffs = pairwise_diffs(phys_conf.r, phys_conf.R)
         n_el = diffs.shape[-3]
         aos = self.basis(diffs)
