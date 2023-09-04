@@ -269,6 +269,7 @@ class ResampledSampler(Sampler):
 
 class MoleculeIdxSampler:
     def __init__(self, rng, n_mols, batch_size, shuffle=False):
+        assert shuffle in [False, 'once', 'always']
         self.rng = rng
         self.n_mols = n_mols
         self.batch_size = batch_size
@@ -292,8 +293,10 @@ class MoleculeIdxSampler:
     def new_permutation(self):
         permutation = jnp.arange(self.n_mols)
         if self.shuffle:
-            self.rng, rng = jax.random.split(self.rng)
+            rng_next, rng = jax.random.split(self.rng)
             permutation = jax.random.permutation(rng, permutation)
+            if self.shuffle == 'always':
+                self.rng = rng_next
         return permutation
 
 

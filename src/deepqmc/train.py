@@ -147,7 +147,7 @@ def train(  # noqa: C901
     assert molecule_batch_size <= len(mols)
     rng, rng_mol_smpl = jax.random.split(rng)
     molecule_idx_sampler = MoleculeIdxSampler(
-        rng_mol_smpl, len(mols), molecule_batch_size, True
+        rng_mol_smpl, len(mols), molecule_batch_size, 'once'
     )
     sampler = MultiNuclearGeometrySampler(
         sampler, jnp.stack([mol.coords for mol in mols])
