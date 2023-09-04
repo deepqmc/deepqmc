@@ -41,7 +41,7 @@ def read_molecules(directory):
         path = to_absolute_path(get_original_cwd()) / path
     log.info(f'Reading molecules from {path}')
     molecules = []
-    for f in glob(str(path / '*.yaml')):
+    for f in sorted(glob(str(path / '*.yaml'))):
         with open(f, 'r') as stream:
             molecules.append(Molecule(**yaml.safe_load(stream)))
     log.info(f'Read {len(molecules)} molecules')
