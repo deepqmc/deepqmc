@@ -84,12 +84,12 @@ class NeuralNetworkWaveFunction(WaveFunction):
         backflow_transform,
         conf_coeff,
     ):
-        super().__init__(hamil.mol)
+        super().__init__(hamil)
         self.charges = hamil.mol.charges
         n_up, n_down = self.n_up, self.n_down
         self.n_det = n_determinants
         self.full_determinant = full_determinant
-        self.envelope = envelope(hamil.mol, n_determinants)
+        self.envelope = envelope(hamil, n_determinants)
         self.conf_coeff = conf_coeff(1, name='conf_coeff')
         self.cusp_electrons = cusp_electrons() if cusp_electrons else None
         self.cusp_nuclei = cusp_nuclei(hamil.mol.charges) if cusp_nuclei else None
@@ -100,7 +100,7 @@ class NeuralNetworkWaveFunction(WaveFunction):
         ]
         self.backflow_transform = backflow_transform
         self.backflow_op = backflow_op() if backflow_op else None
-        self.omni = omni_factory(hamil.mol, *backflow_spec) if omni_factory else None
+        self.omni = omni_factory(hamil, *backflow_spec) if omni_factory else None
 
     def _backflow_op(self, xs, fs, dists_nuc):
         if self.backflow_transform == 'mult':

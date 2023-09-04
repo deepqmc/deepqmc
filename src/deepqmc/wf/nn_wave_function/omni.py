@@ -116,7 +116,7 @@ class OmniNet(hk.Module):
 
     def __init__(
         self,
-        mol,
+        hamil,
         n_orb_up,
         n_orb_down,
         n_determinants,
@@ -128,8 +128,8 @@ class OmniNet(hk.Module):
         backflow_factory,
     ):
         super().__init__()
-        self.n_up = mol.n_up
-        self.gnn = gnn_factory(mol, embedding_dim) if gnn_factory else None
+        self.n_up = hamil.n_up
+        self.gnn = gnn_factory(hamil, embedding_dim) if gnn_factory else None
         self.jastrow = jastrow_factory(embedding_dim) if jastrow_factory else None
         self.backflow = (
             {

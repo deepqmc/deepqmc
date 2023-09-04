@@ -8,7 +8,7 @@ from pyscf.scf import RHF
 log = logging.getLogger(__name__)
 
 
-def pyscf_from_mol(mol, basis, cas=None, **kwargs):
+def pyscf_from_mol(hamil, basis, cas=None, **kwargs):
     r"""Create a pyscf molecule and perform an SCF calculation on it.
 
     Args:
@@ -19,20 +19,20 @@ def pyscf_from_mol(mol, basis, cas=None, **kwargs):
     Returns:
         tuple: the pyscf molecule and the SCF calculation object.
     """
-    for atomic_number in mol.charges[jnp.invert(mol.pp_mask)].tolist():
-        assert atomic_number not in mol.charges[mol.pp_mask], (
+    for atomic_number in hamil.mol.charges[jnp.invert(hamil.pp_mask)].tolist():
+        assert atomic_number not in hamil.mol.charges[hamil.pp_mask], (
             'Usage of different pseudopotentials for atoms of the same element is not'
             ' implemented for pretraining.'
         )
     mol = gto.M(
-        atom=mol.as_pyscf(),
+        atom=hamil.mol.as_pyscf(),
         unit='bohr',
         basis=basis,
-        charge=mol.charge,
-        spin=mol.spin,
+        charge=hamil.mol.charge,
+        spin=hamil.mol.spin,
         cart=True,
         parse_arg=False,
-        ecp={int(charge): mol.pp_type for charge in mol.charges[mol.pp_mask]},
+        ecp={int(charge): hamil.pp_type for charge in hamil.mol.charges[hamil.pp_mask]},
         verbose=0,
         **kwargs,
     )

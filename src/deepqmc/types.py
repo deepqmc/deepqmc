@@ -43,3 +43,6 @@ class Potential:
                 nuclear coordinates.
         """
         raise NotImplementedError
+
+    def nonloc_potential(self, rng, phys_conf, wf):
+        return 0.0

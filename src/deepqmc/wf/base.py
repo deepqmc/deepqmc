@@ -29,10 +29,10 @@ class WaveFunction(hk.Module):
         - Output2, :math:`\operatorname{sgn}\psi(\mathbf r)` (float):
     """
 
-    def __init__(self, mol):
+    def __init__(self, hamil):
         super().__init__()
-        self.mol = mol
-        self.n_up, self.n_down = mol.n_up, mol.n_down
+        self.mol = hamil.mol
+        self.n_up, self.n_down = hamil.n_up, hamil.n_down
 
     @property
     def spin_slices(self):
