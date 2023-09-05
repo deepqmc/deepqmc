@@ -74,6 +74,7 @@ class MolecularHamiltonian(Hamiltonian):
 
         n_elec = int(sum(self.potential.ns_valence) - mol.charge)
         assert not (n_elec + mol.spin) % 2
+        assert n_elec > 1, 'The system must contain at least two active electrons.'
 
         self.n_up = (n_elec + mol.spin) // 2
         self.n_down = (n_elec - mol.spin) // 2
