@@ -1,3 +1,5 @@
+import math
+
 import jax
 import jax.numpy as jnp
 
@@ -6,7 +8,7 @@ from ..types import PhysicalConfiguration
 
 @jax.vmap
 def sph2cart(sph, r=1):
-    # This function transforms from spherical to cartesian coordinates.
+    """This function transforms from spherical to cartesian coordinates."""
     theta = sph[0]
     phi = sph[1]
     rsin_theta = r * jnp.sin(theta)
@@ -17,7 +19,7 @@ def sph2cart(sph, r=1):
 
 
 def rot_y(theta):
-    # returns the rotation matrix about y-axis by angle theta
+    """Returns the rotation matrix about y-axis by angle theta."""
     return jnp.array(
         [
             [jnp.cos(theta), jnp.zeros_like(theta), jnp.sin(theta)],
@@ -28,7 +30,7 @@ def rot_y(theta):
 
 
 def rot_z(phi):
-    # returns the rotation matrix about z-axis by angle phi
+    """Returns the rotation matrix about z-axis by angle phi."""
     return jnp.array(
         [
             [jnp.cos(phi), -jnp.sin(phi), jnp.zeros_like(phi)],
@@ -39,13 +41,13 @@ def rot_z(phi):
 
 
 def get_unit_icosahedron_sph():
-    # Basic definition of unit icosahedron vertices in spherical coordinates.
+    """Basic definition of unit icosahedron vertices in spherical coordinates."""
     unit_icosahedron_sph = []
     unit_icosahedron_sph.append([0, 0])
-    unit_icosahedron_sph.append([jnp.pi, 0])
+    unit_icosahedron_sph.append([math.pi, 0])
     for j in range(5):
-        unit_icosahedron_sph.append([jnp.arctan(2), jnp.pi / 5 * 2 * j])
-        unit_icosahedron_sph.append([jnp.pi - jnp.arctan(2), jnp.pi / 5 * (2 * j - 1)])
+        unit_icosahedron_sph.append([math.atan(2), math.pi / 5 * 2 * j])
+        unit_icosahedron_sph.append([math.pi - math.atan(2), math.pi / 5 * (2 * j - 1)])
     return jnp.array(unit_icosahedron_sph)
 
 
@@ -112,6 +114,7 @@ def get_quadrature_points(rng, nucleus_position, phys_conf):
 
 
 def pad_list_of_3D_arrays_to_one_array(list_of_arrays):
+    """Pads a list of 3D arrays by adding zeros and stacks them into a single array."""
     shapes = [jnp.asarray(arr).shape for arr in list_of_arrays]
     target_shape = jnp.max(jnp.array(shapes), axis=0)
     padded_arrays = [

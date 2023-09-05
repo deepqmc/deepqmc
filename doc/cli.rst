@@ -73,7 +73,7 @@ The predefined configurations can be extended with custom molecules. Alternative
 
 Furthermore, DeepQMC implements the option to use pseudopotentials, which can be used via::
 
-        $ deepqmc hamil.mol.coords=[[0,0,0]] hamil.mol.charges=[21] hamil.mol.charge=0 hamil.mol.spin=1 hamil.mol.unit=angstrom +hamil.mol.pp_type='ccECP'
+        $ deepqmc hamil.mol.coords=[[0,0,0]] hamil.mol.charges=[21] hamil.mol.charge=0 hamil.mol.spin=1 hamil.mol.unit=angstrom +hamil.pp_type='ccECP'
 
 Sampling
 ________

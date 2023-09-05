@@ -142,6 +142,7 @@ class EcpTypePseudopotential(Potential):
         replacing the remaining vmap with fori_loop over the 12 quadrature points.
 
         Args:
+            rng (jax.random.PRNGKey): key used for PRNG.
             phys_conf (:class:`deepqmc.types.PhysicalConfiguration`): electron and
                 nuclear coordinates.
             mol (:class:`deepqmc.Molecule`): a molecule that is used to load the
