@@ -42,13 +42,13 @@ class Helpers:
         return dict(items)
 
     @staticmethod
-    def mol(name='LiH', pp_type=None):
-        return Molecule.from_name(name, pp_type=pp_type)
+    def mol(name='LiH'):
+        return Molecule.from_name(name)
 
     @staticmethod
-    def hamil(mol=None):
+    def hamil(mol=None, pp_type=None, pp_mask=None):
         mol = mol or Helpers.mol()
-        return MolecularHamiltonian(mol=mol)
+        return MolecularHamiltonian(mol=mol, pp_type=pp_type, pp_mask=pp_mask)
 
     @staticmethod
     def R(hamil=None):
