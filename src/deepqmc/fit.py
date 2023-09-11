@@ -7,20 +7,17 @@ import kfac_jax
 import optax
 
 from .kfacext import make_graph_patterns
-from .utils import (
+from .parallel import (
     PMAP_AXIS_NAME,
     gather_on_one_device,
-    masked_mean,
-    per_mol_stats,
     pexp_normalize_mean,
     pmap,
     pmean,
     replicate_on_devices,
     rng_iterator,
-    segment_nanmean,
     split_on_devices,
-    tree_norm,
 )
+from .utils import masked_mean, per_mol_stats, segment_nanmean, tree_norm
 from .wf.base import init_wf_params
 
 __all__ = ()

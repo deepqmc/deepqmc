@@ -6,8 +6,6 @@ from jax.scipy.special import gammaln
 
 __all__ = ()
 
-PMAP_AXIS_NAME = 'device_axis'
-
 
 def flatten(x, start_axis=0):
     return x.reshape(*x.shape[:start_axis], -1)
@@ -170,63 +168,3 @@ def pad_list_of_3D_arrays_to_one_array(list_of_arrays):
         for array in list_of_arrays
     ]
     return jnp.array(padded_arrays)
-
-
-def pmap(fn, axis_name=PMAP_AXIS_NAME, **kwargs):
-    return jax.pmap(fn, axis_name, **kwargs)
-
-
-def pmean(x, axis_name=PMAP_AXIS_NAME, **kwargs):
-    return jax.lax.pmean(x, axis_name, **kwargs)
-
-
-def pmax(x, axis_name=PMAP_AXIS_NAME, **kwargs):
-    return jax.lax.pmax(x, axis_name, **kwargs)
-
-
-def replicate_on_devices(pytree):
-    return jax.device_put_replicated(pytree, devices=jax.devices())
-
-
-def broadcast_to_devices(pytree):
-    return jax.pmap(lambda x: x)(pytree)
-
-
-def select_one_device(pytree, idx=0):
-    return jax.tree_util.tree_map(lambda x: x[idx], pytree)
-
-
-def gather_on_one_device(
-    pytree, gather_fn=jax.lax.all_gather, flatten_device_axis=False
-):
-    all_gathered = jax.pmap(
-        lambda x: gather_fn(x, PMAP_AXIS_NAME), axis_name=PMAP_AXIS_NAME
-    )(pytree)
-    on_one_device = select_one_device(all_gathered)
-    if flatten_device_axis:
-        on_one_device = jax.tree_util.tree_map(
-            lambda x: x.reshape(-1, *x.shape[2:]), on_one_device
-        )
-    return on_one_device
-
-
-def split_rng_key_to_devices(rng):
-    rngs = jax.random.split(rng, jax.device_count())
-    return broadcast_to_devices(rngs)
-
-
-def split_on_devices(rng, num=2):
-    return jax.pmap(lambda key: tuple(jax.random.split(key, num)))(rng)
-
-
-def rng_iterator(rng):
-    while True:
-        rng_yield, rng = split_on_devices(rng)
-        yield rng_yield
-
-
-def pexp_normalize_mean(x, axis_name=PMAP_AXIS_NAME):
-    x_max = pmax(x.max())
-    exp = jnp.exp(x - x_max)
-    exp_mean = pmean(exp.mean())
-    return exp / exp_mean

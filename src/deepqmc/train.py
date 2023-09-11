@@ -16,19 +16,17 @@ from uncertainties import ufloat
 from .ewm import init_ewm
 from .fit import fit_wf
 from .log import CheckpointStore, H5LogTable, TensorboardMetricLogger
-from .physics import pairwise_self_distance
-from .pretrain import pretrain
-from .sampling import MultimoleculeSampler, chain, equilibrate
-from .utils import (
-    ConstantSchedule,
-    InverseSchedule,
+from .parallel import (
     gather_on_one_device,
     replicate_on_devices,
-    segment_nanmean,
     select_one_device,
     split_on_devices,
     split_rng_key_to_devices,
 )
+from .physics import pairwise_self_distance
+from .pretrain import pretrain
+from .sampling import MultimoleculeSampler, chain, equilibrate
+from .utils import ConstantSchedule, InverseSchedule, segment_nanmean
 from .wf.base import init_wf_params
 
 __all__ = ['train']

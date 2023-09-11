@@ -8,7 +8,7 @@ import numpy as np
 import tensorboard.summary
 from jax.tree_util import tree_map
 
-from .utils import gather_on_one_device, select_one_device
+from .parallel import gather_on_one_device, select_one_device
 
 __all__ = ['CheckpointStore', 'H5LogTable', 'TensorboardMetricLogger']
 

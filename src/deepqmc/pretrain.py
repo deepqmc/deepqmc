@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from .utils import (
+from .parallel import (
     gather_on_one_device,
     replicate_on_devices,
     rng_iterator,

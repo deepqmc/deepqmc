@@ -9,14 +9,10 @@ import jax.numpy as jnp
 import jax_dataclasses as jdc
 from jax import lax
 
+from .parallel import replicate_on_devices, rng_iterator
 from .physics import pairwise_diffs, pairwise_self_distance
 from .types import PhysicalConfiguration
-from .utils import (
-    multinomial_resampling,
-    replicate_on_devices,
-    rng_iterator,
-    split_dict,
-)
+from .utils import multinomial_resampling, split_dict
 
 __all__ = [
     'MetropolisSampler',
