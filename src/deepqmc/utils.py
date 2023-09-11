@@ -168,3 +168,8 @@ def pad_list_of_3D_arrays_to_one_array(list_of_arrays):
         for array in list_of_arrays
     ]
     return jnp.array(padded_arrays)
+
+
+def log_squeeze(x):
+    sgn, x = jnp.sign(x), jnp.abs(x)
+    return sgn * jnp.log1p((x + 1 / 2 * x**2 + x**3) / (1 + x**2))

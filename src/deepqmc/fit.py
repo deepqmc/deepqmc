@@ -9,6 +9,9 @@ import optax
 from .kfacext import make_graph_patterns
 from .parallel import (
     PMAP_AXIS_NAME,
+    all_device_mean,
+    all_device_median,
+    all_device_quantile,
     gather_on_one_device,
     pexp_normalize_mean,
     pmap,
@@ -17,7 +20,13 @@ from .parallel import (
     rng_iterator,
     split_on_devices,
 )
-from .utils import masked_mean, per_mol_stats, segment_nanmean, tree_norm
+from .utils import (
+    log_squeeze,
+    masked_mean,
+    per_mol_stats,
+    segment_nanmean,
+    tree_norm,
+)
 from .wf.base import init_wf_params
 
 __all__ = ()
@@ -25,39 +34,26 @@ __all__ = ()
 TrainState = namedtuple('TrainState', 'sampler params opt')
 
 
-def median_clip_and_mask(E_loc, clip_width, median_center, exclude_width=jnp.inf):
-    clip_center = jnp.nanmedian(E_loc) if median_center else jnp.nanmean(E_loc)
-    deviation = jnp.abs(E_loc - clip_center)
-    sigma = jnp.nanmean(deviation)
-    E_loc_s = jnp.clip(
-        E_loc, clip_center - clip_width * sigma, clip_center + clip_width * sigma
-    )
-    gradient_mask = deviation < exclude_width
-    return E_loc_s, gradient_mask
-
-
-def log_squeeze(x):
-    sgn, x = jnp.sign(x), jnp.abs(x)
-    return sgn * jnp.log1p((x + 1 / 2 * x**2 + x**3) / (1 + x**2))
-
-
-def median_log_squeeze(x, width, quantile):
-    x_median = jnp.nanmedian(x)
-    x_diff = x - x_median
-    quantile = jnp.nanquantile(jnp.abs(x_diff), quantile)
-    width = width * quantile
-    return (
-        x_median + 2 * width * log_squeeze(x_diff / (2 * width)),
-        jnp.abs(x_diff) / quantile,
-    )
+def median_clip_and_mask(x, clip_width, median_center, exclude_width=jnp.inf):
+    clip_center = all_device_median(x) if median_center else all_device_mean(x)
+    abs_diff = jnp.abs(x - clip_center)
+    mad = all_device_mean(abs_diff)
+    x_clip = jnp.clip(x, clip_center - clip_width * mad, clip_center + clip_width * mad)
+    gradient_mask = abs_diff < exclude_width
+    return x_clip, gradient_mask
 
 
 def median_log_squeeze_and_mask(
     x, clip_width=1.0, quantile=0.95, exclude_width=jnp.inf
 ):
-    clipped_x, sigma = median_log_squeeze(x, clip_width, quantile)
-    gradient_mask = sigma < exclude_width
-    return clipped_x, gradient_mask
+    x_median = all_device_median(x)
+    x_diff = x - x_median
+    x_abs_diff = jnp.abs(x_diff)
+    quantile = all_device_quantile(x_abs_diff, quantile)
+    width = clip_width * quantile
+    x_clip = x_median + 2 * width * log_squeeze(x_diff / (2 * width))
+    gradient_mask = x_abs_diff / quantile < exclude_width
+    return x_clip, gradient_mask
 
 
 def init_fit(rng, hamil, ansatz, sampler, sample_size):

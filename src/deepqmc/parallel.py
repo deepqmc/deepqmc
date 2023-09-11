@@ -144,3 +144,14 @@ def all_device_median(x, axis_name=PMAP_AXIS_NAME):
         axis_name: optional, name of pmap-ed axis.
     """
     return jax.numpy.median(jax.lax.all_gather(x, axis_name))
+
+
+def all_device_quantile(x, quantile, axis_name=PMAP_AXIS_NAME):
+    r"""Compute quantiles across all devices.
+
+    Args:
+        x: the input data stored on multiple devices.
+        quantile: probability for the quantiles to compute.
+        axis_name: optional, name of pmap-ed axis.
+    """
+    return jax.numpy.quantile(jax.lax.all_gather(x, axis_name), quantile)
