@@ -92,7 +92,7 @@ def fit_wf(  # noqa: C901
         E_loc, hamil_stats = jax.vmap(
             hamil.local_energy(partial(ansatz.apply, params))
         )(rng_batch, phys_conf)
-        loss = jnp.nanmean(E_loc * weight)
+        loss = pmean(jnp.nanmean(E_loc * weight))
         stats = {
             **stats_fn(E_loc, phys_conf.mol_idx, 'E_loc'),
             **{
