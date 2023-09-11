@@ -14,6 +14,18 @@ class DeepQMCCusp:
         return -(scale / (alpha * (1 + alpha * dist))).sum()
 
 
+class PsiformerCusp:
+    r"""Compute the Psiformer cusp factor.
+
+    Computes the factor:
+    :math:`-\frac{\text{scale}}{\sum_{i<j}\alpha^2 * (\alpha + r_{ij})}`, where
+    :math:`r_{ij}` are the electron-electron or electron-nuclei distances.
+    """
+
+    def __call__(self, scale, alpha, dist):
+        return -((scale * alpha**2) / (alpha + dist)).sum()
+
+
 class CuspAsymptotic(hk.Module):
     """Base class for nuclear and electronic cusps."""
 

@@ -15,10 +15,16 @@ backflow_op:
   # mult_act: '${eval:"lambda x: x"}'
 n_determinants: 16
 full_determinant: true
-cusp_electrons: true
-cusp_alpha_electrons: 10
+cusp_electrons:
+  _target_: deepqmc.wf.nn_wave_function.cusp.ElectronicCuspAsymptotic
+  _partial_: true
+  same_scale: 0.25
+  anti_scale: 0.5
+  alpha: 1.0
+  trainable_alpha: true
+  cusp_function:
+    _target_: deepqmc.wf.nn_wave_function.cusp.PsiformerCusp
 cusp_nuclei: false
-cusp_alpha_nuclei: null
 backflow_transform: mult
 conf_coeff:
   _target_: deepqmc.hkext.SumPool
