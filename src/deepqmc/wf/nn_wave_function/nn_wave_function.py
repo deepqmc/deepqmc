@@ -6,7 +6,6 @@ from ...physics import pairwise_diffs, pairwise_self_distance
 from ...types import Psi
 from ...utils import flatten, triu_flat
 from ..base import WaveFunction
-from .cusp import CuspAsymptotic
 
 __all__ = ['NeuralNetworkWaveFunction']
 
@@ -81,9 +80,7 @@ class NeuralNetworkWaveFunction(WaveFunction):
         n_determinants,
         full_determinant,
         cusp_electrons,
-        cusp_alpha_electrons,
         cusp_nuclei,
-        cusp_alpha_nuclei,
         backflow_transform,
         conf_coeff,
     ):
@@ -94,19 +91,8 @@ class NeuralNetworkWaveFunction(WaveFunction):
         self.full_determinant = full_determinant
         self.envelope = envelope(hamil.mol, n_determinants)
         self.conf_coeff = conf_coeff(1, name='conf_coeff')
-        self.cusp_same, self.cusp_anti = (
-            (
-                CuspAsymptotic(cusp=cusp, alpha=cusp_alpha_electrons)
-                for cusp in (0.25, 0.5)
-            )
-            if cusp_electrons
-            else (None, None)
-        )
-        self.cusp_nuclei = (
-            [CuspAsymptotic(cusp=-Z, alpha=cusp_alpha_nuclei) for Z in self.charges]
-            if cusp_nuclei
-            else None
-        )
+        self.cusp_electrons = cusp_electrons() if cusp_electrons else None
+        self.cusp_nuclei = cusp_nuclei(hamil.mol.charges) if cusp_nuclei else None
         backflow_spec = [
             *((n_up + n_down, n_up + n_down) if full_determinant else (n_up, n_down)),
             n_determinants,
@@ -160,20 +146,15 @@ class NeuralNetworkWaveFunction(WaveFunction):
         psi = self.conf_coeff(xs).squeeze()
         log_psi = jnp.log(jnp.abs(psi)) + xs_shift
         sign_psi = jax.lax.stop_gradient(jnp.sign(psi))
-        if self.cusp_same:
-            cusp_same = self.cusp_same(
-                jnp.concatenate(
-                    [triu_flat(dists_elec[idxs, idxs]) for idxs in self.spin_slices],
-                    axis=-1,
-                )
+        if self.cusp_electrons:
+            same_dists = jnp.concatenate(
+                [triu_flat(dists_elec[idxs, idxs]) for idxs in self.spin_slices],
+                axis=-1,
             )
-            cusp_anti = self.cusp_anti(flatten(dists_elec[: self.n_up, self.n_up :]))
-            log_psi = log_psi + cusp_same + cusp_anti
-        if self.cusp_nuclei is not None:
-            cusp_nuclei = sum(
-                self.cusp_nuclei[i](dists_nuc[:, i]) for i in range(len(self.charges))
-            )
-            log_psi = log_psi + cusp_nuclei
+            anti_dists = flatten(dists_elec[: self.n_up, self.n_up :])
+            log_psi += self.cusp_electrons(same_dists, anti_dists)
+        if self.cusp_nuclei:
+            log_psi += self.cusp_nuclei(dists_nuc)
         if jastrow is not None:
             log_psi = log_psi + jastrow
 

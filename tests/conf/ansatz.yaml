@@ -14,10 +14,16 @@ backflow_op:
   _partial_: true
 n_determinants: 2
 full_determinant: false
-cusp_electrons: true
-cusp_alpha_electrons: 10.0
+cusp_electrons:
+  _target_: deepqmc.wf.nn_wave_function.cusp.ElectronicCuspAsymptotic
+  _partial_: true
+  same_scale: 0.25
+  anti_scale: 0.5
+  alpha: 10.0
+  trainable_alpha: false
+  cusp_function:
+    _target_: deepqmc.wf.nn_wave_function.cusp.DeepQMCCusp
 cusp_nuclei: false
-cusp_alpha_nuclei: null
 backflow_transform: mult
 conf_coeff:
   _target_: haiku.Linear
