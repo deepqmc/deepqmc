@@ -15,7 +15,7 @@ pretrain_kwargs:
     b1: 0.9
     b2: 0.999
   baseline_kwargs:
-    basis: 6-311G
+    basis: sto-6g
 metric_logger:
   _target_: deepqmc.log.TensorboardMetricLogger
   _partial_: true
