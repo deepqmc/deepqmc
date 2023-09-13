@@ -12,7 +12,8 @@ def pyscf_from_mol(hamil, basis, cas=None, **kwargs):
     r"""Create a pyscf molecule and perform an SCF calculation on it.
 
     Args:
-        mol (~deepqmc.Molecule): the molecule on which to perform the SCF calculation.
+        hamil (~deepqmc.hamil.qc.MolecularHamiltonian): the Hamiltonian of the
+            molecule on which to perform the SCF calculation.
         basis (str): the name of the Gaussian basis set to use.
         cas (Tuple[int,int]): optional, the active space definition for CAS.
 

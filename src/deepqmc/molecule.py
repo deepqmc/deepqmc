@@ -48,7 +48,6 @@ class Molecule:
     data: dict
 
     # DERIVED PROPERTIES:
-    n_nuc: int
     n_atom_types: int
 
     def __init__(
@@ -76,7 +75,6 @@ class Molecule:
 
         # Derived properties
         set_attr(
-            n_nuc=len(charges),
             n_atom_types=len(jnp.unique(jnp.asarray(charges))),
         )
 

@@ -33,7 +33,7 @@ class TestGraph:
         phys_conf = helpers.phys_conf()
         edge_types = ('ne', 'same', 'anti')
         graph_edges = MolecularGraphEdgeBuilder(
-            mol.n_nuc,
+            hamil.n_nuc,
             hamil.n_up,
             hamil.n_down,
             edge_types,

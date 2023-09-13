@@ -256,7 +256,7 @@ class ElectronGNN(hk.Module):
         ghost_coords=None,
     ):
         super().__init__()
-        n_nuc, n_up, n_down = hamil.mol.n_nuc, hamil.n_up, hamil.n_down
+        n_nuc, n_up, n_down = hamil.n_nuc, hamil.n_up, hamil.n_down
         edge_feat_dim = {typ: len(edge_features[typ]) for typ in edge_types}
         n_atom_types = hamil.mol.n_atom_types
         charges = hamil.mol.charges

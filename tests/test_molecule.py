@@ -24,6 +24,5 @@ class TestMolecule:
                 'spin': mol.spin,
                 'charges': mol.charges,
                 'coords': mol.coords,
-                'n_nuc': mol.n_nuc,
             }
         )

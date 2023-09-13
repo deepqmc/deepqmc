@@ -76,6 +76,7 @@ class MolecularHamiltonian(Hamiltonian):
         assert not (n_elec + mol.spin) % 2
         assert n_elec > 1, 'The system must contain at least two active electrons.'
 
+        self.n_nuc = len(mol.charges)
         self.n_up = (n_elec + mol.spin) // 2
         self.n_down = (n_elec - mol.spin) // 2
         self.ns_valence = self.potential.ns_valence
@@ -110,7 +111,7 @@ class MolecularHamiltonian(Hamiltonian):
 
     def init_single_sample(self, rng, R, elec_std):
         rng_remainder, rng_normal, rng_spin = random.split(rng, 3)
-        valence_electrons = self.potential.ns_valence - self.mol.charge / self.mol.n_nuc
+        valence_electrons = self.potential.ns_valence - self.mol.charge / self.n_nuc
         electrons_of_atom = jnp.floor(valence_electrons).astype(jnp.int32)
 
         def cond_fn(value):
