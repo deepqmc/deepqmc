@@ -42,11 +42,6 @@ def masked_mean(x, mask):
     return x.sum() / jnp.sum(mask)
 
 
-def exp_normalize_mean(x):
-    x_shifted = x - x.max()
-    return jnp.exp(x_shifted) / jnp.exp(x_shifted).mean()
-
-
 def triu_flat(x):
     i, j = jnp.triu_indices(x.shape[-1], 1)
     return x[..., i, j]
