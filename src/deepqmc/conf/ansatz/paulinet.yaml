@@ -21,7 +21,7 @@ cusp_electrons:
 cusp_nuclei:
   _target_: deepqmc.wf.nn_wave_function.cusp.NuclearCuspAsymptotic
   _partial_: true
-  alpha: 1.0
+  alpha: 10.0
   trainable_alpha: false
   cusp_function:
     _target_: deepqmc.wf.nn_wave_function.cusp.DeepQMCCusp
@@ -68,7 +68,12 @@ omni_factory:
     _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
     n_interactions: 4
-    positional_electron_embeddings: false
+    electron_embedding:
+      _target_: deepqmc.gnn.electron_gnn.ElectronEmbedding
+      _partial_: true
+      positional_embeddings: false
+      use_spin: false
+      project_to_embedding_dim: false
     nuclei_embedding:
       _target_: deepqmc.gnn.electron_gnn.NucleiEmbedding
       _partial_: true
