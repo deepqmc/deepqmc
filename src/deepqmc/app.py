@@ -54,7 +54,7 @@ def instantiate_ansatz(hamil, ansatz):
     envelope = ansatz.keywords['envelope']
     if envelope.keywords.get('is_baseline', False):
         # envelope returns a partial(Baseline, **baseline_params) object
-        ansatz.keywords['envelope'] = envelope(hamil.mol)
+        ansatz.keywords['envelope'] = envelope(hamil.mol, hamil)
 
     return hk.without_apply_rng(
         hk.transform(
