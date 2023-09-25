@@ -45,7 +45,8 @@ class NeuralNetworkWaveFunction(WaveFunction):
     Implements the neural network wave function.
 
     Configuration files to obtain the PauliNet [HermannNC20]_, FermiNet [PfauPRR20]_,
-    and DeepErwin [Gerard22]_ architectures are provided.
+    DeepErwin [Gerard22]_ and PsiFormer [Glehn22]_ architectures are provided. For a
+    detailed description of the implemented architeture see [Schaetzle23]_.
 
     Args:
         hamil (~MolecularHamiltonian): the Hamiltonian of the system.

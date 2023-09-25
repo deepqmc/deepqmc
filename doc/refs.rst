@@ -13,16 +13,24 @@ References
 
 .. [Gerard22] L. Gerard, M. Scherbela, P. Marquetand, P. Grohs, Gold-standard
     solutions to the Schrödinger equation using deep learning:
-    How much physics do we need?
+    How much physics do we need?.
     `arXiv:2205.09438 <https://arxiv.org/abs/2205.09438>`_ (2022).
 
+.. [Glehn22] I. von Glehn, J. S. Spencer, D. Pfau, A self-attention ansatz for 
+   ab-initio quantum chemistry. `arXiv:2211.13672 <https://arxiv.org/abs/2211.13672>`_ 
+   (2022).
+
+.. [Schaetzle23] Z. Schätzle, P. B. Szabó, M. Mezera, J. Hermann, F. Noé, DeepQMC: An 
+   open-source software suite for variational optimization of deep-learning molecular 
+   wave functions. `Journal of Chemical Physics 159 (9), 094108
+   <https://doi.org/10.1063/5.0157512>`_ (2023).
+
 .. [Burkatzki07] M. Burkatzki, C. Filippi, and M. Dolg, Energy-consistent
-    pseudopotentials for quantum Monte Carlo calculations `Journal of Chemical
+    pseudopotentials for quantum Monte Carlo calculations. `Journal of Chemical
     Physics 126, 234105 
     <https://doi.org/10.1063/1.2741534>`_ (2007)
 
 .. [Bennett17] M. C. Bennett, C. A. Melton, A. Annaberdiyev, G. Wang, L. Shulenburger,
     and L. Mitas, A new generation of effective core potentials for correlated
-    calculations 
-    `Journal of Chemical Physics 147, 224106
+    calculations. `Journal of Chemical Physics 147, 224106
     <https://doi.org/10.1063/1.4995643>`_ (2017).
