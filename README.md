@@ -10,7 +10,7 @@
 [![code style](https://img.shields.io/badge/code%20style-black-202020.svg)](https://github.com/ambv/black)
 [![doi](https://img.shields.io/badge/doi-10.5281%2Fzenodo.3960826-blue)](http://doi.org/10.5281/zenodo.3960826)
 
-DeepQMC implements variational quantum Monte Carlo for electrons in molecules, using deep neural networks as trial wave functions. The package is based on [JAX](https://github.com/google/jax) and [Haiku](https://github.com/deepmind/dm-haiku). Besides the core functionality, it contains an implementation of a flexible neural network wave function ansatz, that can be configured to obtain a broad range of molecular neural network wave functions. Config files for the instantiation of variants of [PauliNet](https://doi.org/10.1038/s41557-020-0544-y), [FermiNet](https://link.aps.org/doi/10.1103/PhysRevResearch.2.033429) and [DeepErwin](https://arxiv.org/abs/2205.09438) can be found under `src/deepqmc/conf/ansatz`.
+DeepQMC implements variational quantum Monte Carlo for electrons in molecules, using deep neural networks as trial wave functions. The package is based on [JAX](https://github.com/google/jax) and [Haiku](https://github.com/deepmind/dm-haiku). Besides the core functionality, it contains an implementation of a flexible neural network wave function ansatz, that can be configured to obtain a broad range of molecular neural network wave functions. Config files for the instantiation of variants of [PauliNet](https://doi.org/10.1038/s41557-020-0544-y), [FermiNet](https://link.aps.org/doi/10.1103/PhysRevResearch.2.033429), [DeepErwin](https://arxiv.org/abs/2205.09438) and [PsiFormer](https://arxiv.org/abs/2211.13672) can be found under `src/deepqmc/conf/ansatz`.
 
 ### Installation
 
@@ -46,9 +46,31 @@ If issues arise during the JAX installation visit the [JAX Install Guide](https:
 
 For further information about the DeepQMC package and tutorials covering the basic usage visit the [documentation](https://deepqmc.github.io).
 
+An introduction to the methodology and examplary experiments can be found in the asociated [sofware paper](https://doi.org/10.1063/5.0157512).
+
+
 ### Citation
 
-This repository can be cited as:
+If you use DeepQMC for your work, please consider citing our implementation paper:
+
+```
+@article{10.1063/5.0157512,
+    author = {Schätzle, Z. and Szabó, P. B. and Mezera, M. and Hermann, J. and Noé, F.},
+    title = "{DeepQMC: An open-source software suite for variational optimization of deep-learning molecular wave functions}",
+    journal = {The Journal of Chemical Physics},
+    volume = {159},
+    number = {9},
+    pages = {094108},
+    year = {2023},
+    month = {09},
+    issn = {0021-9606},
+    doi = {10.1063/5.0157512},
+    url = {https://doi.org/10.1063/5.0157512},
+}
+
+```
+The repository can be cited as:
+
 ```
 @software{deepqmc,
 	author = {Jan Hermann and
