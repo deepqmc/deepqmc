@@ -104,4 +104,3 @@ omni_factory:
         _partial_: true
         edge_types: [up, down]
         normalize: true
-  

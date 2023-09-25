@@ -158,4 +158,3 @@ omni_factory:
             _target_: jax.numpy.tanh
             _partial_: true
           init: default
-  
