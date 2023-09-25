@@ -46,7 +46,7 @@ If issues arise during the JAX installation visit the [JAX Install Guide](https:
 
 For further information about the DeepQMC package and tutorials covering the basic usage visit the [documentation](https://deepqmc.github.io).
 
-An introduction to the methodology and examplary experiments can be found in the asociated [sofware paper](https://doi.org/10.1063/5.0157512).
+An introduction to the methodology and exemplary experiments can be found in the associated [software paper](https://doi.org/10.1063/5.0157512).
 
 
 ### Citation
