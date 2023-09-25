@@ -86,7 +86,7 @@ Optimize the ansatz
 The high-level :func:`~deepqmc.train` function is used to train the deep neural networks in the ansatz. The train function takes a :class:`~deepqmc.hamil.MolecularHamiltonian`, a :class:`~deepqmc.wf.WaveFunction` and a :class:`~deepqmc.sampling.Sampler`. Further necessary arguments are an optimizer (``opt``), the number of training steps (``steps``), the number of samples used in a training batch (``sample_size``), and a seed (``seed``)::
 
     >>> from deepqmc import train
-    >>> train(H, ansatz, 'kfac', sampler, steps=10000, sample_size=2000, seed=42)
+    >>> train(H, ansatz, 'kfac', sampler, steps=10000, electron_batch_size=2000, seed=42)
     training:   0%|▋       | 102/10000 [01:00<23:01, 7.16it/s, E=-8.042(10)]
 
 If the argument ``pretrain_steps`` is set, the ansatz is pretrained with respect to a Hartree-Fock or CASSCF baseline obtained with :mod:`pyscf`. For more details as well as further training hyperparameters consult the :ref:`api <api>` reference.
