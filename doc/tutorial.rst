@@ -59,7 +59,7 @@ The neural network wave function ansatz is available in the :mod:`deepqmc.wf` su
     with initialize_config_dir(version_base=None, config_dir=config_dir):
         cfg = compose(config_name='default')
 
-    _ansatz = instantiate(cfg, _recursive_=True)
+    _ansatz = instantiate(cfg, _recursive_=True, _convert_='all')
 
 
     @hk.without_apply_rng
