@@ -51,7 +51,7 @@ An introduction to the methodology and exemplary experiments can be found in the
 
 ### Citation
 
-If you use DeepQMC for your work, please consider citing our implementation paper:
+If you use DeepQMC for your work, please cite our implementation paper:
 
 ```
 @article{10.1063/5.0157512,
