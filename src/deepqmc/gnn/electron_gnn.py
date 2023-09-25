@@ -246,7 +246,6 @@ class ElectronGNN(hk.Module):
         *,
         n_interactions,
         edge_features,
-        edge_types,
         self_interaction,
         two_particle_stream_dim,
         nuclei_embedding,
@@ -273,6 +272,7 @@ class ElectronGNN(hk.Module):
                 'electrons': jnp.array(n_up * [0] + n_down * [int(n_up != n_down)])
             },
         }
+        self.edge_types = tuple(edge_features.keys())
         self.layers = [
             layer_factory(
                 n_interactions,
@@ -281,7 +281,7 @@ class ElectronGNN(hk.Module):
                 n_up,
                 n_down,
                 embedding_dim,
-                edge_types,
+                self.edge_types,
                 self_interaction,
                 self.node_data,
                 two_particle_stream_dim,
@@ -289,7 +289,6 @@ class ElectronGNN(hk.Module):
             for ilayer in range(n_interactions)
         ]
         self.edge_features = edge_features
-        self.edge_types = edge_types
         self.nuclei_embedding = (
             nuclei_embedding(charges, n_atom_types) if nuclei_embedding else None
         )

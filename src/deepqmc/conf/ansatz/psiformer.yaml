@@ -66,7 +66,6 @@ omni_factory:
       project_to_embedding_dim: true
     two_particle_stream_dim: 32
     self_interaction: true
-    edge_types: []
     edge_features: []
     layer_factory:
       _target_: deepqmc.gnn.electron_gnn.ElectronGNNLayer

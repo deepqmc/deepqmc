@@ -63,10 +63,6 @@ omni_factory:
       project_to_embedding_dim: false
     two_particle_stream_dim: 32
     self_interaction: true
-    edge_types:
-    - same
-    - anti
-    - ne
     edge_features:
       ne:
         _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
