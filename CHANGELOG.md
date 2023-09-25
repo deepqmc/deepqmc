@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased] - 2023-05-22
+## [1.0.2] - 2023-10-25
 
 ###Changed
 
@@ -16,8 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove defaults from code and fully transition to ansatz initialization through hydra
 - Implement pseudo potentials
 - Implement training on multiple molecular configurations (undocumented)
-- Add configuration files for PauliNet, FermiNet and DeepErwin
-- Enable reequilibration of walkers during training
+- Add configuration files for PauliNet, FermiNet, DeepErwin and PsiFormer
+- Add multi-GPU support
 
 ###Fixed
 
