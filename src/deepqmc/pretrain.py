@@ -46,12 +46,12 @@ def pretrain(  # noqa: C901
         baseline_kwargs (dict): optional, additional keyword arguments passed to the
             baseline wave function.
     """
-    partial_baseline = Baseline.from_mol(mols, **(baseline_kwargs or {}))
+    partial_baseline = Baseline.from_mol(mols, hamil, **(baseline_kwargs or {}))
 
     @hk.without_apply_rng
     @hk.transform
     def baseline(phys_conf):
-        return partial_baseline(hamil.mol, None)(phys_conf)
+        return partial_baseline(hamil, None)(phys_conf)
 
     rng, rng_hamil, rng_baseline = jax.random.split(rng, 3)
     init_pc = hamil.init_sample(rng_hamil, mols[0].coords, 1)[0]

@@ -18,7 +18,7 @@ class Baseline(WaveFunction):
 
     def __init__(
         self,
-        mol,
+        hamil,
         n_determinants,
         centers,
         shells,
@@ -27,7 +27,7 @@ class Baseline(WaveFunction):
         conf_coeffs,
         trainable=False,
     ):
-        super().__init__(mol)
+        super().__init__(hamil)
         self.basis = GTOBasis(centers, shells)
         conf_coeffs = conf_coeffs[:, :n_determinants]
         self.mo_coeffs = (
@@ -60,7 +60,7 @@ class Baseline(WaveFunction):
 
     @classmethod
     def from_mol(
-        cls, mols, *, basis='6-31G', cas=None, is_baseline=True, **pyscf_kwargs
+        cls, mols, hamil, *, basis='6-31G', cas=None, is_baseline=True, **pyscf_kwargs
     ):
         r"""Create input to the constructor from a :class:`~deepqmc.Molecule`.
 
@@ -75,14 +75,22 @@ class Baseline(WaveFunction):
         """
         mols = mols if isinstance(mols, Sequence) else [mols]
         mo_coeffs, confs, conf_coeffs = [], [], []
-        for mol in mols:
-            mol_pyscf, (mf, mc) = pyscf_from_mol(mol, basis, cas, **pyscf_kwargs)
+        for _mol in mols:
+            mol_pyscf, (mf, mc) = pyscf_from_mol(hamil, basis, cas, **pyscf_kwargs)
             centers, shells = GTOBasis.from_pyscf(mol_pyscf)
             mo_coeff = jnp.asarray(mc.mo_coeff if mc else mf.mo_coeff)
             ao_overlap = jnp.asarray(mf.mol.intor('int1e_ovlp_cart'))
             mo_coeff *= jnp.sqrt(jnp.diag(ao_overlap))[:, None]
             conf_coeff, conf = (
-                ([1], [sum([list(range(n_el)) for n_el in (mol.n_up, mol.n_down)], [])])
+                (
+                    [1],
+                    [
+                        sum(
+                            [list(range(n_el)) for n_el in (hamil.n_up, hamil.n_down)],
+                            [],
+                        )
+                    ],
+                )
                 if mc is None
                 else zip(*confs_from_mc(mc))
             )

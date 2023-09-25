@@ -12,7 +12,7 @@ class ExponentialEnvelopes(hk.Module):
 
     def __init__(
         self,
-        mol,
+        hamil,
         n_determinants,
         *,
         isotropic,
@@ -25,7 +25,7 @@ class ExponentialEnvelopes(hk.Module):
         super().__init__()
         shells = []
         for i, (z, n_shell, n_pp_shell) in enumerate(
-            zip(mol.charges, mol.n_shells, mol.n_pp_shells)
+            zip(hamil.mol.charges, hamil.mol_shells, hamil.mol_pp_shells)
         ):
             for k in range(n_pp_shell, n_shell if per_shell else n_pp_shell + 1):
                 shells.append((i, z / (k + 1)))
@@ -33,13 +33,13 @@ class ExponentialEnvelopes(hk.Module):
         self.init_to_ones = init_to_ones
         self.pi = [
             self.get_pi_for_one_spin(
-                name, n_determinants, mol.n_up, mol.n_down, len(zetas)
+                name, n_determinants, hamil.n_up, hamil.n_down, len(zetas)
             )
             for name in (['pi'] if spin_restricted else ['pi_up', 'pi_down'])
         ]  # [n_orb, n_env]
         if per_orbital_exponent:
             zetas = jnp.tile(
-                zetas[None], (n_determinants * (mol.n_up + mol.n_down), 1)
+                zetas[None], (n_determinants * (hamil.n_up + hamil.n_down), 1)
             )  # [n_orb, n_env]
         if not isotropic:
             zetas = zetas[..., None, None] * jnp.eye(3)
@@ -50,7 +50,7 @@ class ExponentialEnvelopes(hk.Module):
         self.isotropic = isotropic
         self.per_orbital_exponent = per_orbital_exponent
         self.spin_restricted = spin_restricted
-        self.n_up = mol.n_up
+        self.n_up = hamil.n_up
         self.n_det = n_determinants
         self.softplus_zeta = softplus_zeta
 

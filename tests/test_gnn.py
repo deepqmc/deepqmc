@@ -29,10 +29,13 @@ class TestGraph:
 
     def test_molecular_graph_edge_builder(self, helpers, ndarrays_regression):
         mol = helpers.mol()
+        hamil = helpers.hamil(mol)
         phys_conf = helpers.phys_conf()
         edge_types = ('ne', 'same', 'anti')
         graph_edges = MolecularGraphEdgeBuilder(
-            *mol.n_particles,
+            hamil.n_nuc,
+            hamil.n_up,
+            hamil.n_down,
             edge_types,
             self_interaction=False,
         )(phys_conf)
@@ -46,7 +49,7 @@ class TestGNN:
         hamil = helpers.hamil(mol)
         phys_conf = helpers.phys_conf(hamil)
         _gnn = helpers.init_conf('gnn')
-        gnn = helpers.transform_model(_gnn, mol, 8)
+        gnn = helpers.transform_model(_gnn, hamil, 8)
         params = helpers.init_model(gnn, phys_conf)
         emb = gnn.apply(params, phys_conf)
         ndarrays_regression.check(

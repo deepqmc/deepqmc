@@ -1,11 +1,12 @@
 defaults:
   - sampler: metropolis_saml
-  - opt: kfac_saml
+  - opt: kfac
 _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
 ansatz: ${ansatz}
 steps: 50000
-sample_size: 2048
+molecule_batch_size: 1
+electron_batch_size: 2048
 seed: 0
 pretrain_steps: 5000
 pretrain_kwargs:

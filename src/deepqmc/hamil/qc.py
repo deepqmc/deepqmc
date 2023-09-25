@@ -1,20 +1,33 @@
+from itertools import count
+
 import jax.numpy as jnp
 import jax_dataclasses as jdc
 from jax import lax, random, vmap
 
 from ..physics import (
+    NuclearCoulombPotential,
     electronic_potential,
     laplacian,
-    local_potential,
-    nonlocal_potential,
     nuclear_energy,
     pairwise_distance,
 )
+from ..pp.ecp_potential import EcpTypePseudopotential
 from ..types import PhysicalConfiguration
 from ..utils import argmax_random_choice
 from .base import Hamiltonian
 
 __all__ = ['MolecularHamiltonian']
+
+
+def get_shell(z):
+    # returns the number of (at least partially) occupied shells for 'z' electrons
+    # 'get_shell(z+1)-1' yields the number of fully occupied shells for 'z' electrons
+    max_elec = 0
+    for n in count():
+        if z <= max_elec:
+            break
+        max_elec += 2 * (1 + n) ** 2
+    return n
 
 
 class MolecularHamiltonian(Hamiltonian):
@@ -29,13 +42,49 @@ class MolecularHamiltonian(Hamiltonian):
 
     Args:
         mol (~deepqmc.Molecule): the molecule to consider
+        pp_type (str): If set, use the appropriate pseudopotential. The string is passed
+            to :func:`pyscf.gto.M()` as :data:`'ecp'` argument. Currently supported
+            pseudopotential types: :data:`'bfd'` [Burkatzki et al. 2007],
+            :data:`'ccECP'` [Bennett et al. 2017]. Other types might not work properly.
+        pp_mask (list, (:math:`N_\text{nuc}`)): list of True and False values specifying
+            whether to use a pseudopotential for each nucleus
         elec_std (float): optional, a default value of the scaling factor
         of the spread of electrons around the nuclei.
     """
 
-    def __init__(self, *, mol, elec_std=1.0):
+    def __init__(self, *, mol, pp_type=None, pp_mask=None, elec_std=1.0):
         self.mol = mol
         self.elec_std = elec_std
+        self.pp_type = pp_type
+
+        if pp_type is None:
+            pp_mask = [False] * len(mol.charges)
+        elif pp_mask is None:
+            # use PP only for atoms larger than He
+            pp_mask = mol.charges > 2
+        assert len(pp_mask) == len(mol.charges), "Incompatible shape of 'pp_mask'!"
+
+        self.pp_mask = jnp.array(pp_mask)
+
+        # Derived properties
+        if self.pp_type is None:
+            self.potential = NuclearCoulombPotential(mol.charges)
+        else:
+            self.potential = EcpTypePseudopotential(mol.charges, pp_type, self.pp_mask)
+
+        n_elec = int(sum(self.potential.ns_valence) - mol.charge)
+        assert not (n_elec + mol.spin) % 2
+        assert n_elec > 1, 'The system must contain at least two active electrons.'
+
+        self.n_nuc = len(mol.charges)
+        self.n_up = (n_elec + mol.spin) // 2
+        self.n_down = (n_elec - mol.spin) // 2
+        self.ns_valence = self.potential.ns_valence
+
+        self.mol_shells = [get_shell(z) for z in self.mol.charges]
+        self.mol_pp_shells = [
+            get_shell(z + 1) - 1 for z in self.mol.charges - self.ns_valence
+        ]
 
     def init_sample(self, rng, Rs, n, elec_std=None):
         r"""
@@ -62,13 +111,15 @@ class MolecularHamiltonian(Hamiltonian):
 
     def init_single_sample(self, rng, R, elec_std):
         rng_remainder, rng_normal, rng_spin = random.split(rng, 3)
-        valence_electrons = self.mol.ns_valence - self.mol.charge / self.mol.n_nuc
+        valence_electrons = self.potential.ns_valence - self.mol.charge / self.n_nuc
         electrons_of_atom = jnp.floor(valence_electrons).astype(jnp.int32)
 
         def cond_fn(value):
             _, electrons_of_atom = value
             return (
-                self.mol.ns_valence.sum() - self.mol.charge - electrons_of_atom.sum()
+                self.potential.ns_valence.sum()
+                - self.mol.charge
+                - electrons_of_atom.sum()
                 > 0
             )
 
@@ -86,8 +137,8 @@ class MolecularHamiltonian(Hamiltonian):
         )
         rng_spin = random.split(rng_spin, 1)
         up, down = self.distribute_spins(rng_spin, R, electrons_of_atom)
-        up = (jnp.cumsum(up)[:, None] <= jnp.arange(self.mol.n_up)).sum(axis=0)
-        down = (jnp.cumsum(down)[:, None] <= jnp.arange(self.mol.n_down)).sum(axis=0)
+        up = (jnp.cumsum(up)[:, None] <= jnp.arange(self.n_up)).sum(axis=0)
+        down = (jnp.cumsum(down)[:, None] <= jnp.arange(self.n_down)).sum(axis=0)
         idxs = jnp.concatenate([up, down])
         centers = R[idxs]
         std = (elec_std or self.elec_std) * jnp.sqrt(self.mol.charges)[idxs][..., None]
@@ -105,9 +156,7 @@ class MolecularHamiltonian(Hamiltonian):
         def pair_body_fn(value):
             i, up, down = value
             mask = elec_of_atom >= 2 * (i + 1)
-            increment = jnp.where(
-                mask & (mask.sum() + down.sum() <= self.mol.n_down), 1, 0
-            )
+            increment = jnp.where(mask & (mask.sum() + down.sum() <= self.n_down), 1, 0)
             up = up + increment
             down = down + increment
             return i + 1, up, down
@@ -125,7 +174,7 @@ class MolecularHamiltonian(Hamiltonian):
 
         def spin_body_fn(value):
             i, center, up, down = value
-            is_down = (i % 2) & (down.sum() < self.mol.n_down)
+            is_down = (i % 2) & (down.sum() < self.n_down)
             up = up.at[center].add(1 - is_down)
             down = down.at[center].add(is_down)
             ordering = nearest_neighbor_indices[center]
@@ -151,21 +200,19 @@ class MolecularHamiltonian(Hamiltonian):
                 phys_conf.r.flatten()
             )
             Es_kin = -0.5 * (lap_log_psis + (quantum_force**2).sum(axis=-1))
-            Es_nuc = nuclear_energy(phys_conf, self.mol)
+            Es_nuc = nuclear_energy(phys_conf, self.ns_valence)
             Vs_el = electronic_potential(phys_conf)
-            Vs_loc = local_potential(phys_conf, self.mol)
-            Es_loc = Es_kin + Vs_loc + Vs_el + Es_nuc
+            Vs_loc = self.potential.local_potential(phys_conf)
+            Vs_nl = self.potential.nonloc_potential(rng, phys_conf, wf)
+            Es_loc = Es_kin + Vs_loc + Vs_nl + Vs_el + Es_nuc
             stats = {
                 'hamil/V_el': Vs_el,
                 'hamil/E_kin': Es_kin,
                 'hamil/V_loc': Vs_loc,
+                'hamil/V_nl': Vs_nl,
                 'hamil/lap': lap_log_psis,
                 'hamil/quantum_force': (quantum_force**2).sum(axis=-1),
             }
-            if self.mol.any_pp:
-                Vs_nl = nonlocal_potential(rng, phys_conf, self.mol, wf)
-                Es_loc += Vs_nl
-                stats = {**stats, 'hamil/V_nl': Vs_nl}
 
             result = (Es_loc, quantum_force) if return_grad else Es_loc
             return result, stats

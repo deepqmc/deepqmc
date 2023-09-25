@@ -128,7 +128,7 @@ The evaluation generates the same type of logs as the training, but writes to ``
 Pseudopotentials
 -------------------
 
-DeepQMC currently supports ``bfd`` [Burkatzki07]_ and ``ccECP`` [Bennett17]_ pseudopotentials, which can be enabled by passing the ``pp_type`` argument to the molecule definition. This replaces a certain number of core electrons with a pseudopotential, reducing the total number of electrons explicitly treated and thus decreasing the computational cost. If the argument ``pp_type`` is passed, the pseudopotentials are used for all the nuclei in the molecule considered, but can be turned off for individual nuclei by specifying ``pp_mask``, a boolean array with ``True`` for each nucleus with pseudopotential turned on. The following example defines a TiO molecule where the titanium core is replaced by a pseudopotential and the oxygen core is left unaffected::
+DeepQMC currently supports ``bfd`` [Burkatzki07]_ and ``ccECP`` [Bennett17]_ pseudopotentials, which can be enabled by passing the ``pp_type`` argument to the hamiltonian definition. This replaces a certain number of core electrons with a pseudopotential, reducing the total number of electrons explicitly treated and thus decreasing the computational cost. The pseudopotentials for all nuclei heavier than He in the molecule will be used if the argument ``pp_type`` is passed. They can be turned off or on for individual nuclei by specifying ``pp_mask``, a boolean array with ``True`` for each nucleus with pseudopotential turned on. The following example defines a hamiltonian of a TiO molecule where the titanium core is replaced by a pseudopotential and the oxygen core is left unaffected::
 
     mol = Molecule(  # TiO
         coords=[[0.0, 0.0, 0.0], [1.668, 0.0, 0.0]],
@@ -136,15 +136,11 @@ DeepQMC currently supports ``bfd`` [Burkatzki07]_ and ``ccECP`` [Bennett17]_ pse
         charge=0,
         spin=2,
         unit='angstrom',
-        pp_type='ccECP',
-        pp_mask=[True,False],
     )
-
-The systems containing heavier atoms sometimes tend to produce NaN errors. To avoid these issues, it was found useful to use a smaller variance for the initial distribution of electrons around the nuclei (via the ``elec_std`` argument) and a larger decorrelation length for sampling::
-
-    H = MolecularHamiltonian(mol=mol, elec_std=0.1)
+    H = MolecularHamiltonian(mol=mol, pp_type='ccECP', pp_mask=[True,False], elec_std=0.1)
     sampler = chain(DecorrSampler(length=100),MetropolisSampler(H))
 
+The systems containing heavier atoms sometimes tend to produce NaN errors. To avoid these issues, it was found useful to use a smaller variance for the initial distribution of electrons around the nuclei (via the ``elec_std`` argument) and a larger decorrelation length for sampling
 .. code::
 
     @hk.without_apply_rng
