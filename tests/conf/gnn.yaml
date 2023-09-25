@@ -15,10 +15,6 @@ electron_embedding:
   project_to_embedding_dim: false
 two_particle_stream_dim: 8
 self_interaction: false
-edge_types:
-- same
-- anti
-- ne
 edge_features:
   ne:
     _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
