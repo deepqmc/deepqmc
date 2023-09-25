@@ -9,6 +9,9 @@ DeepQMC is based on `JAX <https://github.com/google/jax>`_ and `Haiku <https://g
 - `JAX documentation <https://jax.readthedocs.io/en/latest>`_
 - `Haiku documentation <https://dm-haiku.readthedocs.io/en/latest>`_
 
+For an introduction to the methodology of variataional Monte Carlo with neural network trial wave functions, details on the deep-learning Ansätze and applications of the DeepQMC program package we refer to the accompanying `software paper <https://doi.org/10.1063/5.0157512>`_.
+
+
 User guide
 ==========
 
