@@ -67,9 +67,9 @@ def train(  # noqa: C901
     opt,
     sampler,
     steps,
-    molecule_batch_size,
-    electron_batch_size,
     seed,
+    electron_batch_size,
+    molecule_batch_size=1,
     mols=None,
     workdir=None,
     train_state=None,
@@ -110,9 +110,10 @@ def train(  # noqa: C901
                 is performed.
         sampler (~deepqmc.sampling.Sampler): a sampler instance
         steps (int): number of optimization steps.
-        molecule_batch_size (int): the number of molecules considered in a batch
-        electron_batch_size (int): the number of electron samples considered in a batch
         seed (int): the seed used for PRNG.
+        electron_batch_size (int): the number of electron samples considered in a batch
+        molecule_batch_size (int): optional, the number of molecules considered in a
+            batch. Only needed for transferable training.
         mols (Sequence(~deepqmc.molecule.Molecule)): optional, a sequence of molecules
             to consider for transferable training. If None the default molecule from
             hamil is used.
