@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ###Changed
 
-- Refactor simplifying the PauliNet
+- Refactor and simplify the PauliNet
 - Generalize the GNN framework
 - Remove wave function state and cutoff mechanism
 - Remove defaults from code and fully transition to ansatz initialization through hydra
