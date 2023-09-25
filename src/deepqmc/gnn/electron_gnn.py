@@ -67,7 +67,6 @@ class ElectronGNNLayer(hk.Module):
         edge_types,
         self_interaction,
         node_data,
-        edge_feat_dim,
         two_particle_stream_dim,
         *,
         one_particle_residual,
@@ -257,7 +256,6 @@ class ElectronGNN(hk.Module):
     ):
         super().__init__()
         n_nuc, n_up, n_down = hamil.n_nuc, hamil.n_up, hamil.n_down
-        edge_feat_dim = {typ: len(edge_features[typ]) for typ in edge_types}
         n_atom_types = hamil.mol.n_atom_types
         charges = hamil.mol.charges
         self.ghost_coords = None
@@ -286,7 +284,6 @@ class ElectronGNN(hk.Module):
                 edge_types,
                 self_interaction,
                 self.node_data,
-                edge_feat_dim,
                 two_particle_stream_dim,
             )
             for ilayer in range(n_interactions)
