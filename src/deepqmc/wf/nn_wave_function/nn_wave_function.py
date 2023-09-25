@@ -46,7 +46,7 @@ class NeuralNetworkWaveFunction(WaveFunction):
 
     Configuration files to obtain the PauliNet [HermannNC20]_, FermiNet [PfauPRR20]_,
     DeepErwin [Gerard22]_ and PsiFormer [Glehn22]_ architectures are provided. For a
-    detailed description of the implemented architeture see [Schaetzle23]_.
+    detailed description of the implemented architecture see [Schaetzle23]_.
 
     Args:
         hamil (~MolecularHamiltonian): the Hamiltonian of the system.
