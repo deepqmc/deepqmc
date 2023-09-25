@@ -43,7 +43,7 @@ This again generates a Tensorboard event file ``evaluation/events.out.tfevents.*
 Execution on mulitple GPUs
 --------------------------
 
-DeepQMC can utilize multiple GPUs of a single host for increased performance. The algorithm is parallelised over the electron position samples, therefore the number of such samples in a batch (``electron_batch_size``) must be divisible with the number of utilized GPUs. DeepQMC relies on JAX to automatically detect and use all available GPUs, without any configuration from the user. It respects the ``CUDA_VISIBLE_DEVICES`` environment variable and only uses the GPUs specified there. A short log message at the beginning of the run informs the user of the number of utilized GPUs.
+DeepQMC can utilize multiple GPUs of a single host for increased performance. The algorithm is parallelised over the electron position samples, therefore the number of such samples in a batch (``electron_batch_size``) must be divisible with the number of utilized GPUs. DeepQMC relies on JAX to automatically detect and use all available GPUs, without any configuration from the user. It respects the ``CUDA_VISIBLE_DEVICES`` environment variable if it's defined, and only uses the GPUs specified there. A short log message at the beginning of the run informs the user of the number of utilized GPUs.
 
 .. _hyperparameters:
 
