@@ -139,17 +139,26 @@ def maybe_log_code_version():
             log.debug(f'With uncommitted changes:\n{diff}')
 
 
-def main(cfg):
+def detect_devices():
     import jax
 
+    device_kinds = [device.device_kind for device in jax.devices()]
+    assert all(dk == device_kinds[0] for dk in device_kinds)
+    n_device = len(device_kinds)
+    n_process = jax.process_count()
+    log.info(
+        'Running on'
+        f' {n_device} {device_kinds[0].upper()}{"" if n_device == 1 else "s"} with'
+        f' {n_process} process{"" if n_process == 1 else "es"}'
+    )
+
+
+def main(cfg):
     log.setLevel(cfg.logging.deepqmc)
     logging.getLogger('jax').setLevel(cfg.logging.jax)
     logging.getLogger('absl').setLevel(cfg.logging.kfac)
     log.info('Entering application')
-    jax.config.update('jax_platform_name', cfg.device)
-    log.info(f'Running on {cfg.device.upper()}')
-    if cfg.device.upper() == 'CUDA':
-        log.info(f'Detected {jax.device_count()} {cfg.device.upper()} devices')
+    detect_devices()
     cfg.task.workdir = str(Path.cwd())
     log.info(f'Will work in {cfg.task.workdir}')
     maybe_log_code_version()
