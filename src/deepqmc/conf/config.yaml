@@ -14,7 +14,6 @@ hydra:
     - file://conf
 task:
   workdir: ???
-device: cuda
 logging:
   deepqmc: 20
   jax: 40

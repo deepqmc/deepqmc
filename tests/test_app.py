@@ -7,7 +7,6 @@ class TestApp:
     ARGS = [
         'deepqmc',
         'hamil/mol=H2',
-        'device=cpu',
         'task.steps=1',
         'task.electron_batch_size=2',
         '+task.max_eq_steps=1',
