@@ -34,14 +34,19 @@ def parse_ecp_type_params(charges, pp_type, pp_mask):
     max_number_of_same_type_terms = []
     for i, atomic_number in enumerate(charges):
         if pp_mask[i]:
-            _, data = gto.M(
+            pyscf_mole = gto.M(
                 atom=[(int(atomic_number), jnp.array([0, 0, 0]))],
                 # spin is just a placeholder, ecp parameters don't depend on the spin
                 spin=atomic_number % 2,
                 ecp=pp_type,
-            )._ecp.popitem()
+            )
+            assert len(pyscf_mole._ecp) == 1, (
+                f'Pseudopotential of type {pp_type} not found for'
+                f' {pyscf_mole._atom[0][0]} atom.'
+            )
+            _, data = pyscf_mole._ecp.popitem()
             pp_loc_param = data[1][0][1][1:4]
-            if data[0] != 0:
+            if len(data[1]) > 1:
                 pp_nl_param = jnp.array([di[1][2] for di in data[1][1:]]).swapaxes(
                     -1, -2
                 )
