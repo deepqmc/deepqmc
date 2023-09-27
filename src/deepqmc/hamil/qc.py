@@ -43,9 +43,10 @@ class MolecularHamiltonian(Hamiltonian):
     Args:
         mol (~deepqmc.Molecule): the molecule to consider
         pp_type (str): If set, use the appropriate pseudopotential. The string is passed
-            to :func:`pyscf.gto.M()` as :data:`'ecp'` argument. Currently supported
-            pseudopotential types: :data:`'bfd'` [Burkatzki et al. 2007],
-            :data:`'ccECP'` [Bennett et al. 2017]. Other types might not work properly.
+            to :func:`pyscf.gto.M()` as :data:`'ecp'` argument. Supports
+            pseudopotentials that are implemented in the pyscf package, e.g.
+            :data:`'bfd'` [Burkatzki et al. 2007] or :data:`'ccECP'`
+            [Bennett et al. 2017].
         pp_mask (list, (:math:`N_\text{nuc}`)): list of True and False values specifying
             whether to use a pseudopotential for each nucleus
         elec_std (float): optional, a default value of the scaling factor

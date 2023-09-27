@@ -79,9 +79,9 @@ def parse_ecp_type_params(charges, pp_type, pp_mask):
 class EcpTypePseudopotential(Potential):
     r"""Class for the pseudopotential of the ECP type.
 
-    Supports both 'ccECP' and 'bfd' pseudopotentials. The pseudopotential parameters
-    are loaded from the pyscf package.
-    The pseudopotential is defined by the general formula:
+    Supports pseudopotentials that are defined in pyscf package, such as 'bfd', 'ccECP',
+    'ccECP_reg' or 'ccECP_He'. The pseudopotential parameters are loaded directly from
+    the pyscf package. The pseudopotential is defined by the general formula:
     :math: `\sum_{l=0}^{l_\text{max}} V_{\text{nl}}(\mathbf{r}) |lm\rangle\langle lm|`
     :math: V_\text{nl}({r}) = \sum_{k=1}^{2} \beta_{lk} \text{e}^{-\alpha_k r^2}
     """
@@ -217,8 +217,12 @@ class EcpTypePseudopotential(Potential):
             )
             return val + nl_potential_for_one_nucleus
 
-        total_nl_potential = jax.lax.fori_loop(
-            0, len(self.nuc_with_nl_pot), add_nl_potential_for_one_nucleus, 0.0
+        total_nl_potential = (
+            jax.lax.fori_loop(
+                0, len(self.nuc_with_nl_pot), add_nl_potential_for_one_nucleus, 0.0
+            )
+            if len(self.nuc_with_nl_pot) > 0
+            else 0.0
         )
 
         return total_nl_potential
