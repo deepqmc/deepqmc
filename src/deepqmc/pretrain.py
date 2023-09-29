@@ -93,7 +93,7 @@ def pretrain(  # noqa: C901
     else:
         raise NotImplementedError
 
-    rng, rng_smpl_init = split_on_devices(split_rng_key_to_devices(rng))
+    rng, rng_smpl_init = split_on_devices(split_rng_key_to_devices(rng), 2)
     wf = partial(ansatz.apply, select_one_device(params))
     sample_initializer = partial(
         sampler.init,

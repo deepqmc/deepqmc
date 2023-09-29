@@ -2,13 +2,12 @@ import pickle
 from collections import namedtuple
 from pathlib import Path
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import tensorboard.summary
 from jax.tree_util import tree_map
 
-from .parallel import gather_on_one_device
+from .parallel import pmap_pmean, select_one_device
 
 Checkpoint = namedtuple('Checkpoint', 'step loss path')
 
@@ -128,9 +127,8 @@ class TensorboardMetricLogger:
             return
         prefix = f'{prefix}/' if prefix else ''
         if multi_device_stats:
-            multi_device_stats = gather_on_one_device(
-                multi_device_stats, gather_fn=jax.lax.pmean
-            )
+            all_mean = pmap_pmean(multi_device_stats)
+            multi_device_stats = select_one_device(all_mean)
         stats = {**multi_device_stats, **single_device_stats}
         self.write_in_full_dataset_format(step, stats, mol_idxs, prefix)
 

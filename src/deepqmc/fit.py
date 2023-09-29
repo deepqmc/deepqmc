@@ -222,7 +222,7 @@ def fit_wf(  # noqa: C901
         return sampler.update(state, partial(ansatz.apply, params))
 
     def train_step(rng, step, smpl_state, params, opt_state):
-        rng_sample, rng_kfac = split_on_devices(rng)
+        rng_sample, rng_kfac = split_on_devices(rng, 2)
         mol_idxs = molecule_idx_sampler.sample()
         smpl_state, phys_conf, smpl_stats = sample_wf(
             smpl_state, rng_sample, params, mol_idxs
