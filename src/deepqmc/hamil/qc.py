@@ -87,7 +87,7 @@ class MolecularHamiltonian(Hamiltonian):
             get_shell(z + 1) - 1 for z in self.mol.charges - self.ns_valence
         ]
 
-    def init_sample(self, rng, Rs, n, elec_std=None):
+    def init_sample(self, rng, R, n, elec_std=None):
         r"""
         Guess some initial electron positions.
 
@@ -99,13 +99,13 @@ class MolecularHamiltonian(Hamiltonian):
 
         Args:
             rng (jax.random.PRNGKey): key used for PRNG.
-            Rs (float, (:data:`n`, :math:`N_\text{nuc}`, 3)): nuclear coordinates,
-                it is broadcasted if batch dimension (:data:`n`) is omitted
+            R (float, (:math:`N_\text{nuc}`, 3)): nuclear coordinates of a single
+                molecular geometry
             n (int): the number of configurations to generate.
                 electrons around the nuclei.
         """
 
-        Rs = jnp.tile(Rs[None], (n, 1, 1)) if Rs.ndim == 2 else Rs
+        Rs = jnp.tile(R[None], (n, 1, 1))
         return vmap(self.init_single_sample, (0, 0, None))(
             random.split(rng, n), Rs, elec_std
         )
