@@ -104,6 +104,7 @@ class MolecularHamiltonian(Hamiltonian):
             n (int): the number of configurations to generate.
                 electrons around the nuclei.
         """
+        assert R.ndim == 2
 
         Rs = jnp.tile(R[None], (n, 1, 1))
         return vmap(self.init_single_sample, (0, 0, None))(
