@@ -68,7 +68,7 @@ def train_from_factories(hamil, ansatz, sampler, **kwargs):
     from .train import train
 
     ansatz = instantiate_ansatz(hamil, ansatz)
-    sampler = chain(*sampler[:-1], sampler[-1](hamil))
+    sampler = chain(*sampler[:-1], sampler[-1](hamil, ansatz.apply))
     return train(hamil, ansatz, sampler=sampler, **kwargs)
 
 

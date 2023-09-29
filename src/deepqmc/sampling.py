@@ -53,28 +53,29 @@ class MetropolisSampler(Sampler):
 
     WALKER_STATE = ['r', 'psi', 'age']
 
-    def __init__(self, hamil, *, tau=1.0, target_acceptance=0.57, max_age=None):
+    def __init__(self, hamil, wf, *, tau=1.0, target_acceptance=0.57, max_age=None):
         self.hamil = hamil
         self.initial_tau = tau
         self.target_acceptance = target_acceptance
         self.max_age = max_age
+        self.wf = wf
 
-    def _update(self, state, wf, R):
-        psi = jax.vmap(wf)(self.phys_conf(R, state['r']))
+    def _update(self, state, params, R):
+        psi = jax.vmap(self.wf, (None, 0))(params, self.phys_conf(R, state['r']))
         state = {**state, 'psi': psi}
         return state
 
-    def update(self, state, wf, R):
-        return self._update(state, wf, R)
+    def update(self, state, params, R):
+        return self._update(state, params, R)
 
-    def init(self, rng, wf, n, R):
+    def init(self, rng, params, n, R):
         state = {
             'r': self.hamil.init_sample(rng, R, n).r,
             'age': jnp.zeros(n, jnp.int32),
             'tau': jnp.array(self.initial_tau),
         }
 
-        return self._update(state, wf, R)
+        return self._update(state, params, R)
 
     def _proposal(self, state, rng):
         r = state['r']
@@ -83,14 +84,14 @@ class MetropolisSampler(Sampler):
     def _acc_log_prob(self, state, prop):
         return 2 * (prop['psi'].log - state['psi'].log)
 
-    def sample(self, rng, state, wf, R):
+    def sample(self, rng, state, params, R):
         rng_prop, rng_acc = jax.random.split(rng)
         prop = {
             'r': self._proposal(state, rng_prop),
             'age': jnp.zeros_like(state['age']),
             **{k: v for k, v in state.items() if k not in self.WALKER_STATE},
         }
-        prop = self._update(prop, wf, R)
+        prop = self._update(prop, params, R)
         log_prob = self._acc_log_prob(state, prop)
         accepted = log_prob > jnp.log(jax.random.uniform(rng_acc, log_prob.shape))
         if self.max_age:
@@ -141,11 +142,11 @@ class LangevinSampler(MetropolisSampler):
 
     WALKER_STATE = MetropolisSampler.WALKER_STATE + ['force']
 
-    def _update(self, state, wf, R):
+    def _update(self, state, params, R):
         @jax.vmap
         @partial(jax.value_and_grad, has_aux=True)
         def wf_and_force(r):
-            psi = wf(self.phys_conf(R, r))
+            psi = self.wf(params, self.phys_conf(R, r))
             return psi.log, psi
 
         (_, psi), force = wf_and_force(state['r'])
@@ -186,10 +187,10 @@ class DecorrSampler(Sampler):
     def __init__(self, *, length):
         self.length = length
 
-    def sample(self, rng, state, wf, R):
+    def sample(self, rng, state, params, R):
         sample = super().sample  # lax cannot parse super()
         state, stats = lax.scan(
-            lambda state, rng: sample(rng, state, wf, R)[::2],
+            lambda state, rng: sample(rng, state, params, R)[::2],
             state,
             jax.random.split(rng, self.length),
         )
@@ -223,9 +224,9 @@ class ResampledSampler(Sampler):
         self.period = period
         self.treshold = treshold
 
-    def update(self, state, wf, R):
+    def update(self, state, params, R):
         state['log_weight'] -= 2 * state['psi'].log
-        state = self._update(state, wf, R)
+        state = self._update(state, params, R)
         state['log_weight'] += 2 * state['psi'].log
         state['log_weight'] -= state['log_weight'].max()
         return state
@@ -250,9 +251,9 @@ class ResampledSampler(Sampler):
         }
         return state
 
-    def sample(self, rng, state, wf, R):
+    def sample(self, rng, state, params, R):
         rng_re, rng_smpl = jax.random.split(rng)
-        state, _, stats = super().sample(rng_smpl, state, wf, R)
+        state, _, stats = super().sample(rng_smpl, state, params, R)
         state['step'] += 1
         weight = jnp.exp(state['log_weight'])
         ess = jnp.sum(weight) ** 2 / jnp.sum(weight**2)
@@ -306,26 +307,20 @@ class MultiNuclearGeometrySampler(Sampler):
         self.sampler = sampler
         self.nuclear_coordinates = nuclear_coordinates
 
-    def init(self, rng, wf, electron_batch_size):
-        def init_electron_sampler(rng, nuclear_coordinates):
-            return self.sampler.init(rng, wf, electron_batch_size, nuclear_coordinates)
-
+    def init(self, rng, params, electron_batch_size):
         rngs = jax.random.split(rng, len(self))
-        smpl_state = jax.vmap(init_electron_sampler)(rngs, self.nuclear_coordinates)
+        smpl_state = jax.vmap(self.sampler.init, (0, None, None, 0))(
+            rngs, params, electron_batch_size, self.nuclear_coordinates
+        )
         return smpl_state
 
-    def sample(self, rng, state, wave_function, mol_idxs):
-        def sample_electrons(rng, smpl_state, nuclear_coordinates):
-            return self.sampler.sample(
-                rng, smpl_state, wave_function, nuclear_coordinates
-            )
-
+    def sample(self, rng, state, params, mol_idxs):
         rngs = jax.random.split(rng, len(mol_idxs))
         nuclear_coordinates = self.nuclear_coordinates[mol_idxs]
         states_to_sample = jax.tree_util.tree_map(lambda x: x[mol_idxs], state)
-        sampled_states, phys_conf, stats = jax.vmap(sample_electrons)(
-            rngs, states_to_sample, nuclear_coordinates
-        )
+        sampled_states, phys_conf, stats = jax.vmap(
+            self.sampler.sample, (0, 0, None, 0)
+        )(rngs, states_to_sample, params, nuclear_coordinates)
 
         state = jax.tree_util.tree_map(
             lambda x, y: x.at[mol_idxs].set(y), state, sampled_states
@@ -335,11 +330,10 @@ class MultiNuclearGeometrySampler(Sampler):
         )
         return state, phys_conf, stats
 
-    def update(self, state, wf):
-        def update_state(state, nuclear_coordinates):
-            return self.sampler.update(state, wf, nuclear_coordinates)
-
-        return jax.vmap(update_state)(state, self.nuclear_coordinates)
+    def update(self, state, params):
+        return jax.vmap(self.sampler.update, (0, None, 0))(
+            state, params, self.nuclear_coordinates
+        )
 
     def __len__(self):
         return len(self.nuclear_coordinates)
@@ -404,7 +398,7 @@ def clean_force(force, phys_conf, mol, *, tau):
 
 def equilibrate(
     rng,
-    wf,
+    params,
     molecule_idx_sampler,
     sampler,
     state,
@@ -415,16 +409,13 @@ def equilibrate(
     n_blocks=5,
 ):
     criterion = jax.jit(criterion)
-
-    @jax.pmap
-    def sample_wf(rng, state, mol_idxs):
-        return sampler.sample(rng, state, wf, mol_idxs)
+    sample_wf = jax.pmap(sampler.sample)
 
     buffer_size = block_size * n_blocks
     buffer = []
     for step, rng in zip(steps, rng_iterator(rng)):
         mol_idxs = molecule_idx_sampler.sample()
-        state, phys_conf, stats = sample_wf(rng, state, mol_idxs)
+        state, phys_conf, stats = sample_wf(rng, state, params, mol_idxs)
         yield step, state, select_one_device(mol_idxs), stats
         buffer = [*buffer[-buffer_size + 1 :], criterion(phys_conf).item()]
         if len(buffer) < buffer_size:

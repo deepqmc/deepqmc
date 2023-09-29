@@ -94,18 +94,14 @@ def pretrain(  # noqa: C901
         raise NotImplementedError
 
     rng, rng_smpl_init = split_on_devices(split_rng_key_to_devices(rng), 2)
-    wf = partial(ansatz.apply, select_one_device(params))
-    sample_initializer = partial(
-        sampler.init,
-        wf=wf,
-        electron_batch_size=electron_batch_size // jax.device_count(),
+    smpl_state = jax.pmap(sampler.init, static_broadcasted_argnums=2)(
+        rng_smpl_init, params, electron_batch_size // jax.device_count()
     )
-    smpl_state = jax.pmap(sample_initializer)(rng_smpl_init)
 
     opt_state = jax.pmap(opt.init)(params)
 
     def sample_wf(state, rng, params, idxs):
-        return sampler.sample(rng, state, partial(ansatz.apply, params), idxs)
+        return sampler.sample(rng, state, params, idxs)
 
     @partial(jax.pmap, axis_name='device_axis')
     def pretrain_step(rng, params, smpl_state, opt_state, mol_idxs):

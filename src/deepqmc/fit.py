@@ -213,19 +213,14 @@ def fit_wf(  # noqa: C901
             batch_size_extractor=kfac_batch_size_extractor,
         )
 
-    @pmap
-    def sample_wf(state, rng, params, idxs):
-        return sampler.sample(rng, state, partial(ansatz.apply, params), idxs)
-
-    @pmap
-    def update_sampler(state, params):
-        return sampler.update(state, partial(ansatz.apply, params))
+    sample_wf = pmap(sampler.sample)
+    update_sampler = pmap(sampler.update)
 
     def train_step(rng, step, smpl_state, params, opt_state):
         rng_sample, rng_kfac = split_on_devices(rng, 2)
         mol_idxs = molecule_idx_sampler.sample()
         smpl_state, phys_conf, smpl_stats = sample_wf(
-            smpl_state, rng_sample, params, mol_idxs
+            rng_sample, smpl_state, params, mol_idxs
         )
         weight = pmap(pexp_normalize_mean)(
             smpl_state['log_weight'][jnp.arange(device_count)[:, None], mol_idxs]
@@ -254,7 +249,7 @@ def fit_wf(  # noqa: C901
     if opt is not None and opt_state is None:
         rng, rng_sample, rng_opt = split_on_devices(rng, 3)
         idxs = molecule_idx_sampler.sample()
-        _, init_phys_conf, _ = sample_wf(smpl_state, rng_sample, params, idxs)
+        _, init_phys_conf, _ = sample_wf(rng_sample, smpl_state, params, idxs)
         opt_state = init_opt(
             rng_opt,
             params,

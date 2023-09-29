@@ -20,7 +20,6 @@ from .log import CheckpointStore, H5LogTable, TensorboardMetricLogger
 from .parallel import (
     gather_electrons_on_one_device,
     replicate_on_devices,
-    select_one_device,
     split_on_devices,
     split_rng_key_to_devices,
 )
@@ -256,13 +255,9 @@ def train(  # noqa: C901
         rng = split_rng_key_to_devices(rng)
         if not train_state or train_state[0] is None:
             rng, rng_eq, rng_smpl_init = split_on_devices(rng, 3)
-            wf = partial(ansatz.apply, select_one_device(params))
-            sample_initializer = partial(
-                sampler.init,
-                wf=wf,
-                electron_batch_size=electron_batch_size // jax.device_count(),
+            smpl_state = jax.pmap(sampler.init, static_broadcasted_argnums=2)(
+                rng_smpl_init, params, electron_batch_size // jax.device_count()
             )
-            smpl_state = jax.pmap(sample_initializer)(rng_smpl_init)
             log.info('Equilibrating sampler...')
             pbar = tqdm(
                 count() if max_eq_steps is None else range(max_eq_steps),
@@ -271,7 +266,7 @@ def train(  # noqa: C901
             )
             for step, smpl_state, mol_idxs, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
-                wf,
+                params,
                 molecule_idx_sampler,
                 sampler,
                 smpl_state,
