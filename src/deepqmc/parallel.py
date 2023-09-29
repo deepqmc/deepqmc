@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 
 PMAP_AXIS_NAME = 'device_axis'
@@ -30,6 +32,7 @@ def replicate_on_devices(pytree):
     return jax.device_put_replicated(pytree, devices=jax.devices())
 
 
+@jax.pmap
 def broadcast_to_devices(pytree):
     r"""Broadcast an array stored on a single device to all devices.
 
@@ -37,7 +40,7 @@ def broadcast_to_devices(pytree):
     (:data:`input.shape[0] == jax.device_count()`). Useful for broadcasting data
     that differs across devices to the devices.
     """
-    return jax.pmap(lambda x: x)(pytree)
+    return pytree
 
 
 def select_one_device(pytree, idx=0):
@@ -55,38 +58,6 @@ def select_one_device(pytree, idx=0):
     return jax.tree_util.tree_map(lambda x: x[idx], pytree)
 
 
-def gather_on_one_device(
-    pytree, gather_fn=jax.lax.all_gather, flatten_device_axis=False
-):
-    r"""Gather data stored across devices to a single device.
-
-    Useful for collecting data that differs across devices to a single device.
-    Can be though of as an inverse of
-    :class:`deepqmc.parallel.broadcast_to_devices`.
-
-    Args:
-        pytree: the input pytree of arrays to gather.
-        gather_fn: default: :data:`jax.lax.all_gather`, the function used to
-            gather/accumulate data. The default :data:`all_gather` results in
-            the data being simply gathered. Passing e.g. :data:`jax.lax.pmean`
-            would instead result in taking the mean across devices.
-        flatten_device_axis: defaut: :data:`False`, calling
-            :data:`jax.lax.all_gather` results in an output array that has a
-            leading device axis (but all entries of this output are nonetheless
-            stored on one device). If :data:`True`, this axis is flattened into
-            the next axis.
-    """
-    all_gathered = jax.pmap(
-        lambda x: gather_fn(x, PMAP_AXIS_NAME), axis_name=PMAP_AXIS_NAME
-    )(pytree)
-    on_one_device = select_one_device(all_gathered)
-    if flatten_device_axis:
-        on_one_device = jax.tree_util.tree_map(
-            lambda x: x.reshape(-1, *x.shape[2:]), on_one_device
-        )
-    return on_one_device
-
-
 def split_rng_key_to_devices(rng):
     r"""Create and place a separate rng key on each device.
 
@@ -97,14 +68,15 @@ def split_rng_key_to_devices(rng):
     return broadcast_to_devices(rngs)
 
 
-def split_on_devices(rng, num=2):
+@partial(jax.pmap, static_broadcasted_argnums=1)
+def split_on_devices(rng, num):
     r"""Call the :class:`jax.random.split` function on each device.
 
     Args:
         rng: rng key with a leading device axis, rng keys stored on each device.
         num (int): the number of ouput keys on each device.
     """
-    return jax.pmap(lambda key: tuple(jax.random.split(key, num)))(rng)
+    return tuple(jax.random.split(rng, num))
 
 
 def rng_iterator(rng):
@@ -114,7 +86,7 @@ def rng_iterator(rng):
         rng: rng key with a leading device axis, rng keys stored on each device.
     """
     while True:
-        rng_yield, rng = split_on_devices(rng)
+        rng_yield, rng = split_on_devices(rng, 2)
         yield rng_yield
 
 
@@ -157,6 +129,24 @@ def all_device_quantile(x, quantile, axis_name=PMAP_AXIS_NAME):
     return jax.numpy.quantile(jax.lax.all_gather(x, axis_name), quantile)
 
 
+@partial(jax.pmap, axis_name='gather_axis')
+def pmap_all_gather(x):
+    r"""Gather data from all devices.
+
+    Includes it's own :data:`pmap` call inside.
+    """
+    return jax.lax.all_gather(x, 'gather_axis')
+
+
+@partial(jax.pmap, axis_name='pmean_axis')
+def pmap_pmean(x):
+    r"""Gather data using pmean from all devices.
+
+    Includes it's own :data:`pmap` call inside.
+    """
+    return jax.lax.all_gather(x, 'pmean_axis')
+
+
 def gather_electrons_on_one_device(pytree):
     r"""Gather electron sample type arrays on one device.
 
@@ -175,9 +165,7 @@ def gather_electrons_on_one_device(pytree):
         a pytree of arrays all with shape:
             :data:`[molecule_batch_size, electron_batch_size]`.
     """
-    all_gathered = jax.pmap(
-        lambda x: jax.lax.all_gather(x, PMAP_AXIS_NAME), axis_name=PMAP_AXIS_NAME
-    )(pytree)
+    all_gathered = pmap_all_gather(pytree)
     on_one_device = select_one_device(all_gathered)
     return jax.tree_util.tree_map(
         lambda x: jax.numpy.moveaxis(x, 0, 1).reshape(x.shape[1], -1, *x.shape[3:]),
