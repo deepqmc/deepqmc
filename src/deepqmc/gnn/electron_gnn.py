@@ -272,7 +272,7 @@ class ElectronGNN(hk.Module):
                 'electrons': jnp.array(n_up * [0] + n_down * [int(n_up != n_down)])
             },
         }
-        self.edge_types = tuple(edge_features.keys())
+        self.edge_types = tuple((edge_features or {}).keys())
         self.layers = [
             layer_factory(
                 n_interactions,

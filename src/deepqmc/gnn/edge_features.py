@@ -83,15 +83,15 @@ class CombinedEdgeFeature(EdgeFeature):
     r"""Combine multiple edge features.
 
     Args:
-        edge_features (Sequence): a :data:`Sequence` of edge feature objects
+        features (Sequence): a :data:`Sequence` of edge feature objects
             to combine.
     """
 
-    def __init__(self, *, edge_features):
-        self.edge_features = edge_features
+    def __init__(self, *, features):
+        self.features = features
 
     def __call__(self, d):
-        return jnp.concatenate([ef(d) for ef in self.edge_features], axis=-1)
+        return jnp.concatenate([f(d) for f in self.features], axis=-1)
 
     def __len__(self):
-        return sum(map(len, self.edge_features))
+        return sum(map(len, self.features))

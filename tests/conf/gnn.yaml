@@ -18,19 +18,19 @@ self_interaction: false
 edge_features:
   ne:
     _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-    edge_features:
+    features:
     - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
       powers: [1]
     - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
   same:
     _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-    edge_features:
+    features:
     - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
       powers: [1]
     - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
   anti:
     _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-    edge_features:
+    features:
     - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
       powers: [1]
     - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
