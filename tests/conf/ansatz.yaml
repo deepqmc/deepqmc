@@ -84,19 +84,19 @@ omni_factory:
     edge_features:
       same:
         _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-        edge_features:
+        features:
         - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
           powers: [1]
         - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
       anti:
         _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-        edge_features:
+        features:
         - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
           powers: [1]
         - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
       ne:
         _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
-        edge_features:
+        features:
         - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
           powers: [1]
         - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
