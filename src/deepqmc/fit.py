@@ -136,7 +136,7 @@ def fit_wf(  # noqa: C901
         def _step(_rng_opt, params, _opt_state, batch):
             loss, (E_loc, stats) = loss_fn(params, _rng_opt, batch)
 
-            return params, None, E_loc, {'per_mol': stats}
+            return params, None, E_loc, stats
 
     elif isinstance(opt, optax.GradientTransformation):
 
