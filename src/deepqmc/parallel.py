@@ -144,7 +144,7 @@ def pmap_pmean(x):
 
     Includes it's own :data:`pmap` call inside.
     """
-    return jax.lax.all_gather(x, 'pmean_axis')
+    return jax.lax.pmean(x, 'pmean_axis')
 
 
 def gather_electrons_on_one_device(pytree):
