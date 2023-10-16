@@ -17,26 +17,22 @@ class ElectronGNNLayer(hk.Module):
     Derived from :class:`~deepqmc.gnn.gnn.MessagePassingLayer`.
 
     Args:
-        residual (bool): whether a residual connection is used when updating
-            the electron embeddings.
-        deep_features (bool): if :data:`true` edge features are updated through
-            an MLP (:data:`u`), else initial edge features are reused.
-        update_features (list[str]): which features to collect for the update
-            of the electron embeddings.
-            Possible values:
-
-            - ``'residual'``: electron embedding from the previous interaction layer
-            - ``'edge_ne'``: sum over messages from nuclei
-            - ``'edge_same'``: sum over messages from electrons with same spin
-            - ``'edge_anti'``: sum over messages from electrons with opposite spin
-            - ``'edge_up'``: sum over messages from spin up electrons
-            - ``'edge_down'``: sum over messages from spin down electrons
-            - ``'edge_ee'``: sum of over messages from all electrons
-            - ``'node_up'``: sum over embeddings from spin-up electrons
-            - ``'node_down'``: sum over embeddings from spin-down electrons
-
-        update_rule (str): how to combine features for the update of the
-            electron embeddings.
+        one_paritcle_residual: whether a residual connection is used when updating
+            the one particle embeddings, either :data:`False`, or an instance of
+            :class:`~deepqmc.hkext.ResidualConnection`.
+        two_paritcle_residual: whether a residual connection is used when updating
+            the two particle embeddings, either :data:`False`, or an instance of
+            :class:`~deepqmc.hkext.ResidualConnection`.
+        deep_features: if :data:`False`, the edge features are not updated throughout
+            the GNN layers, if :data:`shared` than in each layer a single MLP
+            (:data:`u`) is used to update all edge types, if :data:`separate` then in
+            each layer separate MLPs are used to update the different edge types.
+        update_features (List[~deepqmc.gnn.update_features.UpdateFeature]): a list of
+            partially initialized update feature classes to use when computing the
+            update features of the one particle embeddings. For more details see the
+            documentation of :class:`deepqmc.gnn.update_features`.
+        update_rule (str): how to combine the update features for the update of the
+            one particle embeddings.
             Possible values:
 
             - ``'concatenate'``: run concatenated features through MLP
@@ -44,8 +40,8 @@ class ElectronGNNLayer(hk.Module):
             - ``'featurewise_shared'``: apply the same MLP across feature channels
             - ``'sum'``: sum features before sending through an MLP
 
-            note that `sum` and `featurewise_shared` imply features of same size
-
+            note that :data:`'sum'` and :data:`'featurewise_shared'` imply features
+            of same size.
         subnet_factory (Callable): A function that constructs the subnetworks of
             the GNN layer.
         subnet_factory_by_lbl (dict): optional, a dictionary of functions that construct
@@ -218,22 +214,29 @@ class ElectronGNN(hk.Module):
     Derived from :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork`.
 
     Args:
-        mol (:class:`~deepqmc.Molecule`): the molecule on which the graph is defined.
+        hamil (:class:`~deepqmc.MolecularHamiltonian`): the Hamiltonian of the system
+            on which the graph is defined.
         embedding_dim (int): the length of the electron embedding vectors.
         n_interactions (int): number of message passing interactions.
-        positional_electron_embeddings(bool): whether to initialize the electron
-            embbedings with the concatenated edge features.
-        edge_features: a function or a :data:`dict` of functions for each edge
-            type, embedding the interparticle differences.
-        edge_types: the types of edges to consider in the molecular graph. It should
-            be a sequence of unique :data:`str`s from the follwing options:
-            - ``'nn'``: nucleus-nucleus edges
-            - ``'ne'``: nucleus-electron edges
-            - ``'en'``: electron-nucleus edges
-            - ``'same'``: electron-electron edges between electrons of the same spin
-            - ``'anti'``: electron-electron edges between electrons of opposite spins
+        edge_features (dict): a :data:`dict` of functions for each edge
+            type, embedding the interparticle differences. Valid keys are:
+
+            - ``'ne'``: for nucleus-electron edges
+            - ``'nn'``: for nucleus-nucleus edges
+            - ``'same'``: for same spin electron-electron edges
+            - ``'anti'``: for opposite spin electron-electron edges
+            - ``'up'``: for edges going from spin up electrons to all electrons
+            - ``'down'``: for edges going from spin down electrons to all electrons
+
+        self_interaction (bool): whether to consider edges where the sender and
+            receiver electrons are the same.
         two_particle_stream_dim (int): the feature dimension of the two particle
             streams. Only active if :data:`deep_features` are used.
+        nuclei_embedding (Union[None,~deepqmc.gnn.electron_gnn.NucleiEmbedding]):
+            optional, the instance responsible for creating the initial nuclear
+            embeddings. Set to :data:`None` if nuclear embeddings are not needed.
+        electron_embedding (~deepqmc.gnn.electron_gnn.ElectronEmbedding): the instance
+            that creates the initial electron embeddings.
         layer_factory (Callable): a callable that generates a layer of the GNN.
         ghost_coords: optional, specifies the coordinates of one or more ghost atoms,
             useful for breaking spatial symmetries of the nuclear geometry.
@@ -407,7 +410,36 @@ class NucleiEmbedding(hk.Module):
 
 
 class ElectronEmbedding(hk.Module):
-    r"""Create initial embeddings for electrons."""
+    r"""Create initial embeddings for electrons.
+
+    Args:
+        n_nuc (int): the number of nuclei.
+        n_up (int): the number of spin up electrons.
+        n_down (int): the number of spin down electrons.
+        embedding_dim (int): the desired length of the embedding vectors.
+        n_elec_types (int): the number of electron types to differentiate.
+            Usual values are:
+
+            - ``1``: treat all electrons as indistinguishable. Note that electrons
+                with different spins can still become distinguishable during the later
+                embedding update steps of the GNN.
+            - ``2``: treat spin up and spin down electrons as distinguishable already
+                in the initial embeddings.
+
+        elec_types (jax.Array): an integer array with length equal to the number of
+            electrons, with entries between ``0`` and ``n_elec_types``. Specifies the
+            type for each electron.
+        positional_embeddings (Union[Literal[False],dict]): if not ``False``, a
+            ``dict`` with edge types as keys, and edge features as values. Specifies
+            the edge types and edge features to use when constructing the positional
+            initial electron embeddings.
+        use_spin (bool): only relevant if ``positional_embeddings`` is not ``False``,
+            if ``True``, concatenate the spin of the given electron after the
+            positional embedding features.
+        project_to_embedding_dim (bool): only relevant if ``positional_embeddings``
+            is not ``False``, if ``True``, use a linear layer to project the initial
+            embeddings to have length ``embedding_dim``.
+    """
 
     def __init__(
         self,

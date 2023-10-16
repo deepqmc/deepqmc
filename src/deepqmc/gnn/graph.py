@@ -88,6 +88,8 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interacti
                 - ``'en'``: electrons->nuclei edges
                 - ``'same'``: edges betwen same-spin electrons
                 - ``'anti'``: edges betwen opposite-spin electrons
+                - ``'up'``: edges going from spin-up electrons to all electrons
+                - ``'down'``: edges going from spin-down electrons to all electrons
         self_interaction (bool): whether edges between a particle and itself are
             considered
     """
