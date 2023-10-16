@@ -82,10 +82,6 @@ omni_factory:
       subnet_type: embed
     two_particle_stream_dim: 64
     self_interaction: false
-    edge_types:
-    - same
-    - anti
-    - ne
     edge_features:
       ne:
         _target_: deepqmc.gnn.edge_features.GaussianEdgeFeature
