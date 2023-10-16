@@ -47,11 +47,14 @@ The neural network wave function ansatz is available in the :mod:`deepqmc.wf` su
 
     import os
 
-    import deepqmc
     import haiku as hk
-    from deepqmc.wf import NeuralNetworkWaveFunction
     from hydra import compose, initialize_config_dir
     from hydra.utils import instantiate
+
+    import deepqmc
+    from deepqmc.app import instantiate_ansatz
+    from deepqmc.wf import NeuralNetworkWaveFunction
+
 
     deepqmc_dir = os.path.dirname(deepqmc.__file__)
     config_dir = os.path.join(deepqmc_dir, 'conf/ansatz')
@@ -61,11 +64,7 @@ The neural network wave function ansatz is available in the :mod:`deepqmc.wf` su
 
     _ansatz = instantiate(cfg, _recursive_=True, _convert_='all')
 
-
-    @hk.without_apply_rng
-    @hk.transform
-    def ansatz(phys_conf, return_mos=False):
-        return _ansatz(H)(phys_conf, return_mos=return_mos)
+    ansatz = instantiate_ansatz(H, _ansatz)
 
 The hyperparameters and their physical meaning are described in the :ref:`api <api>` reference.
 
@@ -96,7 +95,7 @@ Logging
 
 The terminal output shows only how far has the training progressed and the current estimate of the energy. More detailed monitoring of the training is available via `Tensorboard <https://www.tensorflow.org/tensorboard>`_. When :func:`~deepqmc.train` is called with an optional ``workdir`` argument, the training run creates a Tensorboard event file::
 
-    >>> train(H, ansatz, 'kfac', sampler, steps=10000, sample_size=2000, seed=42, workdir='runs/01')
+    >>> train(H, ansatz, 'kfac', sampler, steps=10000, electron_batch_size=2000, seed=42, workdir='runs/01')
 
 .. code:: none
 
