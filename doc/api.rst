@@ -63,13 +63,22 @@ This submodule implements the basic functionality for working with graphs.
 
 .. automodule:: deepqmc.gnn.edge_features
 
-ElectronGNN
-~~~~~~~~~~~
+Electron GNN
+~~~~~~~~~~~~
 
 This submodule provides the ElectronGNN architecture for defining neural network
 parametrized functions acting on graphs of electrons and nuclei.
 
 .. automodule:: deepqmc.gnn.electron_gnn
+
+Update Features
+^^^^^^^^^^^^^^^
+
+This submodule implements some common ways to compute update features for the node embeddings from the current node and edge embeddings.
+Instances of the below classes are callable, they take as input the current node and edge representations, and output a list of update features
+to be used for updating the node representations.
+
+.. automodule:: deepqmc.gnn.update_features
 
 
 .. toctree::
