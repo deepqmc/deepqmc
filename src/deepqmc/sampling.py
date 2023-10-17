@@ -434,7 +434,16 @@ def equilibrate(
         if abs(mean(b1) - mean(b2)) < min(stdev(b1), stdev(b2)):
             break
 
-def initialize_sampling(rng, hamil, mols, sampler, pretrain_sampler, electron_batch_size, molecule_batch_size):
+
+def initialize_sampling(
+    rng,
+    hamil,
+    mols,
+    sampler,
+    pretrain_sampler,
+    electron_batch_size,
+    molecule_batch_size,
+):
     assert not electron_batch_size % jax.device_count()
     mols = mols or hamil.mol
     mols = mols if isinstance(mols, Sequence) else [mols]
@@ -453,3 +462,13 @@ def initialize_sampling(rng, hamil, mols, sampler, pretrain_sampler, electron_ba
             pretrain_sampler, jnp.stack([mol.coords for mol in mols])
         )
     return mols, molecule_idx_sampler, sampler, pretrain_sampler
+
+
+def initialize_sampler_state(rng, sampler, ansatz, params, electron_batch_size):
+    wf = partial(ansatz.apply, select_one_device(params))
+
+    @jax.pmap
+    def sampler_state_initializer(rng):
+        return sampler.init(rng, wf, electron_batch_size // jax.device_count())
+
+    return sampler_state_initializer(rng)

@@ -1,14 +1,11 @@
 import logging
-import operator
 import os
 from functools import partial
 from itertools import count
-from typing import Sequence
 
 import h5py
 import jax
 import jax.numpy as jnp
-from jax import tree_util
 from tqdm.auto import tqdm, trange
 from uncertainties import ufloat
 
@@ -19,7 +16,6 @@ from .fit import fit_wf
 from .log import CheckpointStore, H5LogTable, TensorboardMetricLogger
 from .parallel import (
     gather_electrons_on_one_device,
-    replicate_on_devices,
     select_one_device,
     split_on_devices,
     split_rng_key_to_devices,
@@ -214,13 +210,9 @@ def train(  # noqa: C901
         rng = split_rng_key_to_devices(rng)
         if not train_state or train_state[0] is None:
             rng, rng_eq, rng_smpl_init = split_on_devices(rng, 3)
-            wf = partial(ansatz.apply, select_one_device(params))
-            sample_initializer = partial(
-                sampler.init,
-                wf=wf,
-                electron_batch_size=electron_batch_size // jax.device_count(),
+            smpl_state = initialize_sampler_state(
+                rng_smpl_init, sampler, ansatz, params, electron_batch_size
             )
-            smpl_state = jax.pmap(sample_initializer)(rng_smpl_init)
             log.info('Equilibrating sampler...')
             pbar = tqdm(
                 count() if max_eq_steps is None else range(max_eq_steps),
@@ -229,7 +221,7 @@ def train(  # noqa: C901
             )
             for step, smpl_state, mol_idxs, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
-                wf,
+                partial(ansatz.apply, select_one_device(params)),
                 molecule_idx_sampler,
                 sampler,
                 smpl_state,
