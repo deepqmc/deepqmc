@@ -1,8 +1,15 @@
+import logging
+import operator
+
 import haiku as hk
 import jax
 import jax.numpy as jnp
 
+from deepqmc.parallel import replicate_on_devices
+
 __all__ = []
+
+log = logging.getLogger(__name__)
 
 
 def init_wf_params(rng, hamil, ansatz):
@@ -15,6 +22,12 @@ def init_wf_params(rng, hamil, ansatz):
         R_shape = 0
     phys_conf = hamil.init_sample(rng_sample, jnp.zeros(R_shape), 1)[0]
     params = ansatz.init(rng_params, phys_conf)
+
+    num_params = jax.tree_util.tree_reduce(
+        operator.add, jax.tree_util.tree_map(lambda x: x.size, params)
+    )
+    log.info(f'Number of model parameters: {num_params}')
+    params = replicate_on_devices(params)
     return params
 
 
