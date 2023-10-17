@@ -7,6 +7,7 @@ from deepqmc.clip import median_log_squeeze_and_mask
 from deepqmc.parallel import all_device_mean
 from deepqmc.utils import masked_mean
 
+__all__ = ()
 
 def compute_local_energy(rng, hamil, ansatz, params, phys_conf):
     rng = jax.random.split(rng, len(phys_conf.r))
