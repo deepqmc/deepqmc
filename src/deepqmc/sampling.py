@@ -332,7 +332,7 @@ class MultiNuclearGeometrySampler(Sampler):
             lambda x, y: x.at[mol_idxs].set(y), state, sampled_states
         )
         phys_conf = jdc.replace(
-            phys_conf, mol_idx=mol_idxs[:, None].repeat(phys_conf.r.shape[1], 1)
+            phys_conf, mol_idx=mol_idxs[:, None].repeat(phys_conf.batch_shape[1], 1)
         )
         return state, phys_conf, stats
 
