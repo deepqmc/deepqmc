@@ -2,27 +2,24 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-import kfac_jax
 
-from deepqmc.clip import median_log_squeeze_and_mask
+from deepqmc.loss import create_energy_loss_fn
 from deepqmc.optimizer import NoOptimizer
 
 from .parallel import (
     gather_electrons_on_one_device,
     pexp_normalize_mean,
     pmap,
-    pmean,
     rng_iterator,
     select_one_device,
     split_on_devices,
 )
 from .types import TrainState
-from .utils import masked_mean
 
 __all__ = ()
 
 
-def fit_wf(  # noqa: C901
+def fit_wf(
     rng,
     hamil,
     ansatz,
@@ -36,64 +33,7 @@ def fit_wf(  # noqa: C901
     clip_mask_fn=None,
 ):
     device_count = jax.device_count()
-
-    @partial(jax.custom_jvp, nondiff_argnums=(1, 2))
-    def loss_fn(params, rng, batch):
-        phys_conf, weight = batch
-        rng = jax.random.split(rng, len(weight))
-        rng_batch = jax.vmap(partial(jax.random.split, num=weight.shape[1]))(rng)
-        E_loc, hamil_stats = jax.vmap(
-            jax.vmap(hamil.local_energy(partial(ansatz.apply, params)))
-        )(rng_batch, phys_conf)
-        loss = pmean(jnp.nanmean(E_loc * weight))
-        stats = {
-            'E_loc/mean': jnp.nanmean(E_loc, axis=1),
-            'E_loc/std': jnp.nanstd(E_loc, axis=1),
-            'E_loc/min': jnp.nanmin(E_loc, axis=1),
-            'E_loc/max': jnp.nanmax(E_loc, axis=1),
-            **{
-                k_hamil: v_hamil.mean(axis=1)
-                for k_hamil, v_hamil in hamil_stats.items()
-            },
-        }
-        return loss, (E_loc, stats)
-
-    @loss_fn.defjvp
-    def loss_jvp(rng, batch, primals, tangents):
-        phys_conf, weight = batch
-        loss, aux = loss_fn(*primals, rng, batch)
-        E_loc, _ = aux
-        E_loc_s, gradient_mask = jax.vmap(clip_mask_fn or median_log_squeeze_and_mask)(
-            E_loc
-        )
-        E_mean = pmean((E_loc_s * weight).mean(axis=1))
-        assert E_loc_s.shape == E_loc.shape, (
-            f'Error with clipping function: shape of E_loc {E_loc.shape} '
-            f'must equal shape of clipped E_loc {E_loc_s.shape}.'
-        )
-        assert gradient_mask.shape == E_loc.shape, (
-            f'Error with masking function: shape of E_loc {E_loc.shape} '
-            f'must equal shape of mask {gradient_mask.shape}.'
-        )
-
-        def log_likelihood(params):  # log(psi(theta))
-            flat_phys_conf = jax.tree_util.tree_map(
-                lambda x: x.reshape(-1, *x.shape[2:]), phys_conf
-            )
-            return jax.vmap(ansatz.apply, (None, 0))(params, flat_phys_conf).log
-
-        log_psi, log_psi_tangent = jax.jvp(log_likelihood, primals, tangents)
-        kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
-        loss_tangent = (
-            (E_loc_s - E_mean[:, None]) * log_psi_tangent.reshape(E_loc.shape) * weight
-        )
-        loss_tangent = masked_mean(loss_tangent, gradient_mask)
-        return (loss, aux), (loss_tangent, aux)
-        # jax.custom_jvp has actually no official support for auxiliary output.
-        # the second aux in the tangent output should be in fact aux_tangent.
-        # we just output the same thing to satisfy jax's API requirement with
-        # the understanding that we'll never need aux_tangent
-
+    loss_fn = create_energy_loss_fn(hamil, ansatz, clip_mask_fn)
     opt = optimizer_factory(loss_fn)
 
     @pmap
