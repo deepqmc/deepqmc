@@ -26,7 +26,7 @@ def fit_wf(  # noqa: C901
     rng,
     hamil,
     ansatz,
-    opt,
+    optimizer_factory,
     molecule_idx_sampler,
     sampler,
     electron_batch_size,
@@ -94,7 +94,7 @@ def fit_wf(  # noqa: C901
         # we just output the same thing to satisfy jax's API requirement with
         # the understanding that we'll never need aux_tangent
 
-    opt = opt(loss_fn)
+    opt = optimizer_factory(loss_fn)
 
     @pmap
     def sample_wf(state, rng, params, idxs):
