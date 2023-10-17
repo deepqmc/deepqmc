@@ -4,6 +4,7 @@ import jax.numpy as jnp
 import jax_dataclasses as jdc
 
 Psi = namedtuple('Psi', 'sign log')
+TrainState = namedtuple('TrainState', 'sampler params opt')
 
 
 @jdc.pytree_dataclass

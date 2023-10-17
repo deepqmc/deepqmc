@@ -1,4 +1,3 @@
-from collections import namedtuple
 from functools import partial
 
 import jax
@@ -19,11 +18,11 @@ from .parallel import (
     select_one_device,
     split_on_devices,
 )
+from .types import TrainState
 from .utils import masked_mean, tree_norm
 
 __all__ = ()
 
-TrainState = namedtuple('TrainState', 'sampler params opt')
 
 def fit_wf(  # noqa: C901
     rng,
