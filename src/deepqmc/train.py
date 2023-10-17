@@ -173,12 +173,9 @@ def train(  # noqa: C901
         os.makedirs(workdir, exist_ok=True)
         os.makedirs(chkptdir, exist_ok=True)
         chkpts = CheckpointStore(chkptdir, **(chkpts_kwargs or {}))
-        if workdir:
-            metric_logger = (metric_logger or TensorboardMetricLogger)(
-                workdir, len(sampler)
-            )
-        else:
-            metric_logger = None
+        metric_logger = (metric_logger or TensorboardMetricLogger)(
+            workdir, len(sampler)
+        )
         log.debug('Setting up HDF5 file...')
         h5file = h5py.File(os.path.join(workdir, 'result.h5'), 'a', libver='v110')
         h5file.swmr_mode = True
