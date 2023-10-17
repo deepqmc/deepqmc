@@ -3,13 +3,11 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 import kfac_jax
-import optax
 
 from deepqmc.clip import median_log_squeeze_and_mask
+from deepqmc.optimizer import NoOptimizer
 
-from .kfacext import batch_size_extractor, make_graph_patterns
 from .parallel import (
-    PMAP_AXIS_NAME,
     gather_electrons_on_one_device,
     pexp_normalize_mean,
     pmap,
@@ -19,7 +17,7 @@ from .parallel import (
     split_on_devices,
 )
 from .types import TrainState
-from .utils import masked_mean, tree_norm
+from .utils import masked_mean
 
 __all__ = ()
 
@@ -96,82 +94,7 @@ def fit_wf(  # noqa: C901
         # we just output the same thing to satisfy jax's API requirement with
         # the understanding that we'll never need aux_tangent
 
-    energy_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-
-    if opt is None:
-
-        @pmap
-        def _step(_rng_opt, params, _opt_state, batch):
-            loss, (E_loc, stats) = loss_fn(params, _rng_opt, batch)
-
-            return params, None, E_loc, stats
-
-    elif isinstance(opt, optax.GradientTransformation):
-
-        @pmap
-        def _step(rng, params, opt_state, batch):
-            (loss, (E_loc, stats)), grads = energy_and_grad_fn(params, rng, batch)
-            grads = pmean(grads)
-            updates, opt_state = opt.update(grads, opt_state, params)
-            param_norm, update_norm, grad_norm = map(
-                tree_norm, [params, updates, grads]
-            )
-            params = optax.apply_updates(params, updates)
-            stats = {
-                'opt/param_norm': param_norm,
-                'opt/grad_norm': grad_norm,
-                'opt/update_norm': update_norm,
-                **stats,
-            }
-            return params, opt_state, E_loc, stats
-
-        @pmap
-        def init_opt(rng, params, batch):
-            opt_state = opt.init(params)
-            return opt_state
-
-    else:
-
-        def _step(rng, params, opt_state, batch):
-            params, opt_state, opt_stats = opt.step(
-                params,
-                opt_state,
-                rng,
-                batch=batch,
-                momentum=0,
-            )
-            stats = {
-                'opt/param_norm': opt_stats['param_norm'],
-                'opt/grad_norm': opt_stats['precon_grad_norm'],
-                'opt/update_norm': opt_stats['update_norm'],
-                **opt_stats['aux'][1],
-            }
-            return (
-                params,
-                opt_state,
-                opt_stats['aux'][0],
-                stats,
-            )
-
-        def init_opt(rng, params, batch):
-            opt_state = opt.init(
-                params,
-                rng,
-                batch,
-            )
-            return opt_state
-
-        opt = opt(
-            value_and_grad_func=energy_and_grad_fn,
-            l2_reg=0.0,
-            value_func_has_aux=True,
-            value_func_has_rng=True,
-            auto_register_kwargs={'graph_patterns': make_graph_patterns()},
-            include_norms_in_stats=True,
-            multi_device=True,
-            pmap_axis_name=PMAP_AXIS_NAME,
-            batch_size_extractor=batch_size_extractor,
-        )
+    opt = opt(loss_fn)
 
     @pmap
     def sample_wf(state, rng, params, idxs):
@@ -198,24 +121,24 @@ def fit_wf(  # noqa: C901
                 )
             )
         )
-        params, opt_state, E_loc, stats = _step(
+        params, opt_state, E_loc, stats = opt.step(
             rng_kfac,
             params,
             opt_state,
             (phys_conf, weight),
         )
-        if opt is not None:
+        if not isinstance(opt, NoOptimizer):
             # WF was changed in _step, update psi values stored in smpl_state
             smpl_state = update_sampler(smpl_state, params)
         stats = {**stats, **smpl_stats}
         return smpl_state, params, opt_state, E_loc, mol_idxs, stats
 
     smpl_state, params, opt_state = train_state
-    if opt is not None and opt_state is None:
+    if opt_state is None:
         rng, rng_sample, rng_opt = split_on_devices(rng, 3)
         idxs = molecule_idx_sampler.sample()
         _, init_phys_conf, _ = sample_wf(smpl_state, rng_sample, params, idxs)
-        opt_state = init_opt(
+        opt_state = opt.init(
             rng_opt,
             params,
             (

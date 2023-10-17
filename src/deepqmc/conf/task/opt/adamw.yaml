@@ -1,3 +1,6 @@
-_target_: optax.adamw
-learning_rate: 0.001
-b2: 0.9
+_target_: deepqmc.optimizer.OptaxOptimizer
+_partial_: true
+optax_opt:
+  _target_: optax.adamw
+  learning_rate: 0.001
+  b2: 0.9
