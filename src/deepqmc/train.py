@@ -118,7 +118,7 @@ def train(  # noqa: C901
             to consider for transferable training. If None the default molecule from
             hamil is used.
         workdir (str): optional, path, where results should be saved.
-        train_state (~deepqmc.fit.TrainState): optional, training checkpoint to
+        train_state (~deepqmc.types.TrainState): optional, training checkpoint to
             restore training or run evaluation.
         init_step (int): optional, initial step index, useful if
             calculation is restarted from checkpoint saved on disk.
