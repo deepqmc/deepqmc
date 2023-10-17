@@ -98,14 +98,14 @@ def pexp_normalize_mean(x, axis_name=PMAP_AXIS_NAME):
     return exp / exp_mean
 
 
-def all_device_mean(x, axis_name=PMAP_AXIS_NAME):
+def all_device_mean(x, axis_name=PMAP_AXIS_NAME, **mean_kwargs):
     r"""Compute mean across all devices.
 
     Args:
         x: the input data stored on multiple devices.
         axis_name: optional, name of pmap-ed axis.
     """
-    return pmean(jax.numpy.mean(x), axis_name)
+    return pmean(jax.numpy.mean(x, **mean_kwargs), axis_name)
 
 
 def all_device_median(x, axis_name=PMAP_AXIS_NAME):
