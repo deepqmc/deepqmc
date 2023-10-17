@@ -258,3 +258,8 @@ def pi_adjusted_kronecker_inverse(
 
 # temporary monkey patch until kfac works for layers with shape 1
 kfac_jax.utils.pi_adjusted_kronecker_inverse = pi_adjusted_kronecker_inverse
+
+
+def batch_size_extractor(batch):
+    _, weights = batch
+    return weights.shape[0] * weights.shape[1]
