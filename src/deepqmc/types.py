@@ -30,6 +30,10 @@ class PhysicalConfiguration:
     def __len__(self):
         return len(self.r)
 
+    @property
+    def batch_shape(self):
+        return self.r.shape[:-2]
+
 
 class Potential:
     r"""Base class for the (pseudo)potential in which electrons move.

@@ -9,9 +9,10 @@ from deepqmc.utils import masked_mean
 
 __all__ = ()
 
+
 def compute_local_energy(rng, hamil, ansatz, params, phys_conf):
-    rng = jax.random.split(rng, len(phys_conf.r))
-    rng = jax.vmap(partial(jax.random.split, num=phys_conf.r.shape[1]))(rng)
+    rng = jax.random.split(rng, len(phys_conf))
+    rng = jax.vmap(partial(jax.random.split, num=phys_conf.batch_shape[1]))(rng)
     local_energy, hamil_stats = jax.vmap(
         jax.vmap(hamil.local_energy(partial(ansatz.apply, params)))
     )(rng, phys_conf)

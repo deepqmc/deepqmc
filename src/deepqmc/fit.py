@@ -53,13 +53,7 @@ def fit_wf(
         weight = pmap(pexp_normalize_mean)(
             smpl_state['log_weight'][jnp.arange(device_count)[:, None], mol_idxs]
             if 'log_weight' in smpl_state.keys()
-            else jnp.zeros(
-                (
-                    device_count,
-                    molecule_idx_sampler.batch_size,
-                    electron_batch_size // device_count,
-                )
-            )
+            else jnp.zeros(phys_conf.batch_shape)
         )
         params, opt_state, E_loc, stats = opt.step(
             rng_kfac,
@@ -81,16 +75,7 @@ def fit_wf(
         opt_state = opt.init(
             rng_opt,
             params,
-            (
-                init_phys_conf,
-                jnp.ones(
-                    (
-                        device_count,
-                        molecule_idx_sampler.batch_size,
-                        electron_batch_size // device_count,
-                    )
-                ),
-            ),
+            (init_phys_conf, jnp.ones(init_phys_conf.batch_shape)),
         )
     train_state = smpl_state, params, opt_state
 

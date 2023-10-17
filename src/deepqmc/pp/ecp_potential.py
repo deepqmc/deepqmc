@@ -175,7 +175,7 @@ class EcpTypePseudopotential(Potential):
 
             # (2l+1)/12 coefficient
             coefs = jnp.tile(
-                (jnp.arange(l_max_p1) * 2 + 1) / 12, (len(phys_conf.r), 1)
+                (jnp.arange(l_max_p1) * 2 + 1) / 12, (len(phys_conf), 1)
             )  # shape: (N,l_max)
 
             dists = pairwise_distance(phys_conf.r, phys_conf.R[nucleus_index, None])
