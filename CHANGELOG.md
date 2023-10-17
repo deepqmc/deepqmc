@@ -5,10 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2023-xx-xx
+
+### Changed
+
+- Refactor and code cleanup
+- Refactor parallel utils for more efficient pmaps
+
+### Fixed
+
+- Errors when executing tutorial
+- Ansatz config files
+- Tensorboard logging
+- Bug crashing energy evaluation
+
 
 ## [1.1.0] - 2023-10-25
 
-###Changed
+### Changed
 
 - Refactor and simplify the PauliNet
 - Generalize the GNN framework
@@ -19,18 +33,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add configuration files for PauliNet, FermiNet, DeepErwin and PsiFormer
 - Add multi-GPU support
 
-###Fixed
+### Fixed
 
 - Remove deepcopys slowing down the execution
 - Improve logging
 - Explicit creation of logging directories
 
-###Removed
+### Removed
 
 - Remove specification of orbital configurations in wave function ansatz
 - Remove GraphNeuralNetwork base class
 
-###Renamed
+### Renamed
 
 - PauliNet -> NeuralNetworkWaveFunction
 - SchNet -> ElectronGNN
