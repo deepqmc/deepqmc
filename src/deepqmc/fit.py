@@ -7,7 +7,7 @@ import optax
 
 from deepqmc.clip import median_log_squeeze_and_mask
 
-from .kfacext import make_graph_patterns
+from .kfacext import batch_size_extractor, make_graph_patterns
 from .parallel import (
     PMAP_AXIS_NAME,
     gather_electrons_on_one_device,
@@ -161,10 +161,6 @@ def fit_wf(  # noqa: C901
             )
             return opt_state
 
-        def kfac_batch_size_extractor(batch):
-            _, weights = batch
-            return weights.shape[0] * weights.shape[1]
-
         opt = opt(
             value_and_grad_func=energy_and_grad_fn,
             l2_reg=0.0,
@@ -174,7 +170,7 @@ def fit_wf(  # noqa: C901
             include_norms_in_stats=True,
             multi_device=True,
             pmap_axis_name=PMAP_AXIS_NAME,
-            batch_size_extractor=kfac_batch_size_extractor,
+            batch_size_extractor=batch_size_extractor,
         )
 
     @pmap
