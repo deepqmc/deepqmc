@@ -139,13 +139,7 @@ DeepQMC currently supports ``bfd`` [Burkatzki07]_ and ``ccECP`` [Bennett17]_ pse
     H = MolecularHamiltonian(mol=mol, pp_type='ccECP', pp_mask=[True,False], elec_std=0.1)
     sampler = chain(DecorrSampler(length=100),MetropolisSampler(H))
 
-The systems containing heavier atoms sometimes tend to produce NaN errors. To avoid these issues, it was found useful to use a smaller variance for the initial distribution of electrons around the nuclei (via the ``elec_std`` argument) and a larger decorrelation length for sampling
-.. code::
-
-    @hk.without_apply_rng
-    @hk.transform
-    def ansatz(phys_conf, return_mos=False):
-        return _ansatz(H)(phys_conf, return_mos=return_mos)
+The systems containing heavier atoms sometimes tend to produce NaN errors. To avoid these issues, it was found useful to use a smaller variance for the initial distribution of electrons around the nuclei (via the ``elec_std`` argument) and a larger decorrelation length for sampling.
 
 Pretraining for a couple of thousands ``pretrain_steps`` is also very beneficial for systems with heavier atoms. The following command starts the 3000-step pretraining followed by 10000 training steps, however more variational training steps are usually necessary to reach a good accuracy::
 
