@@ -1,13 +1,16 @@
-_target_: kfac_jax.Optimizer
+_target_: deepqmc.optimizer.KFACOptimizer
 _partial_: true
-learning_rate_schedule:
-  _target_: deepqmc.utils.InverseSchedule
-  init_value: 0.05
-  decay_rate: 100000
-norm_constraint: 0.001
-damping_schedule:
-  _target_: deepqmc.utils.ConstantSchedule
-  value: 0.001
-estimation_mode: fisher_exact
-num_burnin_steps: 0
-inverse_update_period: 1
+kfac:
+  _target_: kfac_jax.Optimizer
+  _partial_: true
+  learning_rate_schedule:
+    _target_: deepqmc.utils.InverseSchedule
+    init_value: 0.05
+    decay_rate: 100000
+  norm_constraint: 0.001
+  damping_schedule:
+    _target_: deepqmc.utils.ConstantSchedule
+    value: 0.001
+  estimation_mode: fisher_exact
+  num_burnin_steps: 0
+  inverse_update_period: 1

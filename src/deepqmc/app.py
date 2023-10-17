@@ -12,6 +12,7 @@ from omegaconf import OmegaConf
 from tqdm.auto import tqdm
 
 from deepqmc import Molecule
+from deepqmc.optimizer import NoOptimizer
 
 __all__ = ()
 log = logging.getLogger(__name__)
@@ -83,7 +84,7 @@ def train_from_checkpoint(workdir, restdir, evaluate, chkpt='LAST', **kwargs):
     log.info(f'Found original config file in {restdir}')
     cfg.task.workdir = workdir
     if evaluate:
-        cfg.task.opt = None
+        cfg.task.opt = NoOptimizer
     else:
         cfg.task.init_step = step
     cfg = OmegaConf.to_object(cfg)

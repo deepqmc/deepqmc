@@ -8,11 +8,11 @@ from typing import Sequence
 import h5py
 import jax
 import jax.numpy as jnp
-import kfac_jax
-import optax
 from jax import tree_util
 from tqdm.auto import tqdm, trange
 from uncertainties import ufloat
+
+from deepqmc.optimizer import construct_optimizer
 
 from .ewm import init_ewm
 from .fit import fit_wf
@@ -32,22 +32,11 @@ from .sampling import (
     chain,
     equilibrate,
 )
-from .utils import ConstantSchedule, InverseSchedule
 from .wf.base import init_wf_params
 
 __all__ = ['train']
 
 log = logging.getLogger(__name__)
-
-OPT_KWARGS = {
-    'adam': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
-    'adamw': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
-    'kfac': {
-        'learning_rate_schedule': InverseSchedule(0.05, 10000),
-        'damping_schedule': ConstantSchedule(0.001),
-        'norm_constraint': 0.001,
-    },
-}
 
 
 class NanError(Exception):
@@ -160,13 +149,7 @@ def train(  # noqa: C901
         pretrain_sampler = MultiNuclearGeometrySampler(
             pretrain_sampler, jnp.stack([mol.coords for mol in mols])
         )
-    if isinstance(opt, str):
-        opt_kwargs = OPT_KWARGS.get(opt, {}) | (opt_kwargs or {})
-        opt = (
-            partial(kfac_jax.Optimizer, **opt_kwargs)
-            if opt == 'kfac'
-            else getattr(optax, opt)(**opt_kwargs)
-        )
+    opt = construct_optimizer(opt, opt_kwargs)
     if workdir:
         workdir = os.path.join(workdir, mode)
         chkptdir = os.path.join(chkptdir, mode) if chkptdir else workdir
@@ -205,15 +188,11 @@ def train(  # noqa: C901
                 log.info('Pretraining wrt. baseline wave function')
                 rng, rng_pretrain = jax.random.split(rng)
                 pretrain_kwargs = pretrain_kwargs or {}
-                opt_pretrain = pretrain_kwargs.pop('opt', 'adamw')
-                opt_pretrain_kwargs = OPT_KWARGS.get(
-                    opt_pretrain, {}
-                ) | pretrain_kwargs.pop('opt_kwargs', {})
-                if isinstance(opt_pretrain, str):
-                    if opt_pretrain == 'kfac':
-                        raise NotImplementedError
-                    opt_pretrain = getattr(optax, opt_pretrain)
-                opt_pretrain = opt_pretrain(**opt_pretrain_kwargs)
+                opt_pretrain = construct_optimizer(
+                    pretrain_kwargs.pop('opt', 'adamw'),
+                    pretrain_kwargs.pop('opt_kwargs', None),
+                    wrap=False,
+                )
                 ewm_state, update_ewm = init_ewm(decay_alpha=1.0)
                 ewm_states = len(pretrain_sampler) * [ewm_state]
                 pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
