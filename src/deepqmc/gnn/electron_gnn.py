@@ -17,10 +17,10 @@ class ElectronGNNLayer(hk.Module):
     Derived from :class:`~deepqmc.gnn.gnn.MessagePassingLayer`.
 
     Args:
-        one_paritcle_residual: whether a residual connection is used when updating
+        one_particle_residual: whether a residual connection is used when updating
             the one particle embeddings, either :data:`False`, or an instance of
             :class:`~deepqmc.hkext.ResidualConnection`.
-        two_paritcle_residual: whether a residual connection is used when updating
+        two_particle_residual: whether a residual connection is used when updating
             the two particle embeddings, either :data:`False`, or an instance of
             :class:`~deepqmc.hkext.ResidualConnection`.
         deep_features: if :data:`False`, the edge features are not updated throughout
