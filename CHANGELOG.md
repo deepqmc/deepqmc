@@ -132,6 +132,9 @@ At this moment, DeepQMC should be still considered a research code.
 - Core functionality to run variational quantum Monte Carlo with Pytorch
 - PauliNet, a deep neural network ansatz
 
+[1.1.1]: https://github.com/deepqmc/deepqmc/compare/1.1.0...1.1.1
+[1.1.0]: https://github.com/deepqmc/deepqmc/compare/1.0.1...1.1.0
+[1.0.1]: https://github.com/deepqmc/deepqmc/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/deepqmc/deepqmc/compare/0.3.1...1.0.0
 [0.3.1]: https://github.com/deepqmc/deepqmc/compare/0.3.0...0.3.1
 [0.3.0]: https://github.com/deepqmc/deepqmc/compare/0.2.0...0.3.0
