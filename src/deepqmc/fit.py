@@ -50,12 +50,6 @@ def median_log_squeeze_and_mask(
     return x_clip, gradient_mask
 
 
-def init_fit(rng, hamil, ansatz, sampler, electron_batch_size):
-    params = init_wf_params(rng, hamil, ansatz)
-    smpl_state = sampler.init(rng, partial(ansatz.apply, params), electron_batch_size)
-    return params, smpl_state
-
-
 def fit_wf(  # noqa: C901
     rng,
     hamil,
