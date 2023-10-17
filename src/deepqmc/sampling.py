@@ -1,6 +1,7 @@
 import logging
 from functools import partial
 from statistics import mean, stdev
+from typing import Sequence
 
 import jax
 import jax.numpy as jnp
@@ -432,3 +433,23 @@ def equilibrate(
         b1, b2 = buffer[:block_size], buffer[-block_size:]
         if abs(mean(b1) - mean(b2)) < min(stdev(b1), stdev(b2)):
             break
+
+def initialize_sampling(rng, hamil, mols, sampler, pretrain_sampler, electron_batch_size, molecule_batch_size):
+    assert not electron_batch_size % jax.device_count()
+    mols = mols or hamil.mol
+    mols = mols if isinstance(mols, Sequence) else [mols]
+    assert molecule_batch_size <= len(mols)
+    molecule_idx_sampler = MoleculeIdxSampler(
+        rng, len(mols), molecule_batch_size, 'once'
+    )
+    sampler = MultiNuclearGeometrySampler(
+        sampler, jnp.stack([mol.coords for mol in mols])
+    )
+    if pretrain_sampler is None:
+        pretrain_sampler = sampler
+    else:
+        pretrain_sampler = chain(*pretrain_sampler[:-1], pretrain_sampler[-1](hamil))
+        pretrain_sampler = MultiNuclearGeometrySampler(
+            pretrain_sampler, jnp.stack([mol.coords for mol in mols])
+        )
+    return mols, molecule_idx_sampler, sampler, pretrain_sampler

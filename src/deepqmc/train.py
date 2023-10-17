@@ -26,12 +26,7 @@ from .parallel import (
 )
 from .physics import pairwise_self_distance
 from .pretrain import pretrain
-from .sampling import (
-    MoleculeIdxSampler,
-    MultiNuclearGeometrySampler,
-    chain,
-    equilibrate,
-)
+from .sampling import equilibrate, initialize_sampler_state, initialize_sampling
 from .wf.base import init_wf_params
 
 __all__ = ['train']
@@ -129,26 +124,18 @@ def train(  # noqa: C901
             If not specified, the default `~.log.TensorboardMetricLogger` is used
             to create tensorboard logs.
     """
-    assert not electron_batch_size % jax.device_count()
-    rng = jax.random.PRNGKey(seed)
     mode = 'evaluation' if opt is None else 'training'
-    mols = mols or hamil.mol
-    mols = mols if isinstance(mols, Sequence) else [mols]
-    assert molecule_batch_size <= len(mols)
-    rng, rng_mol_smpl = jax.random.split(rng)
-    molecule_idx_sampler = MoleculeIdxSampler(
-        rng_mol_smpl, len(mols), molecule_batch_size, 'once'
+    rng = jax.random.PRNGKey(seed)
+    rng, rng_smpl = jax.random.split(rng)
+    mols, molecule_idx_sampler, sampler, pretrain_sampler = initialize_sampling(
+        rng_smpl,
+        hamil,
+        mols,
+        sampler,
+        pretrain_sampler,
+        electron_batch_size,
+        molecule_batch_size,
     )
-    sampler = MultiNuclearGeometrySampler(
-        sampler, jnp.stack([mol.coords for mol in mols])
-    )
-    if pretrain_sampler is None:
-        pretrain_sampler = sampler
-    else:
-        pretrain_sampler = chain(*pretrain_sampler[:-1], pretrain_sampler[-1](hamil))
-        pretrain_sampler = MultiNuclearGeometrySampler(
-            pretrain_sampler, jnp.stack([mol.coords for mol in mols])
-        )
     opt = construct_optimizer(opt, opt_kwargs)
     if workdir:
         workdir = os.path.join(workdir, mode)
