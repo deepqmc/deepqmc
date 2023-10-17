@@ -6,12 +6,11 @@ import jax.numpy as jnp
 import kfac_jax
 import optax
 
+from deepqmc.clip import median_log_squeeze_and_mask
+
 from .kfacext import make_graph_patterns
 from .parallel import (
     PMAP_AXIS_NAME,
-    all_device_mean,
-    all_device_median,
-    all_device_quantile,
     gather_electrons_on_one_device,
     pexp_normalize_mean,
     pmap,
@@ -20,35 +19,11 @@ from .parallel import (
     select_one_device,
     split_on_devices,
 )
-from .utils import log_squeeze, masked_mean, tree_norm
-from .wf.base import init_wf_params
+from .utils import masked_mean, tree_norm
 
 __all__ = ()
 
 TrainState = namedtuple('TrainState', 'sampler params opt')
-
-
-def median_clip_and_mask(x, clip_width, median_center, exclude_width=jnp.inf):
-    clip_center = all_device_median(x) if median_center else all_device_mean(x)
-    abs_diff = jnp.abs(x - clip_center)
-    mad = all_device_mean(abs_diff)
-    x_clip = jnp.clip(x, clip_center - clip_width * mad, clip_center + clip_width * mad)
-    gradient_mask = abs_diff < exclude_width
-    return x_clip, gradient_mask
-
-
-def median_log_squeeze_and_mask(
-    x, clip_width=1.0, quantile=0.95, exclude_width=jnp.inf
-):
-    x_median = all_device_median(x)
-    x_diff = x - x_median
-    x_abs_diff = jnp.abs(x_diff)
-    quantile = all_device_quantile(x_abs_diff, quantile)
-    width = clip_width * quantile
-    x_clip = x_median + 2 * width * log_squeeze(x_diff / (2 * width))
-    gradient_mask = x_abs_diff / quantile < exclude_width
-    return x_clip, gradient_mask
-
 
 def fit_wf(  # noqa: C901
     rng,

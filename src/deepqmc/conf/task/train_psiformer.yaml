@@ -19,7 +19,7 @@ pretrain_kwargs:
 seed: 0
 fit_kwargs:
   clip_mask_fn:
-    _target_: deepqmc.fit.median_clip_and_mask
+    _target_: deepqmc.clip.median_clip_and_mask
     _partial_: true
     clip_width: 5
     median_center: true
