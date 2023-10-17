@@ -8,6 +8,8 @@ from deepqmc.kfacext import batch_size_extractor, make_graph_patterns
 from deepqmc.parallel import PMAP_AXIS_NAME, pmap, pmean
 from deepqmc.utils import ConstantSchedule, InverseSchedule, tree_norm
 
+__all__ = ()
+
 DEFAULT_OPT_KWARGS = {
     'adam': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
     'adamw': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
