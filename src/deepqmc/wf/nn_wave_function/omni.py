@@ -10,7 +10,7 @@ class Jastrow(hk.Module):
     Args:
         embedding_dim (int): the length of the electron embedding vectors.
         sum_first (bool): if :data:`True`, the electronic embeddings are summed before
-            feeding them to the MLP. Otherwise the MLP is applyied separately on each
+            feeding them to the MLP. Otherwise the MLP is applied separately on each
             electron embedding, and the outputs are summed, yielding a (quasi)
             mean-field Jastrow factor.
         name (str): the name of this haiku module.

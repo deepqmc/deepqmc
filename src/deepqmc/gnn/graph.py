@@ -41,13 +41,13 @@ def GraphEdgeBuilder(
     Args:
         filter_self (bool): whether to filter edges between nodes of the same index.
         offsets ((int, int)): node index offset to be added to the returned
-            sender and receiver node indeces respectively.
+            sender and receiver node indices respectively.
         mask_vals ((int, int)): if ``occupancy_limit`` is larger than the number
             of valid edges, the remaining node indices will be filled with these
             values for the sender and receiver nodes respectively
             (i.e. the value to pad the node index arrays with).
         feature_callback (Callable): a function that takes the sender positions,
-            receiver positions, sender node indeces and receiver node indeces and
+            receiver positions, sender node indices and receiver node indices and
             returns some data (features) computed for the edges.
     """
 
@@ -86,8 +86,8 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interacti
                 - ``'nn'``: nuclei->nuclei edges
                 - ``'ne'``: nuclei->electrons edges
                 - ``'en'``: electrons->nuclei edges
-                - ``'same'``: edges betwen same-spin electrons
-                - ``'anti'``: edges betwen opposite-spin electrons
+                - ``'same'``: edges between same-spin electrons
+                - ``'anti'``: edges between opposite-spin electrons
                 - ``'up'``: edges going from spin-up electrons to all electrons
                 - ``'down'``: edges going from spin-down electrons to all electrons
         self_interaction (bool): whether edges between a particle and itself are

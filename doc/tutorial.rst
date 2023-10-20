@@ -43,7 +43,7 @@ The Hamiltonian provides the local energy function for the evaluation of the ene
 Create a wave function ansatz
 -----------------------------
 
-The neural network wave function ansatz is available in the :mod:`deepqmc.wf` subpackage. A convinient way of initializing a wave function instance is to use a :mod:`hydra` config file. DeepQMC comes with config files for predefined wave functions (at ``../deepqmc/src/deepqmc/conf/ansatz``), however custom configurations may be used. Being a :mod:`haiku` module the ansatz has to be initialized inside a :func:`haiku.transform`::
+The neural network wave function ansatz is available in the :mod:`deepqmc.wf` subpackage. A convenient way of initializing a wave function instance is to use a :mod:`hydra` config file. DeepQMC comes with config files for predefined wave functions (at ``../deepqmc/src/deepqmc/conf/ansatz``), however custom configurations may be used. Being a :mod:`haiku` module the ansatz has to be initialized inside a :func:`haiku.transform`::
 
     import os
 
@@ -71,7 +71,7 @@ The hyperparameters and their physical meaning are described in the :ref:`api <a
 Instantiate a sampler
 ---------------------
 
-The variational Monte Carlo method requires sampling the propability density associated with the square of the wave function. A :class:`~deepqmc.sampling.Sampler` can be instantiated from a :class:`~deepqmc.hamil.MolecularHamiltonian`::
+The variational Monte Carlo method requires sampling the probability density associated with the square of the wave function. A :class:`~deepqmc.sampling.Sampler` can be instantiated from a :class:`~deepqmc.hamil.MolecularHamiltonian`::
 
     from deepqmc.sampling import chain, MetropolisSampler, DecorrSampler
 

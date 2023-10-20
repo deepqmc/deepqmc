@@ -26,7 +26,7 @@ def replicate_on_devices(pytree):
     Tiles the input arrays to add a leading device axis. The data will be the same
     across all devices. The effect is analogous to calling
     :data:`jnp.repeat(input[None], jax.device_count(), 0)`, except that it also works
-    for pytrees, and the output array will be sharded accross the devices. Useful for
+    for pytrees, and the output array will be sharded across the devices. Useful for
     replicating the same data across all devices.
     """
     return jax.device_put_replicated(pytree, devices=jax.devices())
@@ -74,7 +74,7 @@ def split_on_devices(rng, num):
 
     Args:
         rng: rng key with a leading device axis, rng keys stored on each device.
-        num (int): the number of ouput keys on each device.
+        num (int): the number of output keys on each device.
     """
     return tuple(jax.random.split(rng, num))
 

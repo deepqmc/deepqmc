@@ -190,10 +190,10 @@ class NodeAttentionUpdateFeature(UpdateFeature):
             with_bias=False,
         )
         mlp = self.mlp_factory(h.shape[-1], name='mlp')
-        attented = attention_layer(h, h, h)
+        attended = attention_layer(h, h, h)
         if self.attention_residual:
-            attented = self.attention_residual(h, attented)
-        mlp_out = mlp(attented)
+            attended = self.attention_residual(h, attended)
+        mlp_out = mlp(attended)
         if self.mlp_residual:
-            mlp_out = self.mlp_residual(attented, mlp_out)
+            mlp_out = self.mlp_residual(attended, mlp_out)
         return [mlp_out]

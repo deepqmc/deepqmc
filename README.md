@@ -30,7 +30,7 @@ pip install -e .[dev]
 
 If Pip complains about `setup.py` not being found, please update to the latest Pip version.
 
-The above installation will result in the CPU version of JAX. However, running DeepQMC on the GPU is highly recomended. To enable GPU support make sure to upgrade JAX to match the CUDA and cuDNN versions of your system. For most users this can be achieved with:
+The above installation will result in the CPU version of JAX. However, running DeepQMC on the GPU is highly recommended. To enable GPU support make sure to upgrade JAX to match the CUDA and cuDNN versions of your system. For most users this can be achieved with:
 
 ```
 # CUDA 12 installation
@@ -77,7 +77,7 @@ The repository can be cited as:
 		  Zeno Schätzle and
 		  Peter Bernát Szabó and
 		  Matěj Mezera and
-		  {DeepQMC Contributers}},
+		  {DeepQMC Contributors}},
 	title = {{DeepQMC}},
 	year = {2023},
 	publisher = {Zenodo},

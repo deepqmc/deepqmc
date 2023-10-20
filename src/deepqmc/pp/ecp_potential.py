@@ -15,7 +15,7 @@ QUADRATURE_THETAS = get_unit_icosahedron_sph()[:, 0]
 
 
 def parse_ecp_type_params(charges, pp_type, pp_mask):
-    """Load ane parse the pseudopotential parameters from the pyscf package.
+    """Load and parse the pseudopotential parameters from the pyscf package.
 
     This function loads the pseudopotential parameters for an atom (given by `charge`
     argument) from the pyscf package and parses them to jnp arrays.

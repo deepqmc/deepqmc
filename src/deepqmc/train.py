@@ -84,7 +84,7 @@ def train(  # noqa: C901
             - an :data:`optax` optimizer instance: the supplied :data:`optax`
                 optimizer is used.
             - :class:`str`: the name of the optimizer to use (:data:`'kfac'` or an
-                :data:`optax` optimzier name). Arguments to the optimizer can be
+                :data:`optax` optimizer name). Arguments to the optimizer can be
                 passed in :data:`opt_kwargs`.
             - :data:`None`: no optimizer is used, e.g. the evaluation of the Ansatz
                 is performed.

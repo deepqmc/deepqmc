@@ -40,7 +40,7 @@ def pretrain(  # noqa: C901
         params (dict): the (initial) parameters of the Ansatz.
         opt (``optax`` optimizers): the optimizer.
         molecule_idx_sampler (~deepqmc.samplint.MoleculeIdxSampler): an object that
-            iterates (samples) the indeces of the molecule dataset.
+            iterates (samples) the indices of the molecule dataset.
         sampler (~deepqmc.sampling.Sampler): the sampler instance to use.
         steps: an iterable yielding the step numbers for the pretraining.
         electron_batch_size (int): the number of electron samples to use in a batch.
