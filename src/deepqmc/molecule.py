@@ -94,9 +94,6 @@ class Molecule:
             ')'
         )
 
-    def as_pyscf(self):
-        return [(int(charge), coord) for coord, charge in self]
-
     @classmethod
     def from_name(cls, name, **kwargs):
         """Create a molecule from a database of named molecules.

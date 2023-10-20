@@ -75,8 +75,10 @@ class Baseline(WaveFunction):
         """
         mols = mols if isinstance(mols, Sequence) else [mols]
         mo_coeffs, confs, conf_coeffs = [], [], []
-        for _mol in mols:
-            mol_pyscf, (mf, mc) = pyscf_from_mol(hamil, basis, cas, **pyscf_kwargs)
+        for mol in mols:
+            mol_pyscf, (mf, mc) = pyscf_from_mol(
+                hamil, mol.coords, basis, cas, **pyscf_kwargs
+            )
             centers, shells = GTOBasis.from_pyscf(mol_pyscf)
             mo_coeff = jnp.asarray(mc.mo_coeff if mc else mf.mo_coeff)
             ao_overlap = jnp.asarray(mf.mol.intor('int1e_ovlp_cart'))

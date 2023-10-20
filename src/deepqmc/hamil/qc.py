@@ -220,3 +220,11 @@ class MolecularHamiltonian(Hamiltonian):
             return result, stats
 
         return loc_ene
+
+    def as_pyscf(self, coords):
+        r"""Return nuclear charges and coordinates in a format pyscf can parse.
+
+        Args:
+            coords (jax.Array): nuclear coordinates, shape [n_nuc, 3].
+        """
+        return [(int(charge), coord) for coord, charge in zip(coords, self.mol.charges)]
