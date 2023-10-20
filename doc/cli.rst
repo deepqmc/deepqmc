@@ -40,7 +40,7 @@ The evaluation of the energy of a trained wavefunction ansatz is obtained via::
 
 This again generates a Tensorboard event file ``evaluation/events.out.tfevents.*`` and an HDF5 file ``evaluation/result.h5`` file holding the sampled local energies.
 
-Execution on mulitple GPUs
+Execution on multiple GPUs
 --------------------------
 
 DeepQMC can utilize multiple GPUs of a single host for increased performance. The algorithm is parallelised over the electron position samples, therefore the number of such samples in a batch (``electron_batch_size``) must be divisible with the number of utilized GPUs. DeepQMC relies on JAX to automatically detect and use all available GPUs, without any configuration from the user. It respects the ``CUDA_VISIBLE_DEVICES`` environment variable if it's defined, and only uses the GPUs specified there. A short log message at the beginning of the run informs the user of the number of utilized GPUs.
@@ -55,7 +55,7 @@ In the following the most relevant settings for running experiments with DeepQMC
 Task
 ____
 
-DeepQMC provides the above mentioned conigurations for the ``train``, ``evaluate`` and ``restart`` task. In order to override default hyperparameters of the experimental setup, such as the ``sample_size`` or the number of training ``steps`` or ``pretrain_steps``, hydra provides a simple syntax::
+DeepQMC provides the above mentioned configurations for the ``train``, ``evaluate`` and ``restart`` task. In order to override default hyperparameters of the experimental setup, such as the ``sample_size`` or the number of training ``steps`` or ``pretrain_steps``, hydra provides a simple syntax::
 
         $ deepqmc task=train task.electron_batch_size=2048 task.steps=50_000 task.pretrain_steps=1000
 
@@ -90,7 +90,7 @@ Different sampler configurations can be found in ``.../deepqmc/src/deepqmc/conf/
 Optimization
 ____________
 
-For the optimization either `KFAC <https://kfac-jax.readthedocs.io/en/latest/>`_ or optimizers from `optax <https://optax.readthedocs.io/en/latest/>`_ may be used. While the use of `KFAC <https://kfac-jax.readthedocs.io/en/latest/>`_ is highly recommended due to the significantly imporved convergence, at times it can be useful to run with other optimizers such as `AdamW <https://optax.readthedocs.io/en/latest/api.html#adamw>`_::
+For the optimization either `KFAC <https://kfac-jax.readthedocs.io/en/latest/>`_ or optimizers from `optax <https://optax.readthedocs.io/en/latest/>`_ may be used. While the use of `KFAC <https://kfac-jax.readthedocs.io/en/latest/>`_ is highly recommended due to the significantly improved convergence, at times it can be useful to run with other optimizers such as `AdamW <https://optax.readthedocs.io/en/latest/api.html#adamw>`_::
 
         $ deepqmc task/opt=adamw
 
@@ -101,7 +101,7 @@ The hyperparameters of the training and the wave function ansatz are specified t
 
     $ deepqmc ansatz=ferminet
 
-The hyperparameters of such a predifined ansatz can also be overwritten at the command line::
+The hyperparameters of such a predefined ansatz can also be overwritten at the command line::
 
     $ deepqmc ansatz=ferminet ansatz.omni_factory.gnn_factory.n_interactions=2
 

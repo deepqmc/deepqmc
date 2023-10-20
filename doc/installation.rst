@@ -17,7 +17,7 @@ Dependencies
 These packages will be installed automatically when installing DeepQMC.
 
 - `JAX <https://github.com/google/jax>`_ is a popular Python framework that combines NumPy, Autograd and XLA to give highly efficient just-in-time compiled code with GPU and TPU support.
-- `Haiku <https://github.com/deepmind/dm-haiku>`_ is a neural network libary for JAX that enables object oriented programming of models in the purely functional jax environment.
+- `Haiku <https://github.com/deepmind/dm-haiku>`_ is a neural network library for JAX that enables object oriented programming of models in the purely functional jax environment.
 - `uncertainties <http://uncertainties-python-package.readthedocs.io>`_ helps with propagation of uncertainties in calculations.
 - `TQDM <https://github.com/tqdm/tqdm>`_ provides progress bars.
 - `kfac <https://github.com/deepmind/kfac-jax>`_ is a jax implementation of the KFAC second order optimizer.
@@ -34,7 +34,7 @@ The following dependencies are used for development and their installation must 
 
 - `black <https://github.com/psf/black>`_ formats code according to PEP 8 standard.
 - `flake8 <https://github.com/PyCQA/flake8>`_ implement style guidelines.
-- `isort <https://github.com/PyCQA/isort>`_ helps to keep consitent order of imports.
+- `isort <https://github.com/PyCQA/isort>`_ helps to keep consistent order of imports.
 - `pytest <https://docs.pytest.org/en/7.2.x>`_ for testing the code.
 - `pytest-regressions <https://github.com/ESSS/pytest-regressions>`_ for testing numerical regressions in the code.
 - `pydocstyle <https://github.com/PyCQA/pydocstyle>`_  check compliance with Python docstring conventions.

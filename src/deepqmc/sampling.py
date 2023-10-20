@@ -205,24 +205,24 @@ class ResampledSampler(Sampler):
     This sampler cannot be used as the last element of a sampler chain.
     The resampling is performed by accumulating weights on each MCMC walker
     in each step. Based on a fixed resampling period :data:`period` and/or a
-    threshold :data:`treshold` on the normalized effective sample size the walker
+    threshold :data:`threshold` on the normalized effective sample size the walker
     positions are sampled according to the multinomial distribution defined by
     these weights, and the weights are reset to one. Either :data:`period` or
-    :data:`treshold` have to be specified.
+    :data:`threshold` have to be specified.
 
 
     Args:
         period (int): optional, if specified the walkers are resampled every
             :data:`period` MCMC steps.
-        treshold (float): optional, if specified the walkers are resampled if
+        threshold (float): optional, if specified the walkers are resampled if
             the effective sample size normalized with the batch size is below
-            :data:`treshold`.
+            :data:`threshold`.
     """
 
-    def __init__(self, *, period=None, treshold=None):
-        assert period is not None or treshold is not None
+    def __init__(self, *, period=None, threshold=None):
+        assert period is not None or threshold is not None
         self.period = period
-        self.treshold = treshold
+        self.threshold = threshold
 
     def update(self, state, wf, R):
         state['log_weight'] -= 2 * state['psi'].log
@@ -260,7 +260,7 @@ class ResampledSampler(Sampler):
         stats['sampling/effective sample size'] = ess
         state = jax.lax.cond(
             (self.period is not None and state['step'] >= self.period)
-            | (self.treshold is not None and ess / len(weight) < self.treshold),
+            | (self.threshold is not None and ess / len(weight) < self.threshold),
             self.resample_walkers,
             lambda rng, state: state,
             rng_re,
