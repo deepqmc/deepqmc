@@ -7,6 +7,8 @@ import numpy as np
 import tensorboard.summary
 from jax.tree_util import tree_map
 
+from deepqmc.utils import tree_any
+
 from .parallel import pmap_pmean, select_one_device
 
 Checkpoint = namedtuple('Checkpoint', 'step loss path')
@@ -47,7 +49,9 @@ class CheckpointStore:
         self.chkpts.append(Checkpoint(step, loss, path))
 
     def close(self):
-        if self.buffer and not any(tree_map(lambda x: x.is_deleted(), self.buffer[1])):
+        if self.buffer and not tree_any(
+            tree_map(lambda x: x.is_deleted(), self.buffer[1])
+        ):
             self.dump()
         # If the training crashes KFAC might have already freed the buffers and the
         # state can no longer be dumped. Preventing this by keeping a copy significantly
