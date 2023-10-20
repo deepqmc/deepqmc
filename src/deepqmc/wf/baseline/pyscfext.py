@@ -8,12 +8,13 @@ from pyscf.scf import RHF
 log = logging.getLogger(__name__)
 
 
-def pyscf_from_mol(hamil, basis, cas=None, **kwargs):
+def pyscf_from_mol(hamil, coords, basis, cas=None, **kwargs):
     r"""Create a pyscf molecule and perform an SCF calculation on it.
 
     Args:
         hamil (~deepqmc.hamil.qc.MolecularHamiltonian): the Hamiltonian of the
             molecule on which to perform the SCF calculation.
+        coords (jax.Array): the nuclear coordinates of the molecule, shape: [n_nuc, 3].
         basis (str): the name of the Gaussian basis set to use.
         cas (Tuple[int,int]): optional, the active space definition for CAS.
 
@@ -26,7 +27,7 @@ def pyscf_from_mol(hamil, basis, cas=None, **kwargs):
             ' implemented for pretraining.'
         )
     mol = gto.M(
-        atom=hamil.mol.as_pyscf(),
+        atom=hamil.as_pyscf(coords),
         unit='bohr',
         basis=basis,
         charge=hamil.mol.charge,
