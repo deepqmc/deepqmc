@@ -85,7 +85,7 @@ ________
 
 Different sampler configurations can be found in ``.../deepqmc/src/deepqmc/conf/task/sampler``. A typical usecase would be to pick as sampler form these configurations and, if required, change some argument from the command line::
 
-        $deepqmc task/sampler=decorr_langevin task.sampler.0.length=30
+        $ deepqmc task/sampler=decorr_langevin task.sampler.0.length=30
 
 Optimization
 ____________

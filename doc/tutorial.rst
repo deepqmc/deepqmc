@@ -95,7 +95,7 @@ Logging
 
 The terminal output shows only how far has the training progressed and the current estimate of the energy. More detailed monitoring of the training is available via `Tensorboard <https://www.tensorflow.org/tensorboard>`_. When :func:`~deepqmc.train` is called with an optional ``workdir`` argument, the training run creates a Tensorboard event file::
 
-    >>> train(H, ansatz, 'kfac', sampler, steps=10000, electron_batch_size=2000, seed=42, workdir='runs/01')
+    train(H, ansatz, 'kfac', sampler, steps=10000, electron_batch_size=2000, seed=42, workdir='runs/01')
 
 .. code:: none
 
@@ -115,11 +115,11 @@ Furthermore the training run is logged to the ``workdir``. The ``training`` dire
 Evaluate the energy
 -------------------
 
-A rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the local energies of the training run. A rigorous estimation of the energy expectation value up to the statistical sampling error can be obtained when evaluating the energy expectation value of the trained wavefunction without further optimization. This is achieved by passing a training checkpoint to the :func:`~deepqmc.train` function, and specifying the optimizer to be ``None``:
+A rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the local energies of the training run. A rigorous estimation of the energy expectation value up to the statistical sampling error can be obtained when evaluating the energy expectation value of the trained wavefunction without further optimization. This is achieved by passing a training checkpoint to the :func:`~deepqmc.train` function, and specifying the optimizer to be ``None``::
 
     >>> import jax.numpy as jnp
     >>> step, train_state = jnp.load('runs/01/training/chkpt-10000.pt',allow_pickle=True)
-    >>> train(H, ansatz, None, sampler, train_state=train_state, steps=500, sample_size=2000, seed=42)
+    >>> train(H, ansatz, None, sampler, train_state=train_state, steps=500, electron_batch_size=2000, seed=42)
     evaluating: 100%|█████████| 500/500 [01:20<00:00,  6.20it/s, E=-8.07000(19)]
 
 The evaluation generates the same type of logs as the training, but writes to ``workdir/evaluation`` instead. The final energy can be read from the progress bar, the Tensorboard event file or computed from the local enregies in the hdf5 file respectively.
@@ -143,7 +143,7 @@ The systems containing heavier atoms sometimes tend to produce NaN errors. To av
 
 Pretraining for a couple of thousands ``pretrain_steps`` is also very beneficial for systems with heavier atoms. The following command starts the 3000-step pretraining followed by 10000 training steps, however more variational training steps are usually necessary to reach a good accuracy::
 
-    >>> train(H, ansatz, 'kfac', sampler, steps=10000, sample_size=2000, seed=42, pretrain_steps=3000)
+    >>> train(H, ansatz, 'kfac', sampler, steps=10000, electron_batch_size=2000, seed=42, pretrain_steps=3000)
     pratrain: 100%|█████████| 3000/3000 [54:27<00:00,  1.02it/s, MSE=5.82e-05]
     equilibrate sampler: 18%|██      | 176/1000 [02:59<13:42,  1.00it/s, tau=0.045]
     train: 19%|██      | 1914/10000 [2:52:27<13:31:35,  6.03it/s, E=-133.2503(29)]
