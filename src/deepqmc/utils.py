@@ -51,6 +51,10 @@ def tree_norm(x):
     return jax.tree_util.tree_reduce(lambda norm, x: norm + jnp.linalg.norm(x), x, 0)
 
 
+def tree_any(x):
+    return jax.tree_util.tree_reduce(lambda is_any, leaf: is_any or leaf, x, False)
+
+
 def norm(rs, safe=False, axis=-1):
     eps = jnp.finfo(rs.dtype).eps
     return (

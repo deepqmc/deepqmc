@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ansatz config files
 - Tensorboard logging
 - Bug crashing energy evaluation
+- Saving of final checkpoint
 
 
 ## [1.1.0] - 2023-10-25
