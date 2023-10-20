@@ -57,7 +57,7 @@ ____
 
 DeepQMC provides the above mentioned conigurations for the ``train``, ``evaluate`` and ``restart`` task. In order to override default hyperparameters of the experimental setup, such as the ``sample_size`` or the number of training ``steps`` or ``pretrain_steps``, hydra provides a simple syntax::
 
-        $ deepqmc task=train task.sample_size=2048 task.steps=50_000 +task.pretrain_steps=1000
+        $ deepqmc task=train task.electron_batch_size=2048 task.steps=50_000 task.pretrain_steps=1000
 
 The working directory for logging and checkpointing is is defined through::
 
