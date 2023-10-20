@@ -115,9 +115,7 @@ class EcpTypePseudopotential(Potential):
         const_term = jnp.einsum(
             'ij,kji->kji',
             self.loc_params[idxs, 1, 1, :],
-            jnp.exp(
-                jnp.einsum('ij,ki->kji', -self.loc_params[idxs, 1, 0, :], r_en**2)
-            ),
+            jnp.exp(jnp.einsum('ij,ki->kji', -self.loc_params[idxs, 1, 0, :], r_en**2)),
         )
         linear_term = jnp.einsum(
             'ij,ki->kji', self.loc_params[idxs, 2, 1, :], r_en

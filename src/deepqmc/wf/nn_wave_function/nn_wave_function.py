@@ -27,9 +27,7 @@ class BackflowOp(hk.Module):
             xs = xs * self.mult_act(fs_mult)
         if fs_add is not None:
             R = dists_nuc.min(axis=-1) / 0.5
-            cutoff = jnp.where(
-                R < 1, R**2 * (6 - 8 * R + 3 * R**2), jnp.ones_like(R)
-            )
+            cutoff = jnp.where(R < 1, R**2 * (6 - 8 * R + 3 * R**2), jnp.ones_like(R))
             xs = xs + cutoff[None, :, None] * envel * self.add_act(fs_add)
         return xs
 
