@@ -4,7 +4,7 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'deepqmc'
-version = '1.1.0'
+version = '1.1.1'
 description = 'Deep-learning quantum Monte Carlo for electrons in real space'
 authors = [
     {name = "Jan Hermann", email = "jan.hermann@fu-berlin.de"},
