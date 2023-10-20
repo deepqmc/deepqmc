@@ -53,6 +53,13 @@ def instantiate_ansatz(hamil, ansatz):
 
     envelope = ansatz.keywords['envelope']
     if envelope.keywords.get('is_baseline', False):
+        log.warning(
+            '\x1b[31;20m DeprecationWarning - Running the original PauliNet is'
+            ' deprecated and should be used only for the purpose of reproducing old'
+            ' results. Please consider using one of the other architectures to obtain'
+            ' accurate results. For more details on the performance of different models'
+            ' see the implementation paper.\x1b[0m'
+        )
         # envelope returns a partial(Baseline, **baseline_params) object
         ansatz.keywords['envelope'] = envelope(hamil.mol, hamil)
 
