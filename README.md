@@ -73,12 +73,8 @@ The repository can be cited as:
 
 ```
 @software{deepqmc,
-	author = {Jan Hermann and
-		  Zeno Schätzle and
-		  Peter Bernát Szabó and
-		  Matěj Mezera and
-		  {DeepQMC Contributors}},
-	title = {{DeepQMC}},
+	author = {Hermann, J. and Schätzle, Z. and Szabó, P. B. and Mezera, M and {DeepQMC Contributors}},
+	title = "{DeepQMC}",
 	year = {2023},
 	publisher = {Zenodo},
 	copyright = {MIT},
