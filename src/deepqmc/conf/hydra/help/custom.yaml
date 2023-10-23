@@ -30,7 +30,7 @@ template: |-
 
        Hyperparameters can be specified according to the standard Hydra syntax:
     
-       - deepqmc.app task.sample_size=2000 ansatz.omni_factory.jastrow=false
+       - deepqmc.app task.electron_batch_size=2000 ansatz.omni_factory.jastrow=false
   
    For further information visit the ${hydra.help.app_name} documentation at (https://deepqmc.github.io/).
 
