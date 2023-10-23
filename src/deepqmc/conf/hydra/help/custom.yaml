@@ -17,16 +17,14 @@ template: |-
      - train:      Trains the ansatz with variational Monte Carlo.
      - evaluate:   Evaluates the total energy of an ansatz via Monte Carlo sampling.
      - restart:    Restarts/continues the training from a stored training checkpoint.
-     - defaults:   Collects the default hyperparameters for the main DeepQMC functions.
 
        Further tasks can be defined in the hydra config files (deepqmc/src/deepqmc/conf/task).
 
     Example usage:
     
-     - train:     deepqmc hydra.run.dir=workdir hamil.mol.name=LiH task.steps=5000
+     - train:     deepqmc hydra.run.dir=workdir hamil/mol=LiH task.steps=5000
      - evaluate:  deepqmc task=evaluate task.restdir=workdir +task.steps=500
      - restart:   deepqmc task=restart task.restdir=workdir +task.steps=10000
-     - defaults:  deepqmc.app task=defaults
 
        Hyperparameters can be specified according to the standard Hydra syntax:
     
