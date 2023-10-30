@@ -62,13 +62,13 @@ The latest official release of DeepQMC can be installed from the Python Package 
 Developing
 ----------
 
-In order to have access to the source code and stay up-to-date with the latest developments, DeepQMC can be installed directly from the https://github.com/deepqmc/deepqmc GitHub repository. 
+In order to have access to the source code and stay up-to-date with the latest developments, DeepQMC can be installed directly from the https://github.com/deepqmc/deepqmc GitHub repository.
 
 To install DeepQMC from the Git repository run::
 
     $ git clone https://github.com/deepqmc/deepqmc
     $ cd deepqmc
-    $ pip install -e .[dev] 
+    $ pip install -e .[dev]
 
 Note that the ``-e`` option installs the repository in editable mode and the ``.[dev]`` specification includes the optional dependencies for development.
 

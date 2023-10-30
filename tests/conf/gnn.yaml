@@ -43,7 +43,7 @@ layer_factory:
     hidden_layers: ['log', 3]
     bias: true
     last_linear: false
-    activation: 
+    activation:
       _target_: jax.numpy.tanh
       _partial_: true
     init: default

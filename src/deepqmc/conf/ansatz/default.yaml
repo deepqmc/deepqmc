@@ -37,7 +37,7 @@ omni_factory:
   _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
   _partial_: true
   embedding_dim: 128
-  jastrow_factory: 
+  jastrow_factory:
     _target_: deepqmc.wf.nn_wave_function.omni.Jastrow
     _partial_: true
     sum_first: true
@@ -49,7 +49,7 @@ omni_factory:
       last_linear: true
       activation: null
       init: default
-  backflow_factory:  
+  backflow_factory:
     _target_: deepqmc.wf.nn_wave_function.omni.Backflow
     _partial_: true
     subnet_factory:
@@ -124,7 +124,7 @@ omni_factory:
         normalize: true
       deep_features: shared
       update_rule: concatenate
-      update_features: 
+      update_features:
       - _target_: deepqmc.gnn.update_features.ResidualUpdateFeature
         _partial_: true
       - _target_: deepqmc.gnn.update_features.NodeSumUpdateFeature

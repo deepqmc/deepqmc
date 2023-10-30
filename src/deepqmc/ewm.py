@@ -7,7 +7,7 @@ import jax.numpy as jnp
 __all__ = ()
 
 EWMState = namedtuple(
-    'EWMState', 'step params buffer mean var sqerr', defaults=6 * [None]
+    'EWMState', 'step params buffer mean var sqerr', defaults=6 * [None]  # type: ignore
 )
 
 

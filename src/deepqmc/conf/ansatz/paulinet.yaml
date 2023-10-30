@@ -37,7 +37,7 @@ omni_factory:
   _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
   _partial_: true
   embedding_dim: 64
-  jastrow_factory: 
+  jastrow_factory:
     _target_: deepqmc.wf.nn_wave_function.omni.Jastrow
     _partial_: true
     sum_first: true
@@ -51,7 +51,7 @@ omni_factory:
         _target_: deepqmc.hkext.ssp
         _partial_: true
       init: default
-  backflow_factory:  
+  backflow_factory:
     _target_: deepqmc.wf.nn_wave_function.omni.Backflow
     _partial_: true
     subnet_factory:
@@ -142,4 +142,3 @@ omni_factory:
             _target_: jax.numpy.tanh
             _partial_: true
           init: default
-  

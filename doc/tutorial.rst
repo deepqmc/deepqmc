@@ -33,7 +33,7 @@ Create the molecular Hamiltonian
 --------------------------------
 
 From the molecule the :class:`~deepqmc.hamil.MolecularHamiltonian` is constructed::
-        
+
     from deepqmc import MolecularHamiltonian
 
     H = MolecularHamiltonian(mol=mol)

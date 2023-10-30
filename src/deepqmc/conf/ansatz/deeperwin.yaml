@@ -95,7 +95,7 @@ omni_factory:
         normalize: true
       deep_features: separate
       update_rule: concatenate
-      update_features: 
+      update_features:
       - _target_: deepqmc.gnn.update_features.ResidualUpdateFeature
         _partial_: true
       - _target_: deepqmc.gnn.update_features.NodeSumUpdateFeature

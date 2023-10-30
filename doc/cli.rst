@@ -13,7 +13,7 @@ The CLI provides simple access to the functionalities of the :class:`deepqmc` pa
 	- ``evaluate``:   Evaluates the total energy of an ansatz via Monte Carlo sampling.
 	- ``restart``:    Restarts/continues the training from a stored training checkpoint.
 
-The train function creates a directory which contains the logs as well as the hyperparameters for the training (``.hydra``). For ``restart`` and ``evaluate`` the restdir of the former training run has to be provided. Specifying arguments when executing the command will overwrite the configuration stored in the restdir. This enables changing certain parameters, such as the number of training / evaluation steps, but can result in errors if the requested hyperparameters conflict with the recovered train state. 
+The train function creates a directory which contains the logs as well as the hyperparameters for the training (``.hydra``). For ``restart`` and ``evaluate`` the restdir of the former training run has to be provided. Specifying arguments when executing the command will overwrite the configuration stored in the restdir. This enables changing certain parameters, such as the number of training / evaluation steps, but can result in errors if the requested hyperparameters conflict with the recovered train state.
 
 Example
 -------

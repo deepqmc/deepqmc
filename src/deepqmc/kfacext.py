@@ -1,5 +1,5 @@
 import logging
-from typing import Tuple
+from typing import Tuple, TypeAlias
 
 import jax.numpy as jnp
 import kfac_jax
@@ -148,8 +148,8 @@ def make_graph_patterns():
     return graph_patterns
 
 
-Array = types.Array
-Numeric = types.Numeric
+Array: TypeAlias = types.Array
+Numeric: TypeAlias = types.Numeric
 
 
 def pi_adjusted_kronecker_inverse(

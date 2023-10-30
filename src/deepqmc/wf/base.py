@@ -7,7 +7,7 @@ import jax.numpy as jnp
 
 from deepqmc.parallel import replicate_on_devices
 
-__all__ = []
+__all__ = ()
 
 log = logging.getLogger(__name__)
 

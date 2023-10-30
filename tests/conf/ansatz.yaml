@@ -36,7 +36,7 @@ omni_factory:
   _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
   _partial_: true
   embedding_dim: 8
-  jastrow_factory: 
+  jastrow_factory:
     _target_: deepqmc.wf.nn_wave_function.omni.Jastrow
     _partial_: true
     sum_first: true
@@ -46,11 +46,11 @@ omni_factory:
       hidden_layers: ['log', 3]
       bias: 'not_last'
       last_linear: true
-      activation: 
+      activation:
         _target_: deepqmc.hkext.ssp
         _partial_: true
       init: default
-  backflow_factory:  
+  backflow_factory:
     _target_: deepqmc.wf.nn_wave_function.omni.Backflow
     _partial_: true
     subnet_factory:
@@ -109,7 +109,7 @@ omni_factory:
         hidden_layers: ['log', 1]
         bias: true
         last_linear: false
-        activation: 
+        activation:
           _target_: jax.numpy.tanh
           _partial_: true
         init: default
@@ -147,4 +147,3 @@ omni_factory:
             _target_: jax.numpy.tanh
             _partial_: true
           init: default
-  
