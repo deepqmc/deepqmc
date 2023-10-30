@@ -52,3 +52,27 @@ jobs:
         run: pip install pydocstyle
       - uses: actions/checkout@v2
       - run: pydocstyle src
+  mypy:
+    if: github.event_name != 'schedule' || github.repository == 'deepqmc/deepqmc'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+      - name: Install dependencies
+        run: pip install mypy
+      - uses: actions/checkout@v2
+      - run: mypy src
+  codespell:
+    if: github.event_name != 'schedule' || github.repository == 'deepqmc/deepqmc'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+      - name: Install dependencies
+        run: pip install codespell
+      - uses: actions/checkout@v2
+      - run: codespell
