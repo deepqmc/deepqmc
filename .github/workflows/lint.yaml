@@ -61,7 +61,7 @@ jobs:
         with:
           python-version: 3.x
       - name: Install dependencies
-        run: pip install mypy
+        run: pip install mypy types-PyYAML types-toml
       - uses: actions/checkout@v2
       - run: mypy --ignore-missing-imports src
   codespell:
