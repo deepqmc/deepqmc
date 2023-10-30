@@ -48,11 +48,13 @@ dev = [
     'pytest',
     'pytest-regressions',
     'black',
+    'codespell',
     'flake8',
     'flake8-bugbear',
     'flake8-comprehensions',
     'flake8-quotes',
     'isort',
+    'mypy',
     'pep8-naming',
     'pydocstyle',
 ]
