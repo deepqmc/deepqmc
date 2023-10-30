@@ -102,3 +102,8 @@ To install DeepQMC from the Git repository run::
 Note that the ``-e`` option installs the repository in editable mode and the ``.[dev]`` specification includes the optional dependencies for development.
 
 If `Pip <https://pip.pypa.io/en/stable/quickstart/>`_ complains about ``setup.py`` not being found, please update pip to the latest version.
+
+In order to contribute directly to the repository, the pull requests and code have to conform to our `contributing guidelines <https://github.com/deepqmc/deepqmc/blob/master/CONTRIBUTING.md>`_.
+Most of these can be automatically checked/enforced using our `pre-commit hooks <https://pre-commit.com/>`_, which can be enabled by issuing the following command from the root directory of the repository::
+
+    $ pre-commit install
