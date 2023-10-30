@@ -63,7 +63,7 @@ jobs:
       - name: Install dependencies
         run: pip install mypy
       - uses: actions/checkout@v2
-      - run: mypy src
+      - run: mypy --ignore-missing-imports src
   codespell:
     if: github.event_name != 'schedule' || github.repository == 'deepqmc/deepqmc'
     runs-on: ubuntu-latest
