@@ -155,8 +155,8 @@ def detect_devices():
     n_process = jax.process_count()
     log.info(
         'Running on'
-        f' {n_device} {device_kinds[0].upper()}{"" if n_device == 1 else "s"} with'
-        f' {n_process} process{"" if n_process == 1 else "es"}'
+        f' {n_device} {device_kinds[0].upper()}{"" if n_device == 1 else "s"} with'  # noqa: Q000
+        f' {n_process} process{"" if n_process == 1 else "es"}'  # noqa: Q000
     )
 
 
