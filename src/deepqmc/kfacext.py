@@ -1,5 +1,4 @@
 import logging
-from typing import Tuple, TypeAlias
 
 import jax.numpy as jnp
 import kfac_jax
@@ -8,7 +7,6 @@ from kfac_jax._src.utils import (
     get_special_case_zero_inv,
     psd_inv_cholesky,
     psd_matrix_norm,
-    types,
 )
 
 __all__ = ['make_graph_patterns']
@@ -148,14 +146,7 @@ def make_graph_patterns():
     return graph_patterns
 
 
-Array: TypeAlias = types.Array
-Numeric: TypeAlias = types.Numeric
-
-
-def pi_adjusted_kronecker_inverse(
-    *arrays: Array,
-    damping: Numeric,
-) -> Tuple[Array, ...]:
+def pi_adjusted_kronecker_inverse(*arrays, damping):
     """Computes pi-adjusted factored damping inverses.
 
     The inverse of `a_1 kron a_2 kron ... kron a_n + damping * I` is not Kronecker
@@ -200,7 +191,7 @@ def pi_adjusted_kronecker_inverse(
         c.dtype
     )  # pytype: disable=attribute-error  # numpy-scalars
 
-    def regular_inverse() -> Tuple[Array, ...]:
+    def regular_inverse():
         non_scalars = sum(1 if a.size != 1 else 0 for a in arrays)
 
         # We distribute the overall scale over each factor, including scalars
@@ -229,7 +220,7 @@ def pi_adjusted_kronecker_inverse(
 
         return tuple(u_hats_inv)
 
-    def zero_inverse() -> Tuple[Array, ...]:
+    def zero_inverse():
         # In the special case where for some reason one of the factors is zero, then
         # the inverse is just `damping^-1 * I`, hence we write each factor as
         # `damping^(1/k) * I`.
