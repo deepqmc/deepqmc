@@ -12,6 +12,7 @@ hydra:
     chdir: true
   searchpath:
     - file://conf
+  output_subdir: ${get_hydra_subdir:}
 task:
   workdir: ???
 logging:
