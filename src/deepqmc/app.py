@@ -102,7 +102,7 @@ def task_from_workdir(workdir, chkpt):
 
     workdir = Path(workdir)
     assert workdir.is_dir()
-    cfg = OmegaConf.load(workdir / '.hydra/config.yaml')
+    cfg = OmegaConf.load(workdir / '.hydra' / 'config.yaml')
     if chkpt == 'LAST':
         chkpts = list(workdir.glob(CheckpointStore.PATTERN.format('*')))
         if not chkpts:
