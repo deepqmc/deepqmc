@@ -32,11 +32,11 @@ This creates several files in the working directory, including:
 
 The training can be continued or recoverd from a training checkpoint::
 
-    $ deepqmc task=restart task.restdir=workdir
+    $ deepqmc task=restart task.restdir=workdir/training
 
 The evaluation of the energy of a trained wavefunction ansatz is obtained via::
 
-    $ deepqmc task=evaluate task.restdir=workdir
+    $ deepqmc task=evaluate task.restdir=workdir/training
 
 This again generates a Tensorboard event file ``evaluation/events.out.tfevents.*`` and an HDF5 file ``evaluation/result.h5`` file holding the sampled local energies.
 
