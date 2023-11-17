@@ -15,7 +15,7 @@ repos:
         args: [--assume-in-merge]
         exclude: api.rst
   - repo: https://github.com/psf/black
-    rev: 23.10.0
+    rev: 23.11.0
     hooks:
       - id: black
         name: Format with black

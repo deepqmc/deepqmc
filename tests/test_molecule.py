@@ -18,11 +18,9 @@ from deepqmc.molecule import Molecule
 class TestMolecule:
     def test_from_name(self, name, ndarrays_regression):
         mol = Molecule.from_name(name)
-        ndarrays_regression.check(
-            {
-                'charge': mol.charge,
-                'spin': mol.spin,
-                'charges': mol.charges,
-                'coords': mol.coords,
-            }
-        )
+        ndarrays_regression.check({
+            'charge': mol.charge,
+            'spin': mol.spin,
+            'charges': mol.charges,
+            'coords': mol.coords,
+        })

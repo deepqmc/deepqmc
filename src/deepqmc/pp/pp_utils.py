@@ -20,24 +20,20 @@ def sph2cart(sph, r=1):
 
 def rot_y(theta):
     """Returns the rotation matrix about y-axis by angle theta."""
-    return jnp.array(
-        [
-            [jnp.cos(theta), jnp.zeros_like(theta), jnp.sin(theta)],
-            [jnp.zeros_like(theta), jnp.ones_like(theta), jnp.zeros_like(theta)],
-            [-jnp.sin(theta), jnp.zeros_like(theta), jnp.cos(theta)],
-        ]
-    )
+    return jnp.array([
+        [jnp.cos(theta), jnp.zeros_like(theta), jnp.sin(theta)],
+        [jnp.zeros_like(theta), jnp.ones_like(theta), jnp.zeros_like(theta)],
+        [-jnp.sin(theta), jnp.zeros_like(theta), jnp.cos(theta)],
+    ])
 
 
 def rot_z(phi):
     """Returns the rotation matrix about z-axis by angle phi."""
-    return jnp.array(
-        [
-            [jnp.cos(phi), -jnp.sin(phi), jnp.zeros_like(phi)],
-            [jnp.sin(phi), jnp.cos(phi), jnp.zeros_like(phi)],
-            [jnp.zeros_like(phi), jnp.zeros_like(phi), jnp.ones_like(phi)],
-        ]
-    )
+    return jnp.array([
+        [jnp.cos(phi), -jnp.sin(phi), jnp.zeros_like(phi)],
+        [jnp.sin(phi), jnp.cos(phi), jnp.zeros_like(phi)],
+        [jnp.zeros_like(phi), jnp.zeros_like(phi), jnp.ones_like(phi)],
+    ])
 
 
 def get_unit_icosahedron_sph():

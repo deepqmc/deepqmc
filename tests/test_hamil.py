@@ -18,14 +18,12 @@ class TestHamil:
 
     def test_init(self, helpers, hamil, pp_type, ndarrays_regression):
         hamil = helpers.hamil(helpers.mol(), pp_type=pp_type)
-        ndarrays_regression.check(
-            {
-                'n_up': hamil.n_up,
-                'n_down': hamil.n_down,
-                'ns_valence': hamil.ns_valence,
-                'pp_mask': hamil.pp_mask,
-            }
-        )
+        ndarrays_regression.check({
+            'n_up': hamil.n_up,
+            'n_down': hamil.n_down,
+            'ns_valence': hamil.ns_valence,
+            'pp_mask': hamil.pp_mask,
+        })
 
     def test_init_sample(self, helpers, hamil, pp_type, ndarrays_regression):
         hamil = helpers.hamil(helpers.mol(), pp_type=pp_type)

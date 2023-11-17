@@ -52,14 +52,10 @@ def init_ewm(
         alpha = jax.lax.cond(
             state.step + 1 >= len(alpha),
             lambda: alpha,
-            lambda: jnp.concatenate(
-                [
-                    jnp.maximum(1 - max_alpha, 1 / (2 + state.step / decay_alpha))[
-                        None
-                    ],
-                    alpha[:-1],
-                ]
-            ),
+            lambda: jnp.concatenate([
+                jnp.maximum(1 - max_alpha, 1 / (2 + state.step / decay_alpha))[None],
+                alpha[:-1],
+            ]),
         )
         beta = jnp.concatenate([jnp.array([1.0]), jnp.cumprod(1 - alpha[:-1])])
         weights = alpha * beta
