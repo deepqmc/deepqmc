@@ -9,7 +9,7 @@ with open('../pyproject.toml') as f:
     metadata = toml.load(f)['project']
 project = 'DeepQMC'
 author = ''  # ' '.join(metadata['authors'][0].split()[:-1])
-release = version = '1.1.1'
+release = version = '1.1.2'
 description = ''  # metadata['description']
 year_range = (2019, datetime.date.today().year)
 year_str = (
