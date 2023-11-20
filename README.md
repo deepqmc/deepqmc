@@ -79,6 +79,6 @@ The repository can be cited as:
 	publisher = {Zenodo},
 	copyright = {MIT},
 	url = {https://github.com/deepqmc/deepqmc},
-	doi = {10.5281/zenodo.7503172},
+	doi = {10.5281/zenodo.3960826},
 }
 ```
