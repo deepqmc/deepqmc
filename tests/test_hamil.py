@@ -37,7 +37,4 @@ class TestHamil:
         E_loc, _ = hamil.local_energy(partial(wf.apply, params))(
             helpers.rng(), phys_conf
         )
-        ndarrays_regression.check(
-            {'E_loc': E_loc},
-            default_tolerance={'rtol': 2e-4},
-        )
+        ndarrays_regression.check({'E_loc': E_loc})

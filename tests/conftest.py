@@ -6,8 +6,11 @@ import jax
 import pytest
 from hydra import compose, initialize_config_dir
 from hydra.utils import instantiate
+from jax import config
 
 from deepqmc import MolecularHamiltonian, Molecule
+
+config.update('jax_enable_x64', True)
 
 
 @pytest.fixture(scope='session')

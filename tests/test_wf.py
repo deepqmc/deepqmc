@@ -20,7 +20,6 @@ class TestNeuralNetworkWaveFunction:
         grad_log_psi = grad_ansatz(params)
         ndarrays_regression.check(
             helpers.flatten_pytree(grad_log_psi),
-            default_tolerance={'rtol': 1e-3, 'atol': 1e-5},
         )
 
     def test_laplace_psi(self, helpers, ndarrays_regression):
@@ -32,5 +31,4 @@ class TestNeuralNetworkWaveFunction:
         )(phys_conf.r.flatten())
         ndarrays_regression.check(
             {'lap_log_psis': lap_log_psis, 'quantum_force': quantum_force},
-            default_tolerance={'rtol': 1e-3, 'atol': 1e-5},
         )

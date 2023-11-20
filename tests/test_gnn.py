@@ -52,6 +52,4 @@ class TestGNN:
         gnn = helpers.transform_model(_gnn, hamil, 8)
         params = helpers.init_model(gnn, phys_conf)
         emb = gnn.apply(params, phys_conf)
-        ndarrays_regression.check(
-            {'embedding': emb}, default_tolerance={'rtol': 1e-4, 'atol': 1e-6}
-        )
+        ndarrays_regression.check({'embedding': emb})

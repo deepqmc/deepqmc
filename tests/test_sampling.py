@@ -61,7 +61,6 @@ class TestSampling:
             )
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
-            default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
         )
 
 
@@ -86,10 +85,7 @@ class TestMultimoleculeSampling:
             jnp.stack([self.mol.coords for _ in range(self.N_CONFIG)]),
         )
         smpl_state = sampler.init(helpers.rng(), self.wf, self.SAMPLE_SIZE)
-        ndarrays_regression.check(
-            smpl_state,
-            default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
-        )
+        ndarrays_regression.check(smpl_state)
 
     def test_multi_nuclear_geometry_sampler_sample(
         self, helpers, samplers, ndarrays_regression
@@ -106,5 +102,4 @@ class TestMultimoleculeSampling:
             )
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
-            default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
         )

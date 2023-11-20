@@ -19,7 +19,6 @@ class TestPhysics:
                     else 0
                 ),
             },
-            default_tolerance={'rtol': 2e-2, 'atol': 1e-8},
         )
         # note: nonlocal_potential is not particularly
         # numerically stable, hence the large tolerance
