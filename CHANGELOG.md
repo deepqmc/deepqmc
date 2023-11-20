@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [1.1.2] - 2023-11-20
+
+### Added
+
+- Add script to run common configs before release
+
+### Changed
+
+- Change location of hydra output dir
+- Extend development workflow with codespell and mypy
+- Update workflows
+- Add pre-commit hooks
+- Extend documentation
+- Run tests in double precision
+
 ## [1.1.1] - 2023-10-20
 
 ### Changed
@@ -133,6 +149,7 @@ At this moment, DeepQMC should be still considered a research code.
 - Core functionality to run variational quantum Monte Carlo with Pytorch
 - PauliNet, a deep neural network ansatz
 
+[1.1.2]: https://github.com/deepqmc/deepqmc/compare/1.1.1...1.1.2
 [1.1.1]: https://github.com/deepqmc/deepqmc/compare/1.1.0...1.1.1
 [1.1.0]: https://github.com/deepqmc/deepqmc/compare/1.0.1...1.1.0
 [1.0.1]: https://github.com/deepqmc/deepqmc/compare/1.0.0...1.0.1
