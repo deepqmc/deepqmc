@@ -22,6 +22,8 @@ elif os.environ.get('NVIDIA_TF32_OVERRIDE') != '0':
     )
 
 
+import jax  # noqa: E402
+
 from .conf.custom_resolvers import get_hydra_subdir  # noqa: E402
 from .hamil import MolecularHamiltonian  # noqa: E402
 from .molecule import Molecule  # noqa: E402
@@ -32,6 +34,7 @@ from .sampling import (  # noqa: E402
 )
 from .train import train  # noqa: E402
 
+jax.config.update('jax_default_matmul_precision', 'highest')
 OmegaConf.register_new_resolver('eval', eval)
 OmegaConf.register_new_resolver('get_hydra_subdir', get_hydra_subdir)
 
