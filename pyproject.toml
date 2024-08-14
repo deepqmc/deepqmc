@@ -34,13 +34,15 @@ dependencies = [
     'jax<0.4.24',
     'jaxlib<0.4.24',
     'jax-dataclasses',
-    'kfac-jax',
+    'kfac-jax<0.0.6',
+    'scipy<1.12',
     'optax',
     'pyscf',
     'tensorboard',
     'pyyaml',
     'tqdm',
     'uncertainties',
+    'numpy<2.0.0'
 ]
 
 [project.optional-dependencies]
