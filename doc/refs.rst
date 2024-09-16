@@ -36,3 +36,12 @@ References
     and L. Mitas, A new generation of effective core potentials for correlated
     calculations. `Journal of Chemical Physics 147, 224106
     <https://doi.org/10.1063/1.4995643>`_ (2017).
+
+.. [Szabo24] P. B. Szabó, Z. Schätzle, M. T. Entwistle, and F. Noé, An Improved
+    Penalty-Based Excited-State Variational Monte Carlo Approach with Deep-Learning
+    Ansatzes. `Journal of Chemical Theory and Computation
+    <https://doi.org/10.1021/acs.jctc.4c00678>`_ (2024).
+
+.. [Entwistle23] M. T. Entwistle, Z. Schätzle,   P. A. Erdman, J. Hermann, and F. Noé,
+    Electronic excited states in deep variational Monte Carlo. `Nature Communications
+    <https://doi.org/10.1038/s41467-022-35534-5>`_ (2023).

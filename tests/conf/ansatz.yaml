@@ -1,7 +1,7 @@
 _target_: deepqmc.wf.NeuralNetworkWaveFunction
 _partial_: true
 envelope:
-  _target_: deepqmc.wf.nn_wave_function.env.ExponentialEnvelopes
+  _target_: deepqmc.wf.env.ExponentialEnvelopes
   _partial_: true
   isotropic: true
   per_shell: true
@@ -10,19 +10,19 @@ envelope:
   init_to_ones: false
   softplus_zeta: false
 backflow_op:
-  _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
+  _target_: deepqmc.wf.nn_wave_function.BackflowOp
   _partial_: true
 n_determinants: 2
 full_determinant: false
 cusp_electrons:
-  _target_: deepqmc.wf.nn_wave_function.cusp.ElectronicCuspAsymptotic
+  _target_: deepqmc.wf.cusp.ElectronicCuspAsymptotic
   _partial_: true
   same_scale: 0.25
   anti_scale: 0.5
   alpha: 10.0
   trainable_alpha: false
   cusp_function:
-    _target_: deepqmc.wf.nn_wave_function.cusp.DeepQMCCusp
+    _target_: deepqmc.wf.cusp.DeepQMCCusp
 cusp_nuclei: false
 backflow_transform: mult
 conf_coeff:
@@ -33,11 +33,11 @@ conf_coeff:
     _target_: jax.numpy.ones
     _partial_: true
 omni_factory:
-  _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
+  _target_: deepqmc.wf.omni.OmniNet
   _partial_: true
   embedding_dim: 8
   jastrow_factory:
-    _target_: deepqmc.wf.nn_wave_function.omni.Jastrow
+    _target_: deepqmc.wf.omni.Jastrow
     _partial_: true
     sum_first: true
     subnet_factory:
@@ -51,7 +51,7 @@ omni_factory:
         _partial_: true
       init: default
   backflow_factory:
-    _target_: deepqmc.wf.nn_wave_function.omni.Backflow
+    _target_: deepqmc.wf.omni.Backflow
     _partial_: true
     subnet_factory:
       _target_: deepqmc.hkext.MLP
@@ -73,6 +73,7 @@ omni_factory:
       embedding_dim: 8
       atom_type_embedding: false
       subnet_type: embed
+      edge_features: false
     electron_embedding:
       _target_: deepqmc.gnn.electron_gnn.ElectronEmbedding
       _partial_: true
@@ -113,14 +114,15 @@ omni_factory:
           _target_: jax.numpy.tanh
           _partial_: true
         init: default
-      one_particle_residual:
+      electron_residual:
         _target_: deepqmc.hkext.ResidualConnection
         normalize: false
+      nucleus_residual: null
       two_particle_residual: false
       deep_features: false
       update_rule: featurewise
       update_features:
-      - _target_: deepqmc.gnn.update_features.ConvolutionUpdateFeature
+      - _target_: deepqmc.gnn.update_features.ConvolutionElectronUpdateFeature
         _partial_: true
         normalize: false
         edge_types:

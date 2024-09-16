@@ -1,0 +1,2 @@
+_target_: deepqmc.molecule.Molecule.from_file
+file: ???

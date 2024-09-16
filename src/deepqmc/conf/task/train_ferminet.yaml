@@ -1,13 +1,13 @@
 defaults:
-  - sampler: decorr_metropolis_ferminet
+  - sampler_factory: decorr_metropolis_ferminet
   - opt: kfac
 _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
 ansatz: ${ansatz}
-mols: ${hamil.mol}
 steps: 100000
 molecule_batch_size: 1
 electron_batch_size: 4096
+electronic_states: 1
 seed: 0
 pretrain_steps: 1000
 pretrain_kwargs:
@@ -16,11 +16,28 @@ pretrain_kwargs:
     learning_rate: 3.e-4
     b1: 0.9
     b2: 0.999
-  baseline_kwargs:
+  scf_kwargs:
     basis: sto-6g
-fit_kwargs:
+loss_function_factory:
+  _target_: deepqmc.loss.create_loss_fn
+  _partial_: true
   clip_mask_fn:
-    _target_: deepqmc.clip.median_clip_and_mask
+    _target_: deepqmc.loss.median_clip_and_mask
     _partial_: true
     clip_width: 5.0
     median_center: false
+metric_logger_constructor:
+  _target_: deepqmc.log.TensorboardMetricLogger
+  _partial_: true
+  max_queue: 10
+chkpt_constructor:
+  _target_: deepqmc.log.CheckpointStore
+  _partial_: true
+h5_logger_constructor:
+  _target_: deepqmc.log.H5Logger
+  _partial_: true
+  keys_whitelist:
+    - local_energy
+mols:
+  _target_: deepqmc.app.read_molecules
+  directory: null

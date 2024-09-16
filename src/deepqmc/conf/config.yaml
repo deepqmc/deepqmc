@@ -12,10 +12,10 @@ hydra:
     chdir: true
   searchpath:
     - file://conf
-  output_subdir: ${get_hydra_subdir:}
+  output_subdir: ${mode_subdir:}${process_idx_suffix:}/.hydra
 task:
   workdir: ???
 logging:
-  deepqmc: 20
+  deepqmc: 10
   jax: 40
   kfac: 40

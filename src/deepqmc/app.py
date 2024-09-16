@@ -1,17 +1,18 @@
 import logging
-import pickle
+import platform
 import sys
 import warnings
-from glob import glob
 from pathlib import Path
+from typing import Optional, Union
 
 import hydra
-import yaml
+from hydra.errors import InstantiationException
 from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import OmegaConf
 from tqdm.auto import tqdm
 
-from deepqmc import Molecule
+from .molecule import Molecule, read_molecule_dataset
+from .validate_kwargs import validate_kwargs
 
 __all__ = ()
 log = logging.getLogger(__name__)
@@ -33,35 +34,28 @@ warnings.filterwarnings(
 )
 
 
-def read_molecules(directory):
+def read_molecules(
+    directory: Union[Path, str, None] = None, whitelist: Optional[str] = None
+) -> Optional[list[Molecule]]:
     if directory is None:
         return None
     path = Path(directory)
     if not path.is_absolute():
         path = to_absolute_path(get_original_cwd()) / path
     log.info(f'Reading molecules from {path}')
-    molecules = []
-    for f in sorted(glob(str(path / '*.yaml'))):
-        with open(f, 'r') as stream:
-            molecules.append(Molecule(**yaml.safe_load(stream)))
+    molecules = read_molecule_dataset(path, whitelist)
+    log.info(f'Read molecules from files: {", ".join(molecules.keys())}')
     log.info(f'Read {len(molecules)} molecules')
-    return molecules
+    if len(molecules) == 0:
+        raise ValueError(
+            f'No molecules found in {path}, with whitelist {whitelist!r}. '
+            'Please check if task.mols.directory and task.mols.whitelist are correct.'
+        )
+    return list(molecules.values())
 
 
 def instantiate_ansatz(hamil, ansatz):
     import haiku as hk
-
-    envelope = ansatz.keywords['envelope']
-    if envelope.keywords.get('is_baseline', False):
-        log.warning(
-            '\x1b[31;20m DeprecationWarning - Running the original PauliNet is'
-            ' deprecated and should be used only for the purpose of reproducing old'
-            ' results. Please consider using one of the other architectures to obtain'
-            ' accurate results. For more details on the performance of different models'
-            ' see the implementation paper.\x1b[0m'
-        )
-        # envelope returns a partial(Baseline, **baseline_params) object
-        ansatz.keywords['envelope'] = envelope(hamil.mol, hamil)
 
     return hk.without_apply_rng(
         hk.transform(
@@ -70,30 +64,43 @@ def instantiate_ansatz(hamil, ansatz):
     )
 
 
-def train_from_factories(hamil, ansatz, sampler, **kwargs):
-    from .sampling import chain
+def train_from_factories(hamil, ansatz, **kwargs):
     from .train import train
 
     ansatz = instantiate_ansatz(hamil, ansatz)
-    sampler = chain(*sampler[:-1], sampler[-1](hamil))
-    return train(hamil, ansatz, sampler=sampler, **kwargs)
+    return train(hamil, ansatz, **kwargs)
+
+
+def assert_valid_restdir(restdir: Path, workdir: str):
+    if not restdir.is_dir():
+        raise ValueError(f'restdir {restdir!r} is not a directory')
+    # restdir is workdir/{training/evaluation}
+    if str(restdir.parent) == workdir:
+        raise ValueError(
+            'Cannot restore from the same directory as the one you are running in. '
+            'Make sure that task.restdir and hydra.run.dir are different.'
+        )
 
 
 def train_from_checkpoint(workdir, restdir, evaluate, chkpt='LAST', **kwargs):
     restdir = Path(to_absolute_path(get_original_cwd())) / restdir
-    if not restdir.is_dir():
-        raise ValueError(f'restdir {restdir!r} is not a directory')
+    assert_valid_restdir(restdir, workdir)
     cfg, step, train_state = task_from_workdir(restdir, chkpt)
     while cfg.task.get('restdir', False):
         restdir = Path(to_absolute_path(get_original_cwd())) / cfg.task.restdir
-        cfg, *_ = task_from_workdir(restdir, chkpt)
+        assert_valid_restdir(restdir, workdir)
+        cfg, *_ = task_from_workdir(restdir, 'LAST')
     log.info(f'Found original config file in {restdir}')
     cfg.task.workdir = workdir
+    if not kwargs.pop('keep_sampler_state', not evaluate):
+        train_state = train_state._replace(sampler=None)
     if evaluate:
         cfg.task.opt = None
+        train_state = train_state._replace(opt=None)
     else:
         cfg.task.init_step = step
     cfg = OmegaConf.to_object(cfg)
+    assert isinstance(cfg, dict)
     call(cfg['task'], _convert_='all', train_state=train_state, **kwargs)
 
 
@@ -107,11 +114,13 @@ def task_from_workdir(workdir, chkpt):
         chkpts = list(workdir.glob(CheckpointStore.PATTERN.format('*')))
         if not chkpts:
             chkpts = (workdir / 'training').glob(CheckpointStore.PATTERN.format('*'))
-        chkpt = sorted(chkpts)[-1]
+        chkpt = sorted(
+            chkpts,
+            key=lambda path: CheckpointStore.extract_step_from_filename(path.name),
+        )[-1]
     else:
         chkpt = workdir / chkpt
-    with open(chkpt, 'rb') as f:
-        step, train_state = pickle.load(f)
+    step, train_state = CheckpointStore.load(chkpt)
     return cfg, step, train_state
 
 
@@ -153,6 +162,7 @@ def detect_devices():
     assert all(dk == device_kinds[0] for dk in device_kinds)
     n_device = len(device_kinds)
     n_process = jax.process_count()
+    log.info(f'Process {jax.process_index()} running on {platform.node()}')
     log.info(
         'Running on'
         f' {n_device} {device_kinds[0].upper()}{"" if n_device == 1 else "s"} with'
@@ -161,7 +171,8 @@ def detect_devices():
 
 
 def main(cfg):
-    log.setLevel(cfg.logging.deepqmc)
+    assert log.parent is not None
+    log.parent.setLevel(cfg.logging.deepqmc)
     logging.getLogger('jax').setLevel(cfg.logging.jax)
     logging.getLogger('absl').setLevel(cfg.logging.kfac)
     log.info('Entering application')
@@ -170,6 +181,8 @@ def main(cfg):
     log.info(f'Will work in {cfg.task.workdir}')
     maybe_log_code_version()
     cfg = OmegaConf.to_object(cfg)
+    assert isinstance(cfg, dict)
+    validate_kwargs(cfg['task'])
     call(cfg['task'], _convert_='all')
 
 
@@ -177,7 +190,7 @@ def main(cfg):
 def cli(cfg):
     try:
         main(cfg)
-    except hydra.errors.InstantiationException as e:
-        raise e.__cause__ from None
+    except InstantiationException as e:
+        raise e.__cause__ from None  # type: ignore
     except KeyboardInterrupt:
         log.warning('Interrupted!')

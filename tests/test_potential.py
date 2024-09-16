@@ -1,12 +1,12 @@
 import pytest
 
 
-@pytest.mark.parametrize('pp_type', [None, 'bfd', 'ccECP'])
+@pytest.mark.parametrize('ecp_type', [None, 'bfd', 'ccECP'])
 @pytest.mark.parametrize('name', ['LiH', 'C'])
 class TestPhysics:
-    def test_pseudo_potentials(self, helpers, name, pp_type, ndarrays_regression):
+    def test_pseudo_potentials(self, helpers, name, ecp_type, ndarrays_regression):
         mol = helpers.mol(name)
-        hamil = helpers.hamil(mol, pp_type)
+        hamil = helpers.hamil(mol, ecp_type)
         phys_conf = helpers.phys_conf(hamil)
         _wf, params = helpers.create_ansatz(hamil)
         wf = lambda phys_conf: _wf.apply(params, phys_conf)
@@ -15,7 +15,7 @@ class TestPhysics:
                 'local_potential': hamil.potential.local_potential(phys_conf),
                 'nonlocal_potential': (
                     hamil.potential.nonloc_potential(helpers.rng(), phys_conf, wf)
-                    if pp_type
+                    if ecp_type
                     else 0
                 ),
             },

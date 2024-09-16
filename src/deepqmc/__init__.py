@@ -21,28 +21,17 @@ elif os.environ.get('NVIDIA_TF32_OVERRIDE') != '0':
         ' numerical issues.'
     )
 
+del log
 
 import jax  # noqa: E402
 
-from .conf.custom_resolvers import get_hydra_subdir  # noqa: E402
-from .hamil import MolecularHamiltonian  # noqa: E402
-from .molecule import Molecule  # noqa: E402
-from .sampling import (  # noqa: E402
-    DecorrSampler,
-    MetropolisSampler,
-    ResampledSampler,
-)
-from .train import train  # noqa: E402
+from .parallel import maybe_init_multi_host  # noqa: E402
+
+maybe_init_multi_host()
+
+from .conf.custom_resolvers import mode_subdir, process_idx_suffix  # noqa: E402
 
 jax.config.update('jax_default_matmul_precision', 'highest')
 OmegaConf.register_new_resolver('eval', eval)
-OmegaConf.register_new_resolver('get_hydra_subdir', get_hydra_subdir)
-
-__all__ = [
-    'DecorrSampler',
-    'MetropolisSampler',
-    'MolecularHamiltonian',
-    'Molecule',
-    'ResampledSampler',
-    'train',
-]
+OmegaConf.register_new_resolver('process_idx_suffix', process_idx_suffix)
+OmegaConf.register_new_resolver('mode_subdir', mode_subdir)

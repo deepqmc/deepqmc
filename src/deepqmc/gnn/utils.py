@@ -36,7 +36,7 @@ class NodeEdgeMapping:
     edge, or generate all the edge types with a given sender/receiver node.
 
     Args:
-        edges (Sequence[str]): all the edge types present in the graph
+        edges (~callable.abc.Sequence[str]): all the edge types present in the graph
         node_data (dict): optional, data to store for the node types
     """
 
@@ -46,6 +46,7 @@ class NodeEdgeMapping:
         self.node_data = node_data
 
     def get_data_container(self, data):
+        assert self.node_data is not None
         return self.node_data[data] if isinstance(data, str) else data
 
     def with_receiver(self, node_or_edge):

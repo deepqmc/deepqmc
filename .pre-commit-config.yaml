@@ -14,18 +14,18 @@ repos:
       - id: check-merge-conflict
         args: [--assume-in-merge]
         exclude: api.rst
-  - repo: https://github.com/psf/black
-    rev: 23.11.0
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 24.8.0
     hooks:
       - id: black
         name: Format with black
   - repo: https://github.com/PyCQA/isort
-    rev: 5.12.0
+    rev: 5.13.0
     hooks:
       - id: isort
         name: Order imports with isort
   - repo: https://github.com/PyCQA/flake8
-    rev: 6.1.0
+    rev: 7.1.1
     hooks:
       - id: flake8
         name: Lint with flake8
@@ -37,13 +37,21 @@ repos:
         name: Check docstring style with pydocstyle
         exclude: tests
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.6.1
+    rev: v1.11.1
     hooks:
       - id: mypy
         name: Check types with mypy
         additional_dependencies: [types-PyYAML, types-toml]
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.376
+    hooks:
+    - id: pyright
+      name: Check types with pyright
+      additional_dependencies: [jax_dataclasses, hydra-core]
+      args: ['src/deepqmc']
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.6
+    rev: v2.3.0
     hooks:
     - id: codespell
       name: Check spelling
+      args: ['--ignore-words', '.codespellignore']

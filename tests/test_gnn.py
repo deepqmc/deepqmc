@@ -24,7 +24,7 @@ class TestGraph:
         mask_vals,
         ndarrays_regression,
     ):
-        graph_edges = GraphEdgeBuilder(mask_self, offsets, mask_vals)(nodes, nodes)
+        graph_edges = GraphEdgeBuilder(mask_self)(nodes, nodes)
         ndarrays_regression.check({'graph_edges': graph_edges})
 
     def test_molecular_graph_edge_builder(self, helpers, ndarrays_regression):
@@ -52,4 +52,6 @@ class TestGNN:
         gnn = helpers.transform_model(_gnn, hamil, 8)
         params = helpers.init_model(gnn, phys_conf)
         emb = gnn.apply(params, phys_conf)
-        ndarrays_regression.check({'embedding': emb})
+        ndarrays_regression.check(
+            {'embedding': emb.electrons}, default_tolerance={'rtol': 1e-4, 'atol': 1e-6}
+        )

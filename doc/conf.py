@@ -9,7 +9,7 @@ with open('../pyproject.toml') as f:
     metadata = toml.load(f)['project']
 project = 'DeepQMC'
 author = ''  # ' '.join(metadata['authors'][0].split()[:-1])
-release = version = '1.1.2'
+release = version = '1.2.0'
 description = ''  # metadata['description']
 year_range = (2019, datetime.date.today().year)
 year_str = (
@@ -63,6 +63,7 @@ autodoc_default_options = {'members': True}
 autodoc_inherit_docstrings = False
 autodoc_mock_imports = [
     'h5py',
+    'hydra',
     'numpy',
     'pyscf',
     'scipy',
@@ -75,9 +76,11 @@ autodoc_mock_imports = [
     'omegaconf',
     'optax',
     'yaml',
-    'tensorboard',
+    'tensorboardX',
 ]
 toc_object_entries = False
 todo_include_todos = True
 napoleon_numpy_docstring = False
 napoleon_use_ivar = True
+autodoc_typehints = 'none'
+autodoc_type_aliases = {'PhysicalConfiguration': 'deepqmc.types.PhysicalConfiguration'}

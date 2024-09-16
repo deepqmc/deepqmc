@@ -8,7 +8,7 @@ Installation
 Python version
 --------------
 
-DeepQMC is compatible with Python 3.9 and higher.
+DeepQMC is compatible with Python 3.10 and higher.
 
 Dependencies
 ------------
@@ -23,7 +23,7 @@ These packages will be installed automatically when installing DeepQMC.
 - `kfac <https://github.com/deepmind/kfac-jax>`_ is a jax implementation of the KFAC second order optimizer.
 - `optax <https://github.com/deepmind/optax>`_ provides optimizers and loss functions for jax.
 - `h5py <https://www.h5py.org>`_ handles IO for `HDF5 <http://hdfgroup.org>`_ files.
-- `Tensorboard <https://www.tensorflow.org/tensorboard>`_ is a practical tool for monitoring training of neural networks.
+- `Tensorboard <https://www.tensorflow.org/tensorboard>`_ /  `TensorboardX <https://tensorboardx.readthedocs.io/en/latest/tensorboard.html>`_  are practical tools for monitoring training of neural networks.
 - `hydra <https://hydra.cc/>`_ helps with constructing command-line interfaces.
 - `PySCF <http://pyscf.org>`_ implements quantum chemistry methods in Python. This is used to obtain the baseline for pretraining.
 
@@ -55,38 +55,9 @@ This code creates a virtual environment in the ``venv`` directory and actives it
 Install DeepQMC
 ---------------
 
-In order to install DeepQMC, an appropriate version of the JAX library has to be installed first.
-The necessary version of JAX depends on whether one intends to run DeepQMC on GPUs or CPUs, and in the case of GPUs the version of the CUDA libraries installed on the machine.
+The latest official release of DeepQMC can be installed from the Python Package Index using `Pip <https://pip.pypa.io/en/stable/quickstart/>`_::
 
-Running on GPUs (recommended)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Running DeepQMC on GPUs is highly recommended as, similar to most other ML applications, this results in far superior performance.
-To enable GPU support, make sure to install the appropratie, CUDA enabled JAX version that matches the CUDA and cuDNN versions on your machine.
-For most users this can be achieved with one of the following commands::
-
-    $ # CUDA 12 installation
-    $ pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
-    $ # CUDA 11 installation
-    $ pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
-To determine the CUDA version installed on your machine check e.g. the output of the command ``nvidia-smi``.
-If issues arise during the installation of JAX, or if errors related to CUDA or cuDNN occur at runtime, please visit the `JAX Install Guide <https://github.com/google/jax#installation>`_.
-
-Running on CPUs
-~~~~~~~~~~~~~~~
-
-To install a CPU-only version of JAX, use the command::
-
-    $ pip install --upgrade "jax[cpu]"
-
-Installing the DeepQMC package
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Once the appropriate version of JAX is installed, the latest official release of DeepQMC can be installed from the Python Package Index using `Pip <https://pip.pypa.io/en/stable/quickstart/>`_::
-
-    $ pip install --upgrade deepqmc
+    $ pip install -U deepqmc
 
 Developing
 ----------
@@ -103,7 +74,9 @@ Note that the ``-e`` option installs the repository in editable mode and the ``.
 
 If `Pip <https://pip.pypa.io/en/stable/quickstart/>`_ complains about ``setup.py`` not being found, please update pip to the latest version.
 
-In order to contribute directly to the repository, the pull requests and code have to conform to our `contributing guidelines <https://github.com/deepqmc/deepqmc/blob/master/CONTRIBUTING.md>`_.
-Most of these can be automatically checked/enforced using our `pre-commit hooks <https://pre-commit.com/>`_, which can be enabled by issuing the following command from the root directory of the repository::
+The above installation will result in the CPU version of JAX. However, running DeepQMC on the GPU is highly recommended. To enable GPU support make sure to upgrade JAX to match the CUDA and cuDNN versions of your system. For most users this can be achieved with::
 
-    $ pre-commit install
+    $ # CUDA 12 installation
+    $ pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+If issues arise during the installation of JAX, or if errors related to CUDA or cuDNN occur at runtime, please visit the `JAX Install Guide <https://github.com/google/jax#installation>`_.

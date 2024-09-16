@@ -4,11 +4,15 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'deepqmc'
-version = '1.1.2'
+version = '1.2.0'
 description = 'Deep-learning quantum Monte Carlo for electrons in real space'
 authors = [
-    {name = "Jan Hermann", email = "jan.hermann@fu-berlin.de"},
-    {name = "Zeno Schätzle", email = "zenoone@physik.fu-berlin.de"},
+    {name = "Jan Hermann"},
+    {name = "Zeno Schätzle", email = "zeno.schaetzle@fu-berlin.de"},
+    {name = "Péter Bernát Szabó", email = "peter.bernat.szabo@fu-berlin.de"},
+]
+maintainers = [
+    {name = "Zeno Schätzle", email = "zeno.schaetzle@fu-berlin.de"},
     {name = "Péter Bernát Szabó", email = "peter.bernat.szabo@fu-berlin.de"},
 ]
 readme = 'README.md'
@@ -23,26 +27,26 @@ classifiers = [
     'Topic :: Scientific/Engineering :: Artificial Intelligence',
     'Topic :: Scientific/Engineering :: Chemistry',
     'Topic :: Scientific/Engineering :: Physics',
-    'Programming Language :: Python :: 3.9',
-    'Programming Language :: Python :: 3.10'
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',
 ]
 requires-python = ">=3.9"
 dependencies = [
     'dm-haiku>0.0.9',
     'h5py',
     'hydra-core',
-    'jax<0.4.24',
-    'jaxlib<0.4.24',
+    'jax',
+    'jaxlib',
     'jax-dataclasses',
-    'kfac-jax<0.0.6',
-    'scipy<1.12',
+    'kfac-jax',
+    'scipy',
     'optax',
     'pyscf',
-    'tensorboard',
+    'tensorboardX',
     'pyyaml',
     'tqdm',
     'uncertainties',
-    'numpy<2.0.0'
 ]
 
 [project.optional-dependencies]
@@ -60,6 +64,15 @@ dev = [
     'pep8-naming',
     'pre-commit',
     'pydocstyle',
+    'pyright',
+]
+doc = [
+    'sphinx',
+    'Jinja2',
+    'sphinxcontrib-katex',
+    'toml',
+    'docutils',
+    'pydata-sphinx-theme',
 ]
 
 [project.urls]
@@ -76,6 +89,10 @@ where = ["src"]
 "*" = ["*.yaml"]
 
 [tool.black]
-target-version = ['py39','py310']
+target-version = ['py310']
 skip-string-normalization = true
 preview = true
+
+[tool.pyright]
+exclude = ['tests']
+reportMissingImports = false

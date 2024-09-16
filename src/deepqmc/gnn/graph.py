@@ -1,5 +1,6 @@
 from collections import namedtuple
 
+import jax
 import jax.numpy as jnp
 import jax_dataclasses as jdc
 
@@ -32,23 +33,12 @@ def compute_edges(pos_sender, pos_receiver, filter_diagonal):
 
 def GraphEdgeBuilder(
     mask_self,
-    offsets,
-    mask_vals,
 ):
     r"""
     Create a function that builds graph edges.
 
     Args:
-        filter_self (bool): whether to filter edges between nodes of the same index.
-        offsets ((int, int)): node index offset to be added to the returned
-            sender and receiver node indices respectively.
-        mask_vals ((int, int)): if ``occupancy_limit`` is larger than the number
-            of valid edges, the remaining node indices will be filled with these
-            values for the sender and receiver nodes respectively
-            (i.e. the value to pad the node index arrays with).
-        feature_callback (Callable): a function that takes the sender positions,
-            receiver positions, sender node indices and receiver node indices and
-            returns some data (features) computed for the edges.
+        mask_self (bool): whether to mask edges that begin and end in the same node.
     """
 
     def build(pos_sender, pos_receiver):
@@ -81,7 +71,7 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interacti
         n_nuc (int): number of nuclei.
         n_up (int): number of spin-up electrons.
         n_down (int): number of spin-down electrons.
-        edge_types (List[str]): list of edge type names to build. Possible names are:
+        edge_types (list[str]): list of edge type names to build. Possible names are:
 
                 - ``'nn'``: nuclei->nuclei edges
                 - ``'ne'``: nuclei->electrons edges
@@ -93,7 +83,6 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interacti
         self_interaction (bool): whether edges between a particle and itself are
             considered
     """
-    n_elec = n_up + n_down
     builder_mapping = {
         'nn': ['nn'],
         'ne': ['ne'],
@@ -106,45 +95,27 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interacti
     fix_kwargs_of_builder_type = {
         'nn': {
             'mask_self': not self_interaction,
-            'offsets': (0, 0),
-            'mask_vals': (n_nuc, n_nuc),
         },
         'ne': {
             'mask_self': False,
-            'offsets': (0, 0),
-            'mask_vals': (n_nuc, n_elec),
         },
         'en': {
             'mask_self': False,
-            'offsets': (0, 0),
-            'mask_vals': (n_elec, n_nuc),
         },
         'uu': {
             'mask_self': not self_interaction,
-            'offsets': (0, 0),
-            'mask_vals': (n_elec, n_elec),
         },
         'dd': {
             'mask_self': not self_interaction,
-            'offsets': (n_up, n_up),
-            'mask_vals': (n_elec, n_elec),
         },
         'ud': {
             'mask_self': False,
-            'mask_vals': (n_elec, n_elec),
-            'offsets': (0, n_up),
         },
         'du': {
             'mask_self': False,
-            'mask_vals': (n_elec, n_elec),
-            'offsets': (n_up, 0),
         },
-        'up': {'mask_self': False, 'offsets': (0, 0), 'mask_vals': (n_elec, n_elec)},
-        'down': {
-            'mask_self': False,
-            'offsets': (n_up, 0),
-            'mask_vals': (n_elec, n_elec),
-        },
+        'up': {'mask_self': False},
+        'down': {'mask_self': False},
     }
     builders = {
         builder_type: GraphEdgeBuilder(
@@ -203,8 +174,10 @@ def GraphUpdate(
     Args:
         aggregate_edges_for_nodes_fn (bool): whether to perform the aggregation
             of edges for nodes.
-        update_nodes_fn (Callable): optional, function that updates the nodes.
-        update_edges_fn (Callable): optional, function that updates the edges.
+        update_nodes_fn (~collections.abc.Callable): optional, function that updates the
+            nodes.
+        update_edges_fn (~collections.abc.Callable): optional, function that updates the
+            edges.
     """
 
     def update_graph(graph):
@@ -239,7 +212,7 @@ class GraphEdges:
 
 @jdc.pytree_dataclass
 class SimpleGraphEdges(GraphEdges):
-    edges: jnp.ndarray
+    edges: jax.Array
 
     @property
     def single_array(self):
@@ -272,8 +245,8 @@ class DownGraphEdges(SimpleGraphEdges):
 
 @jdc.pytree_dataclass
 class SameGraphEdges(GraphEdges):
-    uu: jnp.ndarray
-    dd: jnp.ndarray
+    uu: jax.Array
+    dd: jax.Array
 
     @property
     def single_array(self):
@@ -325,8 +298,8 @@ class SameGraphEdges(GraphEdges):
 
 @jdc.pytree_dataclass
 class AntiGraphEdges(GraphEdges):
-    du: jnp.ndarray
-    ud: jnp.ndarray
+    du: jax.Array
+    ud: jax.Array
 
     @property
     def single_array(self):

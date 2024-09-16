@@ -2,6 +2,7 @@ from functools import partial
 from itertools import accumulate
 
 import haiku as hk
+import jax
 import jax.numpy as jnp
 from jax import tree_util
 
@@ -17,8 +18,24 @@ class ElectronGNNLayer(hk.Module):
     Derived from :class:`~deepqmc.gnn.gnn.MessagePassingLayer`.
 
     Args:
-        one_particle_residual: whether a residual connection is used when updating
-            the one particle embeddings, either :data:`False`, or an instance of
+        n_interactions (int): the number of message passing interactions.
+        ilayer (int): the index of this layer (0 <= ilayer < n_interactions).
+        n_nuc (int): the number of nuclei.
+        n_up (int): the number of spin up electrons.
+        n_down (int): the number of spin down electrons.
+        embedding_dim (int): the length of the electron embedding vectors.
+        edge_types (Tuple[str]): the types of edges to consider.
+        self_interaction (bool): whether to consider edges where the sender and
+            receiver electrons are the same.
+        node_data (Dict[str, Any]): a dictionary containing information about the
+            nodes of the graph.
+        two_particle_stream_dim (int): the feature dimension of the two particle
+            streams.
+        electron_residual: whether a residual connection is used when updating
+            the electron embeddings, either :data:`False`, or an instance of
+            :class:`~deepqmc.hkext.ResidualConnection`.
+        nucleus_residual: whether a residual connection is used when updating
+            the nucleus embeddings, either :data:`False`, or an instance of
             :class:`~deepqmc.hkext.ResidualConnection`.
         two_particle_residual: whether a residual connection is used when updating
             the two particle embeddings, either :data:`False`, or an instance of
@@ -27,7 +44,7 @@ class ElectronGNNLayer(hk.Module):
             the GNN layers, if :data:`shared` than in each layer a single MLP
             (:data:`u`) is used to update all edge types, if :data:`separate` then in
             each layer separate MLPs are used to update the different edge types.
-        update_features (List[~deepqmc.gnn.update_features.UpdateFeature]): a list of
+        update_features (list[~deepqmc.gnn.update_features.UpdateFeature]): a list of
             partially initialized update feature classes to use when computing the
             update features of the one particle embeddings. For more details see the
             documentation of :class:`deepqmc.gnn.update_features`.
@@ -42,8 +59,8 @@ class ElectronGNNLayer(hk.Module):
 
             note that :data:`'sum'` and :data:`'featurewise_shared'` imply features
             of same size.
-        subnet_factory (Callable): A function that constructs the subnetworks of
-            the GNN layer.
+        subnet_factory (~collections.abc.Callable): optional, a function that constructs
+            the subnetworks of the GNN layer.
         subnet_factory_by_lbl (dict): optional, a dictionary of functions that construct
             subnetworks of the GNN layer. If both this and :data:`subnet_factory` is
             specified, the specified values of :data:`subnet_factory_by_lbl` will take
@@ -65,7 +82,8 @@ class ElectronGNNLayer(hk.Module):
         node_data,
         two_particle_stream_dim,
         *,
-        one_particle_residual,
+        electron_residual,
+        nucleus_residual,
         two_particle_residual,
         deep_features,
         update_features,
@@ -112,22 +130,24 @@ class ElectronGNNLayer(hk.Module):
             uf(self.n_up, self.n_down, two_particle_stream_dim, self.mapping)
             for uf in update_features
         ]
+        self.g_factory = subnet_factory_by_lbl['g']
         self.g = (
-            subnet_factory_by_lbl['g'](
+            self.g_factory(
                 embedding_dim,
                 name='g',
             )
             if not self.update_rule == 'featurewise'
             else {
-                name: subnet_factory_by_lbl['g'](
+                name: self.g_factory(
                     embedding_dim,
                     name=f'g_{name}',
                 )
-                for uf in (self.update_features)
+                for uf in self.update_features
                 for name in uf.names
             }
         )
-        self.one_particle_residual = one_particle_residual
+        self.electron_residual = electron_residual
+        self.nucleus_residual = nucleus_residual
         self.two_particle_residual = two_particle_residual
         self.self_interaction = self_interaction
 
@@ -135,6 +155,7 @@ class ElectronGNNLayer(hk.Module):
         def update_edges(edges):
             if self.deep_features:
                 if self.deep_features == 'shared':
+                    assert not isinstance(self.u, dict)
                     # combine features along leading dim, apply MLP and split
                     # into channels again to please kfac
                     keys, edge_objects = zip(*edges.items())
@@ -153,6 +174,8 @@ class ElectronGNNLayer(hk.Module):
                         )
                         for typ, edge in edges.items()
                     }
+                else:
+                    raise ValueError(f'Unknown deep features: {self.deep_features}')
 
                 if self.two_particle_residual:
                     updated_edges = self.two_particle_residual(edges, updated_edges)
@@ -164,30 +187,70 @@ class ElectronGNNLayer(hk.Module):
 
     def get_aggregate_edges_for_nodes_fn(self):
         def aggregate_edges_for_nodes(nodes, edges):
-            f = []
-            for uf in self.update_features:
-                f.extend(uf(nodes, edges))
-            return f
+            fs = sum(
+                (uf(nodes, edges) for uf in self.update_features),
+                start=[],
+            )
+            return GraphNodes(
+                [f.nuclei for f in fs if f.nuclei is not None],
+                [f.electrons for f in fs if f.electrons is not None],
+            )
 
         return aggregate_edges_for_nodes
 
     def get_update_nodes_fn(self):
-        def update_nodes(nodes, f):
-            if self.update_rule == 'concatenate':
-                updated = self.g(jnp.concatenate(f, axis=-1))
-            elif self.update_rule == 'featurewise':
-                updated = sum(self.g[name](fi) for fi, name in zip(f, self.g.keys()))
-            elif self.update_rule == 'sum':
-                updated = self.g(sum(f))
-            elif self.update_rule == 'featurewise_shared':
-                updated = jnp.sum(self.g(jnp.stack(f)), axis=0)
-            if self.one_particle_residual:
-                updated = self.one_particle_residual(nodes.electrons, updated)
-            nodes = GraphNodes(nodes.nuclei, updated)
-
-            return nodes
+        def update_nodes(nodes, update_features: GraphNodes):
+            updated_electrons = self.apply_update_rule(
+                nodes.electrons,
+                self.g,
+                update_features.electrons,
+                self.electron_residual,
+            )
+            if nodes.nuclei is not None and update_features.nuclei:
+                g_nuc = (
+                    self.g_factory(
+                        nodes.nuclei.shape[-1],
+                        name='g_nuc',
+                    )
+                    if not self.update_rule == 'featurewise'
+                    else {
+                        name: self.g_factory(
+                            nodes.nuclei.shape[-1],
+                            name=f'g_nuc_{name}',
+                        )
+                        for uf in (update_features.nuclei)
+                        for name in uf.names
+                    }
+                )
+                updated_nuclei = self.apply_update_rule(
+                    nodes.nuclei,
+                    g_nuc,
+                    update_features.nuclei,
+                    self.nucleus_residual,
+                )
+            else:
+                updated_nuclei = nodes.nuclei
+            return GraphNodes(updated_nuclei, updated_electrons)
 
         return update_nodes
+
+    def apply_update_rule(self, nodes, update_network, update_features, residual):
+        if self.update_rule == 'concatenate':
+            updated = update_network(jnp.concatenate(update_features, axis=-1))
+        elif self.update_rule == 'featurewise':
+            updated = sum(
+                update_network[name](fi)
+                for fi, name in zip(update_features, update_network.keys())
+            )
+        elif self.update_rule == 'sum':
+            updated = update_network(sum(update_features))
+        elif self.update_rule == 'featurewise_shared':
+            updated = jnp.sum(update_network(jnp.stack(update_features)), axis=0)
+        else:
+            raise ValueError(f'Unknown update rule: {self.update_rule}')
+        if residual:
+            updated = residual(nodes, updated)
+        return updated
 
     def __call__(self, graph):
         r"""
@@ -214,8 +277,8 @@ class ElectronGNN(hk.Module):
     Derived from :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork`.
 
     Args:
-        hamil (:class:`~deepqmc.MolecularHamiltonian`): the Hamiltonian of the system
-            on which the graph is defined.
+        hamil (:class:`~deepqmc.hamil.MolecularHamiltonian`): the Hamiltonian of
+            the system on which the graph is defined.
         embedding_dim (int): the length of the electron embedding vectors.
         n_interactions (int): number of message passing interactions.
         edge_features (dict): a :data:`dict` of functions for each edge
@@ -232,14 +295,15 @@ class ElectronGNN(hk.Module):
             receiver electrons are the same.
         two_particle_stream_dim (int): the feature dimension of the two particle
             streams. Only active if :data:`deep_features` are used.
-        nuclei_embedding (Union[None,~deepqmc.gnn.electron_gnn.NucleiEmbedding]):
+        nuclei_embedding (~typing.Type[~deepqmc.gnn.electron_gnn.NucleiEmbedding]):
             optional, the instance responsible for creating the initial nuclear
             embeddings. Set to :data:`None` if nuclear embeddings are not needed.
-        electron_embedding (~deepqmc.gnn.electron_gnn.ElectronEmbedding): the instance
-            that creates the initial electron embeddings.
-        layer_factory (Callable): a callable that generates a layer of the GNN.
-        ghost_coords: optional, specifies the coordinates of one or more ghost atoms,
-            useful for breaking spatial symmetries of the nuclear geometry.
+        electron_embedding (~typing.Type[~deepqmc.gnn.electron_gnn.ElectronEmbedding]):
+            the instance that creates the initial electron embeddings.
+        layer_factory (~typing.Type[~deepqmc.gnn.electron_gnn.ElectronGNNLayer]): a
+            callable that generates a layer of the GNN.
+        ghost_coords (jax.Array): optional, specifies the coordinates of one or more
+            ghost atoms, useful for breaking spatial symmetries of the nuclear geometry.
     """
 
     def __init__(
@@ -293,7 +357,9 @@ class ElectronGNN(hk.Module):
         ]
         self.edge_features = edge_features
         self.nuclei_embedding = (
-            nuclei_embedding(charges, n_atom_types) if nuclei_embedding else None
+            nuclei_embedding(n_up, n_down, charges, n_atom_types)
+            if nuclei_embedding
+            else None
         )
         self.electron_embedding = electron_embedding(
             n_nuc,
@@ -306,8 +372,10 @@ class ElectronGNN(hk.Module):
         self.self_interaction = self_interaction
 
     def node_factory(self, phys_conf):
-        electron_embedding = self.electron_embedding(phys_conf)
-        nucleus_embedding = self.nuclei_embedding() if self.nuclei_embedding else None
+        nucleus_embedding = (
+            self.nuclei_embedding(phys_conf) if self.nuclei_embedding else None
+        )
+        electron_embedding = self.electron_embedding(phys_conf, nucleus_embedding)
         return GraphNodes(nucleus_embedding, electron_embedding)
 
     def edge_factory(self, phys_conf):
@@ -357,14 +425,16 @@ class ElectronGNN(hk.Module):
         for layer in self.layers:
             graph = layer(graph)
 
-        return graph.nodes.electrons
+        return graph.nodes
 
 
 class NucleiEmbedding(hk.Module):
     r"""Create initial embeddings for nuclei.
 
     Args:
-        charges (jnp.ndarray): the nuclear charges of the molecule.
+        n_up (int): the number of spin up electrons.
+        n_down (int): the number of spin down electrons.
+        charges (jax.Array): the nuclear charges of the molecule.
         n_atom_types (int): the number of different atom types in the molecule.
         embedding_dim (int): the length of the output embedding vector
         atom_type_embedding (bool): if :data:`True`, initial embeddings are the same
@@ -373,13 +443,59 @@ class NucleiEmbedding(hk.Module):
         subnet_type (str): the type of subnetwork to use for the embedding generation:
             - ``'mlp'``: an MLP is used
             - ``'embed'``: a :class:`haiku.Embed` block is used
+        edge_features (~deepqmc.gnn.edge_features.EdgeFeature): optional, the edge
+            features to use when constructing the initial nuclear embeddings.
     """
 
     def __init__(
-        self, charges, n_atom_types, *, embedding_dim, atom_type_embedding, subnet_type
+        self,
+        n_up,
+        n_down,
+        charges,
+        n_atom_types,
+        *,
+        embedding_dim,
+        atom_type_embedding,
+        subnet_type,
+        edge_features,
     ):
         super().__init__()
         assert subnet_type in ['mlp', 'embed']
+        self.edge_features = edge_features
+        if self.edge_features:
+            self.edge_factory = MolecularGraphEdgeBuilder(
+                len(charges),
+                n_up,
+                n_down,
+                ['nn'],
+                self_interaction=True,
+            )
+            self.edge_mlp = MLP(
+                32,
+                'edge_mlp',
+                hidden_layers=(32,),
+                bias=True,
+                last_linear=True,
+                activation=jax.nn.silu,
+                init='ferminet',
+            )
+            self.embed_mlp = MLP(
+                embedding_dim,
+                'embed_mlp',
+                hidden_layers=(embedding_dim,),
+                bias=True,
+                last_linear=True,
+                activation=jax.nn.silu,
+                init='ferminet',
+            )
+        self.charge_embedding = jnp.tile(
+            jax.nn.one_hot(
+                jnp.unique(charges, size=len(charges), return_inverse=True)[-1],
+                len(charges),
+            )[:, None],
+            (1, len(charges), 1),
+        )
+
         n_nuc_types = n_atom_types if atom_type_embedding else len(charges)
         if subnet_type == 'mlp':
             self.subnet = MLP(
@@ -405,8 +521,16 @@ class NucleiEmbedding(hk.Module):
         if subnet_type == 'mlp':
             self.input = self.input[:, None]
 
-    def __call__(self):
-        return self.subnet(self.input)
+    def __call__(self, phys_conf):
+        if self.edge_features:
+            nn_features = self.edge_features(
+                self.edge_factory(phys_conf)['nn'].single_array
+            )
+            nn_features = jnp.concatenate([nn_features, self.charge_embedding], axis=-1)
+            nn_edges = self.edge_mlp(nn_features)
+            return self.embed_mlp(nn_edges.sum(axis=0))
+        else:
+            return self.subnet(self.input)
 
 
 class ElectronEmbedding(hk.Module):
@@ -429,10 +553,10 @@ class ElectronEmbedding(hk.Module):
         elec_types (jax.Array): an integer array with length equal to the number of
             electrons, with entries between ``0`` and ``n_elec_types``. Specifies the
             type for each electron.
-        positional_embeddings (Union[Literal[False],dict]): if not ``False``, a
-            ``dict`` with edge types as keys, and edge features as values. Specifies
-            the edge types and edge features to use when constructing the positional
-            initial electron embeddings.
+        positional_embeddings (dict): optional, if not ``None``, a ``dict`` with edge
+            types as keys, and edge features as values. Specifies the edge types and
+            edge features to use when constructing the positional initial electron
+            embeddings.
         use_spin (bool): only relevant if ``positional_embeddings`` is not ``False``,
             if ``True``, concatenate the spin of the given electron after the
             positional embedding features.
@@ -465,7 +589,7 @@ class ElectronEmbedding(hk.Module):
         self.use_spin = use_spin
         self.project_to_embedding_dim = project_to_embedding_dim
 
-    def __call__(self, phys_conf):
+    def __call__(self, phys_conf, nucleus_embedding):
         if self.positional_embeddings:
             edge_factory = MolecularGraphEdgeBuilder(
                 self.n_nuc,
@@ -495,3 +619,94 @@ class ElectronEmbedding(hk.Module):
             )
             x = X(self.elec_types)
         return x
+
+
+class PermutationInvariantEmbedding(hk.Module):
+    r"""Electron embeddings that are invariant to exchanges of identical nuclei."""
+
+    def __init__(
+        self,
+        n_nuc,
+        n_up,
+        n_down,
+        embedding_dim,
+        n_elec_types,
+        elec_types,
+        charges,
+        *,
+        edge_dim,
+        edge_features,
+        nuclear_charge_dependence,
+        use_spin,
+    ):
+        assert nuclear_charge_dependence in {'concatenate', 'elementwise-product'}
+        super().__init__()
+        self.n_up = n_up
+        self.n_down = n_down
+        self.embedding_dim = embedding_dim
+        self.edge_factory = MolecularGraphEdgeBuilder(
+            n_nuc,
+            n_up,
+            n_down,
+            ['ne'],
+            self_interaction=False,
+        )
+        self.edge_features = edge_features
+        self.nuclear_charge_dependence = nuclear_charge_dependence
+        self.charge_embedding = jax.nn.one_hot(
+            jnp.unique(charges, size=len(charges), return_inverse=True)[-1],
+            len(charges),
+        )
+        self.use_spin = use_spin
+        if nuclear_charge_dependence == 'elementwise-product':
+            self.charge_linear = hk.Linear(edge_dim, name='edge_linear', with_bias=True)
+            self.edge_linear = hk.Linear(edge_dim, with_bias=True)
+        else:
+            self.charge_embedding = jnp.tile(
+                self.charge_embedding[:, None], (1, n_up + n_down, 1)
+            )
+            self.edge_mlp = MLP(
+                edge_dim,
+                'edge_mlp',
+                hidden_layers=(edge_dim,),
+                bias=True,
+                last_linear=True,
+                activation=jax.nn.silu,
+                init='ferminet',
+            )
+        self.embed_mlp = MLP(
+            embedding_dim,
+            'embed_mlp',
+            hidden_layers=(embedding_dim,),
+            bias=True,
+            last_linear=True,
+            activation=jax.nn.silu,
+            init='ferminet',
+        )
+
+    def __call__(self, phys_conf, nucleus_embedding):
+        ne_features = self.edge_features(
+            self.edge_factory(phys_conf)['ne'].single_array
+        )
+        if self.nuclear_charge_dependence == 'elementwise-product':
+            ne_edges = (
+                jax.nn.sigmoid(self.edge_linear(ne_features))
+                * self.charge_linear(self.charge_embedding)[..., None, :]
+            )
+        else:
+            nucleus_embedding = (
+                self.charge_embedding
+                if nucleus_embedding is None
+                else jnp.tile(
+                    nucleus_embedding[:, None, :], (1, self.n_up + self.n_down, 1)
+                )
+            )
+            ne_features = jnp.concatenate([ne_features, nucleus_embedding], axis=-1)
+            ne_edges = self.edge_mlp(ne_features)
+        electron_features = ne_edges.sum(axis=0)
+        if self.use_spin:
+            spins = jnp.concatenate([jnp.ones(self.n_up), -jnp.ones(self.n_down)])[
+                :, None
+            ]
+            electron_features = jnp.concatenate([electron_features, spins], axis=1)
+        return self.embed_mlp(electron_features)
