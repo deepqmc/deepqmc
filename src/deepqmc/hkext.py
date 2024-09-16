@@ -1,13 +1,16 @@
+from collections.abc import Callable, Sequence
+from typing import Optional, Union
+
 import haiku as hk
+import jax
 import jax.numpy as jnp
 from haiku.initializers import VarianceScaling
 from jax import tree_util
-from jax.nn import softplus
+from jax.nn import sigmoid, softplus
 
 
-def ssp(x):
-    r"""
-    Compute the shifted softplus activation function.
+def ssp(x: jax.Array) -> jax.Array:
+    r"""Compute the shifted softplus activation function.
 
     Computes the elementwise function
     :math:`\text{softplus}(x)=\log(1+\text{e}^x)+\log\frac{1}{2}`
@@ -16,19 +19,16 @@ def ssp(x):
 
 
 class MLP(hk.Module):
-    r"""
-    Represent a multilayer perceptron.
+    r"""Represent a multilayer perceptron.
 
     Args:
-        in_dim (int): the input dimension.
         out_dim (int): the output dimension.
-        residual (bool): whether to include a residual connection
         name (str): optional, the name of the network.
         hidden_layers (tuple): optional, either ('log', :math:`N_\text{layers}`),
             in which case the network will have :math:`N_\text{layers}` layers
             with logarithmically changing widths, or a tuple of ints specifying
             the width of each layer.
-        bias (str): optional, specifies which layers should have a bias term.
+        bias (bool | str): optional, specifies which layers should have a bias term.
             Possible values are
 
             - :data:`True`: all layers will have a bias term
@@ -36,25 +36,27 @@ class MLP(hk.Module):
             - ``'not_last'``: all but the last layer will have a bias term
         last_linear (bool): optional, if :data:`True` the activation function
             is not applied to the activation of the last layer.
-        activation (Callable): optional, the activation function.
-        w_init (str or Callable): optional, specifies the initialization of the
+        activation (~collections.abc.Callable): optional, the activation function.
+        init (str | Callable): optional, specifies the initialization of the
             linear weights. Possible string values are:
 
             - ``'default'``: the default haiku initialization method is used.
+            - ``'ferminet'``: the initialization method of the :class:`ferminet`
+                package is used.
             - ``'deeperwin'``: the initialization method of the :class:`deeperwin`
                 package is used.
     """
 
     def __init__(
         self,
-        out_dim,
-        name=None,
+        out_dim: int,
+        name: Optional[str] = None,
         *,
-        hidden_layers,
-        bias,
-        last_linear,
-        activation,
-        init,
+        hidden_layers: Sequence[Union[int, str]],
+        bias: bool,
+        last_linear: bool,
+        activation: Callable[[jax.Array], jax.Array],
+        init: Union[str, Callable],
     ):
         assert bias in (True, False, 'not_last')
         super().__init__(name=name)
@@ -78,8 +80,9 @@ class MLP(hk.Module):
             self.b_init = init
         self.hidden_layers = hidden_layers or []
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: jax.Array) -> jax.Array:
         if len(self.hidden_layers) == 2 and self.hidden_layers[0] == 'log':
+            assert isinstance(self.hidden_layers[1], int)
             n_hidden = self.hidden_layers[1]
             qs = [k / n_hidden for k in range(1, n_hidden + 1)]
             dims = [round(inputs.shape[-1] ** (1 - q) * self.out_dim**q) for q in qs]
@@ -110,8 +113,7 @@ class MLP(hk.Module):
 
 
 class ResidualConnection:
-    r"""
-    Represent a residual connection between pytrees.
+    r"""Represent a residual connection between pytrees.
 
     The residual connection is only added if :data:`inp` and :data:`update`
     have the same shape.
@@ -121,7 +123,7 @@ class ResidualConnection:
             is normalized with :data:`sqrt(2)`.
     """
 
-    def __init__(self, *, normalize):
+    def __init__(self, *, normalize: bool):
         self.normalize = normalize
 
     def __call__(self, inp, update):
@@ -135,7 +137,12 @@ class ResidualConnection:
 
 
 class SumPool:
-    r"""Represent a global sum pooling operation."""
+    r"""Represent a global sum pooling operation.
+
+    Args:
+        out_dim (int): the output dimension.
+        name (str): optional, the name of the network.
+    """
 
     def __init__(self, out_dim, name=None):
         assert out_dim == 1
@@ -152,3 +159,43 @@ class Identity:
 
     def __call__(self, x):
         return x
+
+
+class GLU(hk.Module):
+    r"""Gated Linear Unit.
+
+    Args:
+        out_dim (int): the output dimension.
+        name (str): optional, the name of the network.
+        bias (bool): optional, whether to include a bias term.
+        layer_norm_before (bool): optional, whether to apply layer normalization before
+            the GLU operation.
+        activation (~collections.abc.Callable): default is sigmoid, the activation
+            function.
+        b_init (~collections.abc.Callable): default is zeros, the initialization
+            function for the bias term.
+    """
+
+    def __init__(
+        self,
+        out_dim: int,
+        name: Optional[str] = None,
+        *,
+        bias: bool = True,
+        layer_norm_before: bool = True,
+        activation: Callable[[jax.Array], jax.Array] = sigmoid,
+        b_init: Callable = jnp.zeros,
+    ):
+        super().__init__(name=name)
+        self.activated_linear = hk.Linear(
+            out_dim, name='W', with_bias=bias, b_init=b_init
+        )
+        self.linear = hk.Linear(out_dim, name='V', with_bias=bias, b_init=b_init)
+        self.activation = activation
+        self.layer_norm_before = layer_norm_before
+
+    def __call__(self, x, y):
+        if self.layer_norm_before:
+            x = hk.LayerNorm(-1, False, False)(x)
+            y = hk.LayerNorm(-1, False, False)(y)
+        return self.activation(self.activated_linear(x)) * self.linear(y)

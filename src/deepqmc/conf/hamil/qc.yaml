@@ -1,5 +1,9 @@
 defaults:
+  - _self_
   - mol: LiH
 _target_: deepqmc.hamil.MolecularHamiltonian
 mol:
   _target_: deepqmc.molecule.Molecule
+laplacian_factory:
+  _target_: deepqmc.physics.laplacian
+  _partial_: true

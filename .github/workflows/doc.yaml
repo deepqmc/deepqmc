@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: 3.x
       - name: Install dependencies
-        run: pip install "sphinx<6" Jinja2 sphinxcontrib-katex toml docutils pydata-sphinx-theme
+        run: pip install sphinx Jinja2 sphinxcontrib-katex toml docutils pydata-sphinx-theme
       - uses: actions/checkout@v2
       - name: Build
         run: sphinx-build -W -E doc doc/build

@@ -1,7 +1,7 @@
 _target_: deepqmc.wf.NeuralNetworkWaveFunction
 _partial_: true
 envelope:
-  _target_: deepqmc.wf.nn_wave_function.env.ExponentialEnvelopes
+  _target_: deepqmc.wf.env.ExponentialEnvelopes
   _partial_: true
   isotropic: true
   per_shell: false
@@ -10,32 +10,32 @@ envelope:
   init_to_ones: true
   softplus_zeta: false
 backflow_op:
-  _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
+  _target_: deepqmc.wf.nn_wave_function.BackflowOp
   _partial_: true
   mult_act: '${eval:"lambda x: x"}'
 n_determinants: 16
 full_determinant: true
 cusp_electrons:
-  _target_: deepqmc.wf.nn_wave_function.cusp.ElectronicCuspAsymptotic
+  _target_: deepqmc.wf.cusp.ElectronicCuspAsymptotic
   _partial_: true
   same_scale: 0.25
   anti_scale: 0.5
   alpha: 1.0
   trainable_alpha: true
   cusp_function:
-    _target_: deepqmc.wf.nn_wave_function.cusp.PsiformerCusp
+    _target_: deepqmc.wf.cusp.PsiformerCusp
 cusp_nuclei: false
 backflow_transform: mult
 conf_coeff:
   _target_: deepqmc.hkext.SumPool
   _partial_: true
 omni_factory:
-  _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
+  _target_: deepqmc.wf.omni.OmniNet
   _partial_: true
   embedding_dim: 256
   jastrow_factory: null
   backflow_factory:
-    _target_: deepqmc.wf.nn_wave_function.omni.Backflow
+    _target_: deepqmc.wf.omni.Backflow
     _partial_: true
     subnet_factory:
       _target_: deepqmc.hkext.MLP
@@ -45,6 +45,7 @@ omni_factory:
       last_linear: true
       activation: null
       init: ferminet
+  nuclear_gnn_head: null
   gnn_factory:
     _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
@@ -73,12 +74,13 @@ omni_factory:
       subnet_factory:
         _target_: deepqmc.hkext.Identity
         _partial_: true
-      one_particle_residual: false
+      electron_residual: false
+      nucleus_residual: false
       two_particle_residual: false
       deep_features: false
       update_rule: concatenate
       update_features:
-      - _target_: deepqmc.gnn.update_features.NodeAttentionUpdateFeature
+      - _target_: deepqmc.gnn.update_features.NodeAttentionElectronUpdateFeature
         _partial_: true
         num_heads: 4
         mlp_factory:

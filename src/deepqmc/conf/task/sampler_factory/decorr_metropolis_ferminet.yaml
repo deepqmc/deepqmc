@@ -1,0 +1,13 @@
+_target_: deepqmc.sampling.initialize_sampling
+_partial_: true
+elec_sampler:
+  _target_: deepqmc.sampling.combine_samplers
+  _partial_: true
+  samplers:
+    - _target_: deepqmc.sampling.DecorrSampler
+      length: 10
+    - _target_: deepqmc.sampling.MetropolisSampler
+      _partial_: true
+      tau: 0.02
+      target_acceptance: 0.525
+      max_age: null

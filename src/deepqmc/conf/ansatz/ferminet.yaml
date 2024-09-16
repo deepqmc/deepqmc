@@ -1,7 +1,7 @@
 _target_: deepqmc.wf.NeuralNetworkWaveFunction
 _partial_: true
 envelope:
-  _target_: deepqmc.wf.nn_wave_function.env.ExponentialEnvelopes
+  _target_: deepqmc.wf.env.ExponentialEnvelopes
   _partial_: true
   isotropic: true
   per_shell: false
@@ -10,7 +10,7 @@ envelope:
   init_to_ones: true
   softplus_zeta: false
 backflow_op:
-  _target_: deepqmc.wf.nn_wave_function.nn_wave_function.BackflowOp
+  _target_: deepqmc.wf.nn_wave_function.BackflowOp
   _partial_: true
   mult_act: '${eval:"lambda x: x"}'
 n_determinants: 16
@@ -22,12 +22,12 @@ conf_coeff:
   _target_: deepqmc.hkext.SumPool
   _partial_: true
 omni_factory:
-  _target_: deepqmc.wf.nn_wave_function.omni.OmniNet
+  _target_: deepqmc.wf.omni.OmniNet
   _partial_: true
   embedding_dim: 256
   jastrow_factory: null
   backflow_factory:
-    _target_: deepqmc.wf.nn_wave_function.omni.Backflow
+    _target_: deepqmc.wf.omni.Backflow
     _partial_: true
     subnet_factory:
       _target_: deepqmc.hkext.MLP
@@ -37,6 +37,7 @@ omni_factory:
       last_linear: true
       activation: null
       init: ferminet
+  nuclear_gnn_head: null
   gnn_factory:
     _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
@@ -82,7 +83,8 @@ omni_factory:
           _target_: jax.numpy.tanh
           _partial_: true
         init: ferminet
-      one_particle_residual:
+      nucleus_residual: false
+      electron_residual:
         _target_: deepqmc.hkext.ResidualConnection
         normalize: true
       two_particle_residual:
@@ -91,13 +93,13 @@ omni_factory:
       deep_features: shared
       update_rule: concatenate
       update_features:
-      - _target_: deepqmc.gnn.update_features.ResidualUpdateFeature
+      - _target_: deepqmc.gnn.update_features.ResidualElectronUpdateFeature
         _partial_: true
-      - _target_: deepqmc.gnn.update_features.NodeSumUpdateFeature
+      - _target_: deepqmc.gnn.update_features.NodeSumElectronUpdateFeature
         _partial_: true
         node_types: [up, down]
         normalize: true
-      - _target_: deepqmc.gnn.update_features.EdgeSumUpdateFeature
+      - _target_: deepqmc.gnn.update_features.EdgeSumElectronUpdateFeature
         _partial_: true
         edge_types: [up, down]
         normalize: true

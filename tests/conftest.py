@@ -1,5 +1,5 @@
 import os
-from typing import Sequence
+from collections.abc import Sequence
 
 import haiku as hk
 import jax
@@ -8,7 +8,8 @@ from hydra import compose, initialize_config_dir
 from hydra.utils import instantiate
 from jax import config
 
-from deepqmc import MolecularHamiltonian, Molecule
+from deepqmc.hamil import MolecularHamiltonian
+from deepqmc.molecule import Molecule
 
 config.update('jax_enable_x64', True)
 
@@ -49,9 +50,9 @@ class Helpers:
         return Molecule.from_name(name)
 
     @staticmethod
-    def hamil(mol=None, pp_type=None, pp_mask=None):
+    def hamil(mol=None, ecp_type=None, ecp_mask=None):
         mol = mol or Helpers.mol()
-        return MolecularHamiltonian(mol=mol, pp_type=pp_type, pp_mask=pp_mask)
+        return MolecularHamiltonian(mol=mol, ecp_type=ecp_type, ecp_mask=ecp_mask)
 
     @staticmethod
     def R(hamil=None):

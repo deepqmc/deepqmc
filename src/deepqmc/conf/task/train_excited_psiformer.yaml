@@ -1,0 +1,84 @@
+defaults:
+  - sampler_factory: decorr_metropolis_psiformer
+_target_: deepqmc.app.train_from_factories
+opt:
+  _target_: deepqmc.optimizer.KFACOptimizer
+  _partial_: true
+  kfac:
+    _target_: kfac_jax.Optimizer
+    _partial_: true
+    learning_rate_schedule:
+      _target_: deepqmc.utils.InverseSchedule
+      init_value: 0.05
+      decay_rate: 50000
+    norm_constraint: 0.001
+    damping_schedule:
+      _target_: deepqmc.utils.ConstantSchedule
+      value: 0.001
+    estimation_mode: fisher_exact
+    num_burnin_steps: 0
+    inverse_update_period: 1
+hamil: ${hamil}
+ansatz: ${ansatz}
+steps: 100000
+molecule_batch_size: 1
+electron_batch_size: 2048
+electronic_states: ???
+pretrain_steps: 1000
+pretrain_kwargs:
+  opt: lamb
+  opt_kwargs:
+    learning_rate: 3.e-4
+    b1: 0.9
+    b2: 0.999
+  scf_kwargs:
+    basis: aug-cc-pVTZ
+    cas: ???
+seed: 0
+max_restarts: 5
+loss_function_factory:
+  _target_: deepqmc.loss.create_loss_fn
+  _partial_: true
+  alpha: 4.0
+  scale_overlap_by: max_gap_std
+  min_gap_scale_factor: 0.001
+  clip_mask_fn:
+    _target_: deepqmc.loss.median_clip_and_mask
+    _partial_: true
+    clip_width: 5
+    median_center: true
+  clip_mask_overlap_fn:
+    _target_: deepqmc.loss.psi_ratio_clip_and_mask
+    _partial_: true
+metric_logger_constructor:
+  _target_: deepqmc.log.TensorboardMetricLogger
+  _partial_: true
+  max_queue: 10
+chkpt_constructor:
+  _target_: deepqmc.log.CheckpointStore
+  _partial_: true
+h5_logger_constructor:
+  _target_: deepqmc.log.H5Logger
+  _partial_: true
+  keys_whitelist:
+    - 'local_energy'
+    - 'energy'
+    - 'spin'
+    - 'overlap/pairwise'
+    - 'time'
+observable_monitors:
+  - _target_: deepqmc.observable.EnergyMonitor
+    _partial_: false
+    save_samples: True
+    period: 1
+  - _target_: deepqmc.observable.WaveFunctionMonitor
+    _partial_: false
+    save_samples: True
+    period: 1
+  - _target_: deepqmc.observable.SpinMonitor
+    _partial_: false
+    save_samples: False
+    period: 1
+mols:
+  _target_: deepqmc.app.read_molecules
+  directory: null

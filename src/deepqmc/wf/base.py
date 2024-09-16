@@ -1,55 +1,39 @@
 import logging
 import operator
+from typing import Optional
 
-import haiku as hk
 import jax
-import jax.numpy as jnp
 
-from deepqmc.parallel import replicate_on_devices
+from ..optimizer import merge_states
+from ..parallel import replicate_on_devices
+from ..utils import filter_dict, tree_stack
 
 __all__ = ()
 
 log = logging.getLogger(__name__)
 
 
-def init_wf_params(rng, hamil, ansatz):
-    rng_sample, rng_params = jax.random.split(rng)
-    try:
-        # QC
-        R_shape = (len(hamil.mol.charges), 3)
-    except AttributeError:
-        # QHO
-        R_shape = 0
-    phys_conf = hamil.init_sample(rng_sample, jnp.zeros(R_shape), 1)[0]
-    params = ansatz.init(rng_params, phys_conf)
-
+def init_wf_params(
+    rng, hamil, ansatz, electronic_states=1, *, merge_keys: Optional[list[str]] = None
+):
+    rng_sample, *rng_params = jax.random.split(rng, electronic_states + 1)
+    phys_conf = hamil.init_sample(rng_sample, hamil.mol.coords, 1)[0]
+    params = tree_stack([ansatz.init(rng, phys_conf) for rng in rng_params])
     num_params = jax.tree_util.tree_reduce(
         operator.add, jax.tree_util.tree_map(lambda x: x.size, params)
     )
-    log.info(f'Number of model parameters: {num_params}')
-    params = replicate_on_devices(params)
+    state_mult = '' if electronic_states == 1 else f'{electronic_states} x '
+    log.info(
+        f'Number of model parameters: {state_mult}{num_params // electronic_states}'
+    )
+    if merge_keys is not None and electronic_states > 1:
+        params = merge_states(params, merge_keys)
+        merged_params = '\n  - '.join(
+            str(key) for key in filter_dict(params, merge_keys).keys()
+        )
+        log.debug(
+            'The following model parameters are shared between the'
+            f' {electronic_states} states:\n  - {merged_params}'
+        )
+    params = replicate_on_devices(params, globally=True)
     return params
-
-
-class WaveFunction(hk.Module):
-    r"""
-    Base class for all trial wave functions.
-
-    Shape:
-        - Input, :math:`\mathbf r`, (float, :math:`(N,3)`, a.u.): particle
-            coordinates
-        - Output1, :math:`\ln|\psi(\mathbf r)|` (float):
-        - Output2, :math:`\operatorname{sgn}\psi(\mathbf r)` (float):
-    """
-
-    def __init__(self, hamil):
-        super().__init__()
-        self.mol = hamil.mol
-        self.n_up, self.n_down = hamil.n_up, hamil.n_down
-
-    @property
-    def spin_slices(self):
-        return slice(None, self.n_up), slice(self.n_up, None)
-
-    def forward(self, rs):
-        return NotImplemented

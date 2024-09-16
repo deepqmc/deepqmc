@@ -11,15 +11,17 @@ from deepqmc.sampling import (
     ResampledSampler,
     chain,
 )
+from deepqmc.sampling.nuclei_samplers import IdleNucleiSampler, no_elec_warp
 
 
 @pytest.fixture(scope='class')
 def wf(helpers, request):
     request.cls.mol = helpers.mol()
     hamil = helpers.hamil(request.cls.mol)
-    wf, params = helpers.create_ansatz(hamil)
-    request.cls.wf = partial(wf.apply, params)
+    ansatz, params = helpers.create_ansatz(hamil)
+    request.cls.ansatz = ansatz
     request.cls.hamil = hamil
+    request.cls.params = params
 
 
 @pytest.mark.parametrize(
@@ -41,9 +43,9 @@ class TestSampling:
     SAMPLE_SIZE = 10
 
     def test_sampler_init(self, helpers, samplers, ndarrays_regression):
-        sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
+        sampler = chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply))
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, self.mol.coords
+            helpers.rng(), self.params, self.SAMPLE_SIZE, self.mol.coords
         )
         ndarrays_regression.check(
             helpers.flatten_pytree(smpl_state),
@@ -51,13 +53,13 @@ class TestSampling:
         )
 
     def test_sampler_sample(self, helpers, samplers, ndarrays_regression):
-        sampler = chain(*samplers[:-1], samplers[-1](self.hamil))
+        sampler = chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply))
         smpl_state = sampler.init(
-            helpers.rng(), self.wf, self.SAMPLE_SIZE, self.mol.coords
+            helpers.rng(), self.params, self.SAMPLE_SIZE, self.mol.coords
         )
         for step in range(4):
             smpl_state, _, stats = sampler.sample(
-                helpers.rng(step), smpl_state, self.wf, self.mol.coords
+                helpers.rng(step), smpl_state, self.params, self.mol.coords
             )
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
@@ -81,24 +83,43 @@ class TestMultimoleculeSampling:
         self, helpers, samplers, ndarrays_regression
     ):
         sampler = MultiNuclearGeometrySampler(
-            chain(*samplers[:-1], samplers[-1](self.hamil)),
+            chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply)),
+            IdleNucleiSampler(self.mol.charges),
+            no_elec_warp,
+            None,
+            None,
+        )
+        smpl_state = sampler.init(
+            helpers.rng(),
+            self.params,
+            self.SAMPLE_SIZE,
             jnp.stack([self.mol.coords for _ in range(self.N_CONFIG)]),
         )
-        smpl_state = sampler.init(helpers.rng(), self.wf, self.SAMPLE_SIZE)
-        ndarrays_regression.check(smpl_state)
+        ndarrays_regression.check(
+            helpers.flatten_pytree(smpl_state),
+            default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
+        )
 
     def test_multi_nuclear_geometry_sampler_sample(
         self, helpers, samplers, ndarrays_regression
     ):
         sampler = MultiNuclearGeometrySampler(
-            chain(*samplers[:-1], samplers[-1](self.hamil)),
+            chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply)),
+            IdleNucleiSampler(self.mol.charges),
+            no_elec_warp,
+            None,
+            None,
+        )
+        smpl_state = sampler.init(
+            helpers.rng(),
+            self.params,
+            self.SAMPLE_SIZE,
             jnp.stack([self.mol.coords for _ in range(self.N_CONFIG)]),
         )
-        smpl_state = sampler.init(helpers.rng(), self.wf, self.SAMPLE_SIZE)
         mol_idxs = jnp.arange(2)
         for step in range(4):
             smpl_state, phys_conf, stats = sampler.sample(
-                helpers.rng(step), smpl_state, self.wf, mol_idxs
+                helpers.rng(step), smpl_state, self.params, mol_idxs
             )
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),

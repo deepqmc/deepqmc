@@ -1,82 +1,148 @@
 from functools import partial
+from typing import Optional, Protocol, TypeVar, cast
 
 import jax
-import kfac_jax
+import jax.numpy as jnp
 import optax
 
-from deepqmc.kfacext import batch_size_extractor, make_graph_patterns
-from deepqmc.parallel import PMAP_AXIS_NAME, pmap, pmean
-from deepqmc.utils import ConstantSchedule, InverseSchedule, tree_norm
+from .kfacext import batch_size_extractor, make_graph_patterns
+from .loss.loss_function import LossAndGradFunction
+from .parallel import PMAP_AXIS_NAME, pmap, pmean
+from .types import Batch, Energy, KeyArray, OptState, Params, Stats
+from .utils import filter_dict, tree_norm, tree_stack, tree_unstack
 
-__all__ = ()
+__all__ = ['Optimizer']
 
-DEFAULT_OPT_KWARGS = {
-    'adam': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
-    'adamw': {'learning_rate': 1.0e-3, 'b1': 0.9, 'b2': 0.9},
-    'kfac': {
-        'learning_rate_schedule': InverseSchedule(0.05, 10000),
-        'damping_schedule': ConstantSchedule(0.001),
-        'norm_constraint': 0.001,
-        'estimation_mode': 'fisher_exact',
-        'num_burnin_steps': 0,
-        'inverse_update_period': 1,
-    },
-}
+T = TypeVar('T')
 
 
-class Optimizer:
-    r"""Base class for deepqmc's optimizer wrapper classes."""
+class Optimizer(Protocol):
+    r"""Protocol for :class:`~deepqmc.optimizer.Optimizer` objects."""
 
-    def __init__(self, loss_fn):
-        self.loss_fn = loss_fn
+    def __init__(
+        self,
+        loss_and_grad_fn: LossAndGradFunction,
+        merge_keys: Optional[list[str]] = None,
+    ):
+        r"""Initializes the optimizer object.
 
-    def init(self, rng, params, batch):
-        r"""Initialize the optimizer state."""
-        return None
+        Args:
+            loss_and_grad_fn (~deepqmc.loss.loss_function.LossAndGradFunction):
+                a function that returns the loss and the gradient with respect to
+                the model parameters alongside auxiliary data.
+            merge_keys (list[str]): a list of keys for wave function parameters that
+                are merged across ansatzes for multiple electronic states.
+        """
+        ...
 
-    def step(self, rng, params, opt_state, batch):
-        r"""Perform an optimization step."""
-        raise NotImplementedError
+    def init(self, rng: KeyArray, params: Params, batch: Batch) -> OptState:
+        r"""Initialize the optimizer state.
+
+        Args:
+            rng (~deepqmc.types.KeyArray): the RNG key used to initialize random
+                components the of optimizer state.
+            params (~deepqmc.types.Params): the parameters of the wave function
+                ansatz/ansatzes to be optimized during training.
+            batch (~deepqmc.types.Batch): a tuple containing a physical configuration,
+                a set of sample weights and auxiliary data.
+
+        Returns:
+            ~deepqmc.types.OptState: the initial state of the optimizer
+        """
+        ...
+
+    def step(
+        self, rng: KeyArray, params: Params, opt_state: OptState, batch: Batch
+    ) -> tuple[Params, OptState, Energy, Optional[jax.Array], Stats]:
+        r"""Perform an optimization step.
+
+        Args:
+            rng (~deepqmc.types.KeyArray): the RNG key for the optimizer update.
+            params (~deepqmc.types.Params): the current parameters of the wave function
+                ansatz/ansatzes.
+            opt_state (~deepqmc.types.OptState): the current state of the optimizer
+            batch (~deepqmc.types.Batch): a tuple containing a physical configuration,
+                a set of sample weights and auxiliary data.
+
+        Returns:
+            tuple[~deepqmc.types.Params, ~deepqmc.types.OptState, ~deepqmc.types.Energy,
+            jax.Array | None, ~deepqmc.types.Stats]: the new model
+            parameters, an updated optimizer state, the energies obtained during the
+            evaluation of the loss function, if applicable the wave function ratios
+            obtained during the evaluation of the loss dunction and further statistics.
+        """
+        ...
 
 
 class NoOptimizer(Optimizer):
-    @partial(pmap, static_broadcasted_argnums=(0,))
-    def step(self, rng, params, opt_state, batch):
-        loss, (E_loc, stats) = self.loss_fn(params, rng, batch)
+    def __init__(
+        self,
+        loss_and_grad_fn: LossAndGradFunction,
+        merge_keys: Optional[list[str]] = None,
+    ):
+        self.loss_and_grad_fn = loss_and_grad_fn
 
-        return params, opt_state, E_loc, stats
+    @partial(pmap, static_broadcasted_argnums=(0,))
+    def step(
+        self, rng: KeyArray, params: Params, opt_state: OptState, batch: Batch
+    ) -> tuple[Params, OptState, Energy, Optional[jax.Array], Stats]:
+        (loss, (E_loc, ratios, stats)), _ = self.loss_and_grad_fn(
+            tree_unstack(params), rng, batch
+        )
+
+        return params, opt_state, E_loc, ratios, stats
 
 
 class OptaxOptimizer(Optimizer):
-    def __init__(self, loss_fn, *, optax_opt):
-        self.energy_and_grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+    def __init__(
+        self,
+        loss_and_grad_fn: LossAndGradFunction,
+        merge_keys: Optional[list[str]] = None,
+        *,
+        optax_opt,
+    ):
+        self.energy_and_grad_fn = loss_and_grad_fn
+        self.merge_keys = merge_keys
         self.optax_opt = optax_opt
 
     @partial(pmap, static_broadcasted_argnums=(0,))
-    def init(self, rng, params, batch):
-        opt_state = self.optax_opt.init(params)
+    def init(self, rng: KeyArray, params: Params, batch: Batch) -> OptState:
+        opt_state = self.optax_opt.init(tree_unstack(params))
         return opt_state
 
     @partial(pmap, static_broadcasted_argnums=(0,))
-    def step(self, rng, params, opt_state, batch):
-        (loss, (E_loc, stats)), grads = self.energy_and_grad_fn(params, rng, batch)
+    def step(
+        self, rng: KeyArray, params: Params, opt_state: OptState, batch: Batch
+    ) -> tuple[Params, OptState, Energy, Optional[jax.Array], Stats]:
+        params_list = tree_unstack(params)
+        (loss, (E_loc, ratios, stats)), grads = self.energy_and_grad_fn(
+            params_list, rng, batch
+        )
         grads = pmean(grads)
-        updates, opt_state = self.optax_opt.update(grads, opt_state, params)
-        param_norm, update_norm, grad_norm = map(tree_norm, [params, updates, grads])
-        params = optax.apply_updates(params, updates)
+        updates, opt_state = self.optax_opt.update(grads, opt_state, params_list)
+        param_norm, update_norm, grad_norm = map(
+            tree_norm, [params_list, updates, grads]
+        )
+        params_list = optax.apply_updates(params_list, updates)
+        params_list = cast(
+            list[Params], params_list
+        )  # optax.apply_updates overwrites our type
+        params = merge_states(tree_stack(params_list), self.merge_keys)
         stats = {
             'opt/param_norm': param_norm,
             'opt/grad_norm': grad_norm,
             'opt/update_norm': update_norm,
             **stats,
         }
-        return params, opt_state, E_loc, stats
+        return params, opt_state, E_loc, ratios, stats
 
 
 class KFACOptimizer(Optimizer):
-    def __init__(self, loss_fn, *, kfac):
+    def __init__(
+        self, loss_and_grad_fn, merge_keys: Optional[list[str]] = None, *, kfac
+    ):
         self.kfac = kfac(
-            value_and_grad_func=jax.value_and_grad(loss_fn, has_aux=True),
+            value_and_grad_func=loss_and_grad_fn,
             l2_reg=0.0,
             value_func_has_aux=True,
             value_func_has_rng=True,
@@ -86,55 +152,55 @@ class KFACOptimizer(Optimizer):
             pmap_axis_name=PMAP_AXIS_NAME,
             batch_size_extractor=batch_size_extractor,
         )
+        self.merge_keys = merge_keys
 
-    def init(self, rng, params, batch):
+    def init(self, rng: KeyArray, params: Params, batch: Batch) -> OptState:
         opt_state = self.kfac.init(
-            params,
+            self.pmap_tree_unstack(params),
             rng,
             batch,
         )
         return opt_state
 
-    def step(self, rng, params, opt_state, batch):
-        params, opt_state, opt_stats = self.kfac.step(
-            params,
+    def step(
+        self, rng, params: Params, opt_state: OptState, batch: Batch
+    ) -> tuple[Params, OptState, Energy, Optional[jax.Array], Stats]:
+        params_list, opt_state, opt_stats = self.kfac.step(
+            self.pmap_tree_unstack(params),
             opt_state,
             rng,
             batch=batch,
             momentum=0,
         )
+        params = self.pmap_merge_states(
+            self.pmap_tree_stack(params_list), self.merge_keys
+        )
         stats = {
             'opt/param_norm': opt_stats['param_norm'],
             'opt/grad_norm': opt_stats['precon_grad_norm'],
             'opt/update_norm': opt_stats['update_norm'],
-            **opt_stats['aux'][1],
+            **opt_stats['aux'][2],
         }
-        return params, opt_state, opt_stats['aux'][0], stats
+        return params, opt_state, opt_stats['aux'][0], opt_stats['aux'][1], stats
+
+    @partial(jax.pmap, static_broadcasted_argnums=(0,))
+    def pmap_tree_stack(self, trees: list[T]) -> T:
+        return tree_stack(trees)
+
+    @partial(jax.pmap, static_broadcasted_argnums=(0,))
+    def pmap_tree_unstack(self, tree: T) -> list[T]:
+        return tree_unstack(tree)
+
+    @partial(jax.pmap, static_broadcasted_argnums=(0, 2))
+    def pmap_merge_states(
+        self, params: Params, keys_whitelist: Optional[list[str]]
+    ) -> Params:
+        return merge_states(params, keys_whitelist)
 
 
-def wrap_optimizer(opt):
-    if opt is None:
-        return NoOptimizer
-    elif isinstance(opt, optax.GradientTransformation):
-        return partial(OptaxOptimizer, optax_opt=opt)
-    else:
-        return partial(KFACOptimizer, kfac=opt)
-
-
-def optimizer_from_name(opt_name, opt_kwargs=None, wrap=True):
-    opt_kwargs = DEFAULT_OPT_KWARGS.get(opt_name, {}) | (opt_kwargs or {})
-    return (
-        partial(kfac_jax.Optimizer, **opt_kwargs)
-        if opt_name == 'kfac'
-        else getattr(optax, opt_name)(**opt_kwargs)
-    )
-
-
-def construct_optimizer(opt, opt_kwargs, wrap=True):
-    if isinstance(opt, str):
-        opt = optimizer_from_name(opt, opt_kwargs)
-        if wrap:
-            opt = wrap_optimizer(opt)
-    if wrap and opt is None:
-        opt = wrap_optimizer(opt)
-    return opt
+def merge_states(params: Params, merge_keys: Optional[list[str]]) -> Params:
+    """Averages the parameters along the state axis."""
+    av = lambda x: jnp.mean(x, axis=0, keepdims=True).repeat(x.shape[0], axis=0)
+    params_filtered = filter_dict(params, merge_keys)
+    params_averaged = jax.tree_map(av, params_filtered)
+    return params | params_averaged

@@ -1,27 +1,31 @@
 import os
+import re
+from collections import OrderedDict
 from copy import deepcopy
 from dataclasses import dataclass
+from glob import glob
 from importlib import resources
-from typing import ClassVar
+from pathlib import Path
+from typing import ClassVar, Optional, cast
+from typing_extensions import Self
 
+import jax
 import jax.numpy as jnp
 import yaml
+from hydra.core.global_hydra import GlobalHydra
+from hydra.utils import get_original_cwd, to_absolute_path
 
-angstrom = 1 / 0.52917721092
+from .units import angstrom_to_bohr, null
 
 __all__ = ['Molecule']
 
 
-def parse_molecules():
-    path = resources.files('deepqmc').joinpath('conf/hamil/mol')
-    data = {}
-    for f in os.listdir(path):
-        with open(path.joinpath(f), 'r') as stream:
-            data[f.strip('.yaml')] = yaml.safe_load(stream)
-    return data
+def mol_conf_dir() -> Path:
+    return cast(Path, resources.files('deepqmc').joinpath('conf/hamil/mol'))
 
 
-_SYSTEMS = parse_molecules()
+def get_all_names() -> set[str]:
+    return {filename.replace('.yaml', '') for filename in os.listdir(mol_conf_dir())}
 
 
 @dataclass(frozen=True, init=False)
@@ -29,20 +33,22 @@ class Molecule:
     r"""Represents a molecule.
 
     The array-like arguments accept anything that can be transformed to
-    :class:`jax.numpy.DeviceArray`.
+    :class:`jax.Array`.
 
     Args:
-        coords (float, (:math:`N_\text{nuc}`, 3), a.u.):
-            nuclear coordinates as rows
-        charges (int, (:math:`N_\text{nuc}`)): atom charges
+        coords (jax.Array | list[float]):
+            nuclear coordinates ((:math:`N_\text{nuc}`, 3), a.u.) as rows
+        charges (jax.Array | list[int | float]): atom charges (:math:`N_\text{nuc}`)
         charge (int): total charge of a molecule
         spin (int): total spin multiplicity
+        unit (str): units of the coordinates, either 'bohr' or 'angstrom'
+        data (dict): additional data stored with the molecule
     """
 
-    all_names: ClassVar[set] = set(_SYSTEMS.keys())
+    all_names: ClassVar[set] = get_all_names()
 
-    coords: jnp.ndarray
-    charges: jnp.ndarray
+    coords: jax.Array
+    charges: jax.Array
     charge: int
     spin: int
     data: dict
@@ -64,10 +70,10 @@ class Molecule:
             for k, v in kwargs.items():
                 object.__setattr__(self, k, v)
 
-        unit_multiplier = {'bohr': 1.0, 'angstrom': angstrom}[unit]
+        unit_multiplier = {'bohr': null, 'angstrom': angstrom_to_bohr}[unit]
         set_attr(
-            coords=unit_multiplier * jnp.asarray(coords),
-            charges=1.0 * jnp.asarray(charges),
+            coords=unit_multiplier(jnp.array(coords)),
+            charges=jnp.array(charges, dtype=float),
             charge=charge,
             spin=spin,
             data=data or {},
@@ -75,7 +81,7 @@ class Molecule:
 
         # Derived properties
         set_attr(
-            n_atom_types=len(jnp.unique(jnp.asarray(charges))),
+            n_atom_types=len(jnp.unique(jnp.array(charges))),
         )
 
     def __len__(self):
@@ -95,15 +101,52 @@ class Molecule:
         )
 
     @classmethod
-    def from_name(cls, name, **kwargs):
+    def from_name(cls, name: str) -> Self:
         """Create a molecule from a database of named molecules.
 
         The available names are in :attr:`Molecule.all_names`.
+
+        Args:
+            name (str): name of the molecule (one of :attr:`Molecule.all_names`)
         """
         if name in cls.all_names:
-            system = deepcopy(_SYSTEMS[name])
-            system.update(kwargs)
+            mol = deepcopy(read_molecule_dataset(mol_conf_dir(), whitelist=name)[name])
         else:
             raise ValueError(f'Unknown molecule name: {name}')
-        coords = system.pop('coords')
-        return cls(coords=coords, **system)
+        return mol
+
+    @classmethod
+    def from_file(cls, file: str) -> Self:
+        """Create a molecule from a YAML file.
+
+        Args:
+            file (str): path to the YAML file
+        """
+        if not Path(file).is_absolute():
+            if GlobalHydra().instance().is_initialized():
+                file = os.path.join(to_absolute_path(get_original_cwd()), file)
+            else:
+                file = to_absolute_path(file)
+        with open(file, 'r') as stream:
+            return cls(**yaml.safe_load(stream))
+
+
+class MoleculeDict(OrderedDict):
+    r"""Store molecules in the order they were added to the dictionary."""
+
+    def __setitem__(self, key: str, value: Molecule):
+        super().__setitem__(key, value)
+        self.move_to_end(key)
+
+
+def read_molecule_dataset(
+    dataset: Path, whitelist: Optional[str] = None
+) -> MoleculeDict:
+    molecules = MoleculeDict()
+    for f in sorted(glob(str(dataset / '*.yaml'))):
+        filename = f.split('/')[-1].replace('.yaml', '')
+        if whitelist is not None and not re.search(whitelist, filename):
+            continue
+        with open(f, 'r') as stream:
+            molecules[filename] = Molecule(**yaml.safe_load(stream))
+    return molecules

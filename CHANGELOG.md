@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.2.0] - 2024-09-10
+
+### Added
+
+- Implementation of excited state simulation
+- Spin-penalty for targeting spin states
+- Evaluation of HF-forces, spin and other observables
+- Type hints and type checking
+- Support of folx forward Laplacian
+- Expanded configuration through hydra
+- Utilities for parsing result files
+- Improved logging
+
+
+### Fixed
+
+- NaN-restart mechanism
+- Avoid executing code on import
+
+### Renamed
+
+- Rename pp (pseudo potential) to ecp (effective core potential) to be consistent across codebase
+
+### Removed
+
+- Support for cuda <= 11
+- Support for python 3.9
+- Deprecated PauliNet ansatz from 10.1038/s41557-020-0544-y
+
 ## [1.1.2] - 2023-11-20
 
 ### Added
@@ -149,6 +178,7 @@ At this moment, DeepQMC should be still considered a research code.
 - Core functionality to run variational quantum Monte Carlo with Pytorch
 - PauliNet, a deep neural network ansatz
 
+[1.2.0]: https://github.com/deepqmc/deepqmc/compare/1.1.2...1.2.0
 [1.1.2]: https://github.com/deepqmc/deepqmc/compare/1.1.1...1.1.2
 [1.1.1]: https://github.com/deepqmc/deepqmc/compare/1.1.0...1.1.1
 [1.1.0]: https://github.com/deepqmc/deepqmc/compare/1.0.1...1.1.0

@@ -7,6 +7,7 @@ nuclei_embedding:
   embedding_dim: 8
   atom_type_embedding: false
   subnet_type: embed
+  edge_features: false
 electron_embedding:
   _target_: deepqmc.gnn.electron_gnn.ElectronEmbedding
   _partial_: true
@@ -47,14 +48,15 @@ layer_factory:
       _target_: jax.numpy.tanh
       _partial_: true
     init: default
-  one_particle_residual:
+  electron_residual:
     _target_: deepqmc.hkext.ResidualConnection
     normalize: false
+  nucleus_residual: null
   two_particle_residual: false
   deep_features: false
   update_rule: featurewise
   update_features:
-  - _target_: deepqmc.gnn.update_features.ConvolutionUpdateFeature
+  - _target_: deepqmc.gnn.update_features.ConvolutionElectronUpdateFeature
     _partial_: true
     normalize: false
     edge_types:
