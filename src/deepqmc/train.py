@@ -227,7 +227,11 @@ def train(  # noqa: C901
                     split_rng_key_to_devices(rng), 2
                 )
                 pretrain_smpl_state = initialize_sampler_state(
-                    rng_pretrain_smpl_init, sampler, params, electron_batch_size, mols
+                    rng_pretrain_smpl_init,
+                    sampler,
+                    params,
+                    electron_batch_size,
+                    jnp.stack([mol.coords for mol in mols]),
                 )
                 pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
                 for step, params, per_sample_losses, mol_idxs in pretrain(  # noqa: B007
@@ -264,7 +268,11 @@ def train(  # noqa: C901
         if train_state is None or train_state.sampler is None:
             rng, rng_eq, rng_smpl_init = split_on_devices(rng, 3)
             smpl_state = initialize_sampler_state(
-                rng_smpl_init, sampler, params, electron_batch_size, mols
+                rng_smpl_init,
+                sampler,
+                params,
+                electron_batch_size,
+                jnp.stack([mol.coords for mol in mols]),
             )
             log.info('Equilibrating sampler...')
             pbar = tqdm(

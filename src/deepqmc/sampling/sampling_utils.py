@@ -166,14 +166,14 @@ def initialize_sampling(
     return molecule_idx_sampler, sampler
 
 
-def initialize_sampler_state(rng, sampler, params, electron_batch_size, mols):
+def initialize_sampler_state(rng, sampler, params, electron_batch_size, nuc_coords):
     @jax.pmap
     def sampler_state_initializer(rng, params):
         return sampler.init(
             rng,
             params,
             electron_batch_size // jax.device_count(),
-            jnp.stack([mol.coords for mol in mols]),
+            nuc_coords,
         )
 
     return sampler_state_initializer(rng, params)
