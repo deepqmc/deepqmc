@@ -113,10 +113,12 @@ class CheckpointStore:
         self.chkpts.append(Checkpoint(step, path))
 
     @staticmethod
-    def load(path: Path) -> tuple[int, TrainState]:
+    def load(path: Path, deserialize: bool = True) -> tuple[int, TrainState]:
         with open(path, 'rb') as f:
             step, state = pickle.load(f)
-        return step, deserialize_train_state(state)
+        if deserialize:
+            state = deserialize_train_state(state)
+        return step, state
 
     def close(self):
         if all(self.buffer) and not tree_any(
