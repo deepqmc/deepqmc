@@ -1,6 +1,5 @@
 import logging
 import platform
-import re
 import sys
 import warnings
 from pathlib import Path
@@ -149,8 +148,7 @@ def maybe_log_code_version():
             sha = git_command(['rev-parse', '--short', 'HEAD'])
             diff = git_command(['diff'])
         except Exception:
-            with open(cwd.parent.parent / Path('pyproject.toml')) as f:
-                sha = 'deepqmc ' + re.findall("version = '([.\0-9]*)'", f.read())[0]
+            sha = 'deepqmc 1.2.0'
             diff = None
         log.debug(f'Running with code version: {sha}')
         if diff:
