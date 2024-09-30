@@ -20,11 +20,13 @@ from .parallel import (
     all_device_min,
     all_device_std,
     pmap,
+    split_on_devices,
 )
 from .physics import evaluate_spin
 from .types import (
     DataDict,
     Energy,
+    KeyArray,
     ParametrizedWaveFunction,
     Params,
     PhysicalConfiguration,
@@ -65,6 +67,7 @@ class ObservableMonitor:
     @partial(pmap, static_broadcasted_argnums=(0,))
     def compute_observable(
         self,
+        rng: KeyArray,
         params: Params,
         phys_conf: PhysicalConfiguration,
         psi: Psi,
@@ -74,19 +77,20 @@ class ObservableMonitor:
         assert self.observable_fn is not None, 'call ObservableMonitor.finalize first'
         if not self.requires_energy:
             observable_samples = jax.vmap(
-                jax.vmap(jax.vmap(self.observable_fn, (None, 0))), (None, 0)
-            )(params, phys_conf)
+                jax.vmap(jax.vmap(self.observable_fn, (0, None, 0))), (0, None, 0)
+            )(rng, params, phys_conf)
         else:
             observable_samples = jax.vmap(
-                jax.vmap(jax.vmap(self.observable_fn, (None, 0, 0, None))),
-                (None, 0, 0, 0),
-            )(params, phys_conf, local_energy, local_energy.mean(-1))
+                jax.vmap(jax.vmap(self.observable_fn, (0, None, 0, 0, None))),
+                (0, None, 0, 0, 0),
+            )(rng, params, phys_conf, local_energy, local_energy.mean(-1))
         stats = compute_mean_and_std(self.name, observable_samples, axis=2)
         return observable_samples, stats
 
     def __call__(
         self,
         step: int,
+        rng: KeyArray,
         params: Params,
         phys_conf: PhysicalConfiguration,
         psi: Psi,
@@ -95,19 +99,27 @@ class ObservableMonitor:
     ) -> Stats:
         if step % self.period:
             return {}
+        rng = jnp.array(split_on_devices(rng, phys_conf.batch_shape))[0]
         observable_samples, stats = self.compute_observable(
-            params, phys_conf, psi, local_energy, psi_ratios
+            rng, params, phys_conf, psi, local_energy, psi_ratios
         )
         if self.save_samples and observable_samples is not None:
             stats |= {f'{self.name}/samples': observable_samples}
         return stats
 
 
+def rng_wrapper(observable_fn):
+    def observable_fn_rng(rng, *args, **kwargs):
+        return observable_fn(*args, **kwargs)
+
+    return observable_fn_rng
+
+
 class SpinMonitor(ObservableMonitor):
     name: str = 'spin'
 
     def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
-        self.observable_fn = evaluate_spin(hamil, wf)
+        self.observable_fn = rng_wrapper(evaluate_spin(hamil, wf))
         return self
 
 
@@ -115,7 +127,7 @@ class BareForceMonitor(ObservableMonitor):
     name: str = 'hf_force_bare'
 
     def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
-        self.observable_fn = evaluate_hf_force_bare(hamil)
+        self.observable_fn = evaluate_hf_force_bare(hamil, wf)
         return self
 
 
@@ -140,7 +152,8 @@ class ACZVQForceMonitor(ObservableMonitor):
     name: str = 'hf_force_ac_zvq'
 
     def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
-        self.observable_fn = evaluate_hf_force_ac_zvq(hamil, wf)
+        assert not jnp.any(hamil.ecp_mask), 'Use ACZV for forces with pseudo-potentials'
+        self.observable_fn = rng_wrapper(evaluate_hf_force_ac_zvq(hamil, wf))
         return self
 
 
@@ -148,7 +161,10 @@ class ACZVZBQForceMonitor(ObservableMonitor):
     name: str = 'hf_force_ac_zvzbq'
 
     def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
-        self.observable_fn = evaluate_hf_force_ac_zvzbq(hamil, wf)
+        assert not jnp.any(
+            hamil.ecp_mask
+        ), 'Use ACZVZB for forces with pseudo-potentials'
+        self.observable_fn = rng_wrapper(evaluate_hf_force_ac_zvzbq(hamil, wf))
         self.requires_energy = True
         return self
 
@@ -161,6 +177,7 @@ class EnergyMonitor(ObservableMonitor):
     @partial(pmap, static_broadcasted_argnums=(0,))
     def compute_observable(
         self,
+        rng: KeyArray,
         params: Params,
         phys_conf: PhysicalConfiguration,
         psi: Psi,
@@ -182,6 +199,7 @@ class PsiRatioMonitor(ObservableMonitor):
     @partial(pmap, static_broadcasted_argnums=(0,))
     def compute_observable(
         self,
+        rng: KeyArray,
         params: Params,
         phys_conf: PhysicalConfiguration,
         psi: Psi,
@@ -198,6 +216,7 @@ class ElectronPositionMonitor(ObservableMonitor):
     @partial(pmap, static_broadcasted_argnums=(0,))
     def compute_observable(
         self,
+        rng: KeyArray,
         params: Params,
         phys_conf: PhysicalConfiguration,
         psi: Psi,
@@ -213,6 +232,7 @@ class NuclearPositionMonitor(ObservableMonitor):
     @partial(pmap, static_broadcasted_argnums=(0,))
     def compute_observable(
         self,
+        rng: KeyArray,
         params: Params,
         phys_conf: PhysicalConfiguration,
         psi: Psi,
@@ -230,6 +250,7 @@ class WaveFunctionMonitor(ObservableMonitor):
     @partial(pmap, static_broadcasted_argnums=(0,))
     def compute_observable(
         self,
+        rng: KeyArray,
         params: Params,
         phys_conf: PhysicalConfiguration,
         psi: Psi,
@@ -245,6 +266,7 @@ class OscillatorStrengthMonitor(ObservableMonitor):
     @partial(pmap, static_broadcasted_argnums=(0,))
     def compute_observable(
         self,
+        rng: KeyArray,
         params: Params,
         phys_conf: PhysicalConfiguration,
         psi: Psi,

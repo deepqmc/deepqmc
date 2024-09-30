@@ -2,8 +2,9 @@ import math
 
 import jax
 import jax.numpy as jnp
+import jax_dataclasses as jdc
 
-from ..types import PhysicalConfiguration
+from ..types import Psi
 
 
 @jax.vmap
@@ -51,61 +52,47 @@ def get_unit_icosahedron_sph():
     return jnp.array(unit_icosahedron_sph)
 
 
-def get_quadrature_points(rng, nucleus_position, phys_conf):
+def single_quadrature_point(
+    rng, electron_coordinate, nucleus_coordinate, unit_quadrature_coordinate
+):
+    r"""Compute a single quadrature point (electron position).
+
+    The complete quadrature is a rotated icosahedron centered on
+    ``nucleus_coordinate``, with radius and orientation determined by the relative
+    positions of ``electron_coordinate`` and ``nucleus_coordinate``. A random rotation
+    around the Z axis is also applied to the icosahedron.
+
+    Args:
+        rng: random seed.
+        electron_coordinate: the coordinates  of the electron.
+        nucleus_coordinate: the coordinates of the nucleus.
+        unit_quadrature_coordinate: the coordinates of one point of the unit
+            icosahedron, determines which quadrature point to compute.
     """
-    Transform :data:`phys_conf` of size (N,3) into an array quadrature points.
-
-    Return a phys_conf of size (N,12,N,3) that includes all the 12 quadrature point
-    configurations (i.e. reference electron position is shifted to another icosahedron
-    vertex) corresponding to N different reference electron.
-    """
-
-    N = len(phys_conf)
-    norm = jnp.linalg.norm(phys_conf.r - nucleus_position, axis=-1)
-    theta = jnp.arccos(
-        jnp.clip((phys_conf.r - nucleus_position)[..., 2] / norm, a_min=-1.0, a_max=1.0)
+    diff_vector = electron_coordinate - nucleus_coordinate
+    radius = jnp.linalg.norm(diff_vector, axis=-1)
+    theta = jnp.arccos(jnp.clip(diff_vector[2] / radius, a_min=-1.0, a_max=1.0))
+    phi = jnp.arctan2(diff_vector[1], diff_vector[0])
+    phi_random = jax.random.uniform(rng, (), minval=0, maxval=jnp.pi / 5)
+    return (
+        radius
+        * (rot_z(phi) @ rot_y(theta) @ rot_z(phi_random) @ unit_quadrature_coordinate)
+        + nucleus_coordinate
     )
-    phi = jnp.arctan2(
-        (phys_conf.r - nucleus_position)[..., 1],
-        (phys_conf.r - nucleus_position)[..., 0],
+
+
+def single_quadrature_phys_conf(
+    rng, electron_idx, nucleus_idx, phys_conf, unit_quadrature_coordinate
+):
+    r"""Compute a quadrature point as :class:`~deepqmc.types.PhysicalConfiguration`."""
+    quadrature_coordinate = single_quadrature_point(
+        rng,
+        phys_conf.r[electron_idx],
+        phys_conf.R[nucleus_idx],
+        unit_quadrature_coordinate,
     )
-    phi_random = jax.random.uniform(rng, phi.shape, minval=0, maxval=jnp.pi / 5)
-
-    z_rot_random = jnp.moveaxis(rot_z(phi_random), -1, -3)
-
-    y_rot = jnp.moveaxis(rot_y(theta), -1, -3)  # shape: (3,3,num_e) -> (num_e,3,3)
-
-    z_rot = jnp.moveaxis(rot_z(phi), -1, -3)  # shape: (3,3,num_e) -> (num_e,3,3)
-
-    # auxiliary function applying the rotation and translation to be vmapped
-    def transform_coordinates(norm, z_rot, y_rot, z_rot_random, r, nucleus_position):
-        return norm * (z_rot @ y_rot @ z_rot_random @ r) + nucleus_position
-
-    # vmapping to include N different rotations corresponding to each electron position
-    transform_coordinates = jax.vmap(
-        transform_coordinates, in_axes=(-1, -3, -3, -3, None, None)
-    )
-    # vmapping to be able to transform all 12 icosahedron points at the same time
-    transform_coordinates = jax.vmap(
-        transform_coordinates, in_axes=(None, None, None, None, -2, None)
-    )
-    unit_icosahedron = sph2cart(get_unit_icosahedron_sph())
-    quadrature_points = transform_coordinates(
-        norm, z_rot, y_rot, z_rot_random, unit_icosahedron, nucleus_position
-    )  # shape: (12,N,3)
-    # we still need to pad the quadrature points with other electron's coordinates
-    quadrature_points_copied = jnp.tile(quadrature_points, (N, 1, 1, 1))
-    rs_copied = jnp.tile(phys_conf.r, (N, 12, 1, 1))
-    criterion = jnp.moveaxis(
-        jnp.moveaxis(jnp.tile(jnp.eye(N), (12, 3, 1, 1)), -3, -1), -4, -3
-    )
-    quadrature_rs = jnp.where(
-        criterion, quadrature_points_copied, rs_copied
-    )  # shape: (N,12,N,3)
-    return PhysicalConfiguration(
-        jnp.tile(phys_conf.R[None, None], (N, 12, 1, 1)),
-        quadrature_rs,
-        jnp.broadcast_to(phys_conf.mol_idx, (N, 12)),
+    return jdc.replace(
+        phys_conf, r=phys_conf.r.at[electron_idx].set(quadrature_coordinate)
     )
 
 
@@ -122,3 +109,8 @@ def pad_list_of_3D_arrays_to_one_array(list_of_arrays):
         for array in list_of_arrays
     ]
     return jnp.array(padded_arrays)
+
+
+def compute_wf_ratio(numerator: Psi, denonimator: Psi) -> jax.Array:
+    """Computes the ratio of two wavefunctions."""
+    return jnp.exp(numerator.log - denonimator.log) * numerator.sign * denonimator.sign

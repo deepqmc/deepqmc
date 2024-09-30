@@ -89,9 +89,17 @@ def fit_wf(  # noqa: C901
             operator.or_,
             (
                 monitor(
-                    step, params, phys_conf, smpl_state['elec']['psi'], E_loc, ratios
+                    step,
+                    rng_monitor,
+                    params,
+                    phys_conf,
+                    smpl_state['elec']['psi'],
+                    E_loc,
+                    ratios,
                 )
-                for monitor in observable_monitors
+                for rng_monitor, monitor in zip(
+                    split_on_devices(rng, len(observable_monitors)), observable_monitors
+                )
             ),
             stats | smpl_stats,
         )
