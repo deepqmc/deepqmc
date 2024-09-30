@@ -1,4 +1,5 @@
 from functools import partial
+from typing import Callable
 
 import jax
 import jax.numpy as jnp
@@ -7,6 +8,7 @@ import jax_dataclasses as jdc
 from .ecp.gaussian_type_ecp import GaussianTypeECP
 from .hamil import MolecularHamiltonian
 from .physics import nuclear_energy
+from .sampling.sampling_utils import diffs_to_nearest_nuc
 from .types import (
     Energy,
     KeyArray,
@@ -103,6 +105,39 @@ def vnl_ongradpsi(hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction):
         return V_nl_ongradpsi * wf_ratio
 
     return vnl_ongradpsi_
+
+
+def antithetic_sampler(
+    phys_conf: PhysicalConfiguration, r_cut: float
+) -> tuple[PhysicalConfiguration, PhysicalConfiguration]:
+    """Mirrors electons within a cutoff on the closest nuclei."""
+    r_nn, _ = diffs_to_nearest_nuc(phys_conf.r, phys_conf.R)
+    r_ = phys_conf.r - 2 * r_nn[..., :3] * (r_nn[..., -1] < r_cut**2)[..., None]
+    return phys_conf, jdc.replace(phys_conf, r=r_)
+
+
+def antithetic_wrapper(
+    evaluate_force: Callable[[KeyArray, Params, PhysicalConfiguration], jax.Array],
+    wf: ParametrizedWaveFunction,
+    r_cut: float,
+):
+    """Wraps force evaluation with an antithetic sampler."""
+
+    def evaluate_force_antithetic(
+        rng: KeyArray, params: Params, phys_conf: PhysicalConfiguration
+    ):
+        # expects estimators that do not require access to the local energies for now.
+        phys_conf, phys_conf_ = antithetic_sampler(phys_conf, r_cut)
+        log_weight_ = 2 * (wf(params, phys_conf_).log - wf(params, phys_conf).log)
+        log_weight = jnp.zeros_like(log_weight_)
+        weight_stack = jax.nn.softmax(jnp.stack((log_weight, log_weight_), 0), 0)
+        rng, rng_ = jax.random.split(rng)
+        force = evaluate_force(rng, params, phys_conf)
+        force_ = evaluate_force(rng_, params, phys_conf_)
+        force_stack = jnp.stack((force, force_), 0)
+        return (weight_stack[:, None, None] * force_stack).sum(0)
+
+    return evaluate_force_antithetic
 
 
 def evaluate_hf_force_bare(hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction):

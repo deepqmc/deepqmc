@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 
 from .force import (
+    antithetic_wrapper,
     evaluate_hf_force_ac_zv,
     evaluate_hf_force_ac_zvq,
     evaluate_hf_force_ac_zvzb,
@@ -131,11 +132,39 @@ class BareForceMonitor(ObservableMonitor):
         return self
 
 
+class BareForceAntiMonitor(ObservableMonitor):
+    name: str = 'hf_force_bare_anti'
+
+    def __init__(self, save_samples: bool, period: int, cutoff: float = 0.3):
+        super().__init__(save_samples, period)
+        self.cutoff = cutoff
+
+    def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
+        self.observable_fn = antithetic_wrapper(
+            evaluate_hf_force_bare(hamil, wf), wf, self.cutoff
+        )
+        return self
+
+
 class ACZVForceMonitor(ObservableMonitor):
     name: str = 'hf_force_ac_zv'
 
     def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
         self.observable_fn = evaluate_hf_force_ac_zv(hamil, wf)
+        return self
+
+
+class ACZVForceAntiMonitor(ObservableMonitor):
+    name: str = 'hf_force_ac_zv_anti'
+
+    def __init__(self, save_samples: bool, period: int, cutoff: float = 0.3):
+        super().__init__(save_samples, period)
+        self.cutoff = cutoff
+
+    def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
+        self.observable_fn = antithetic_wrapper(
+            evaluate_hf_force_ac_zv(hamil, wf), wf, self.cutoff
+        )
         return self
 
 
@@ -154,6 +183,20 @@ class ACZVQForceMonitor(ObservableMonitor):
     def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
         assert not jnp.any(hamil.ecp_mask), 'Use ACZV for forces with pseudo-potentials'
         self.observable_fn = rng_wrapper(evaluate_hf_force_ac_zvq(hamil, wf))
+        return self
+
+
+class ACZVQForceAntiMonitor(ObservableMonitor):
+    name: str = 'hf_force_ac_zvq_anti'
+
+    def __init__(self, save_samples: bool, period: int, cutoff: float = 0.3):
+        super().__init__(save_samples, period)
+        self.cutoff = cutoff
+
+    def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
+        self.observable_fn = antithetic_wrapper(
+            rng_wrapper(evaluate_hf_force_ac_zvq(hamil, wf)), wf, self.cutoff
+        )
         return self
 
 
