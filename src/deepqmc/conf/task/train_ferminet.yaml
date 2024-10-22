@@ -36,8 +36,6 @@ chkpt_constructor:
 h5_logger_constructor:
   _target_: deepqmc.log.H5Logger
   _partial_: true
-  keys_whitelist:
-    - local_energy
 mols:
   _target_: deepqmc.app.read_molecules
   directory: null

@@ -20,7 +20,6 @@ h5_logger:
   _partial_: true
   keys_whitelist:
     - mol_idxs
-    - local_energy
     - time
     - step
     - hf_force_bare
