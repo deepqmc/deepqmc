@@ -1,3 +1,4 @@
+import logging
 import os
 import pickle
 import re
@@ -26,6 +27,7 @@ from .types import Stats, TrainState
 from .utils import flatten_dict, tree_any
 
 __all__ = ['CheckpointStore', 'H5LogTable', 'TensorboardMetricLogger']
+log = logging.getLogger(__name__)
 
 
 class Checkpoint(NamedTuple):
@@ -344,9 +346,11 @@ class TensorboardMetricLogger:
                     )
                 ]
             else:
-                raise ValueError(
-                    f'Invalid dimension ({v.ndim}) for {k} (shape: {v.shape}).'
+                log.warning(
+                    f'Invalid dimension ({v.ndim}) for {k} (shape: {v.shape}), '
+                    'excluding it from Tensorboard log.'
                 )
+                continue
             group = k.split('/')[0]
             self.layout[f'{prefix}{group}'] = {
                 k: ['Multiline', keys],
@@ -406,9 +410,11 @@ class TensorboardMetricLogger:
                     for j, l in product(range(v.shape[1]), range(v.shape[2]))
                 ]
             else:
-                raise ValueError(
-                    f'Invalid dimension ({v.ndim}) for {k} (shape: {v.shape}).'
+                log.warning(
+                    f'Invalid dimension ({v.ndim}) for {k} (shape: {v.shape}), '
+                    'excluding it from Tensorboard log.'
                 )
+                continue
             group = k.split('/')[0]
             self.layout[f'{prefix}{group}'] = {
                 k: ['Multiline', keys],
