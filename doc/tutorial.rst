@@ -131,7 +131,15 @@ Furthermore, several other quantities are dumped during the training to the ``wo
     >>> with h5py.File('runs/01/training/result.h5') as f: print(f.keys(),f['local_energy'].keys())
     <KeysViewHDF5 ['local_energy']> <KeysViewHDF5 ['max', 'mean', 'min', 'samples', 'std']>
 
-Additional observables can also be computed and logged during a run by specifying the ``observable_monitors`` argument to :func:`~deepqmc.train.train`. See also the :mod:`~deepqmc.observable` submodule for more details.
+Additional observables can also be computed and logged during a run by specifying the ``observable_monitors`` argument to :func:`~deepqmc.train.train`.
+For example, to evaluate the spin of the wave function during training one can use the :class:`~deepqmc.observable.SpinMonitor` class::
+
+    from deepqmc.observable import SpinMonitor
+    observable_monitors = [SpinMonitor(period=1, save_samples=True)]
+    train(H, ansatz, kfac, sampler_factory, steps=10000, electron_batch_size=2000, seed=42, workdir='runs/02', observable_monitors=observable_monitors)
+
+Then the ``runs/02/training/result.h5`` file will contain the keys ``spin/samples``, ``spin/mean``, and ``spin/std``.
+See also the :mod:`~deepqmc.observable` submodule for more details.
 
 Evaluate the energy
 -------------------
