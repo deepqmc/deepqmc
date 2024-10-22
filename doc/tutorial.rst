@@ -139,6 +139,7 @@ For example, to evaluate the spin of the wave function during training one can u
     train(H, ansatz, kfac, sampler_factory, steps=10000, electron_batch_size=2000, seed=42, workdir='runs/02', observable_monitors=observable_monitors)
 
 Then the ``runs/02/training/result.h5`` file will contain the keys ``spin/samples``, ``spin/mean``, and ``spin/std``.
+Note: since logging all samples can result in very large ``result.h5`` files, it may be useful to disable saving of individual samples by setting save_samples=False if not explicitly required.
 See also the :mod:`~deepqmc.observable` submodule for more details.
 
 Evaluate the energy
