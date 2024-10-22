@@ -161,6 +161,7 @@ def train(  # noqa: C901
         log.debug('Setting up h5_logger...')
         h5_logger = (h5_logger_constructor or H5Logger)(
             workdir,
+            [observable.name for observable in observable_monitors or []],
             init_step=init_step,
             aux_data={f'mol-{i}': m.coords for i, m in enumerate(mols)},
         )
