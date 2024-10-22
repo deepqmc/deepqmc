@@ -202,7 +202,7 @@ class H5Logger:
     def __init__(
         self,
         workdir: str,
-        observable_names: Optional[list[str]] = None,
+        additional_keys_to_whitelist: Optional[list[str]] = None,
         *,
         keys_whitelist: Optional[list[str]] = None,
         init_step: int = 0,
@@ -210,7 +210,7 @@ class H5Logger:
     ):
         self.keys_whitelist = (
             keys_whitelist if keys_whitelist is not None else ['local_energy']
-        ) + (observable_names or [])
+        ) + (additional_keys_to_whitelist or [])
         self.h5file = h5py.File(os.path.join(workdir, 'result.h5'), 'a', libver='v110')
         self.h5file.swmr_mode = True
         for k, v in (aux_data or {}).items():
