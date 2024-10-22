@@ -67,16 +67,7 @@ h5_logger_constructor:
     - 'overlap/pairwise'
     - 'time'
 observable_monitors:
-  - _target_: deepqmc.observable.EnergyMonitor
-    _partial_: false
-    save_samples: True
-    period: 1
-  - _target_: deepqmc.observable.WaveFunctionMonitor
-    _partial_: false
-    save_samples: True
-    period: 1
   - _target_: deepqmc.observable.SpinMonitor
-    _partial_: false
     save_samples: False
     period: 1
 mols:

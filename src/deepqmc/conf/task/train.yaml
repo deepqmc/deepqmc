@@ -31,15 +31,6 @@ loss_function_factory:
 mols:
   _target_: deepqmc.app.read_molecules
   directory: null
-observable_monitors:
-  - _target_: deepqmc.observable.EnergyMonitor
-    _partial_: false
-    save_samples: true
-    period: 1
-  - _target_: deepqmc.observable.WaveFunctionMonitor
-    _partial_: false
-    save_samples: true
-    period: 1
 metric_logger_constructor:
   _target_: deepqmc.log.TensorboardMetricLogger
   _partial_: true
