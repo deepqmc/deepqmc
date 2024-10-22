@@ -148,6 +148,7 @@ def train(  # noqa: C901
         molecule_batch_size,
     )
     opt = opt or NoOptimizer
+    observable_monitors = default_observable_monitors() + (observable_monitors or [])
     chkpts = None
     if workdir:
         workdir = os.path.join(workdir, mode + process_idx_suffix())
@@ -278,7 +279,6 @@ def train(  # noqa: C901
                 assert chkpts
                 chkpts.update(init_step, train_state)
             log.info(f'Start {mode}')
-        observable_monitors = observable_monitors or default_observable_monitors()
         loss_function_factory = loss_function_factory or partial(
             create_loss_fn, clip_mask_fn=median_log_squeeze_and_mask
         )

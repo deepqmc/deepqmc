@@ -3,24 +3,16 @@ evaluate: true
 keep_sampler_state: true
 restdir: ???
 observable_monitors:
-  - _target_: deepqmc.observable.EnergyMonitor
-    _partial_: false
-    save_samples: True
-    period: 1
   - _target_: deepqmc.observable.ACZVQForceMonitor
-    _partial_: false
     save_samples: True
     period: 1
   - _target_: deepqmc.observable.ACZVForceMonitor
-    _partial_: false
     save_samples: True
     period: 1
   - _target_: deepqmc.observable.ACZVZBQForceMonitor
-    _partial_: false
     save_samples: True
     period: 1
   - _target_: deepqmc.observable.ACZVZBForceMonitor
-    _partial_: false
     save_samples: True
     period: 1
 h5_logger:
