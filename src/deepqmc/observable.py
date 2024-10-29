@@ -1,6 +1,6 @@
 from collections.abc import Callable, Mapping
 from functools import partial
-from typing import Any, Optional
+from typing import Any, Optional, Type
 from typing_extensions import Self
 
 import jax
@@ -294,3 +294,27 @@ def default_observable_monitors() -> list[ObservableMonitor]:
         EnergyMonitor(save_samples=True, period=1),
         WaveFunctionMonitor(save_samples=True, period=1),
     ]
+
+
+def observable_monitor_from_name(name: str) -> ObservableMonitor:
+    all_obseravble_monitors: set[Type[ObservableMonitor]] = {
+        ElectronPositionMonitor,
+        NuclearPositionMonitor,
+        WaveFunctionMonitor,
+        EnergyMonitor,
+        SpinMonitor,
+        PsiRatioMonitor,
+        OscillatorStrengthMonitor,
+        BareForceMonitor,
+        BareForceAntiMonitor,
+        ACZVForceMonitor,
+        ACZVForceAntiMonitor,
+        ACZVQForceMonitor,
+        ACZVQForceAntiMonitor,
+        ACZVZBForceMonitor,
+        ACZVZBQForceMonitor,
+    }
+    for monitor in all_obseravble_monitors:
+        if monitor.name == name:
+            return monitor(save_samples=True, period=1)
+    raise ValueError(f'Unknown observable monitor: {name}')

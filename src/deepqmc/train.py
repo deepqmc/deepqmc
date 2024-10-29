@@ -4,7 +4,7 @@ import time
 from collections.abc import Callable, Sequence
 from functools import partial
 from itertools import count
-from typing import Optional, Type
+from typing import Optional, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -22,7 +22,11 @@ from .log import CheckpointStore, H5Logger, MetricLogger, TensorboardMetricLogge
 from .loss.clip import median_log_squeeze_and_mask
 from .loss.loss_function import LossFunctionFactory, create_loss_fn
 from .molecule import Molecule
-from .observable import ObservableMonitor, default_observable_monitors
+from .observable import (
+    ObservableMonitor,
+    default_observable_monitors,
+    observable_monitor_from_name,
+)
 from .optimizer import NoOptimizer
 from .parallel import pmap_pmean, split_on_devices, split_rng_key_to_devices
 from .physics import pairwise_self_distance
@@ -69,7 +73,7 @@ def train(  # noqa: C901
     h5_logger_constructor: Optional[Type[H5Logger]] = None,
     merge_keys: Optional[list[str]] = None,
     loss_function_factory: Optional[LossFunctionFactory] = None,
-    observable_monitors: Optional[list[ObservableMonitor]] = None,
+    observable_monitors: Optional[list[Union[ObservableMonitor, str]]] = None,
 ):
     r"""Train or evaluate a JAX wave function model.
 
@@ -154,7 +158,16 @@ def train(  # noqa: C901
         molecule_batch_size,
     )
     opt = opt or NoOptimizer
-    observable_monitors = default_observable_monitors() + (observable_monitors or [])
+    observable_monitors = observable_monitors or []
+    observables = [
+        (
+            observable
+            if isinstance(observable, ObservableMonitor)
+            else observable_monitor_from_name(observable)
+        )
+        for observable in observable_monitors
+    ]
+    observables = default_observable_monitors() + observables
     chkpts = None
     if workdir:
         workdir = os.path.join(workdir, mode + process_idx_suffix())
@@ -167,7 +180,7 @@ def train(  # noqa: C901
         log.debug('Setting up h5_logger...')
         h5_logger = (h5_logger_constructor or H5Logger)(
             workdir,
-            [observable.name for observable in observable_monitors],
+            [observable.name for observable in observables],
             init_step=init_step,
             aux_data={f'mol-{i}': m.coords for i, m in enumerate(mols)},
         )
@@ -321,8 +334,8 @@ def train(  # noqa: C901
                     merge_keys,
                     loss_function_factory,
                     observable_monitors=[
-                        monitor.finalize(hamil, ansatz.apply)
-                        for monitor in observable_monitors
+                        observable.finalize(hamil, ansatz.apply)
+                        for observable in observables
                     ],
                 ):
                     ewm_energies, best_ene = update_progress(
