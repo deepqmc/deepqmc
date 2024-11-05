@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Optional
+from typing import Callable, Optional
 
 import jax
 import jax.numpy as jnp
@@ -95,33 +95,33 @@ class MetropolisSampler:
 
         return self._update(state, params, R)
 
-    def _proposal(self, state: SamplerState, rng: KeyArray) -> jax.Array:
+    def _proposal(self, rng: KeyArray, state: SamplerState) -> jax.Array:
         r = state['r']
         return r + state['tau'] * jax.random.normal(rng, r.shape)
 
     def _acc_log_prob(self, state: SamplerState, prop: SamplerState) -> jax.Array:
         return 2 * (prop['psi'].log - state['psi'].log)
 
-    def sample(
-        self, rng: KeyArray, state: SamplerState, params: Params, R: jax.Array
-    ) -> tuple[SamplerState, PhysicalConfiguration, Stats]:
-        rng_prop, rng_acc = jax.random.split(rng)
-        prop = {
-            'r': self._proposal(state, rng_prop),
-            'age': jnp.zeros_like(state['age']),
-            **{k: v for k, v in state.items() if k not in self.WALKER_STATE},
-        }
-        prop = self._update(prop, params, R)
-        log_prob = self._acc_log_prob(state, prop)
-        accepted = log_prob > jnp.log(jax.random.uniform(rng_acc, log_prob.shape))
-        if self.max_age:
-            accepted = accepted | (state['age'] >= self.max_age)
+    def _accept(
+        self,
+        rng: KeyArray,
+        state: SamplerState,
+        prop: SamplerState,
+        log_prob: jax.Array,
+        max_age: Optional[int] = None,
+        target_acceptance: Optional[float] = None,
+    ) -> tuple[SamplerState, jax.Array]:
+        accepted = log_prob > jnp.log(jax.random.uniform(rng, log_prob.shape))
+        if max_age is not None:
+            accepted |= state['age'] >= max_age
         acceptance = accepted.astype(int).sum() / accepted.shape[0]
-        if self.target_acceptance:
-            prop['tau'] /= self.target_acceptance / jnp.max(
-                jnp.stack([acceptance, jnp.array(0.05)])
-            )
-        state = {**state, 'age': state['age'] + 1}
+        prop['tau'] = state['tau'] / (
+            target_acceptance / jnp.max(jnp.stack([acceptance, jnp.array(0.05)]))
+            if target_acceptance is not None
+            else 1
+        )
+        state['age'] += 1
+        prop['age'] = jnp.zeros_like(state['age'])
         (prop, other), (state, _) = (
             split_dict(d, lambda k: k in self.WALKER_STATE) for d in (prop, state)
         )
@@ -131,6 +131,17 @@ class MetropolisSampler:
             ),
             **other,
         }
+        return state, acceptance
+
+    def sample(
+        self, rng: KeyArray, state: SamplerState, params: Params, R: jax.Array
+    ) -> tuple[SamplerState, PhysicalConfiguration, Stats]:
+        rng_prop, rng_acc = jax.random.split(rng)
+        prop = self._update({'r': self._proposal(rng_prop, state)}, params, R)  # type: ignore
+        log_prob = self._acc_log_prob(state, prop)
+        state, acceptance = self._accept(
+            rng_acc, state, prop, log_prob, self.max_age, self.target_acceptance
+        )
         stats = {
             'sampling/acceptance': acceptance,
             'sampling/tau': state['tau'],
@@ -190,7 +201,11 @@ class LangevinSampler(MetropolisSampler):
         state = {**state, 'psi': psi, 'force': force}
         return state
 
-    def _proposal(self, state: SamplerState, rng: KeyArray) -> jax.Array:
+    def _proposal(
+        self,
+        rng: KeyArray,
+        state: SamplerState,
+    ) -> jax.Array:
         r, tau = state['r'], state['tau']
         r = r + tau * state['force'] + jnp.sqrt(tau) * jax.random.normal(rng, r.shape)
         return r
@@ -205,6 +220,50 @@ class LangevinSampler(MetropolisSampler):
             axis=tuple(range(1, len(state['r'].shape))),
         )
         return log_G_ratios + 2 * (prop['psi'].log - state['psi'].log)
+
+
+class OppositeSpinExchangeSampler:
+    def __init__(
+        self,
+        *,
+        up_logits_fn: Optional[Callable] = None,
+        down_logits_fn: Optional[Callable] = None,
+    ):
+        self.up_logits_fn = up_logits_fn or self.default_logits_fn
+        self.down_logits_fn = down_logits_fn or self.default_logits_fn
+
+    def default_logits_fn(self, r):
+        return jnp.zeros(len(r))
+
+    def exchange_proposal(self, rng: KeyArray, state: SamplerState) -> jax.Array:
+        rng_up, rng_down = jax.random.split(rng)
+        r = state['r']
+        batch_idx = jnp.arange(len(r))
+        r_up = r[:, : self.hamil.n_up]  # type: ignore
+        r_down = r[:, self.hamil.n_up :]  # type: ignore
+        up_idx = jax.random.categorical(rng_up, jax.vmap(self.up_logits_fn)(r_up))
+        down_idx = jax.random.categorical(
+            rng_down, jax.vmap(self.down_logits_fn)(r_down)
+        )
+        exchanged_up = r_up.at[batch_idx, up_idx].set(r_down[batch_idx, down_idx])
+        exchanged_down = r_down.at[batch_idx, down_idx].set(r_up[batch_idx, up_idx])
+        return jnp.concatenate([exchanged_up, exchanged_down], axis=1)
+
+    def exchange_acc_log_prob(
+        self, state: SamplerState, prop: SamplerState
+    ) -> jax.Array:
+        return 2 * (prop['psi'].log - state['psi'].log)
+
+    def sample(
+        self, rng: KeyArray, state: SamplerState, params: Params, R: jax.Array
+    ) -> tuple[SamplerState, PhysicalConfiguration, Stats]:
+        rng_super, rng_prop, rng_acc = jax.random.split(rng, 3)
+        state, _, stats = super().sample(rng_super, state, params, R)  # type: ignore
+        prop = self._update({'r': self.exchange_proposal(rng_prop, state)}, params, R)  # type: ignore
+        log_prob = self.exchange_acc_log_prob(state, prop)
+        state, exchange_acceptance = self._accept(rng_acc, state, prop, log_prob)  # type: ignore
+        stats = {'sampling/exchange_acceptance': exchange_acceptance, **stats}
+        return state, self.phys_conf(R, state['r']), stats  # type: ignore
 
 
 class DecorrSampler:
