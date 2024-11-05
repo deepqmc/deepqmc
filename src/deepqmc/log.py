@@ -32,7 +32,6 @@ log = logging.getLogger(__name__)
 
 class Checkpoint(NamedTuple):
     step: int
-    loss: jax.typing.ArrayLike
     path: Path
 
 
@@ -91,14 +90,10 @@ class CheckpointStore:
         self.size = size
         self.interval = interval
         self.chkpts: list[Checkpoint] = []
-        self.buffer: Union[
-            tuple[None, None, None], tuple[int, TrainState, jax.typing.ArrayLike]
-        ] = (None, None, None)
+        self.buffer: Union[tuple[None, None], tuple[int, TrainState]] = (None, None)
 
-    def update(
-        self, step: int, state: TrainState, loss: jax.typing.ArrayLike = jnp.inf
-    ):
-        self.buffer = (step, state, loss)
+    def update(self, step: int, state: TrainState):
+        self.buffer = (step, state)
         if not self.chkpts or (step >= self.interval + self.chkpts[-1].step):
             self.dump()
         while len(self.chkpts) > self.size:
@@ -107,16 +102,12 @@ class CheckpointStore:
             # preceding the variational training.
 
     def dump(self):
-        step, state, loss = self.buffer
-        assert (
-            isinstance(state, TrainState)
-            and isinstance(step, int)
-            and isinstance(loss, jax.typing.ArrayLike)
-        )
+        step, state = self.buffer
+        assert isinstance(state, TrainState) and isinstance(step, int)
         path = self.workdir / self.PATTERN.format(step)
         with path.open('wb') as f:
             pickle.dump((step, serialize_train_state(state)), f)
-        self.chkpts.append(Checkpoint(step, loss, path))
+        self.chkpts.append(Checkpoint(step, path))
 
     @staticmethod
     def load(path: Path) -> tuple[int, TrainState]:

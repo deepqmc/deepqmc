@@ -349,11 +349,7 @@ def train(  # noqa: C901
                         if mode == 'training':
                             assert chkpts
                             # the convention is that chkpt-i contains the step i-1 -> i
-                            chkpts.update(
-                                step + 1,
-                                train_state,
-                                stats['local_energy/std'].mean(),
-                            )
+                            chkpts.update(step + 1, train_state)
                         if metric_logger:
                             metric_logger.update(step, stats, {}, mol_idxs)
                         observable_samples |= {
