@@ -158,10 +158,37 @@ def convert_to_per_molecule_format(
     return result_per_mol
 
 
+def read_and_reshape_result(
+    path, *keys, read_workdir=read_workdir, gather_electrons=True
+):
+    r"""Read and reshape results from a deepQMC workdir.
+
+    Use when the result file contains result for a single molecule,
+    and no mol_idxs entry.
+    """
+    results, _ = read_workdir(path, keys)
+    min_idxs = {
+        key: min(len(result) for result in results.values()) for key in results.keys()
+    }
+    results = {
+        key: (
+            gather_electron_axis(results[key][: min_idxs[key]])
+            if gather_electrons
+            else results[key][: min_idxs[key], 0]
+        )
+        for key in keys
+    }
+    return list(results.values())[0] if len(results.keys()) == 1 else results
+
+
 def read_and_convert_result(
     path, *keys, read_workdir=read_workdir, gather_electrons=True
 ):
-    r"""Read and convert results from a deepQMC workdir to per molecule format."""
+    r"""Read and convert results from a deepQMC workdir to per molecule format.
+
+    Use when the result file contains results for multiple molecules,
+    and the mol_idxs entry.
+    """
     results, _ = read_workdir(path, [*keys, 'mol_idxs'])
     min_idxs = {
         key: min(len(result) for result in results.values()) for key in results.keys()
@@ -182,3 +209,13 @@ def read_and_convert_result(
         for k in keys
     }
     return list(results.values())[0] if len(results.keys()) == 1 else results
+
+
+def read_average_iteration_time(path, discard_first=10):
+    r"""Read the average iteration time from a deepQMC workdir.
+
+    Needs the ``time`` entry in the result.h5 file.
+    """
+    times = read_workdir(path, ['time'])[0]['time']
+    average_time = (times[-1] - times[discard_first - 1]) / (len(times) - discard_first)
+    return average_time
