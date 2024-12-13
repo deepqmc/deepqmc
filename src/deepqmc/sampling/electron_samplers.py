@@ -137,7 +137,9 @@ class MetropolisSampler:
         self, rng: KeyArray, state: SamplerState, params: Params, R: jax.Array
     ) -> tuple[SamplerState, PhysicalConfiguration, Stats]:
         rng_prop, rng_acc = jax.random.split(rng)
-        prop = self._update({'r': self._proposal(rng_prop, state)}, params, R)  # type: ignore
+        prop = self._update(
+            {'tau': state['tau'], 'r': self._proposal(rng_prop, state)}, params, R
+        )  # type: ignore
         log_prob = self._acc_log_prob(state, prop)
         state, acceptance = self._accept(
             rng_acc, state, prop, log_prob, self.max_age, self.target_acceptance
@@ -195,6 +197,7 @@ class LangevinSampler(MetropolisSampler):
             return psi.log, psi
 
         (_, psi), force = wf_and_force(state['r'])
+        # Warning: here tau is coming from the previous iteration
         force = clean_force(
             force, self.phys_conf(R, state['r']), self.hamil.mol, tau=state['tau']
         )
