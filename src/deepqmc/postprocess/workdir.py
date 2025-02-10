@@ -144,18 +144,15 @@ def convert_to_per_molecule_format(
     mol_idxs = mol_idxs.astype(int)
     quantity_shape = raw_result.shape[2:]
     n_mol = mol_idxs.max() + 1
-    steps_per_mol = mol_idxs.size // n_mol
-    even_steps = steps_per_mol * n_mol
-
-    mol_idx = mol_idxs.flatten()[:even_steps]
-    result = raw_result.reshape(-1, *quantity_shape)[:even_steps]
-    cumulative_idx_per_mol = (
-        np.cumsum(mol_idx[..., None] == np.arange(n_mol), axis=0) - 1
-    )
-    step_idx_per_mol = cumulative_idx_per_mol[np.arange(len(mol_idx)), mol_idx]
-    result_per_mol = np.zeros((steps_per_mol, n_mol, *quantity_shape))
-    result_per_mol[step_idx_per_mol, mol_idx] = result
-    return result_per_mol
+    steps_per_mol = np.bincount(mol_idxs.flatten())
+    even_steps = steps_per_mol.min()
+    result = raw_result.reshape(-1, *quantity_shape)
+    mask = np.arange(n_mol) == mol_idxs.flatten()[:, None]
+    mask &= np.cumsum(mask, axis=0) - 1 < even_steps
+    selected = []
+    for m in mask.T:
+        selected.append(result[m])
+    return np.stack(selected, axis=1)
 
 
 def read_and_reshape_result(
