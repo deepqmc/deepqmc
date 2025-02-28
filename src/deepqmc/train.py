@@ -8,6 +8,7 @@ from typing import Optional, Type
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 from tqdm.auto import tqdm, trange
 from uncertainties import ufloat
@@ -50,7 +51,7 @@ def train(  # noqa: C901
         tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],
     ],
     steps: int,
-    seed: int,
+    seed: Optional[int],
     electron_batch_size: int,
     molecule_batch_size: int = 1,
     electronic_states: int = 1,
@@ -94,7 +95,9 @@ def train(  # noqa: C901
         sampler_factory (~collections.abc.Callable): a function that returns a Sampler
             instance
         steps (int): number of optimization steps.
-        seed (int): the seed used for PRNG.
+        seed (int | None): the seed used for PRNG, if omitted,
+            ``numpy.random.default_rng().integers(2 ** 32)`` will be called to obtain a
+            random seed from the OS.
         electron_batch_size (int): the number of electron samples considered in a batch
         molecule_batch_size (int): optional, the number of molecules considered in a
             batch. Only needed for transferable training.
@@ -136,6 +139,9 @@ def train(  # noqa: C901
             list of observable monitors to be evaluated during training or evaluation.
     """
     mode = 'evaluation' if opt is None else 'training'
+    if seed is None:
+        seed = np.random.default_rng().integers(2**32)
+        log.info('Seed not provided, using random seed %d', seed)
     rng = jax.random.PRNGKey(seed + jax.process_index())
     rng, rng_smpl = jax.random.split(rng)
     mols = mols if isinstance(mols, Sequence) else [hamil.mol]
