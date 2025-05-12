@@ -41,6 +41,8 @@ def maybe_init_multi_host():
 
     Detecting multiple processes only implemented for SLURM.
     """
+    if os.getenv('DEEPQMC_DISABLE_MULTIHOST'):
+        return
     process_count = get_process_count()
     process_id = get_process_index()
 
