@@ -284,6 +284,58 @@ class NodeAttentionElectronUpdateFeature(UpdateFeature):
         return [GraphNodes(None, mlp_out)]
 
 
+class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
+    """TODO: docstring"""
+
+    def __init__(
+        self,
+        *args,
+        num_heads,
+        indiv_mlp_factory,
+        attn_mlp_factory,
+        attention_residual,
+        attn_mlp_residual,
+    ):
+        super().__init__(*args)
+        self.num_heads = num_heads
+        self.attention_residual = attention_residual
+        self.attn_mlp_residual = attn_mlp_residual
+        self.attn_mlp_factory = attn_mlp_factory
+        self.indiv_mlp_factory = indiv_mlp_factory
+
+    def __call__(
+        self, nodes: GraphNodes, edges: Mapping[str, GraphEdges]
+    ) -> Sequence[GraphNodes]:
+        h_tot = nodes.electrons
+        # split the note features into individual and attentive streams
+        # g.shape = h.shape = (n_el, embedding_dim)
+        g, h = jnp.split(h_tot, 2, axis=-1)
+
+        # update attentive stream
+        heads_dim = h.shape[-1] // self.num_heads
+        assert heads_dim * self.num_heads == h.shape[-1]
+        attention_layer = hk.MultiHeadAttention(
+            self.num_heads,
+            heads_dim,
+            w_init=hk.initializers.VarianceScaling(1, 'fan_in', 'normal'),
+            with_bias=False,
+        )
+        attn_mlp = self.attn_mlp_factory(h.shape[-1], name='mlp')
+        attended = attention_layer(g, g, h)
+        if self.attention_residual:
+            attended = self.attention_residual(h, attended)
+        attn_mlp_out = attn_mlp(attended)
+        if self.attn_mlp_residual:
+            attn_mlp_out = self.attn_mlp_residual(attended, attn_mlp_out)
+
+        # update individual stream
+        indiv_mlp = self.indiv_mlp_factory(g.shape[-1], name='mlp')
+        indiv_mlp_out = indiv_mlp(g)
+
+        h_tot = jnp.concatenate([indiv_mlp_out, attn_mlp_out], axis=-1)
+        return [GraphNodes(None, h_tot)]
+
+
 class CombinedNodeAttentionUpdateFeature(UpdateFeature):
     r"""Create an attention update feature for both electrons and nuclei.
 
