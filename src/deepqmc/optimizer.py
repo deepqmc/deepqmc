@@ -202,5 +202,5 @@ def merge_states(params: Params, merge_keys: Optional[list[str]]) -> Params:
     """Averages the parameters along the state axis."""
     av = lambda x: jnp.mean(x, axis=0, keepdims=True).repeat(x.shape[0], axis=0)
     params_filtered = filter_dict(params, merge_keys)
-    params_averaged = jax.tree_map(av, params_filtered)
+    params_averaged = jax.tree.map(av, params_filtered)
     return params | params_averaged

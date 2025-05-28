@@ -380,7 +380,7 @@ def update_progress(pbar, best_ene, ewm_energies, mol_idxs, stats):
     )
     pbar.set_postfix(E=energies)
     if best_ene is None or jnp.any(
-        jnp.array(jax.tree_map(lambda x, y: x.s < 0.5 * y.s, ewm_energies, best_ene))
+        jnp.array(jax.tree.map(lambda x, y: x.s < 0.5 * y.s, ewm_energies, best_ene))
     ):
         best_ene = ewm_energies
         log.info(f'Progress: {pbar.n + 1}/{pbar.total}, energy = {energies}')

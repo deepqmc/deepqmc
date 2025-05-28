@@ -89,7 +89,7 @@ def init_multi_mol_multi_state_ewm(
     state, update = init_ewm(max_alpha, decay_alpha, window_size)
 
     def state_tree_map(fn, *state):
-        return jax.tree_map(fn, *state, is_leaf=lambda x: isinstance(x, jax.Array))
+        return jax.tree.map(fn, *state, is_leaf=lambda x: isinstance(x, jax.Array))
 
     def vmapper(fn):
         for _ in range(len(shape)):
