@@ -107,7 +107,7 @@ The repository can be cited as:
 @software{deepqmc,
 	author = {Hermann, J. and Schätzle, Z. and Szabó, P. B. and Mezera, M and {DeepQMC Contributors}},
 	title = "{DeepQMC}",
-	year = {2024},
+	year = {2025},
 	publisher = {Zenodo},
 	copyright = {MIT},
 	url = {https://github.com/deepqmc/deepqmc},
