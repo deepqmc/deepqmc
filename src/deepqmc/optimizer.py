@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from .kfacext import batch_size_extractor, make_graph_patterns
+from .kfacext import batch_size_extractor
 from .loss.loss_function import LossAndGradFunction
 from .parallel import PMAP_AXIS_NAME, pmap, pmean
 from .types import Batch, Energy, KeyArray, OptState, Params, Stats
@@ -146,7 +146,6 @@ class KFACOptimizer(Optimizer):
             l2_reg=0.0,
             value_func_has_aux=True,
             value_func_has_rng=True,
-            auto_register_kwargs={'graph_patterns': make_graph_patterns()},
             include_norms_in_stats=True,
             multi_device=True,
             pmap_axis_name=PMAP_AXIS_NAME,
