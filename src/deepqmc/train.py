@@ -347,11 +347,11 @@ def train(  # noqa: C901
             except (NanError, TrainingBlowup) as e:
                 if pbar:
                     pbar.close()
-                log.warn(f'Restarting due to {type(e).__name__}...')
+                log.warning(f'Restarting due to {type(e).__name__}...')
                 if attempt < max_restarts and chkpts is not None:
                     init_step, train_state = chkpts.last
                     (rng,) = split_on_devices(rng, 1)
-        log.warn(
+        log.warning(
             f'The {mode} has crashed before all steps were completed ({step}/{steps})!'
         )
         raise TrainingCrash(train_state)
