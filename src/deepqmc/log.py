@@ -49,27 +49,30 @@ def serialize_train_state(train_state: TrainState) -> TrainState:
 
 
 def deserialize_train_state(train_state: TrainState) -> TrainState:
-    if train_state.sampler['elec'].get('r', None) is not None:
-        if train_state.sampler['elec']['r'].ndim == 6:
-            # Legacy checkpoints are already deserialized
-            return train_state
-    if train_state.sampler['elec'].get('tau', None) is not None:
-        if train_state.sampler['elec']['tau'].ndim == 3:
-            # up to and including 147d4feb tau was not averaged over devices
-            train_state.sampler['elec']['tau'] = train_state.sampler['elec'][
-                'tau'
-            ].mean(axis=-1)
-    train_state.sampler['elec']['tau'] = jnp.repeat(
-        train_state.sampler['elec']['tau'][..., None], jax.device_count(), axis=-1
-    )
+    if train_state.sampler is None:
+        sampler = None
+    else:
+        if train_state.sampler['elec'].get('r', None) is not None:
+            if train_state.sampler['elec']['r'].ndim == 6:
+                # Legacy checkpoints are already deserialized
+                return train_state
+        if train_state.sampler['elec'].get('tau', None) is not None:
+            if train_state.sampler['elec']['tau'].ndim == 3:
+                # up to and including 147d4feb tau was not averaged over devices
+                train_state.sampler['elec']['tau'] = train_state.sampler['elec'][
+                    'tau'
+                ].mean(axis=-1)
+        train_state.sampler['elec']['tau'] = jnp.repeat(
+            train_state.sampler['elec']['tau'][..., None], jax.device_count(), axis=-1
+        )
+        sampler = train_state.sampler
+        sampler['elec'] = scatter_electrons_to_devices(sampler['elec'])
+        sampler['elec']['tau'] = jnp.squeeze(sampler['elec']['tau'], axis=-1)
+        sampler['nuc'], sampler['update_nuc_counter'] = replicate_on_devices(
+            (sampler['nuc'], sampler['update_nuc_counter'])
+        )
     params, opt = replicate_on_devices((train_state.params, train_state.opt))
-    sampler = train_state.sampler
-    sampler['elec'] = scatter_electrons_to_devices(sampler['elec'])
-    sampler['elec']['tau'] = jnp.squeeze(sampler['elec']['tau'], axis=-1)
-    sampler['nuc'], sampler['update_nuc_counter'] = replicate_on_devices(
-        (sampler['nuc'], sampler['update_nuc_counter'])
-    )
-    return TrainState(sampler, params, opt)
+    return TrainState(sampler, params, opt)  # type: ignore
 
 
 class CheckpointStore:
