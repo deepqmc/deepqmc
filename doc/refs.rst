@@ -45,3 +45,13 @@ References
 .. [Entwistle23] M. T. Entwistle, Z. Schätzle,   P. A. Erdman, J. Hermann, and F. Noé,
     Electronic excited states in deep variational Monte Carlo. `Nature Communications
     <https://doi.org/10.1038/s41467-022-35534-5>`_ (2023).
+
+.. [Ichibha23] T. Ichibha, Y. Nikaido, M. C. Bennett, J. T. Krogel, K. Hongo, R.
+    Maezono, F. A. Reboredo, Locality Error Free Effective Core Potentials for 3 d
+    Transition Metal Elements Developed for the Diffusion Monte Carlo Method. `The
+    Journal of Chemical Physics <https://doi.org/10.1063/5.0175381>`_ (2023).
+
+.. [Fu25] W. Fu, R. Fujimaru, R. Li, Y. Liu, X. Wen, X. Li, K. Hongo, L. Wang,
+    T. Ichibha, R. Maezono, J. Chen, W. Ren, Local Pseudopotential Unlocks the True
+    Potential of Neural Network-Based Quantum Monte Carlo. `arXiv
+    <https://doi.org/10.48550/arXiv.2505.19909>`_ (2025).

@@ -18,6 +18,18 @@ from .utils import norm, triu_flat
 __all__ = ()
 
 
+class LaplacianFactory(Protocol):
+    r"""Protocol class for Laplacian factories.
+
+    A Laplacian factory takes as input a function and returns a function that
+    computes the laplacian and gradient of the input function
+    """
+
+    def __call__(
+        self, f: Callable[[jax.Array], jax.Array]
+    ) -> Callable[[jax.Array], tuple[jax.Array, jax.Array]]: ...
+
+
 class Potential(Protocol):
     r"""Protocol for :class:`~deepqmc.types.Potential` objects.
 
@@ -39,7 +51,40 @@ class Potential(Protocol):
         rng: Optional[KeyArray],
         phys_conf: PhysicalConfiguration,
         wf: WaveFunction,
-    ) -> Energy: ...
+    ) -> Energy:
+        r"""Compute the non-local potential energy.
+
+        When the potential is fully local, (e.g. Coulomb potential or
+        PseudoHamiltonian), this function should return 0.0.
+        """
+        return jnp.array(0.0)
+
+    def kinetic_term(
+        self,
+        phys_conf: PhysicalConfiguration,
+        wf: WaveFunction,
+        laplacian_factory: LaplacianFactory,
+    ) -> tuple[Energy, jax.Array, jax.Array]:
+        r"""Compute the kinetic term of the Hamiltonian.
+
+        Typically, -1/2Δ, where Δ is the laplacian of the wave function.
+
+        Args:
+            phys_conf (:class:`deepqmc.types.PhysicalConfiguration`): electron and
+                nuclear coordinates.
+            wf (:class:`deepqmc.types.WaveFunction`): wave function.
+            laplacian_factory (Callable): factory to compute the laplacian and gradient.
+        """
+
+        def wave_function(r: jax.Array) -> jax.Array:
+            pc = jdc.replace(phys_conf, r=r.reshape(-1, 3))
+            return wf(pc).log
+
+        lap_log_psis, quantum_force = laplacian_factory(wave_function)(
+            phys_conf.r.flatten()
+        )
+        Es_kin = -0.5 * (lap_log_psis + (quantum_force**2).sum(axis=-1))
+        return Es_kin, lap_log_psis, (quantum_force**2).sum(axis=-1)
 
 
 def pairwise_distance(coords1: jax.Array, coords2: jax.Array) -> jax.Array:

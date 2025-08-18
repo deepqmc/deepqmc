@@ -5,11 +5,12 @@ from typing import Any, Optional, Protocol
 
 import jax
 import jax.numpy as jnp
-import jax_dataclasses as jdc
 
 from .ecp.gaussian_type_ecp import GaussianTypeECP
+from .ecp.pseudo_hamiltonian import PseudoHamiltonian
 from .molecule import Molecule
 from .physics import (
+    LaplacianFactory,
     NuclearCoulombPotential,
     electronic_potential,
     laplacian,
@@ -26,19 +27,7 @@ from .types import (
 )
 from .utils import argmax_random_choice
 
-__all__ = ['MolecularHamiltonian', 'LaplacianFactory']
-
-
-class LaplacianFactory(Protocol):
-    r"""Protocol class for Laplacian factories.
-
-    A Laplacian factory takes as input a function and returns a function that
-    computes the laplacian and gradient of the input function
-    """
-
-    def __call__(
-        self, f: Callable[[jax.Array], jax.Array]
-    ) -> Callable[[jax.Array], tuple[jax.Array, jax.Array]]: ...
+__all__ = ['MolecularHamiltonian']
 
 
 def get_shell(z):
@@ -92,10 +81,13 @@ class MolecularHamiltonian(Hamiltonian):
 
     Args:
         mol (~deepqmc.molecule.Molecule): the molecule to consider
-        ecp_type (str): If set, use the appropriate effective core potential (ECP). The
-            string is passed to :func:`pyscf.gto.M()` as :data:`'ecp'` argument.
+        ecp_type (str): If set, use the appropriate pseudopotential or effective core
+            potential (ECP). The string is passed to :func:`pyscf.gto.M()` as
+            :data:`'ecp'` argument.
             Supports ECPs that are implemented in the pyscf package, e.g. :data:`'bfd'`
             [Burkatzki et al. 2007] or :data:`'ccECP'` [Bennett et al. 2017].
+            Supports PseudoHamiltonians from [Ichibha23] and [Fu25], e.g. :data:`'PHcc'`
+            or :data:`'PHhf'`.
         ecp_mask (list[bool]): list of True and False values (:math:`N_\text{nuc}`)
             specifying whether to use an ECP for each nucleus.
         elec_std (float): optional, a default value of the scaling factor
@@ -128,10 +120,14 @@ class MolecularHamiltonian(Hamiltonian):
 
         self.laplacian = laplacian_factory
         self.potential: (
-            NuclearCoulombPotential | GaussianTypeECP
+            NuclearCoulombPotential | GaussianTypeECP | PseudoHamiltonian
         )  # mypy otherwise complains about the following assignment
         if self.ecp_mask.any():
-            self.potential = GaussianTypeECP(mol.charges, ecp_type, self.ecp_mask)
+            assert ecp_type is not None, 'ECP type must be specified if ECPs are used.'
+            if 'PH' in str(ecp_type):
+                self.potential = PseudoHamiltonian(mol.charges, ecp_type, self.ecp_mask)
+            else:
+                self.potential = GaussianTypeECP(mol.charges, ecp_type, self.ecp_mask)
         else:
             self.potential = NuclearCoulombPotential(mol.charges)
 
@@ -272,14 +268,9 @@ class MolecularHamiltonian(Hamiltonian):
         ) -> tuple[Energy, Stats]:
             wf = partial(ansatz, params)
 
-            def wave_function(r: jax.Array) -> jax.Array:
-                pc = jdc.replace(phys_conf, r=r.reshape(-1, 3))
-                return wf(pc).log
-
-            lap_log_psis, quantum_force = self.laplacian(wave_function)(
-                phys_conf.r.flatten()
+            Es_kin, lap_log_psis, quantum_force_2_sum = self.potential.kinetic_term(
+                phys_conf, wf, self.laplacian
             )
-            Es_kin = -0.5 * (lap_log_psis + (quantum_force**2).sum(axis=-1))
             Es_nuc = nuclear_energy(phys_conf, self.ns_valence)
             Vs_el = electronic_potential(phys_conf)
             Vs_loc = self.potential.local_potential(phys_conf)
@@ -291,7 +282,7 @@ class MolecularHamiltonian(Hamiltonian):
                 'hamil/V_loc': Vs_loc,
                 'hamil/V_nl': Vs_nl,
                 'hamil/lap': lap_log_psis,
-                'hamil/quantum_force': (quantum_force**2).sum(axis=-1),
+                'hamil/quantum_force': quantum_force_2_sum,
             }
 
             return Es_loc, stats

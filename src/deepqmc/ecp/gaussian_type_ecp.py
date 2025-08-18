@@ -6,7 +6,7 @@ from pyscf.gto.basis import load_ecp
 from pyscf.lib.parameters import ELEMENTS
 from scipy.special import legendre
 
-from ..physics import pairwise_distance
+from ..physics import Potential, pairwise_distance
 from ..types import Energy, KeyArray, PhysicalConfiguration, WaveFunction
 from .ecp_utils import (
     get_quadrature_points,
@@ -79,7 +79,7 @@ def parse_gaussian_type_ecp_params(charges, ecp_type, ecp_mask):
     return ns_valence, ecp_loc_params, jnp.array(ecp_nl_params)
 
 
-class GaussianTypeECP:
+class GaussianTypeECP(Potential):
     r"""
     ECPs of the standard semi-local form with the functions given by sums of gaussians.
 
