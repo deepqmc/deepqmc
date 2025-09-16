@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 
 from ..hamil import MolecularHamiltonian
@@ -11,7 +13,7 @@ from ..types import (
     Stats,
     Weight,
 )
-from ..utils import masked_mean
+from ..utils import batched_vmap, masked_mean
 
 
 def compute_local_energy(
@@ -20,6 +22,7 @@ def compute_local_energy(
     ansatz: ParametrizedWaveFunction,
     params: Params,
     phys_conf: PhysicalConfiguration,
+    batch_size: int | None = None,
 ) -> tuple[Energy, Stats]:
     r"""Compute a batch of local energies.
 
@@ -38,10 +41,17 @@ def compute_local_energy(
             statistics.
     """
     rng = jax.random.split(rng, phys_conf.batch_shape)
+    electron_axis_mapper = (
+        jax.vmap
+        if batch_size is None
+        else partial(batched_vmap, batch_size=batch_size // jax.device_count())
+    )
 
     local_energy, hamil_stats = jax.vmap(  # molecule_batch
         jax.vmap(  # electronic_state
-            jax.vmap(hamil.local_energy(ansatz), (0, None, 0))  # electron_batch
+            electron_axis_mapper(
+                hamil.local_energy(ansatz), in_axes=(0, None, 0)
+            )  # electron_batch
         ),
         (0, None, 0),
     )(rng, params, phys_conf)

@@ -118,6 +118,7 @@ def create_loss_fn(
     scale_overlap_by: Optional[str] = None,
     sort_states_by: Optional[str] = None,
     min_gap_scale_factor: float = 0.1,
+    local_energy_batch_size: int | None = None,
 ) -> LossFunction:
     overlap_scale_factory = {
         None: no_scaling,
@@ -145,8 +146,14 @@ def create_loss_fn(
     ) -> tuple[jax.Array, tuple[Energy, Optional[jax.Array], Stats]]:
         phys_conf, weight, data = batch
         stacked_params = tree_stack(params)
+        rng, rng_energy = jax.random.split(rng)
         local_energy, hamil_stats = compute_local_energy(
-            rng, hamil, ansatz.apply, stacked_params, phys_conf
+            rng_energy,
+            hamil,
+            ansatz.apply,
+            stacked_params,
+            phys_conf,
+            local_energy_batch_size,
         )
         loss, energy_stats = compute_mean_energy(local_energy, weight)
         stats = hamil_stats | energy_stats
@@ -185,8 +192,14 @@ def create_loss_fn(
         )
 
         stacked_params = tree_stack(params)
+        rng, rng_energy = jax.random.split(rng)
         local_energy, hamil_stats = compute_local_energy(
-            rng, hamil, ansatz.apply, stacked_params, phys_conf
+            rng_energy,
+            hamil,
+            ansatz.apply,
+            stacked_params,
+            phys_conf,
+            local_energy_batch_size,
         )
         loss, energy_stats = compute_mean_energy(local_energy, weight)
         stats = hamil_stats | energy_stats
