@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import partial
 from typing import Optional, Protocol
 
 import jax
@@ -12,6 +13,7 @@ from .types import (
     ParametrizedWaveFunction,
     Params,
     PhysicalConfiguration,
+    Psi,
     WaveFunction,
 )
 from .utils import triu_flat
@@ -136,31 +138,25 @@ def laplacian(
 
 
 def evaluate_spin(
-    hamil, wf: ParametrizedWaveFunction
+    hamil, parametrized_wf: ParametrizedWaveFunction
 ) -> Callable[[Params, PhysicalConfiguration], jax.Array]:
     """Returns a function to evaluate the spin expectation value (s^2)."""
-    nspins = (hamil.n_up, hamil.n_down)
+
+    up_minus_down = hamil.n_up - hamil.n_down
 
     def evaluate_spin_(params: Params, phys_conf: PhysicalConfiguration) -> jax.Array:
-        na, nb = sorted(nspins, reverse=True)
-        s2 = (na - nb) / 2 * ((na - nb) / 2 + 1) + nb
+        s2 = up_minus_down / 2 * (up_minus_down / 2 + 1) + hamil.n_down
+        wf = partial(parametrized_wf, params)
 
-        psi = wf(params, phys_conf)
-        r_up, r_down = jnp.split(phys_conf.r, nspins[:1], axis=-2)
+        orig_psi = wf(phys_conf)
+        permute_single_down_with_all_up = make_permute_single_down_with_all_up(
+            wf, phys_conf, orig_psi, hamil.n_up
+        )
 
-        def _inner(j, val):
-            i, s2 = val
-            r_perm = jnp.concatenate(
-                (r_up.at[i].set(r_down[j]), r_down.at[j].set(r_up[i]))
-            )
-            psi_perm = wf(params, jdc.replace(phys_conf, r=r_perm))
-            s2 -= psi.sign * psi_perm.sign * jnp.exp(psi_perm.log - psi.log)
-            return i, s2
+        s2 = jax.lax.fori_loop(
+            hamil.n_up, hamil.n_up + hamil.n_down, permute_single_down_with_all_up, s2
+        )
 
-        def _outer(i, s2):
-            return jax.lax.fori_loop(0, nspins[1], _inner, (i, s2))[1]
-
-        s2 = jax.lax.fori_loop(0, nspins[0], _outer, s2)
         return s2
 
     return evaluate_spin_
@@ -182,3 +178,61 @@ def coulomb_force(
     if remove_self_int:
         force = force.at[jnp.arange(len(r1)), jnp.arange(len(r2))].set(0)
     return force.sum(-2)
+
+
+def make_permute_single_down_with_all_up(
+    wf: WaveFunction, phys_conf: PhysicalConfiguration, orig_psi: Psi, n_up: int
+) -> Callable[[jax.Array, jax.Array], jax.Array]:
+    r"""Return a function that accumulates permuted wave function ratios.
+
+    The returned function computes
+    :math:`- \sum_{\alpha} \frac{\hat P_{\alpha\beta} \Psi}{\Psi}`,
+    for one value of :math:`beta`.
+    """
+
+    def permute_single_down_with_all_up(
+        down_idx: jax.Array, outer_accumulator: jax.Array
+    ) -> jax.Array:
+        original_electron_indices = jnp.arange(phys_conf.r.shape[0])
+
+        def permute_single_down_with_single_up(
+            up_idx: jax.Array, inner_accumulator: jax.Array
+        ) -> jax.Array:
+            permuted_electron_indices = (
+                original_electron_indices.at[down_idx]
+                .set(up_idx)
+                .at[up_idx]
+                .set(down_idx)
+            )
+            permuted_phys_conf = jdc.replace(
+                phys_conf, r=phys_conf.r[permuted_electron_indices]
+            )
+            permuted_psi = wf(permuted_phys_conf)
+            inner_accumulator -= (
+                orig_psi.sign
+                * permuted_psi.sign
+                * jnp.exp(permuted_psi.log - orig_psi.log)
+            )
+            return inner_accumulator
+
+        return jax.lax.fori_loop(
+            0, n_up, permute_single_down_with_single_up, outer_accumulator
+        )
+
+    return permute_single_down_with_all_up
+
+
+def make_stochastic_spin_raising_operator(
+    hamil, parametrized_wf: ParametrizedWaveFunction
+):
+    def evaluate_stochastic_spin_raising_operator(
+        params: Params, phys_conf: PhysicalConfiguration, down_idx: jax.Array
+    ):
+        wf = partial(parametrized_wf, params)
+        orig_psi = wf(phys_conf)
+        permute_single_down_with_all_up = make_permute_single_down_with_all_up(
+            wf, phys_conf, orig_psi, hamil.n_up
+        )
+        return permute_single_down_with_all_up(down_idx, jnp.array(1.0))
+
+    return evaluate_stochastic_spin_raising_operator

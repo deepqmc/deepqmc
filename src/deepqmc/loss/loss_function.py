@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Optional, Protocol, cast
+from typing import Literal, Optional, Protocol, cast
 
 import jax
 import jax.numpy as jnp
@@ -40,8 +40,10 @@ from .overlap import (
 )
 from .spin import (
     compute_mean_spin,
+    compute_mean_spin_raising_tangent,
     compute_mean_spin_tangent,
     compute_spin_contributions,
+    compute_spin_raising_contributions,
 )
 
 __all__ = ()
@@ -115,6 +117,7 @@ def create_loss_fn(
     clip_mask_overlap_fn: Optional[PsiRatioClipAndMaskFn] = None,
     alpha: Optional[float] = None,
     spin_penalty: Optional[float] = None,
+    spin_penalty_type: Literal['raising', 'squared'] = 'squared',
     scale_overlap_by: Optional[str] = None,
     sort_states_by: Optional[str] = None,
     min_gap_scale_factor: float = 0.1,
@@ -166,9 +169,15 @@ def create_loss_fn(
         else:
             psi_ratio = None
         if spin_penalty is not None:
-            spin_contributions = compute_spin_contributions(
-                hamil, ansatz, stacked_params, phys_conf
-            )
+            if spin_penalty_type == 'squared':
+                spin_contributions = compute_spin_contributions(
+                    hamil, ansatz, stacked_params, phys_conf
+                )
+            else:
+                rng, rng_spin_raising = jax.random.split(rng)
+                spin_contributions = compute_spin_raising_contributions(
+                    rng_spin_raising, hamil, ansatz, phys_conf, stacked_params
+                )
             spin, spin_stats = compute_mean_spin(spin_contributions, weight)
             loss += spin_penalty * spin
             stats |= spin_stats
@@ -236,14 +245,40 @@ def create_loss_fn(
             psi_ratio = None
 
         if spin_penalty is not None:
-            spin_contributions = compute_spin_contributions(
-                hamil, ansatz, stacked_params, phys_conf
-            )
-            spin, spin_stats = compute_mean_spin(spin_contributions, weight)
+            if spin_penalty_type == 'squared':
+                spin_contributions = compute_spin_contributions(
+                    hamil, ansatz, stacked_params, phys_conf
+                )
+                spin, spin_stats = compute_mean_spin(spin_contributions, weight)
+                spin_tangent = compute_mean_spin_tangent(
+                    spin_contributions, weight, log_psi_tangent, gradient_mask
+                )
+            else:
+                rng, rng_spin_raising = jax.random.split(rng)
+                stacked_params_tangent = tree_stack(params_tangent)
+                spin_raising, spin_raising_tangent = jax.jvp(
+                    partial(
+                        compute_spin_raising_contributions,
+                        rng_spin_raising,
+                        hamil,
+                        ansatz,
+                        phys_conf,
+                    ),
+                    (stacked_params,),
+                    (stacked_params_tangent,),
+                )
+                clipped_spin_raising, spin_raising_gradient_mask = clip_local_energy(
+                    clip_mask_fn, spin_raising
+                )
+                spin, spin_stats = compute_mean_spin(spin_raising, weight)
+                spin_tangent = compute_mean_spin_raising_tangent(
+                    clipped_spin_raising,
+                    spin_raising_tangent,
+                    weight,
+                    log_psi_tangent,
+                    spin_raising_gradient_mask,
+                )
             stats |= spin_stats
-            spin_tangent = compute_mean_spin_tangent(
-                spin_contributions, weight, log_psi_tangent, gradient_mask
-            )
             loss += spin_penalty * spin
             loss_tangent += spin_penalty * spin_tangent
 
