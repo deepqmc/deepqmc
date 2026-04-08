@@ -168,12 +168,9 @@ class PseudoHamiltonian(Potential):
     """
 
     def __init__(self, charges: jax.Array, ecp_type: str, ecp_mask: jax.Array):
-        ph_file_suffix = ecp_type.split('PH')[-1]
-        if ph_file_suffix == '':
-            ph_file_suffix = 'cc'  # default suffix for PseudoHamiltonian
         self.ecp_mask = ecp_mask
         self.ns_valence, self.a, self.rV_loc, self.rV_L2 = load_PH_functions(
-            charges, ecp_mask, ph_file_suffix
+            charges, ecp_mask
         )
 
     def local_potential(self, phys_conf: PhysicalConfiguration) -> Energy:
