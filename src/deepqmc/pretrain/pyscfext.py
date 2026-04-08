@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import pyscf.lib.chkfile as chk
 from pyscf import gto
 from pyscf.gto.basis import ALIAS as PYSCF_BASIS_SETS
+from pyscf.lib.parameters import ELEMENTS
 from pyscf.mcscf import CASSCF
 from pyscf.mcscf.df import _DFCAS, _DFCASCI, _DFCASSCF
 from pyscf.scf import RHF
@@ -32,7 +33,14 @@ def extend_basis(hamil: MolecularHamiltonian, basis: str) -> Mapping[int, str]:
     basis_dict = {}
     if any(hamil.ecp_mask):
         assert hamil.ecp_type is not None
+
         ecp_type = filter_string(hamil.ecp_type)
+        if ecp_type == 'ph':
+            ecp_type = 'ccecp'
+            log.info(
+                'PH is enabled. Trying to find ccECP variant of pretraining basis.'
+            )
+
         basis = filter_string(basis)
         ecp_basis = ecp_type + basis
         if ecp_basis in PYSCF_BASIS_SETS.keys():
@@ -94,8 +102,14 @@ def pyscf_from_hamil(  # type: ignore
     if isinstance(basis, str):
         basis = extend_basis(hamil, basis)
 
+    hamil_as_pyscf = hamil.as_pyscf(coords=coords)
+    for k, v in hamil_as_pyscf['ecp'].items():
+        if filter_string(v) == 'ph':
+            hamil_as_pyscf['ecp'][k] = 'ccECP'
+            log.info(f'Pretraining {ELEMENTS[int(k)]} with PH against ccECP target.')
+
     mol = gto.M(
-        **hamil.as_pyscf(coords=coords),
+        **hamil_as_pyscf,
         basis=basis,
         cart=True,
         parse_arg=False,
