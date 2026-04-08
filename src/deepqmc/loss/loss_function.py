@@ -151,6 +151,7 @@ def create_loss_fn(
         loss, energy_stats = compute_mean_energy(local_energy, weight)
         stats = hamil_stats | energy_stats
         if phys_conf.batch_shape[1] > 1:
+            assert alpha is not None
             psi_ratio, psi_stats = compute_psi_ratio(ansatz, stacked_params, phys_conf)
             overlap_loss, overlap_stats = compute_mean_overlap(psi_ratio, weight)
             loss += alpha * overlap_loss
