@@ -1,5 +1,5 @@
 defaults:
-  - sampler_factory: decorr_metropolis_psiformer
+  - sampler_factory: default
   - opt: kfac_psiformer
 _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}

@@ -1,5 +1,5 @@
 defaults:
-  - sampler_factory: decorr_metropolis_psiformer
+  - sampler_factory: default
 _target_: deepqmc.app.train_from_factories
 opt:
   _target_: deepqmc.optimizer.KFACOptimizer

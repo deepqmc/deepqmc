@@ -1,0 +1,6 @@
+defaults:
+  - elec_sampler: decorr_metropolis_psiformer
+  - nuc_sampler: idle
+  - elec_warp_fn: no_elec_warp
+_target_: deepqmc.sampling.initialize_sampling
+_partial_: true

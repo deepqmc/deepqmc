@@ -1,5 +1,5 @@
 defaults:
-  - sampler_factory: decorr_langevin
+  - sampler_factory: default
   - opt: kfac
 _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}

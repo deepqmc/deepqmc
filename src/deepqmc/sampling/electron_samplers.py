@@ -18,6 +18,7 @@ from ..types import (
     Stats,
 )
 from ..utils import multinomial_resampling, split_dict
+from .electron_sample_initializers import ElectronSampleInitializer
 
 __all__ = [
     'MetropolisSampler',
@@ -54,11 +55,15 @@ class MetropolisSampler:
         hamil: MolecularHamiltonian,
         wf: ParametrizedWaveFunction,
         *,
+        sample_initializer: ElectronSampleInitializer,
         tau: float = 1.0,
         target_acceptance: float = 0.57,
         max_age: Optional[int] = None,
     ):
         self.hamil = hamil
+        self.sample_initializer = jax.vmap(
+            sample_initializer, (0, None, None, None, None, None)
+        )
         self.initial_tau = tau
         self.target_acceptance = target_acceptance
         self.max_age = max_age
@@ -76,7 +81,14 @@ class MetropolisSampler:
 
     def init(self, rng: KeyArray, params: Params, n: int, R: jax.Array) -> SamplerState:
         state = {
-            'r': self.hamil.init_sample(rng, R, n).r,
+            'r': self.sample_initializer(
+                jax.random.split(rng, n),
+                self.hamil.mol.charges,
+                self.hamil.ns_valence,
+                R,
+                self.hamil.n_up,
+                self.hamil.n_down,
+            ),
             'age': jnp.zeros(n, jnp.int32),
             'tau': jnp.array(self.initial_tau),
         }

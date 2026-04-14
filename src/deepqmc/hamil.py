@@ -8,7 +8,6 @@ import jax.numpy as jnp
 
 from .ecp.gaussian_type_ecp import GaussianTypeECP
 from .ecp.pseudo_hamiltonian import PseudoHamiltonian
-from .geom import pairwise_distance
 from .molecule import Molecule
 from .physics import (
     LaplacianFactory,
@@ -25,7 +24,6 @@ from .types import (
     PhysicalConfiguration,
     Stats,
 )
-from .utils import argmax_random_choice
 
 __all__ = ['MolecularHamiltonian']
 
@@ -144,120 +142,6 @@ class MolecularHamiltonian(Hamiltonian):
         self.mol_ecp_shells = [
             get_shell(z + 1) - 1 for z in self.mol.charges - self.ns_valence
         ]
-
-    def init_sample(
-        self, rng: KeyArray, R: jax.Array, n: int, elec_std: Optional[float] = None
-    ) -> PhysicalConfiguration:
-        r"""
-        Guess some initial electron positions.
-
-        Tries to make an educated guess about plausible initial electron
-        configurations. Places electrons according to normal distributions
-        centered on the nuclei. If the molecule is not neutral, extra electrons
-        are placed on or removed from random nuclei. The resulting configurations
-        are usually very crude, a subsequent, thorough equilibration is needed.
-
-        Args:
-            rng (~deepqmc.types.KeyArray): key used for PRNG.
-            R (jax.Array): nuclear coordinates of a single molecular geometry
-                (:math:`N_\text{nuc}`, 3)
-            n (int): the number of initial electron configurations to generate.
-
-        Returns:
-            :class:`~deepqmc.types.PhysicalConfiguration`:
-            initial electron and nuclei
-                configurations
-        """
-        assert R.ndim == 2
-
-        Rs = jnp.tile(R[None], (n, 1, 1))
-        return jax.vmap(self.init_single_sample, (0, 0, None))(
-            jax.random.split(rng, n), Rs, elec_std
-        )
-
-    def init_single_sample(
-        self, rng: KeyArray, R: jax.Array, elec_std: Optional[float]
-    ) -> PhysicalConfiguration:
-        rng_remainder, rng_normal, rng_spin = jax.random.split(rng, 3)
-        valence_electrons = self.potential.ns_valence - self.mol.charge / self.n_nuc
-        electrons_of_atom = jnp.floor(valence_electrons).astype(jnp.int32)
-
-        def cond_fn(value):
-            _, electrons_of_atom = value
-            return (
-                self.potential.ns_valence.sum()
-                - self.mol.charge
-                - electrons_of_atom.sum()
-                > 0
-            )
-
-        def body_fn(value):
-            rng, electrons_of_atom = value
-            rng, rng_categorical = jax.random.split(rng)
-            atom_idx = jax.random.categorical(
-                rng_categorical, valence_electrons - electrons_of_atom, shape=()
-            )
-            electrons_of_atom = electrons_of_atom.at[atom_idx].add(1)
-            return rng, electrons_of_atom
-
-        _, electrons_of_atom = jax.lax.while_loop(
-            cond_fn, body_fn, (rng_remainder, electrons_of_atom)
-        )
-        up, down = self.distribute_spins(rng_spin, R, electrons_of_atom)
-        up = (jnp.cumsum(up)[:, None] <= jnp.arange(self.n_up)).sum(axis=0)
-        down = (jnp.cumsum(down)[:, None] <= jnp.arange(self.n_down)).sum(axis=0)
-        idxs = jnp.concatenate([up, down])
-        centers = R[idxs]
-        std = (elec_std or self.elec_std) * jnp.sqrt(self.mol.charges)[idxs][..., None]
-        r = centers + std * jax.random.normal(rng_normal, centers.shape)
-        return PhysicalConfiguration(R, r, jnp.array(0))  # type: ignore
-
-    def distribute_spins(
-        self, rng: KeyArray, R: jax.Array, elec_of_atom: jax.Array
-    ) -> tuple[jax.Array, jax.Array]:
-        up, down = jnp.zeros_like(elec_of_atom), jnp.zeros_like(elec_of_atom)
-        # try to distribute electron pairs evenly across atoms
-
-        def pair_cond_fn(value):
-            i, *_ = value
-            return i < jnp.max(elec_of_atom)
-
-        def pair_body_fn(value):
-            i, up, down = value
-            mask = elec_of_atom >= 2 * (i + 1)
-            increment = jnp.where(mask & (mask.sum() + down.sum() <= self.n_down), 1, 0)
-            up = up + increment
-            down = down + increment
-            return i + 1, up, down
-
-        _, up, down = jax.lax.while_loop(pair_cond_fn, pair_body_fn, (0, up, down))
-
-        # distribute remaining electrons such that opposite spin electrons
-        # end up close in an attempt to mimic covalent bonds
-        dists = pairwise_distance(R, R).at[jnp.diag_indices(len(R))].set(jnp.inf)
-        nearest_neighbor_indices = jnp.argsort(dists)
-
-        def spin_cond_fn(value):
-            _, _, up, down = value
-            return (up + down < elec_of_atom).any()
-
-        def spin_body_fn(value):
-            i, center, up, down = value
-            is_down = (i % 2) & (down.sum() < self.n_down)
-            up = up.at[center].add(1 - is_down)
-            down = down.at[center].add(is_down)
-            ordering = nearest_neighbor_indices[center]
-            ordered_has_remainder = (elec_of_atom - up - down)[ordering] > 0
-            first_ordered_has_remainder = jnp.argmax(ordered_has_remainder)
-            center = ordering[first_ordered_has_remainder]
-            return i + 1, center, up, down
-
-        center = argmax_random_choice(rng, elec_of_atom - up - down)
-        *_, up, down = jax.lax.while_loop(
-            spin_cond_fn, spin_body_fn, (jnp.array(0), center, up, down)
-        )
-
-        return up, down
 
     def local_energy(self, ansatz: ParametrizedWaveFunction) -> Callable[
         [Optional[KeyArray], Params, PhysicalConfiguration],
