@@ -10,7 +10,8 @@ import numpy as np
 
 import deepqmc
 
-from ..physics import LaplacianFactory, Potential, pairwise_distance
+from ..geom import pairwise_distance
+from ..physics import LaplacianFactory, Potential
 from ..types import Energy, PhysicalConfiguration, WaveFunction
 
 ELEMENTS_WITH_EXISTING_PH = {

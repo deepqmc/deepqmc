@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from jax.nn import softplus
 from kfac_jax import register_scale_and_shift
 
-from ..physics import pairwise_diffs
+from ..geom import pairwise_diffs
 from ..utils import norm, unflatten
 
 

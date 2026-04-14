@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 from jax.nn import one_hot
 
-from ..physics import pairwise_diffs
+from ..geom import pairwise_diffs
 from .gto import GTOBasis
 
 log = logging.getLogger(__name__)

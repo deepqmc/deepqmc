@@ -6,7 +6,8 @@ from pyscf.gto.basis import load_ecp
 from pyscf.lib.parameters import ELEMENTS
 from scipy.special import legendre
 
-from ..physics import Potential, pairwise_distance
+from ..geom import pairwise_distance
+from ..physics import Potential
 from ..types import Energy, KeyArray, PhysicalConfiguration, WaveFunction
 from .ecp_utils import (
     get_quadrature_points,

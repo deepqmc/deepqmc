@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 import jax_dataclasses as jdc
 
+from .geom import pairwise_distance, pairwise_self_distance
 from .types import (
     Energy,
     KeyArray,
@@ -13,7 +14,7 @@ from .types import (
     PhysicalConfiguration,
     WaveFunction,
 )
-from .utils import norm, triu_flat
+from .utils import triu_flat
 
 __all__ = ()
 
@@ -85,30 +86,6 @@ class Potential(Protocol):
         )
         Es_kin = -0.5 * (lap_log_psis + (quantum_force**2).sum(axis=-1))
         return Es_kin, lap_log_psis, (quantum_force**2).sum(axis=-1)
-
-
-def pairwise_distance(coords1: jax.Array, coords2: jax.Array) -> jax.Array:
-    return jnp.linalg.norm(coords1[..., :, None, :] - coords2[..., None, :, :], axis=-1)
-
-
-def pairwise_diffs(coords1: jax.Array, coords2: jax.Array) -> jax.Array:
-    diffs = coords1[..., :, None, :] - coords2[..., None, :, :]
-    return jnp.concatenate([diffs, (diffs**2).sum(axis=-1, keepdims=True)], axis=-1)
-
-
-def pairwise_self_distance(coords: jax.Array, full: bool = False) -> jax.Array:
-    i, j = jnp.triu_indices(coords.shape[-2], k=1)
-    diffs = coords[..., :, None, :] - coords[..., None, :, :]
-    dists = norm(diffs[..., i, j, :], safe=True, axis=-1)
-    if full:
-        dists = (
-            jnp.zeros(diffs.shape[:-1])
-            .at[..., i, j]
-            .set(dists)
-            .at[..., j, i]
-            .set(dists)
-        )
-    return dists
 
 
 def nuclear_energy(phys_conf: PhysicalConfiguration, ns_valence: jax.Array) -> Energy:

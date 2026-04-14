@@ -5,10 +5,10 @@ from typing import Optional
 import jax
 import jax.numpy as jnp
 
+from ..geom import pairwise_diffs
 from ..hamil import MolecularHamiltonian
 from ..molecule import Molecule
 from ..parallel import pmap, rng_iterator, select_one_device
-from ..physics import pairwise_diffs
 from ..types import (
     Ansatz,
     KeyArray,

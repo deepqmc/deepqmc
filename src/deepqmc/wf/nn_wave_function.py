@@ -4,7 +4,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 
-from ..physics import pairwise_diffs, pairwise_self_distance
+from ..geom import pairwise_diffs, pairwise_self_distance
 from ..types import Psi
 from ..utils import flatten, triu_flat
 

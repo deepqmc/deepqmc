@@ -8,6 +8,7 @@ import jax.numpy as jnp
 
 from .ecp.gaussian_type_ecp import GaussianTypeECP
 from .ecp.pseudo_hamiltonian import PseudoHamiltonian
+from .geom import pairwise_distance
 from .molecule import Molecule
 from .physics import (
     LaplacianFactory,
@@ -15,7 +16,6 @@ from .physics import (
     electronic_potential,
     laplacian,
     nuclear_energy,
-    pairwise_distance,
 )
 from .types import (
     Energy,
