@@ -1,4 +1,5 @@
-from collections.abc import MutableMapping, Sequence
+from collections.abc import Iterable, MutableMapping, Sequence
+from functools import partial
 from typing import Optional, TypeVar, Union
 
 import jax
@@ -160,7 +161,7 @@ def weighted_std(
     return jnp.sqrt(variance)
 
 
-def filter_dict(x: MutableMapping, keys_whitelist: Optional[list[str]]) -> dict:
+def filter_dict(x: MutableMapping, keys_whitelist: Optional[Iterable[str]]) -> dict:
     x_filtered = (
         {
             key: value
@@ -197,3 +198,102 @@ def better_where(condition, true_val, false_val):
         condition, range(len(condition.shape), len(true_val.shape))
     )
     return jnp.where(condition, true_val, false_val)
+
+
+def to_tuple(o):
+    return tuple([to_tuple(i) for i in o]) if isinstance(o, Iterable) else o
+
+
+def scaled_normal(key, shape, mean=0, std=1):
+    return mean + jax.random.normal(key, shape) * std
+
+
+def broadcast_pytree_structure(x, y) -> tuple:
+    """Recursively broadcast two pytrees at the structure level."""
+
+    class CombinedLeaf:
+        """A helper class which jax.tree.map recognizes as a leaf by default."""
+
+        __slots__ = ('x', 'y')
+
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+
+    def broadcast_and_combine_pytree_structure(x, y):
+        x_children = jax.tree.structure(x).children()
+        y_children = jax.tree.structure(y).children()
+        if x_children and y_children:
+            return jax.tree.map(
+                broadcast_and_combine_pytree_structure,
+                x,
+                y,
+                is_leaf=lambda x: x is None,
+            )
+
+        if not y_children:
+            return jax.tree.map(lambda x_leaf: CombinedLeaf(x_leaf, y), x)
+
+        if not x_children:
+            return jax.tree.map(lambda y_leaf: CombinedLeaf(x, y_leaf), y)
+
+    combined = broadcast_and_combine_pytree_structure(x, y)
+    return jax.tree.map(lambda combined_leaf: combined_leaf.x, combined), jax.tree.map(
+        lambda combined_leaf: combined_leaf.y, combined
+    )
+
+
+def batched_vmap(func, batch_size: int, in_axes: int | tuple = 0, out_axis: int = 0):
+    """A version of jax.vmap that splits the mapped axis into batches of a given size.
+
+    Useful to reduce the memory requirements of vmap.
+    """
+
+    def is_none(x) -> bool:
+        return x is None
+
+    def arg_size_reducer(acc: int | None, x: int | None):
+        if x is None:
+            return acc
+        if acc is None:
+            return x
+        assert acc == x, 'All mapped axes must have the same size'
+        return acc
+
+    def batch_slicer(i_batch: int, x: jax.Array, axis: int | None) -> jax.Array:
+        if axis is None:
+            return x
+        return jnp.take(
+            x,
+            jnp.arange(i_batch * batch_size, (i_batch + 1) * batch_size),
+            axis=axis,
+            unique_indices=True,
+            indices_are_sorted=True,
+        )
+
+    def mapped_func(*args):
+        broadcasted_in_axes, _ = broadcast_pytree_structure(in_axes, args)
+        arg_size = jax.tree.reduce(
+            arg_size_reducer,
+            jax.tree.map(
+                lambda axis, x: None if axis is None else x.shape[axis],
+                broadcasted_in_axes,
+                args,
+                is_leaf=is_none,
+            ),
+            initializer=None,
+        )
+        assert arg_size is not None, 'At least one argument must be mapped'
+
+        outs = []
+        for i_batch in range(arg_size // batch_size):
+            args_batch = jax.tree.map(
+                partial(batch_slicer, i_batch),
+                args,
+                broadcasted_in_axes,
+                is_leaf=is_none,
+            )
+            outs.append(jax.vmap(func, in_axes)(*args_batch))
+        return jax.tree.map(lambda *x: jnp.concatenate(x, axis=out_axis), *outs)
+
+    return mapped_func
