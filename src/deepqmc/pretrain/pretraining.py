@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
+from ..optimizer import pmap_merge_states
 from ..parallel import (
     gather_electrons_on_one_device,
     rng_iterator,
@@ -25,7 +26,7 @@ def pretrain(  # noqa: C901
     sampler,
     smpl_state,
     dataset,
-    *,
+    merge_keys,
     steps,
 ):
     r"""Perform pretraining of the Ansatz to (MC-)SCF orbitals.
@@ -40,6 +41,9 @@ def pretrain(  # noqa: C901
             iterates (samples) the indices of the molecule dataset.
         sampler: the sampler instance to use.
         dataset (dict): dictionary containing the coefficients for the pretraining.
+        merge_keys (list[str]): optional, list of strings for selecting parameters to be
+            shared across electronic states. Matching merge keys with (substrings of)
+            parameter keys.
         steps: an iterable yielding the step numbers for the pretraining.
     """
     target_fn = PretrainTarget(
@@ -116,6 +120,9 @@ def pretrain(  # noqa: C901
         mol_idxs = molecule_idx_sampler.sample()
         params, opt_state, per_sample_losses = pretrain_step(
             rng, params, smpl_state, opt_state, mol_idxs
+        )
+        params = pmap_merge_states(
+            params, tuple(merge_keys) if merge_keys is not None else None
         )
         yield step, params, gather_electrons_on_one_device(
             per_sample_losses

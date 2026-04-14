@@ -221,6 +221,7 @@ def train(  # noqa: C901
                     sampler,
                     pretrain_smpl_state,
                     pretrain_dataset,
+                    merge_keys,
                     steps=pbar,
                 ):  # noqa: B007
                     per_mol_state_losses = per_sample_losses.mean(axis=-1)
@@ -311,6 +312,7 @@ def train(  # noqa: C901
                     sampler,
                     pbar,
                     train_state,
+                    merge_keys,
                     loss_function_factory,
                     observable_monitors=[
                         monitor.finalize(hamil, ansatz.apply)

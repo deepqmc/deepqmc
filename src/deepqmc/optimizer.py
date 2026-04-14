@@ -22,7 +22,6 @@ class Optimizer(Protocol):
     def __init__(
         self,
         loss_and_grad_fn: LossAndGradFunction,
-        merge_keys: Optional[list[str]] = None,
     ):
         r"""Initializes the optimizer object.
 
@@ -30,8 +29,6 @@ class Optimizer(Protocol):
             loss_and_grad_fn (~deepqmc.loss.loss_function.LossAndGradFunction):
                 a function that returns the loss and the gradient with respect to
                 the model parameters alongside auxiliary data.
-            merge_keys (list[str]): a list of keys for wave function parameters that
-                are merged across ansatzes for multiple electronic states.
         """
         ...
 
@@ -78,7 +75,6 @@ class NoOptimizer(Optimizer):
     def __init__(
         self,
         loss_and_grad_fn: LossAndGradFunction,
-        merge_keys: Optional[list[str]] = None,
     ):
         self.loss_and_grad_fn = loss_and_grad_fn
 
@@ -97,12 +93,10 @@ class OptaxOptimizer(Optimizer):
     def __init__(
         self,
         loss_and_grad_fn: LossAndGradFunction,
-        merge_keys: Optional[list[str]] = None,
         *,
         optax_opt,
     ):
         self.energy_and_grad_fn = loss_and_grad_fn
-        self.merge_keys = merge_keys
         self.optax_opt = optax_opt
 
     @partial(pmap, static_broadcasted_argnums=(0,))
@@ -127,7 +121,7 @@ class OptaxOptimizer(Optimizer):
         params_list = cast(
             list[Params], params_list
         )  # optax.apply_updates overwrites our type
-        params = merge_states(tree_stack(params_list), self.merge_keys)
+        params = tree_stack(params_list)
         stats = {
             'opt/param_norm': param_norm,
             'opt/grad_norm': grad_norm,
@@ -138,9 +132,7 @@ class OptaxOptimizer(Optimizer):
 
 
 class KFACOptimizer(Optimizer):
-    def __init__(
-        self, loss_and_grad_fn, merge_keys: Optional[list[str]] = None, *, kfac
-    ):
+    def __init__(self, loss_and_grad_fn, *, kfac):
         self.kfac = kfac(
             value_and_grad_func=loss_and_grad_fn,
             l2_reg=0.0,
@@ -151,7 +143,6 @@ class KFACOptimizer(Optimizer):
             pmap_axis_name=PMAP_AXIS_NAME,
             batch_size_extractor=batch_size_extractor,
         )
-        self.merge_keys = merge_keys
 
     def init(self, rng: KeyArray, params: Params, batch: Batch) -> OptState:
         opt_state = self.kfac.init(
@@ -171,13 +162,12 @@ class KFACOptimizer(Optimizer):
             batch=batch,
             momentum=0,
         )
-        params = self.pmap_merge_states(
-            self.pmap_tree_stack(params_list), self.merge_keys
-        )
+        params = self.pmap_tree_stack(params_list)
         stats = {
             'opt/param_norm': opt_stats['param_norm'],
             'opt/grad_norm': opt_stats['precon_grad_norm'],
             'opt/update_norm': opt_stats['update_norm'],
+            'opt/scaled_grad_norm_sq': opt_stats['scaled_grad_norm_sq'],
             **opt_stats['aux'][2],
         }
         return params, opt_state, opt_stats['aux'][0], opt_stats['aux'][1], stats
@@ -190,16 +180,15 @@ class KFACOptimizer(Optimizer):
     def pmap_tree_unstack(self, tree: T) -> list[T]:
         return tree_unstack(tree)
 
-    @partial(jax.pmap, static_broadcasted_argnums=(0, 2))
-    def pmap_merge_states(
-        self, params: Params, keys_whitelist: Optional[list[str]]
-    ) -> Params:
-        return merge_states(params, keys_whitelist)
 
-
-def merge_states(params: Params, merge_keys: Optional[list[str]]) -> Params:
+def merge_states(params: Params, merge_keys: Optional[tuple[str, ...]]) -> Params:
     """Averages the parameters along the state axis."""
     av = lambda x: jnp.mean(x, axis=0, keepdims=True).repeat(x.shape[0], axis=0)
     params_filtered = filter_dict(params, merge_keys)
     params_averaged = jax.tree.map(av, params_filtered)
     return params | params_averaged
+
+
+@partial(jax.pmap, static_broadcasted_argnums=(1,))
+def pmap_merge_states(params: Params, merge_keys: Optional[tuple[str, ...]]) -> Params:
+    return merge_states(params, merge_keys)

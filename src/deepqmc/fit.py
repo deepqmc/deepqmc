@@ -1,7 +1,7 @@
 import operator
 from collections.abc import Generator, Iterable
 from functools import reduce
-from typing import Type
+from typing import Optional, Type
 
 import jax
 import jax.numpy as jnp
@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from .ewm import init_multi_mol_multi_state_ewm
 from .loss import LossFunctionFactory
 from .observable import ObservableMonitor
-from .optimizer import NoOptimizer, Optimizer
+from .optimizer import NoOptimizer, Optimizer, pmap_merge_states
 from .parallel import (
     local_slice,
     pexp_normalize_mean,
@@ -35,6 +35,7 @@ def fit_wf(  # noqa: C901
     sampler,
     steps: Iterable,
     train_state: TrainState,
+    merge_keys: Optional[list[str]],
     loss_function_factory: LossFunctionFactory,
     observable_monitors: list[ObservableMonitor],
 ) -> Generator[tuple[int, TrainState, jax.Array, Stats, dict]]:
@@ -71,6 +72,9 @@ def fit_wf(  # noqa: C901
             params,
             opt_state,
             (phys_conf, weight, data),
+        )
+        params = pmap_merge_states(
+            params, tuple(merge_keys) if merge_keys is not None else None
         )
         # E_loc and ratios have been `all_gather`ed in the loss function
         # because KFAC only returns their mean over the devices

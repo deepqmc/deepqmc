@@ -33,7 +33,9 @@ def init_wf_params(
         f'Number of model parameters: {state_mult}{num_params // electronic_states}'
     )
     if merge_keys is not None and electronic_states > 1:
-        params = merge_states(params, merge_keys)
+        params = merge_states(
+            params, tuple(merge_keys) if merge_keys is not None else None
+        )
         merged_params = '\n  - '.join(
             str(key) for key in filter_dict(params, merge_keys).keys()
         )
