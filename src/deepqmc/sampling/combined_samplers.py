@@ -171,7 +171,7 @@ class MultiNuclearGeometrySampler:
         mol_idxs: jax.Array,
     ) -> tuple[SamplerState, PhysicalConfiguration, Stats]:
         rngs_elec, rngs_nuc = jax.random.split(rng, (2, len(mol_idxs)))
-        counter = smpl_state.pop('update_nuc_counter')
+        counter = smpl_state.pop('update_nuc_counter', None)
         smpl_state_it = jax.tree_util.tree_map(lambda x: x[mol_idxs], smpl_state)
         if self.update_nuc_period is not None:
             condition = counter[mol_idxs] == self.update_nuc_period - 1
