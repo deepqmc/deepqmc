@@ -8,8 +8,10 @@ from typing import Optional, Union
 import hydra
 from hydra.errors import InstantiationException
 from hydra.utils import call, get_original_cwd, to_absolute_path
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 from tqdm.auto import tqdm
+
+from deepqmc.types import TrainState
 
 from .molecule import Molecule, read_molecule_dataset
 from .validate_kwargs import validate_kwargs
@@ -82,16 +84,17 @@ def assert_valid_restdir(restdir: Path, workdir: str):
         )
 
 
-def train_from_checkpoint(workdir, restdir, evaluate, chkpt='LAST', **kwargs):
-    restdir = Path(to_absolute_path(get_original_cwd())) / restdir
-    assert_valid_restdir(restdir, workdir)
-    cfg, step, train_state = task_from_workdir(restdir, chkpt)
-    while cfg.task.get('restdir', False):
-        restdir = Path(to_absolute_path(get_original_cwd())) / cfg.task.restdir
-        assert_valid_restdir(restdir, workdir)
-        cfg, *_ = task_from_workdir(restdir, 'LAST')
-    log.info(f'Found original config file in {restdir}')
+def train_from_checkpoint(
+    workdir: str, restdir: str, evaluate: bool, chkpt='LAST', **kwargs
+):
+    restdir_path = Path(restdir)
+    if not restdir_path.is_absolute():
+        restdir_path = Path(to_absolute_path(get_original_cwd())) / restdir
+    cfg, step, train_state, task_overrides = task_from_chain_of_workdirs(
+        workdir, restdir_path, chkpt
+    )
     cfg.task.workdir = workdir
+    kwargs = {**OmegaConf.to_object(task_overrides), **kwargs}  # type: ignore
     if not kwargs.pop('keep_sampler_state', not evaluate):
         train_state = train_state._replace(sampler=None)
     if evaluate:
@@ -101,27 +104,82 @@ def train_from_checkpoint(workdir, restdir, evaluate, chkpt='LAST', **kwargs):
         cfg.task.init_step = step
     cfg = OmegaConf.to_object(cfg)
     assert isinstance(cfg, dict)
-    call(cfg['task'], _convert_='all', train_state=train_state, **kwargs)
+    call(cfg['task'], _convert_='all', train_state=train_state, **kwargs)  # type: ignore
 
 
-def task_from_workdir(workdir, chkpt):
+def task_from_chain_of_workdirs(workdir: str, restdir: Path, chkpt: str):
+    assert_valid_restdir(restdir, workdir)
+    cfg, step, train_state, next_restdir, task_overrides = task_from_workdir(
+        restdir, chkpt, DictConfig({})
+    )
+    assert train_state is not None
+    while next_restdir:
+        restdir = (
+            next_restdir
+            if next_restdir.is_absolute()
+            else Path(to_absolute_path(get_original_cwd())) / next_restdir
+        )
+        assert_valid_restdir(restdir, workdir)
+        cfg, _, _, next_restdir, task_overrides = task_from_workdir(
+            restdir, 'LAST', task_overrides
+        )
+    log.info(f'Found original config file in {restdir}, from checkpoint {chkpt}')
+    return cfg, step, train_state, task_overrides
+
+
+def update_task_overrides(
+    cfg: DictConfig,
+    task_overrides: DictConfig,
+) -> DictConfig:
+    updated_task_overrides = OmegaConf.merge(
+        DictConfig(
+            {
+                key: cfg.task[key]
+                for key in cfg.task.keys()
+                if key not in ['keep_sampler_state', 'workdir', '_target_', 'chkpt']
+            }
+        ),
+        task_overrides,
+    )
+    assert isinstance(updated_task_overrides, DictConfig)
+    return updated_task_overrides
+
+
+def task_from_workdir(
+    workdir: Path, chkpt: str, task_overrides: DictConfig
+) -> tuple[DictConfig, int, Optional[TrainState], Optional[Path], DictConfig]:
     from .train import CheckpointStore
 
     workdir = Path(workdir)
     assert workdir.is_dir()
     cfg = OmegaConf.load(workdir / '.hydra' / 'config.yaml')
-    if chkpt == 'LAST':
-        chkpts = list(workdir.glob(CheckpointStore.PATTERN.format('*')))
-        if not chkpts:
-            chkpts = (workdir / 'training').glob(CheckpointStore.PATTERN.format('*'))
-        chkpt = sorted(
-            chkpts,
-            key=lambda path: CheckpointStore.extract_step_from_filename(path.name),
-        )[-1]
-    else:
-        chkpt = workdir / chkpt
-    step, train_state = CheckpointStore.load(chkpt)
-    return cfg, step, train_state
+    assert isinstance(cfg, DictConfig), 'DeepQMC config should always be a DictConfig.'
+    assert not cfg.task.pop(
+        'evaluate', False
+    ), f'Cannot restart from evaluation job in {workdir}.'
+    restdir = cfg.task.pop('restdir', None)
+    if restdir:
+        task_overrides = update_task_overrides(cfg, task_overrides)
+        restdir = Path(restdir)
+    try:
+        if chkpt == 'LAST':
+            chkpts = workdir.glob(CheckpointStore.PATTERN.format('*'))
+            if not chkpts:
+                chkpts = (workdir / 'training').glob(
+                    CheckpointStore.PATTERN.format('*')
+                )
+            chkpt_path = sorted(
+                chkpts,
+                key=lambda path: CheckpointStore.extract_step_from_filename(path.name),
+            )[-1]
+        else:
+            chkpt_path = workdir / chkpt
+        step, train_state = CheckpointStore.load(chkpt_path)
+    except Exception:
+        # No checkpoint found, continue without train state
+        step = 0
+        train_state = None
+    return cfg, step, train_state, restdir, task_overrides
 
 
 class TqdmStream:
@@ -182,7 +240,8 @@ def main(cfg):
     maybe_log_code_version()
     cfg = OmegaConf.to_object(cfg)
     assert isinstance(cfg, dict)
-    validate_kwargs(cfg['task'])
+    if not cfg['task'].get('restdir', False):
+        validate_kwargs(cfg['task'])
     call(cfg['task'], _convert_='all')
 
 
