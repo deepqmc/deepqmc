@@ -14,8 +14,9 @@ import jax.numpy as jnp
 import yaml
 from hydra.core.global_hydra import GlobalHydra
 from hydra.utils import get_original_cwd, to_absolute_path
+from pyscf.data.elements import _symbol
 
-from .units import angstrom_to_bohr, null
+from .units import angstrom_to_bohr, bohr_to_angstrom, null
 
 __all__ = ['Molecule']
 
@@ -100,6 +101,16 @@ class Molecule:
             ')'
         )
 
+    def xyz_string(self) -> str:
+        xyz = f'{len(self)}\n\n'
+        xyz += '\n'.join(
+            f'{_symbol(charge)} {coord[0]} {coord[1]} {coord[2]}'
+            for charge, coord in zip(
+                self.charges.astype(int), bohr_to_angstrom(self.coords)
+            )
+        )
+        return xyz
+
     @classmethod
     def from_name(cls, name: str) -> Self:
         """Create a molecule from a database of named molecules.
@@ -129,6 +140,16 @@ class Molecule:
                 file = to_absolute_path(file)
         with open(file, 'r') as stream:
             return cls(**yaml.safe_load(stream))
+
+    def update_coords(self, coords: jax.Array, unit: str = 'bohr') -> Self:
+        return self.__class__(
+            coords=coords,
+            charge=self.charge,
+            spin=self.spin,
+            charges=self.charges,
+            unit=unit,
+            data=self.data,
+        )
 
 
 class MoleculeDict(OrderedDict):
