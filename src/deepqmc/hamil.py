@@ -121,11 +121,17 @@ class MolecularHamiltonian(Hamiltonian):
             NuclearCoulombPotential | GaussianTypeECP | PseudoHamiltonian
         )  # mypy otherwise complains about the following assignment
         if self.ecp_mask.any():
-            assert ecp_type is not None, 'ECP type must be specified if ECPs are used.'
-            if 'PH' in str(ecp_type):
-                self.potential = PseudoHamiltonian(mol.charges, ecp_type, self.ecp_mask)
+            assert (
+                self.ecp_type is not None
+            ), 'ECP type must be specified if ECPs are used.'
+            if 'PH' in str(self.ecp_type):
+                self.potential = PseudoHamiltonian(
+                    mol.charges, self.ecp_type, self.ecp_mask
+                )
             else:
-                self.potential = GaussianTypeECP(mol.charges, ecp_type, self.ecp_mask)
+                self.potential = GaussianTypeECP(
+                    mol.charges, self.ecp_type, self.ecp_mask
+                )
         else:
             self.potential = NuclearCoulombPotential(mol.charges)
 
