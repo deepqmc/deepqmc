@@ -149,6 +149,7 @@ def train(  # noqa: C901
     rng = jax.random.PRNGKey(seed + jax.process_index())
     rng, rng_smpl = jax.random.split(rng)
     mols = mols if isinstance(mols, Sequence) else [hamil.mol]
+    mols = mols * molecule_batch_size if len(mols) == 1 else mols
     molecule_idx_sampler, sampler = sampler_factory(
         rng_smpl,
         hamil,
@@ -393,20 +394,23 @@ def train(  # noqa: C901
 
 def update_progress(pbar, best_ene, ewm_energies, mol_idxs, stats):
     r"""Update the tqdm progress bar, maybe print progress message."""
-    for i, mol_idx in enumerate(mol_idxs):
-        ewm_energies[mol_idx] = [
-            ufloat(mean, sqerr)
-            for (mean, sqerr) in zip(
-                stats['energy/ewm'][i], stats['energy/ewm_error'][i]
+    if stats.get('energy/ewm') is not None:
+        for i, mol_idx in enumerate(mol_idxs):
+            ewm_energies[mol_idx] = [
+                ufloat(mean, sqerr)
+                for (mean, sqerr) in zip(
+                    stats['energy/ewm'][i], stats['energy/ewm_error'][i]
+                )
+            ]
+        energies = '|'.join(
+            '(' + '|'.join(f'{es:S}' for es in em) + ')' for em in ewm_energies
+        )
+        pbar.set_postfix(E=energies)
+        if best_ene is None or jnp.any(
+            jnp.array(
+                jax.tree.map(lambda x, y: x.s < 0.5 * y.s, ewm_energies, best_ene)
             )
-        ]
-    energies = '|'.join(
-        '(' + '|'.join(f'{es:S}' for es in em) + ')' for em in ewm_energies
-    )
-    pbar.set_postfix(E=energies)
-    if best_ene is None or jnp.any(
-        jnp.array(jax.tree.map(lambda x, y: x.s < 0.5 * y.s, ewm_energies, best_ene))
-    ):
-        best_ene = ewm_energies
-        log.info(f'Progress: {pbar.n + 1}/{pbar.total}, energy = {energies}')
+        ):
+            best_ene = ewm_energies
+            log.info(f'Progress: {pbar.n + 1}/{pbar.total}, energy = {energies}')
     return ewm_energies, best_ene

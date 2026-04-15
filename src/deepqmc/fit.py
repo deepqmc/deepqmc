@@ -78,7 +78,8 @@ def fit_wf(  # noqa: C901
         )
         # E_loc and ratios have been `all_gather`ed in the loss function
         # because KFAC only returns their mean over the devices
-        E_loc = E_loc[0, local_slice()]
+        if E_loc is not None:
+            E_loc = E_loc[0, local_slice()]
         if ratios is not None:
             ratios = ratios[0, local_slice()]
         if not isinstance(opt, NoOptimizer):
@@ -127,17 +128,20 @@ def fit_wf(  # noqa: C901
         stats = select_one_device(pmap_pmean(stats))
         mol_idxs = select_one_device(mol_idxs)
 
-        ewm_state = update_ewm(stats['local_energy/mean'], ewm_state, mol_idxs)
-        std_ewm_state = update_ewm(stats['local_energy/std'], std_ewm_state, mol_idxs)
+        if stats.get('local_energy/mean') is not None:
+            ewm_state = update_ewm(stats['local_energy/mean'], ewm_state, mol_idxs)
+            std_ewm_state = update_ewm(
+                stats['local_energy/std'], std_ewm_state, mol_idxs
+            )
 
-        data = {
-            'energy_ewm': replicate_on_devices(ewm_state.mean),
-            'std_ewm': replicate_on_devices(std_ewm_state.mean),
-        }
-        stats |= {
-            'energy/ewm': ewm_state.mean[mol_idxs],
-            'energy/ewm_error': jnp.sqrt(ewm_state.sqerr[mol_idxs]),
-            'energy/std_ewm': std_ewm_state.mean[mol_idxs],
-        }
+            data = {
+                'energy_ewm': replicate_on_devices(ewm_state.mean),
+                'std_ewm': replicate_on_devices(std_ewm_state.mean),
+            }
+            stats |= {
+                'energy/ewm': ewm_state.mean[mol_idxs],
+                'energy/ewm_error': jnp.sqrt(ewm_state.sqerr[mol_idxs]),
+                'energy/std_ewm': std_ewm_state.mean[mol_idxs],
+            }
 
         yield step, train_state, mol_idxs, stats, observable_samples

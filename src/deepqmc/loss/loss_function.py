@@ -55,7 +55,7 @@ class LossFunction(Protocol):
         params: list[Params],
         rng: KeyArray,
         batch: Batch,
-    ) -> tuple[jax.Array, tuple[Energy, Optional[jax.Array], Stats]]: ...
+    ) -> tuple[jax.Array, tuple[Optional[Energy], Optional[jax.Array], Stats]]: ...
 
 
 class LossFunctionFactory(Protocol):
@@ -108,6 +108,28 @@ def compute_log_psi_tangent(
     kfac_jax.register_normal_predictive_distribution(log_psi[:, None])
     log_psi_tangent = jnp.stack(log_psi_tangents, axis=1)
     return log_psi_tangent
+
+
+def create_idle_loss_fn(
+    hamil: MolecularHamiltonian, ansatz: Ansatz, **kwargs
+) -> LossFunction:
+    @jax.custom_jvp
+    def loss_fn(
+        params: list[Params], rng: KeyArray, batch: Batch
+    ) -> tuple[jax.Array, tuple[None, Optional[jax.Array], Stats]]:
+        return jnp.array(0.0), (None, None, {})
+
+    @loss_fn.defjvp
+    def loss_fn_jvp(
+        primals: tuple[list[Params], KeyArray, Batch],
+        tangents: tuple[list[Params], KeyArray, Batch],
+    ) -> tuple[
+        tuple[jax.Array, tuple[None, Optional[jax.Array], Stats]],
+        tuple[jax.Array, tuple[None, Optional[jax.Array], Stats]],
+    ]:
+        return (jnp.array(0.0), (None, None, {})), (jnp.array(0.0), (None, None, {}))  # type: ignore
+
+    return loss_fn
 
 
 def create_loss_fn(
