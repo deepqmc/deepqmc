@@ -22,7 +22,7 @@ def helpers():
 class Helpers:
     @staticmethod
     def pytree_allclose(tree1, tree2):
-        close = jax.tree_util.tree_map(jax.numpy.allclose, tree1, tree2)
+        close = jax.tree.map(jax.numpy.allclose, tree1, tree2)
         return jax.tree_util.tree_reduce(lambda x, y: x and y, close, True).item()
 
     @staticmethod

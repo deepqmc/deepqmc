@@ -9,7 +9,7 @@ import numpy as np
 
 def gather_electron_axis(pytree, electron_batch_axis=4):
     r"""Gather the electron samples from the devices to a single axis."""
-    return jax.tree_util.tree_map(
+    return jax.tree.map(
         lambda x: np.moveaxis(x, 1, electron_batch_axis - 1).reshape(
             x.shape[0],
             *x.shape[2:electron_batch_axis],

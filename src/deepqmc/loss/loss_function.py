@@ -92,7 +92,7 @@ def compute_log_psi_tangent(
     for i, (state_params, state_params_tangent) in enumerate(
         zip(params, params_tangent)
     ):
-        flat_phys_conf = jax.tree_util.tree_map(
+        flat_phys_conf = jax.tree.map(
             partial(lambda i, x: x[:, i].reshape(-1, *x.shape[n_batch_dims:]), i),
             phys_conf,
         )
@@ -184,7 +184,6 @@ def create_loss_fn(
         loss, energy_stats = compute_mean_energy(local_energy, weight)
         stats = hamil_stats | energy_stats
         if phys_conf.batch_shape[1] > 1:
-            assert alpha is not None
             psi_ratio, psi_stats = compute_psi_ratio(ansatz, stacked_params, phys_conf)
             overlap_loss, overlap_stats = compute_mean_overlap(psi_ratio, weight)
             loss += alpha * overlap_loss

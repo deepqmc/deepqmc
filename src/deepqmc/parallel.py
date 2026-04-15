@@ -88,7 +88,7 @@ def replicate_on_devices(pytree, globally=False):
     pytree = jax.device_put_replicated(pytree, devices=jax.local_devices())
     if globally:
         # broadcast_on_to_all returns numpy arrays for some reason
-        pytree = jax.tree_util.tree_map(
+        pytree = jax.tree.map(
             jax.numpy.asarray,
             broadcast_one_to_all(pytree),
         )
@@ -118,7 +118,7 @@ def select_one_device(pytree, idx=0):
         pytree: the input pytree of arrays.
         idx: the index of the entry to select from the leading device axis.
     """
-    return jax.tree_util.tree_map(lambda x: x[idx], pytree)
+    return jax.tree.map(lambda x: x[idx], pytree)
 
 
 def split_rng_key_to_devices(rng):
@@ -276,7 +276,7 @@ def gather_electrons_on_one_device(pytree, electron_batch_axis=3):
     """
     all_gathered = pmap_all_gather(pytree)
     on_one_device = select_one_device(all_gathered)
-    return jax.tree_util.tree_map(
+    return jax.tree.map(
         lambda x: jax.numpy.moveaxis(x, 0, electron_batch_axis - 1).reshape(
             *x.shape[1:electron_batch_axis], -1, *x.shape[electron_batch_axis + 1 :]
         ),
@@ -306,7 +306,7 @@ def scatter_electrons_to_devices(pytree: T) -> T:
             :data:`[n_device, molecule_batch_size, electronic_states,
             electron_batch_size / n_device, ...]`
     """
-    reshaped_pytree: T = jax.tree_util.tree_map(
+    reshaped_pytree: T = jax.tree.map(
         lambda x: jax.numpy.moveaxis(
             x.reshape(*x.shape[:2], jax.device_count(), -1, *x.shape[3:]), 2, 0
         )[local_slice()],

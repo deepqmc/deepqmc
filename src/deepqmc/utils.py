@@ -57,20 +57,20 @@ def triu_flat(x):
 
 
 def tree_norm(x):
-    return jax.tree_util.tree_reduce(lambda norm, x: norm + jnp.linalg.norm(x), x, 0)
+    return jax.tree.reduce(lambda norm, x: norm + jnp.linalg.norm(x), x, 0)
 
 
 def tree_stack(trees: list[T]) -> T:
-    return jax.tree_util.tree_map(lambda *v: jnp.stack(v), *trees)
+    return jax.tree.map(lambda *v: jnp.stack(v), *trees)
 
 
 def tree_unstack(tree: T) -> list[T]:
-    leaves, treedef = jax.tree_util.tree_flatten(tree)
+    leaves, treedef = jax.tree.flatten(tree)
     return [treedef.unflatten(leaf) for leaf in zip(*leaves)]
 
 
 def tree_any(x):
-    return jax.tree_util.tree_reduce(lambda is_any, leaf: is_any or leaf, x, False)
+    return jax.tree.reduce(lambda is_any, leaf: is_any or leaf, x, False)
 
 
 def norm(rs, safe=False, axis=-1):

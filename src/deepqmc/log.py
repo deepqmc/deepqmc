@@ -13,7 +13,6 @@ import h5py
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.tree_util import tree_map
 from tensorboardX import SummaryWriter
 
 from .parallel import (
@@ -122,7 +121,7 @@ class CheckpointStore:
 
     def close(self):
         if all(self.buffer) and not tree_any(
-            tree_map(lambda x: x.is_deleted(), self.buffer[1])
+            jax.tree.map(lambda x: x.is_deleted(), self.buffer[1])
         ):
             self.dump()
         # If the training crashes KFAC might have already freed the buffers and the

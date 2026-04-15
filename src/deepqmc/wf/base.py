@@ -25,9 +25,7 @@ def init_wf_params(
         jnp.array(0),
     )
     params = tree_stack([ansatz.init(rng, dummy_phys_conf) for rng in rng_params])
-    num_params = jax.tree_util.tree_reduce(
-        operator.add, jax.tree_util.tree_map(lambda x: x.size, params)
-    )
+    num_params = jax.tree.reduce(operator.add, jax.tree.map(lambda x: x.size, params))
     state_mult = '' if electronic_states == 1 else f'{electronic_states} x '
     log.info(
         f'Number of model parameters: {state_mult}{num_params // electronic_states}'

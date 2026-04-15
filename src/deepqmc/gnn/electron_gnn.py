@@ -4,7 +4,6 @@ from itertools import accumulate
 import haiku as hk
 import jax
 import jax.numpy as jnp
-from jax import tree_util
 
 from ..hkext import MLP
 from .graph import Graph, GraphNodes, GraphUpdate, MolecularGraphEdgeBuilder
@@ -598,14 +597,14 @@ class ElectronEmbedding(hk.Module):
                 self.positional_embeddings.keys(),
                 self_interaction=False,
             )
-            feats = tree_util.tree_map(
+            feats = jax.tree.map(
                 lambda f, e: f(e.single_array)
                 .swapaxes(0, 1)
                 .reshape(self.n_up + self.n_down, -1),
                 self.positional_embeddings,
                 edge_factory(phys_conf),
             )
-            x = tree_util.tree_reduce(partial(jnp.concatenate, axis=1), feats)
+            x = jax.tree.reduce(partial(jnp.concatenate, axis=1), feats)
             if self.use_spin:
                 spins = jnp.concatenate([jnp.ones(self.n_up), -jnp.ones(self.n_down)])[
                     :, None

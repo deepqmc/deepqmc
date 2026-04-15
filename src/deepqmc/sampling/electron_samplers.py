@@ -126,7 +126,7 @@ class MetropolisSampler:
             split_dict(d, lambda k: k in self.WALKER_STATE) for d in (prop, state)
         )
         state = {
-            **jax.tree_util.tree_map(
+            **jax.tree.map(
                 lambda xp, x: jax.vmap(jnp.where)(accepted, xp, x), prop, state
             ),
             **other,
@@ -344,7 +344,7 @@ class ResampledSampler:
         idx = multinomial_resampling(rng_re, jnp.exp(state['log_weight']))
         state, other = split_dict(state, lambda k: k in self.WALKER_STATE)  # type: ignore
         state = {
-            **jax.tree_util.tree_map(lambda x: x[idx], state),
+            **jax.tree.map(lambda x: x[idx], state),
             **other,
             'step': jnp.array(0),
             'log_weight': jnp.zeros_like(other['log_weight']),

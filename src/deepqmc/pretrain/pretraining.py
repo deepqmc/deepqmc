@@ -76,7 +76,7 @@ def pretrain(  # noqa: C901
                 jnp.apply_along_axis(jnp.pad, -1, target[1], (n_up, 0)),
             )
         # in full determinant mode off diagonal elements are pretrained against zero
-        losses = jax.tree_util.tree_map(lambda o, t: (o - t) ** 2, orbs, target)
+        losses = jax.tree.map(lambda o, t: (o - t) ** 2, orbs, target)
         loss = sum(map(jnp.mean, losses))
         per_sample_losses = sum(map(partial(jnp.mean, axis=(-3, -2, -1)), losses))
         return loss, per_sample_losses

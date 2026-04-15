@@ -56,7 +56,7 @@ def compute_local_energy(
         (0, None, 0),
     )(rng, params, phys_conf)
 
-    stats = jax.tree_util.tree_map(lambda x: x.mean(axis=-1), hamil_stats)
+    stats = jax.tree.map(lambda x: x.mean(axis=-1), hamil_stats)
     return local_energy, stats
 
 

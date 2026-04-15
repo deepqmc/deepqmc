@@ -5,7 +5,6 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 from haiku.initializers import VarianceScaling
-from jax import tree_util
 from jax.nn import sigmoid, softplus
 
 
@@ -133,7 +132,7 @@ class ResidualConnection:
             z = x + y
             return z / jnp.sqrt(2) if self.normalize else z
 
-        return tree_util.tree_map(leaf_residual, inp, update)
+        return jax.tree.map(leaf_residual, inp, update)
 
 
 class SumPool:
@@ -148,7 +147,7 @@ class SumPool:
         assert out_dim == 1
 
     def __call__(self, x):
-        return tree_util.tree_map(lambda leaf: leaf.sum(axis=-1, keepdims=True), x)
+        return jax.tree.map(lambda leaf: leaf.sum(axis=-1, keepdims=True), x)
 
 
 class Identity:

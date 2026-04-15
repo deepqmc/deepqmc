@@ -14,7 +14,7 @@ def load_parameters(
     _step, train_state = CheckpointStore.load(chkpt_path, deserialize=False)
     params = train_state.params
     if squeeze_electronic_states:
-        params = jax.tree_util.tree_map(lambda x: x.squeeze(axis=0), params)
+        params = jax.tree.map(lambda x: x.squeeze(axis=0), params)
 
     return params
 

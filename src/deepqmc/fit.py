@@ -58,7 +58,7 @@ def fit_wf(  # noqa: C901
         smpl_state, params, opt_state = train_state
         rng_sample, rng_kfac = split_on_devices(rng, 2)
         mol_idxs = molecule_idx_sampler.sample()
-        data = jax.tree_util.tree_map(lambda x: x[:, mol_idxs[0]], data)
+        data = jax.tree.map(lambda x: x[:, mol_idxs[0]], data)
         smpl_state, phys_conf, smpl_stats = sample_wf(
             rng_sample, smpl_state, params, mol_idxs
         )
@@ -112,7 +112,7 @@ def fit_wf(  # noqa: C901
     if opt_state is None:
         rng, rng_sample, rng_opt = split_on_devices(rng, 3)
         idxs = molecule_idx_sampler.sample()
-        data = jax.tree_util.tree_map(lambda x: x[:, idxs[0]], data)
+        data = jax.tree.map(lambda x: x[:, idxs[0]], data)
         _, init_phys_conf, _ = sample_wf(rng_sample, smpl_state, params, idxs)
         opt_state = opt.init(
             rng_opt,

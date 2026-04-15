@@ -172,7 +172,7 @@ class MultiNuclearGeometrySampler:
     ) -> tuple[SamplerState, PhysicalConfiguration, Stats]:
         rngs_elec, rngs_nuc = jax.random.split(rng, (2, len(mol_idxs)))
         counter = smpl_state.pop('update_nuc_counter', None)
-        smpl_state_it = jax.tree_util.tree_map(lambda x: x[mol_idxs], smpl_state)
+        smpl_state_it = jax.tree.map(lambda x: x[mol_idxs], smpl_state)
         if self.update_nuc_period is not None:
             condition = counter[mol_idxs] == self.update_nuc_period - 1
             smpl_state_it = jax.lax.cond(
@@ -182,12 +182,12 @@ class MultiNuclearGeometrySampler:
                 rngs_nuc,
                 smpl_state_it,
             )
-            smpl_state_it = jax.tree_util.tree_map(
+            smpl_state_it = jax.tree.map(
                 lambda a, b: better_where(condition, a, b[mol_idxs]),
                 smpl_state_it,
                 smpl_state,
             )
-            smpl_state = jax.tree_util.tree_map(
+            smpl_state = jax.tree.map(
                 lambda x, y: x.at[mol_idxs].set(y), smpl_state, smpl_state_it
             )
             counter = counter.at[mol_idxs].set(
@@ -196,7 +196,7 @@ class MultiNuclearGeometrySampler:
         smpl_state_it['elec'], phys_conf, stats = jax.vmap(
             self.elec_sampler.sample, (0, 0, None, 0)
         )(rngs_elec, smpl_state_it['elec'], params, smpl_state_it['nuc']['R'])
-        smpl_state = jax.tree_util.tree_map(
+        smpl_state = jax.tree.map(
             lambda x, y: x.at[mol_idxs].set(y), smpl_state, smpl_state_it
         )
         smpl_state['update_nuc_counter'] = counter
