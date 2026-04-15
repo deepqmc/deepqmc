@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from functools import partial
-from typing import Callable, Optional
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
@@ -144,7 +145,11 @@ class MetropolisSampler:
         state, acceptance = self._accept(
             rng_acc, state, prop, log_prob, self.max_age, self.target_acceptance
         )
-        stats = {
+        stats = self.compute_stats(state, acceptance)
+        return state, self.phys_conf(R, state['r']), stats
+
+    def compute_stats(self, state: SamplerState, acceptance: jax.Array) -> Stats:
+        return {
             'sampling/acceptance': acceptance,
             'sampling/tau': state['tau'],
             'sampling/age/mean': jnp.mean(state['age']),
@@ -153,7 +158,6 @@ class MetropolisSampler:
             'sampling/log_psi/std': jnp.std(state['psi'].log),
             'sampling/dists/mean': jnp.mean(pairwise_self_distance(state['r'])),
         }
-        return state, self.phys_conf(R, state['r']), stats
 
     def phys_conf(self, R: jax.Array, r: jax.Array, **kwargs) -> PhysicalConfiguration:
         if r.ndim == 2:
@@ -226,12 +230,36 @@ class LangevinSampler(MetropolisSampler):
 
 
 class OppositeSpinExchangeSampler:
+    r"""
+    Add spin swapping steps into chained samplers.
+
+    This sampler proposes moves based on swapping the positions of a random pair of
+    spin-up and spin-down electrons. This generally helps to equilibrate the spin of
+    subsystems, when separated by a low probability region in space.
+
+    To control the frequency of spin swap proposals compared to regular proposals,
+    this class performs an MCMC step with a spin swap proposal with probability
+    :data:`exchange_step_probability`, and a step with a normal proposal with
+    probability :data:`1 - exchange_step_probability`. This leads to a well defined
+    ratio between the two types of proposals when a large number of steps are
+    considered, but can lead to surprising behavior with a single or a few number of
+    sampling steps.
+
+    The sampler cannot be used as the last element of a sampler chain.
+
+    Args:
+        up_logits_fn (Callable): function returning weights for spin-up elec swaps
+        down_logits_fn (Callable): function returning weights for spin-down elec swaps
+    """
+
     def __init__(
         self,
         *,
+        exchange_step_probability: float,
         up_logits_fn: Optional[Callable] = None,
         down_logits_fn: Optional[Callable] = None,
     ):
+        self.exchange_step_probability = exchange_step_probability
         self.up_logits_fn = up_logits_fn or self.default_logits_fn
         self.down_logits_fn = down_logits_fn or self.default_logits_fn
 
@@ -260,12 +288,40 @@ class OppositeSpinExchangeSampler:
     def sample(
         self, rng: KeyArray, state: SamplerState, params: Params, R: jax.Array
     ) -> tuple[SamplerState, PhysicalConfiguration, Stats]:
-        rng_super, rng_prop, rng_acc = jax.random.split(rng, 3)
-        state, _, stats = super().sample(rng_super, state, params, R)  # type: ignore
-        prop = self._update({'r': self.exchange_proposal(rng_prop, state)}, params, R)  # type: ignore
-        log_prob = self.exchange_acc_log_prob(state, prop)
-        state, exchange_acceptance = self._accept(rng_acc, state, prop, log_prob)  # type: ignore
-        stats = {'sampling/exchange_acceptance': exchange_acceptance, **stats}
+        rng_exchange, rng_prop, rng_acc = jax.random.split(rng, 3)
+        is_exchange_step = (
+            jax.random.uniform(rng_exchange, ()) < self.exchange_step_probability
+        )
+        r_prop = jax.lax.cond(
+            is_exchange_step,
+            self.exchange_proposal,
+            self._proposal,  # type: ignore
+            rng_prop,
+            state,
+        )
+        # Computing the wave function (and gradient) is the expensive step
+        prop = self._update({'r': r_prop}, params, R)  # type: ignore
+        log_prob = jax.lax.cond(
+            is_exchange_step,
+            self.exchange_acc_log_prob,
+            self._acc_log_prob,  # type: ignore
+            state,
+            prop,
+        )
+        state, acceptance = jax.lax.cond(
+            is_exchange_step,
+            self._accept,  # type: ignore
+            partial(
+                self._accept,  # type: ignore
+                max_age=self.max_age,  # type: ignore
+                target_acceptance=self.target_acceptance,  # type: ignore
+            ),
+            rng_acc,
+            state,
+            prop,
+            log_prob,
+        )
+        stats = self.compute_stats(state, acceptance)  # type: ignore
         return state, self.phys_conf(R, state['r']), stats  # type: ignore
 
 
