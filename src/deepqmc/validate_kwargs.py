@@ -23,9 +23,13 @@ def validate_pretrain_kwargs(cfg):
             ' pretraining.'
         )
 
-    if cfg.get('electronic_states', 1) > 1 and (
-        not cfg.get('pretrain_kwargs', False)
-        or not cfg['pretrain_kwargs']['scf_kwargs'].get('cas', None)
+    if (
+        cfg.get('electronic_states', 1) > 1
+        and cfg.get('pretrain_steps', 0) > 0
+        and (
+            not cfg.get('pretrain_kwargs', False)
+            or not cfg['pretrain_kwargs']['scf_kwargs'].get('cas', None)
+        )
     ):
         log.warning(
             'No CAS specified, all electronic states '
@@ -44,7 +48,7 @@ def validate_batch_size(cfg):
         call(cfg.get('mols')) if isinstance(cfg.get('mols'), dict) else cfg.get('mols')
     )
     len_mols = len(mols) if mols is not None else 1
-    assert cfg.get('molecule_batch_size', 0) <= len_mols, (
+    assert cfg.get('molecule_batch_size', 0) <= len_mols or len_mols == 1, (
         f'Molecule batch size ({cfg.get("molecule_batch_size")}) is larger than '
         f'the number of molecules in the dataset ({len_mols})!'
     )
