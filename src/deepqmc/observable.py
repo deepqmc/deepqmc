@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from functools import partial
 from typing import Any, Optional, Type
@@ -8,12 +9,16 @@ import jax.numpy as jnp
 
 from .force import (
     antithetic_wrapper,
+    evaluate_finite_difference_force,
+    evaluate_hf_force_ac_zb,
     evaluate_hf_force_ac_zv,
     evaluate_hf_force_ac_zvq,
+    evaluate_hf_force_ac_zvqzb,
     evaluate_hf_force_ac_zvzb,
     evaluate_hf_force_ac_zvzbq,
     evaluate_hf_force_bare,
 )
+from .geom.coordinate_transform import InvertibleCoordinateTransform
 from .hamil import MolecularHamiltonian
 from .parallel import (
     all_device_max,
@@ -38,6 +43,18 @@ from .types import (
 __all__ = ['default_observable_monitors', 'EnergyMonitor', 'WaveFunctionMonitor']
 
 
+def rng_wrapper(observable_fn_factory):
+    def wrapped_observable_fn_factory(*args, **kwargs):
+        observable_fn = observable_fn_factory(*args, **kwargs)
+
+        def wrapped_observable_fn(rng: KeyArray, *args, **kwargs):
+            return observable_fn(*args, **kwargs)
+
+        return wrapped_observable_fn
+
+    return wrapped_observable_fn_factory
+
+
 def compute_mean_and_std(
     name: str, observable_samples: jax.Array, axis: int = -1
 ) -> dict[str, jax.Array]:
@@ -51,14 +68,13 @@ class ObservableMonitor:
     name: str
     save_samples: bool
     period: int
-    observable_fn: Optional[Callable]
+    observable_fn: Optional[Callable] = None
+    requires_energy: bool = False
 
     def __init__(self, save_samples: bool, period: int):
         assert period > 0
         self.save_samples = save_samples
         self.period = period
-        self.observable_fn = None
-        self.requires_energy = False
 
     def finalize(
         self, hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction
@@ -109,105 +125,240 @@ class ObservableMonitor:
         return stats
 
 
-def rng_wrapper(observable_fn):
-    def observable_fn_rng(rng, *args, **kwargs):
-        return observable_fn(*args, **kwargs)
-
-    return observable_fn_rng
-
-
 class SpinMonitor(ObservableMonitor):
     name: str = 'spin'
 
     def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
-        self.observable_fn = rng_wrapper(evaluate_spin(hamil, wf))
+        self.observable_fn = rng_wrapper(evaluate_spin)(hamil, wf)
         return self
 
 
-class BareForceMonitor(ObservableMonitor):
+class BaseForceMonitor(ObservableMonitor, ABC):
+    def __init__(
+        self,
+        save_samples: bool,
+        period: int,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ):
+        super().__init__(save_samples, period)
+        self.coordinate_transform = coordinate_transform
+
+    def finalize(
+        self, hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction
+    ) -> Self:
+        self.observable_fn = self.evaluate_hf_force(
+            hamil, wf, self.coordinate_transform
+        )
+        return self
+
+    @staticmethod
+    @abstractmethod
+    def evaluate_hf_force(
+        hamil: MolecularHamiltonian,
+        wf: ParametrizedWaveFunction,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ) -> Callable:
+        pass
+
+
+class BaseForceMonitorNotRequiringEnergy(BaseForceMonitor, ABC):
+    requires_energy = False
+
+    @staticmethod
+    @abstractmethod
+    def evaluate_hf_force(
+        hamil: MolecularHamiltonian,
+        wf: ParametrizedWaveFunction,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ) -> Callable[[KeyArray, Params, PhysicalConfiguration], jax.Array]:
+        pass
+
+
+class BaseForceMonitorRequiringEnergy(BaseForceMonitor, ABC):
+    requires_energy = True
+
+    @staticmethod
+    @abstractmethod
+    def evaluate_hf_force(
+        hamil: MolecularHamiltonian,
+        wf: ParametrizedWaveFunction,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ) -> Callable[[KeyArray, Params, PhysicalConfiguration, Energy, Energy], jax.Array]:
+        pass
+
+
+class BareForceMonitor(BaseForceMonitorNotRequiringEnergy):
     name: str = 'hf_force_bare'
 
-    def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
-        self.observable_fn = evaluate_hf_force_bare(hamil, wf)
-        return self
+    @staticmethod
+    def evaluate_hf_force(
+        hamil: MolecularHamiltonian,
+        wf: ParametrizedWaveFunction,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ) -> Callable[[KeyArray, Params, PhysicalConfiguration], jax.Array]:
+        return evaluate_hf_force_bare(hamil, wf, coordinate_transform)
 
 
-class BareForceAntiMonitor(ObservableMonitor):
+class BareForceAntiMonitor(BareForceMonitor):
     name: str = 'hf_force_bare_anti'
 
-    def __init__(self, save_samples: bool, period: int, cutoff: float = 0.3):
-        super().__init__(save_samples, period)
+    def __init__(
+        self,
+        save_samples: bool,
+        period: int,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+        cutoff: float = 0.3,
+    ):
+        super().__init__(save_samples, period, coordinate_transform)
         self.cutoff = cutoff
 
-    def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
+    def finalize(
+        self, hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction
+    ) -> Self:
         self.observable_fn = antithetic_wrapper(
-            evaluate_hf_force_bare(hamil, wf), wf, self.cutoff
+            self.evaluate_hf_force(hamil, wf, self.coordinate_transform),  # type: ignore
+            wf,
+            self.cutoff,
         )
         return self
 
+    @staticmethod
+    def evaluate_hf_force(
+        hamil: MolecularHamiltonian,
+        wf: ParametrizedWaveFunction,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ) -> Callable[[KeyArray, Params, PhysicalConfiguration], jax.Array]:
+        return evaluate_hf_force_bare(hamil, wf, coordinate_transform)
 
-class ACZVForceMonitor(ObservableMonitor):
+
+class ACZVForceMonitor(BaseForceMonitorRequiringEnergy):
     name: str = 'hf_force_ac_zv'
 
-    def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
-        self.observable_fn = evaluate_hf_force_ac_zv(hamil, wf)
-        return self
+    @staticmethod
+    def evaluate_hf_force(
+        hamil: MolecularHamiltonian,
+        wf: ParametrizedWaveFunction,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ) -> Callable[[KeyArray, Params, PhysicalConfiguration, Energy, Energy], jax.Array]:
+        return evaluate_hf_force_ac_zv(hamil, wf, coordinate_transform)
 
 
-class ACZVForceAntiMonitor(ObservableMonitor):
-    name: str = 'hf_force_ac_zv_anti'
-
-    def __init__(self, save_samples: bool, period: int, cutoff: float = 0.3):
-        super().__init__(save_samples, period)
-        self.cutoff = cutoff
-
-    def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
-        self.observable_fn = antithetic_wrapper(
-            evaluate_hf_force_ac_zv(hamil, wf), wf, self.cutoff
-        )
-        return self
-
-
-class ACZVZBForceMonitor(ObservableMonitor):
+class ACZVZBForceMonitor(BaseForceMonitorRequiringEnergy):
     name: str = 'hf_force_ac_zvzb'
 
-    def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
-        self.observable_fn = evaluate_hf_force_ac_zvzb(hamil, wf)
-        self.requires_energy = True
-        return self
+    @staticmethod
+    def evaluate_hf_force(
+        hamil: MolecularHamiltonian,
+        wf: ParametrizedWaveFunction,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ) -> Callable[[KeyArray, Params, PhysicalConfiguration, Energy, Energy], jax.Array]:
+        return evaluate_hf_force_ac_zvzb(hamil, wf, coordinate_transform)
 
 
-class ACZVQForceMonitor(ObservableMonitor):
+class ACZBForceMonitor(BaseForceMonitorRequiringEnergy):
+    name: str = 'hf_force_ac_zb'
+
+    @staticmethod
+    def evaluate_hf_force(
+        hamil: MolecularHamiltonian,
+        wf: ParametrizedWaveFunction,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ) -> Callable[[KeyArray, Params, PhysicalConfiguration, Energy, Energy], jax.Array]:
+        return evaluate_hf_force_ac_zb(hamil, wf, coordinate_transform)
+
+
+class ACZVQForceMonitor(BaseForceMonitorNotRequiringEnergy):
     name: str = 'hf_force_ac_zvq'
 
-    def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
+    def finalize(
+        self, hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction
+    ) -> Self:
         assert not jnp.any(hamil.ecp_mask), 'Use ACZV for forces with pseudo-potentials'
-        self.observable_fn = rng_wrapper(evaluate_hf_force_ac_zvq(hamil, wf))
-        return self
+        return super().finalize(hamil, wf)
+
+    @staticmethod
+    def evaluate_hf_force(
+        hamil: MolecularHamiltonian,
+        wf: ParametrizedWaveFunction,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ):
+        return rng_wrapper(evaluate_hf_force_ac_zvq)(hamil, wf, coordinate_transform)
 
 
-class ACZVQForceAntiMonitor(ObservableMonitor):
+class ACZVQForceAntiMonitor(ACZVQForceMonitor):
     name: str = 'hf_force_ac_zvq_anti'
 
-    def __init__(self, save_samples: bool, period: int, cutoff: float = 0.3):
-        super().__init__(save_samples, period)
+    def __init__(
+        self,
+        save_samples: bool,
+        period: int,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+        cutoff: float = 0.3,
+    ):
+        super().__init__(save_samples, period, coordinate_transform)
         self.cutoff = cutoff
 
-    def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
+    def finalize(
+        self, hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction
+    ) -> Self:
+        assert not jnp.any(
+            hamil.ecp_mask
+        ), 'antithetic ACZVQ forces are not implemented with ECPs'
         self.observable_fn = antithetic_wrapper(
-            rng_wrapper(evaluate_hf_force_ac_zvq(hamil, wf)), wf, self.cutoff
+            self.evaluate_hf_force(hamil, wf, self.coordinate_transform),
+            wf,
+            self.cutoff,
         )
         return self
 
 
-class ACZVZBQForceMonitor(ObservableMonitor):
+class ACZVZBQForceMonitor(BaseForceMonitorRequiringEnergy):
     name: str = 'hf_force_ac_zvzbq'
+
+    def finalize(
+        self, hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction
+    ) -> Self:
+        assert not jnp.any(
+            hamil.ecp_mask
+        ), 'Use ACZVZB for forces with pseudo-potentials'
+        return super().finalize(hamil, wf)
+
+    @staticmethod
+    def evaluate_hf_force(
+        hamil: MolecularHamiltonian,
+        wf: ParametrizedWaveFunction,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ):
+        return rng_wrapper(evaluate_hf_force_ac_zvzbq)(hamil, wf, coordinate_transform)
+
+
+class ACZVQZBForceMonitor(BaseForceMonitorRequiringEnergy):
+    name: str = 'hf_force_ac_zvqzb'
 
     def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
         assert not jnp.any(
             hamil.ecp_mask
         ), 'Use ACZVZB for forces with pseudo-potentials'
-        self.observable_fn = rng_wrapper(evaluate_hf_force_ac_zvzbq(hamil, wf))
+        return super().finalize(hamil, wf)
+
+    @staticmethod
+    def evaluate_hf_force(
+        hamil: MolecularHamiltonian,
+        wf: ParametrizedWaveFunction,
+        coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
+    ):
+        return rng_wrapper(evaluate_hf_force_ac_zvqzb)(hamil, wf, coordinate_transform)
+
+
+class FiniteDifferenceForceMonitor(ObservableMonitor):
+    name: str = 'finite_difference_force'
+
+    def __init__(self, save_samples: bool, period: int, h: float = 1e-3):
+        super().__init__(save_samples, period)
+        self.h = h
+
+    def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
+        self.observable_fn = evaluate_finite_difference_force(hamil, wf, self.h)
         self.requires_energy = True
         return self
 
@@ -356,7 +507,6 @@ class OscillatorStrengthMonitor(ObservableMonitor):
 def default_observable_monitors() -> list[ObservableMonitor]:
     r"""Return a list of default observable monitors."""
     return [
-        EnergyMonitor(save_samples=True, period=1),
         WaveFunctionMonitor(save_samples=True, period=1),
     ]
 
@@ -373,11 +523,13 @@ def observable_monitor_from_name(name: str) -> ObservableMonitor:
         BareForceMonitor,
         BareForceAntiMonitor,
         ACZVForceMonitor,
-        ACZVForceAntiMonitor,
         ACZVQForceMonitor,
         ACZVQForceAntiMonitor,
         ACZVZBForceMonitor,
+        ACZBForceMonitor,
         ACZVZBQForceMonitor,
+        FiniteDifferenceForceMonitor,
+        ACZVQZBForceMonitor,
     }
     for monitor in all_obseravble_monitors:
         if monitor.name == name:

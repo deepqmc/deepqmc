@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import jax_dataclasses as jdc
 
-from .geom import pairwise_distance, pairwise_self_distance
+from .geom.general import pairwise_distance, pairwise_self_distance
 from .types import (
     Energy,
     KeyArray,
@@ -160,24 +160,6 @@ def evaluate_spin(
         return s2
 
     return evaluate_spin_
-
-
-def coulomb_force(
-    r1: jax.Array,
-    r2: jax.Array,
-    c1: jax.Array,
-    c2: jax.Array,
-    remove_self_int: bool = False,
-) -> jax.Array:
-    dists = r1[:, None] - r2[None]
-    force = (
-        (c1[:, None] * c2[None])[..., None]
-        * dists
-        / jnp.linalg.norm(dists, axis=-1, keepdims=True) ** 3
-    )
-    if remove_self_int:
-        force = force.at[jnp.arange(len(r1)), jnp.arange(len(r2))].set(0)
-    return force.sum(-2)
 
 
 def make_permute_single_down_with_all_up(

@@ -93,7 +93,9 @@ def fit_wf(  # noqa: C901
                     rng_monitor,
                     params,
                     phys_conf,
-                    smpl_state['elec']['psi'],
+                    jax.tree.map(
+                        lambda x: x[:, mol_idxs[0]], smpl_state['elec']['psi']
+                    ),
                     E_loc,
                     ratios,
                 )
