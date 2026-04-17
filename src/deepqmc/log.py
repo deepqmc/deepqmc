@@ -374,13 +374,13 @@ class TensorboardMetricLogger:
                     for j, v_ij in enumerate(v_i):
                         self.writer.add_scalar(f'{prefix}{k}/{i}/{j}', v_ij, step)
             elif v.ndim == 3:
-                assert v.shape[1] == v.shape[2]
-                # Per molecule per state pairwise statistic (upper triangular)
-                for i, v_i in zip(mol_idxs, v):
-                    for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
-                        self.writer.add_scalar(
-                            f'{prefix}{k}/{i}/{l}-{j}', v_i[j, l], step
-                        )
+                if v.shape[1] == v.shape[2]:
+                    # Per molecule per state pairwise statistic (upper triangular)
+                    for i, v_i in zip(mol_idxs, v):
+                        for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
+                            self.writer.add_scalar(
+                                f'{prefix}{k}/{i}/{l}-{j}', v_i[j, l], step
+                            )
 
     def add_batch_scalars(self, stats: Stats, prefix: Optional[str]):
         for k, v in stats.items():
@@ -440,17 +440,17 @@ class TensorboardMetricLogger:
                     self.writer.add_scalar(f'{prefix}{k}/mean/{j}', v_mean_j, step)
                     self.writer.add_scalar(f'{prefix}{k}/std/{j}', v_std_j, step)
             elif v.ndim == 3:
-                assert v.shape[1] == v.shape[2]
-                # Per molecule per state pairwise statistic (upper triangular)
-                v_mean = v.mean(axis=0)
-                v_std = v.std(axis=0)
-                for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
-                    self.writer.add_scalar(
-                        f'{prefix}{k}/mean/{l}-{j}', v_mean[j, l], step
-                    )
-                    self.writer.add_scalar(
-                        f'{prefix}{k}/std/{l}-{j}', v_std[j, l], step
-                    )
+                if v.shape[1] == v.shape[2]:
+                    # Per molecule per state pairwise statistic (upper triangular)
+                    v_mean = v.mean(axis=0)
+                    v_std = v.std(axis=0)
+                    for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
+                        self.writer.add_scalar(
+                            f'{prefix}{k}/mean/{l}-{j}', v_mean[j, l], step
+                        )
+                        self.writer.add_scalar(
+                            f'{prefix}{k}/std/{l}-{j}', v_std[j, l], step
+                        )
 
     def close(self):
         self.writer.close()
