@@ -6,7 +6,8 @@ from pyscf.gto.basis import load_ecp
 from pyscf.lib.parameters import ELEMENTS
 from scipy.special import legendre
 
-from ..physics import Potential, pairwise_distance
+from ..geom.general import pairwise_distance
+from ..physics import Potential
 from ..types import (
     Energy,
     KeyArray,
@@ -180,8 +181,8 @@ class GaussianTypeECP(Potential):
         # get value of the denominator (which is constant)
         denominator = wf(phys_conf)
 
-        def add_nl_potential_for_one_nucleus(i, val):
-            nucleus_index = self.nuc_with_nl_pot[i]
+        def add_nl_potential_for_one_nucleus(j, val):
+            nucleus_index = self.nuc_with_nl_pot[j]
             nl_params = self.nl_params[nucleus_index]
             l_max_p1 = nl_params.shape[0]  # l_max_p1 = l_max + 1
 
@@ -213,9 +214,10 @@ class GaussianTypeECP(Potential):
                 nl_pot_coefs=nl_pot_coefs,
             ):
                 # numerator
+                rng_quadrature = jax.random.fold_in(jax.random.fold_in(rng, j), i)
                 quadrature_phys_conf = jax.vmap(
                     single_quadrature_phys_conf, (None, None, None, None, 0)
-                )(rng, i, nucleus_index, phys_conf, self.unit_icosahedron)
+                )(rng_quadrature, i, nucleus_index, phys_conf, self.unit_icosahedron)
                 numerator = jax.vmap(wf)(quadrature_phys_conf)  # shape (12,)
                 wf_ratio = compute_wf_ratio(numerator, denominator)
                 wf_ratio_tile = (
@@ -232,7 +234,7 @@ class GaussianTypeECP(Potential):
 
             nl_potential_for_one_nucleus = jax.lax.fori_loop(
                 0,
-                self.ns_valence.astype(int).sum(),
+                phys_conf.r.shape[-2],
                 nl_potential_for_one_nucleus_and_one_electron,
                 0.0,
             )
@@ -308,7 +310,7 @@ class GaussianTypeECP(Potential):
 
             nl_potential_for_one_nucleus = jax.lax.fori_loop(
                 0,
-                self.ns_valence.astype(int).sum(),
+                phys_conf.r.shape[-2],
                 nl_potential_for_one_nucleus_and_one_electron,
                 jnp.zeros(3),
             )

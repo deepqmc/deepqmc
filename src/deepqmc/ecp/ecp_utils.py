@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 import jax_dataclasses as jdc
 
+from ..geom.general import rot_y, rot_z
 from ..types import Psi
 
 
@@ -17,28 +18,6 @@ def sph2cart(sph, r=1):
     y = rsin_theta * jnp.sin(phi)
     z = r * jnp.cos(theta)
     return jnp.array([x, y, z])
-
-
-def rot_y(theta):
-    """Returns the rotation matrix about y-axis by angle theta."""
-    return jnp.array(
-        [
-            [jnp.cos(theta), jnp.zeros_like(theta), jnp.sin(theta)],
-            [jnp.zeros_like(theta), jnp.ones_like(theta), jnp.zeros_like(theta)],
-            [-jnp.sin(theta), jnp.zeros_like(theta), jnp.cos(theta)],
-        ]
-    )
-
-
-def rot_z(phi):
-    """Returns the rotation matrix about z-axis by angle phi."""
-    return jnp.array(
-        [
-            [jnp.cos(phi), -jnp.sin(phi), jnp.zeros_like(phi)],
-            [jnp.sin(phi), jnp.cos(phi), jnp.zeros_like(phi)],
-            [jnp.zeros_like(phi), jnp.zeros_like(phi), jnp.ones_like(phi)],
-        ]
-    )
 
 
 def get_unit_icosahedron_sph():
