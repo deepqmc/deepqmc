@@ -1,12 +1,13 @@
 from collections.abc import Iterable, MutableMapping, Sequence
 from functools import partial
-from typing import Optional, TypeVar, Union
+from typing import Callable, Optional, TypeVar
 
 import jax
 import jax.numpy as jnp
 from jax import ops
 from jax.random import uniform
 from jax.scipy.special import gammaln
+from jaxtyping import PyTree
 
 from .types import Stats
 
@@ -15,11 +16,11 @@ __all__ = ()
 T = TypeVar('T')
 
 
-def flatten(x, start_axis=0):
+def flatten(x: jax.Array, start_axis: int = 0) -> jax.Array:
     return x.reshape(*x.shape[:start_axis], -1)
 
 
-def unflatten(x, axis, shape):
+def unflatten(x: jax.Array, axis: int, shape: tuple[int, ...]) -> jax.Array:
     if axis < 0:
         axis = len(x.shape) + axis
     begin = x.shape[:axis]
@@ -56,24 +57,24 @@ def triu_flat(x):
     return x[..., i, j]
 
 
-def tree_norm(x):
-    return jax.tree.reduce(lambda norm, x: norm + jnp.linalg.norm(x), x, 0)
+def tree_norm(x: PyTree) -> float:
+    return jax.tree.reduce(lambda norm, x: norm + jnp.linalg.norm(x), x, 0.0)
 
 
-def tree_stack(trees: list[T]) -> T:
+def tree_stack(trees: list[PyTree]) -> PyTree:
     return jax.tree.map(lambda *v: jnp.stack(v), *trees)
 
 
-def tree_unstack(tree: T) -> list[T]:
+def tree_unstack(tree: PyTree) -> list[PyTree]:
     leaves, treedef = jax.tree.flatten(tree)
     return [treedef.unflatten(leaf) for leaf in zip(*leaves)]
 
 
-def tree_any(x):
+def tree_any(x: PyTree) -> bool:
     return jax.tree.reduce(lambda is_any, leaf: is_any or leaf, x, False)
 
 
-def norm(rs, safe=False, axis=-1):
+def norm(rs: jax.Array, safe: bool = False, axis: int = -1) -> jax.Array:
     eps = jnp.finfo(rs.dtype).eps
     return (
         jnp.sqrt(eps + (rs * rs).sum(axis=axis))
@@ -82,18 +83,21 @@ def norm(rs, safe=False, axis=-1):
     )
 
 
-def split_dict(dct, cond):
-    included, excluded = {}, {}
+def split_dict(
+    dct: dict[str, T], cond: Callable[[str], bool]
+) -> tuple[dict[str, T], dict[str, T]]:
+    included: dict[str, T] = {}
+    excluded: dict[str, T] = {}
     for k, v in dct.items():
         (included if cond(k) else excluded)[k] = v
     return included, excluded
 
 
-def InverseSchedule(init_value, decay_rate):
+def InverseSchedule(init_value: float, decay_rate: float) -> Callable[[int], float]:
     return lambda n: init_value / (1 + n / decay_rate)
 
 
-def ConstantSchedule(value):
+def ConstantSchedule(value: float) -> Callable[[int], float]:
     return lambda n: value
 
 
@@ -132,7 +136,7 @@ def per_mol_stats(
     mol_idx: jax.Array,
     prefix: str,
     mean_only: bool = False,
-) -> Union[jax.Array, Stats]:
+) -> jax.Array | Stats:
     mean = segment_nanmean(data, mol_idx, n_mols)
     if mean_only:
         return mean
@@ -154,7 +158,7 @@ def log_squeeze(x: jax.Array):
 
 
 def weighted_std(
-    x: jax.Array, weights: jax.Array, axis: Union[int, Sequence[int], None] = None
+    x: jax.Array, weights: jax.Array, axis: int | Sequence[int] | None = None
 ) -> jax.Array:
     mean = jnp.average(x, axis=axis, weights=weights, keepdims=True)
     variance = jnp.average((x - mean) ** 2, axis=axis, weights=weights)

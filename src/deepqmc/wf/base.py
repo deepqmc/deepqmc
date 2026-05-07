@@ -7,7 +7,7 @@ import jax.numpy as jnp
 
 from ..optimizer import merge_states
 from ..parallel import replicate_on_devices
-from ..types import PhysicalConfiguration
+from ..types import Params, PhysicalConfiguration
 from ..utils import filter_dict, tree_stack
 
 __all__ = ()
@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 def init_wf_params(
     rng, hamil, ansatz, electronic_states=1, *, merge_keys: Optional[list[str]] = None
-):
+) -> Params:
     rng_params = jax.random.split(rng, electronic_states)
     dummy_phys_conf = PhysicalConfiguration(  # type: ignore
         jnp.zeros_like(hamil.mol.coords),

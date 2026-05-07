@@ -144,7 +144,7 @@ def train(  # noqa: C901
     """
     mode = 'evaluation' if opt is None else 'training'
     if seed is None:
-        seed = np.random.default_rng().integers(2**32)
+        seed = int(np.random.default_rng().integers(2**32))
         log.info('Seed not provided, using random seed %d', seed)
     rng = jax.random.PRNGKey(seed + jax.process_index())
     rng, rng_smpl = jax.random.split(rng)

@@ -3,7 +3,7 @@ import platform
 import sys
 import warnings
 from pathlib import Path
-from typing import Optional, Union
+from typing import Callable, Optional, TypeAlias
 
 import hydra
 from hydra.errors import InstantiationException
@@ -11,10 +11,12 @@ from hydra.utils import call, get_original_cwd, to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from tqdm.auto import tqdm
 
-from deepqmc.types import TrainState
-
+from .hamil import MolecularHamiltonian
 from .molecule import Molecule, read_molecule_dataset
+from .types import Ansatz, TrainState
 from .validate_kwargs import validate_kwargs
+
+AnsatzFactory: TypeAlias = Callable[[MolecularHamiltonian], Ansatz]
 
 __all__ = ()
 log = logging.getLogger(__name__)
@@ -37,7 +39,7 @@ warnings.filterwarnings(
 
 
 def read_molecules(
-    directory: Union[Path, str, None] = None, whitelist: Optional[str] = None
+    directory: Path | str | None = None, whitelist: Optional[str] = None
 ) -> Optional[list[Molecule]]:
     if directory is None:
         return None
@@ -56,21 +58,23 @@ def read_molecules(
     return list(molecules.values())
 
 
-def instantiate_ansatz(hamil, ansatz):
+def instantiate_ansatz(hamil: MolecularHamiltonian, ansatz: AnsatzFactory) -> Ansatz:
     import haiku as hk
 
     return hk.without_apply_rng(
         hk.transform(
-            lambda phys_conf, return_mos=False: ansatz(hamil)(phys_conf, return_mos)
+            lambda phys_conf, return_mos=False: ansatz(hamil)(phys_conf, return_mos)  # type: ignore
         )
     )
 
 
-def train_from_factories(hamil, ansatz, **kwargs):
+def train_from_factories(
+    hamil: MolecularHamiltonian, ansatz: AnsatzFactory, **kwargs
+) -> TrainState:
     from .train import train
 
-    ansatz = instantiate_ansatz(hamil, ansatz)
-    return train(hamil, ansatz, **kwargs)
+    instantiated_ansatz = instantiate_ansatz(hamil, ansatz)
+    return train(hamil, instantiated_ansatz, **kwargs)
 
 
 def assert_valid_restdir(restdir: Path, workdir: str):
@@ -193,7 +197,7 @@ class TqdmStream:
         return len(msg)
 
 
-def maybe_log_code_version():
+def maybe_log_code_version() -> None:
     if log.isEnabledFor(logging.DEBUG):
         import subprocess
 
@@ -213,7 +217,7 @@ def maybe_log_code_version():
             log.debug(f'With uncommitted changes:\n{diff}')
 
 
-def detect_devices():
+def detect_devices() -> None:
     import jax
 
     device_kinds = [device.device_kind for device in jax.devices()]

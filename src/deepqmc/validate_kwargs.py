@@ -2,11 +2,12 @@ import logging
 
 import jax
 from hydra.utils import call
+from omegaconf import DictConfig
 
 log = logging.getLogger(__name__)
 
 
-def validate_pretrain_kwargs(cfg):
+def validate_pretrain_kwargs(cfg: DictConfig) -> None:
     """Catch the most common misconfigurations in pretraining."""
 
     if (
@@ -37,7 +38,7 @@ def validate_pretrain_kwargs(cfg):
         )
 
 
-def validate_batch_size(cfg):
+def validate_batch_size(cfg: DictConfig) -> None:
     """Make sure that batch sizes are acceptable in coputational setup."""
 
     assert not cfg.get('electron_batch_size', 0) % jax.device_count(), (
@@ -54,7 +55,7 @@ def validate_batch_size(cfg):
     )
 
 
-def validate_kwargs(cfg):
+def validate_kwargs(cfg: DictConfig) -> None:
     """Check that the combinations of configuration options are sensible."""
 
     validate_pretrain_kwargs(cfg)

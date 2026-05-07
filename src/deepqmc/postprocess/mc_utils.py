@@ -43,7 +43,9 @@ def clipped_mean_and_sampling_error(
     return all_walker_mean, sampling_error, {'kept_sample_ratio': samples_mask.mean()}
 
 
-def clipped_batch_mean_and_std(samples, lower, upper, walker_axis=1):
+def clipped_batch_mean_and_std(
+    samples: jax.Array, lower: float, upper: float, walker_axis: int = 1
+) -> tuple[jax.Array, jax.Array]:
     r"""Compute the batchwise mean and std. dev. of samples clipped to a given range."""
     samples_mask = (samples < upper) & (samples > lower) & ~jnp.isnan(samples)
     masked_samples = samples * samples_mask

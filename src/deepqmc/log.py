@@ -7,7 +7,7 @@ from copy import deepcopy
 from functools import partial
 from itertools import product
 from pathlib import Path
-from typing import NamedTuple, Optional, Protocol, Union
+from typing import NamedTuple, Optional, Protocol
 
 import h5py
 import jax
@@ -92,7 +92,7 @@ class CheckpointStore:
         self.size = size
         self.interval = interval
         self.chkpts: list[Checkpoint] = []
-        self.buffer: Union[tuple[None, None], tuple[int, TrainState]] = (None, None)
+        self.buffer: tuple[None, None] | tuple[int, TrainState] = (None, None)
 
     def update(self, step: int, state: TrainState):
         self.buffer = (step, state)
@@ -141,7 +141,7 @@ class CheckpointStore:
         return int(match.groups()[0])
 
 
-def resize_if_dataset(size: int, name: str, obj: Union[h5py.Dataset, h5py.Group]):
+def resize_if_dataset(size: int, name: str, obj: h5py.Dataset | h5py.Group):
     r"""Resize dataset objects of HDF5 files.
 
     A ``partial`` of this function can be used as the visitor function argument of

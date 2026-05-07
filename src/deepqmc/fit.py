@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 
 from .ewm import init_multi_mol_multi_state_ewm
+from .hamil import MolecularHamiltonian
 from .loss import LossFunctionFactory
 from .observable import ObservableMonitor
 from .optimizer import NoOptimizer, Optimizer, pmap_merge_states
@@ -28,7 +29,7 @@ __all__ = ()
 
 def fit_wf(  # noqa: C901
     rng: KeyArray,
-    hamil,
+    hamil: MolecularHamiltonian,
     ansatz: Ansatz,
     optimizer_factory: Type[Optimizer],
     molecule_idx_sampler,

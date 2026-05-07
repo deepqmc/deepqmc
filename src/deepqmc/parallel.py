@@ -106,7 +106,7 @@ def broadcast_to_devices(pytree: T) -> T:
     return pytree
 
 
-def select_one_device(pytree, idx=0):
+def select_one_device(pytree: T, idx=0) -> T:
     r"""Select one entry from the device axis.
 
     Selects the a single entry from the device axis, resulting in an array that is
@@ -211,14 +211,14 @@ def all_device_max(x, axis_name=PMAP_AXIS_NAME, **mean_kwargs):
 
 
 def all_device_std(x, axis_name=PMAP_AXIS_NAME, **mean_kwargs):
-    r"""Compute mean across all devices.
+    r"""Compute standard deviation across all devices.
 
     Args:
         x: the input data stored on multiple devices.
         axis_name: optional, name of pmap-ed axis.
     """
     first_mean_kwargs = mean_kwargs | {'keepdims': True}
-    mean = pmean(jax.numpy.mean(x, **first_mean_kwargs), axis_name)
+    mean = pmean(jax.numpy.mean(x, **first_mean_kwargs), axis_name)  # type: ignore
     var = pmean(jax.numpy.mean((x - mean) ** 2, **mean_kwargs), axis_name)
     return jax.numpy.sqrt(var)
 
