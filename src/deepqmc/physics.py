@@ -101,13 +101,10 @@ def pairwise_self_distance(coords: jax.Array, full: bool = False) -> jax.Array:
     diffs = coords[..., :, None, :] - coords[..., None, :, :]
     dists = norm(diffs[..., i, j, :], safe=True, axis=-1)
     if full:
-        dists = (
-            jnp.zeros(diffs.shape[:-1])
-            .at[..., i, j]
-            .set(dists)
-            .at[..., j, i]
-            .set(dists)
-        )
+        diffs = coords[..., :, None, :] - coords[..., None, :, :]
+        dists = norm(diffs, safe=True, axis=-1)
+        # make the diagonal zero
+        dists *= 1 - jnp.eye(dists.shape[-1], dtype=dists.dtype)
     return dists
 
 

@@ -25,12 +25,14 @@ class UpdateFeature(hk.Module):
         n_down: int,
         two_particle_stream_dim: int,
         node_edge_mapping: NodeEdgeMapping,
+        layer_is_last: bool = False,
     ):
         super().__init__()
         self.n_up = n_up
         self.n_down = n_down
         self.node_edge_mapping = node_edge_mapping
         self.two_particle_stream_dim = two_particle_stream_dim
+        self.layer_is_last = layer_is_last
 
     @property
     def names(self) -> list[str]:
@@ -320,7 +322,7 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
             w_init=hk.initializers.VarianceScaling(1, 'fan_in', 'normal'),
             with_bias=False,
         )
-        attn_mlp = self.attn_mlp_factory(h.shape[-1], name='mlp')
+        attn_mlp = self.attn_mlp_factory(h.shape[-1], name='mlp_attn')
         attended = attention_layer(g, g, h)
         if self.attention_residual:
             attended = self.attention_residual(h, attended)
@@ -329,8 +331,11 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
             attn_mlp_out = self.attn_mlp_residual(attended, attn_mlp_out)
 
         # update individual stream
-        indiv_mlp = self.indiv_mlp_factory(g.shape[-1], name='mlp')
-        indiv_mlp_out = indiv_mlp(g)
+        if not self.layer_is_last:
+            indiv_mlp = self.indiv_mlp_factory(g.shape[-1], name='mlp_indiv')
+            indiv_mlp_out = indiv_mlp(g)
+        else:
+            indiv_mlp_out = g
 
         h_tot = jnp.concatenate([indiv_mlp_out, attn_mlp_out], axis=-1)
         return [GraphNodes(None, h_tot)]
