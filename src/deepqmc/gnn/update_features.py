@@ -3,7 +3,7 @@ from collections.abc import Mapping, Sequence
 import haiku as hk
 import jax.numpy as jnp
 
-from ..hkext import Identity
+from ..hkext import Identity, SparseMultiHeadAttention
 from .graph import GraphEdges, GraphNodes
 from .utils import NodeEdgeMapping
 
@@ -316,7 +316,7 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
         # update attentive stream
         heads_dim = h.shape[-1] // self.num_heads
         assert heads_dim * self.num_heads == h.shape[-1]
-        attention_layer = hk.MultiHeadAttention(
+        attention_layer = SparseMultiHeadAttention(
             self.num_heads,
             heads_dim,
             w_init=hk.initializers.VarianceScaling(1, 'fan_in', 'normal'),

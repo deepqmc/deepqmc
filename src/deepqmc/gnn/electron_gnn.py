@@ -127,7 +127,13 @@ class ElectronGNNLayer(hk.Module):
                 }
             )
         self.update_features = [
-            uf(self.n_up, self.n_down, two_particle_stream_dim, self.mapping, self.last_layer)
+            uf(
+                self.n_up,
+                self.n_down,
+                two_particle_stream_dim,
+                self.mapping,
+                self.last_layer,
+            )
             for uf in update_features
         ]
         self.g_factory = subnet_factory_by_lbl['g']
@@ -218,7 +224,7 @@ class ElectronGNNLayer(hk.Module):
                             nodes.nuclei.shape[-1],
                             name=f'g_nuc_{name}',
                         )
-                        for uf in (update_features.nuclei)
+                        for uf in update_features.nuclei
                         for name in uf.names
                     }
                 )
@@ -390,8 +396,10 @@ class ElectronGNN(hk.Module):
         )
         edges = edge_factory(phys_conf)
         return {
-            typ: edges[typ].update_from_single_array(
-                self.edge_features[typ](edges[typ].single_array)
+            typ: (
+                edges[typ].update_from_single_array(
+                    self.edge_features[typ](edges[typ].single_array)
+                )
             )
             for typ in self.edge_types
         }

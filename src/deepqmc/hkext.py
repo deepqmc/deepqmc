@@ -4,9 +4,12 @@ from typing import Optional, Union
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import numpy as np
 from haiku.initializers import VarianceScaling
 from jax import tree_util
 from jax.nn import sigmoid, softplus
+
+from .folxext import sparse_matmul
 
 
 def ssp(x: jax.Array) -> jax.Array:
@@ -199,3 +202,82 @@ class GLU(hk.Module):
             x = hk.LayerNorm(-1, False, False)(x)
             y = hk.LayerNorm(-1, False, False)(y)
         return self.activation(self.activated_linear(x)) * self.linear(y)
+
+
+class SparseMultiHeadAttention(hk.MultiHeadAttention):
+    """hk.MultiHeadAttention with deferred-softmax for sparse-Jacobian propagation.
+
+    Drop-in subclass of haiku.MultiHeadAttention that defers the softmax
+    normalisation until *after* the value-aggregation matmul.
+
+    Standard order:
+        S         = exp(QK^T / sqrt(d))           # weak Jacobian per element
+        attn_w    = S / sum_T(S)                  # softmax — Jacobian becomes DENSE
+        out       = attn_w @ v                    # weak v meets dense S -> dense flow
+
+    Reordered (mathematically identical):
+        S         = exp(QK^T / sqrt(d))           # weak (k_S = 2·D_y)
+        numerator = S @ v                         # ← weak @ weak -> stays sparse
+        Z         = sum_T(S)                      # dense Jacobian, but only shape (T',)
+        out       = numerator / Z                 # broadcast divide
+
+    The expensive `S @ v` matmul is now done while `S` is still weak, so the
+    `weak S, weak v` branch of `_sparse_matmul_laplacian` fires. The "dense" step is
+    only the elementwise divide by `Z`, which produces a small `(H, T')` normalizer.
+
+    Caveat — numerical stability:
+    We drop the standard max-subtraction trick (`softmax(x) = exp(x - max(x))/...`)
+    because `max(logits[t, :])` depends on every key position and so would
+    re-densify S. With reasonable weight scales (default `w_init_scale=0.1`)
+    this is fine; if your logits can blow up, scale them down or accept the
+    loss of the trick.
+    """
+
+    def __call__(self, query, key, value, mask=None):
+        *leading_dims, sequence_length, _ = query.shape
+        projection = self._linear_projection
+
+        query_heads = projection(query, self.key_size, 'query')  # [..., T', H, K]
+        key_heads = projection(key, self.key_size, 'key')  # [..., T,  H, K]
+        value_heads = projection(value, self.value_size, 'value')  # [..., T,  H, V]
+
+        # Pre-softmax logits, scaled.
+        attn_logits = jnp.einsum('...thd,...Thd->...htT', query_heads, key_heads)
+        attn_logits = attn_logits / np.sqrt(self.key_size).astype(key.dtype)
+        if mask is not None:
+            if mask.ndim != attn_logits.ndim:
+                raise ValueError(
+                    f'Mask dimensionality {mask.ndim} must match logits '
+                    f'dimensionality {attn_logits.ndim}.'
+                )
+            attn_logits = jnp.where(mask, attn_logits, -1e30)
+
+        # === deferred-softmax trick =========================================
+        # S = exp(logits)  — keeps per-element weak Jacobian (k_S = 2·D_y)
+        # numerator = S @ v   computed BEFORE normalising, so S is still weak
+        # Z = sum_T(S)        small (H, T') normalizer, takes the dense hit
+        # attn = numerator / Z
+        S = jnp.exp(attn_logits)  # [..., H, T', T]
+
+        # Move H to batch position on both operands so the whole multi-head
+        # einsum collapses into a single batched matmul — one pjit equation
+        # in the jaxpr regardless of num_heads, and the both-weak branch of
+        # the sparse_matmul rule fires unchanged.
+        v_batched = jnp.moveaxis(value_heads, -2, -3)  # [..., H, T, V]
+        num_batched = sparse_matmul(S, v_batched)  # [..., H, T', V]
+        numerator = jnp.moveaxis(num_batched, -3, -2)  # [..., T', H, V]
+
+        Z = S.sum(axis=-1)  # [..., H, T']
+        Z = jnp.moveaxis(Z, -2, -1)  # [..., T', H]
+        attn = numerator / Z[..., None]  # [..., T', H, V]
+        # ====================================================================
+
+        attn = jnp.reshape(attn, (*leading_dims, sequence_length, -1))
+
+        final_projection = hk.Linear(
+            self.model_size,
+            w_init=self.w_init,
+            with_bias=self.with_bias,
+            b_init=self.b_init,
+        )
+        return final_projection(attn)
