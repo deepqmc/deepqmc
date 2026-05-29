@@ -43,7 +43,7 @@ repos:
         name: Check types with mypy
         additional_dependencies: [types-PyYAML, types-toml]
   - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.376
+    rev: v1.1.409
     hooks:
     - id: pyright
       name: Check types with pyright
