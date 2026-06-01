@@ -654,23 +654,15 @@ class ElectronEmbedding(hk.Module):
                 ]
                 x = jnp.concatenate([x, spins], axis=1)
             if self.project_to_embedding_dim:
-                if self.use_individual_stream:
-                    x_indiv = hk.Linear(
-                        self.total_embedding_dim, with_bias=False, name='proj_indiv'
-                    )(x)
-                else:
-                    x_indiv = None
                 x = hk.Linear(self.total_embedding_dim, with_bias=False, name='proj')(x)
-            else:
-                x_indiv = x if self.use_individual_stream else None
         else:
             X = hk.Embed(
                 self.n_elec_types, self.total_embedding_dim, name='ElectronicEmbedding'
             )
             x = X(self.elec_types)
-            x_indiv = x if self.use_individual_stream else None
-            # If not projecting to embedding dimension, both individual and attentive
-            # streams start from the same array; they diverge in the first GNN layer
+        x_indiv = x if self.use_individual_stream else None
+        # Both individual and attentive streams start from the same array; they diverge
+        # in the first GNN layer.
         return ElectronStream(x_indiv, x)
 
 
