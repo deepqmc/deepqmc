@@ -4,7 +4,7 @@ import haiku as hk
 import jax.numpy as jnp
 
 from ..hkext import Identity, SparseMultiHeadAttention
-from .graph import GraphEdges, GraphNodes
+from .graph import ElectronStream, GraphEdges, GraphNodes
 from .utils import NodeEdgeMapping
 
 
@@ -93,7 +93,7 @@ class NodeSumElectronUpdateFeature(UpdateFeature):
                 None,
                 jnp.tile(
                     reduce_fn(
-                        nodes.electrons[node_idx[node_type]], axis=0, keepdims=True
+                        nodes.electrons.attn[node_idx[node_type]], axis=0, keepdims=True
                     ),
                     (self.n_up + self.n_down, 1),
                 ),
@@ -267,7 +267,7 @@ class NodeAttentionElectronUpdateFeature(UpdateFeature):
     def __call__(
         self, nodes: GraphNodes, edges: Mapping[str, GraphEdges]
     ) -> Sequence[GraphNodes]:
-        h = nodes.electrons
+        h = nodes.electrons.attn
         heads_dim = h.shape[-1] // self.num_heads
         assert heads_dim * self.num_heads == h.shape[-1]
         attention_layer = hk.MultiHeadAttention(
@@ -308,10 +308,9 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
     def __call__(
         self, nodes: GraphNodes, edges: Mapping[str, GraphEdges]
     ) -> Sequence[GraphNodes]:
-        h_tot = nodes.electrons
-        # split the note features into individual and attentive streams
         # g.shape = h.shape = (n_el, embedding_dim)
-        g, h = jnp.split(h_tot, 2, axis=-1)
+        g = nodes.electrons.indiv
+        h = nodes.electrons.attn
 
         # update attentive stream
         heads_dim = h.shape[-1] // self.num_heads
@@ -337,8 +336,7 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
         else:
             indiv_mlp_out = g
 
-        h_tot = jnp.concatenate([indiv_mlp_out, attn_mlp_out], axis=-1)
-        return [GraphNodes(None, h_tot)]
+        return [GraphNodes(None, ElectronStream(indiv_mlp_out, attn_mlp_out))]
 
 
 class CombinedNodeAttentionUpdateFeature(UpdateFeature):
@@ -382,8 +380,8 @@ class CombinedNodeAttentionUpdateFeature(UpdateFeature):
         self, nodes: GraphNodes, edges: Mapping[str, GraphEdges]
     ) -> Sequence[GraphNodes]:
         n_nuc = len(nodes.nuclei)
-        n_el = len(nodes.electrons)
-        h = jnp.concatenate([nodes.nuclei, nodes.electrons], axis=0)
+        n_el = len(nodes.electrons.attn)
+        h = jnp.concatenate([nodes.nuclei, nodes.electrons.attn], axis=0)
         mask = (
             None
             if self.elec_to_nuc

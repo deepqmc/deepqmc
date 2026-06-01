@@ -46,7 +46,6 @@ omni_factory:
       activation: null
       init: ferminet
   nuclear_gnn_head: null
-  use_attentive_stream: true
   gnn_factory:
     _target_: deepqmc.gnn.ElectronGNN
     _partial_: true
@@ -66,6 +65,7 @@ omni_factory:
             log_rescale: true
       use_spin: true
       project_to_embedding_dim: true
+      use_individual_stream: true
     two_particle_stream_dim: 32 # not used, irrelevant
     self_interaction: true # todo
     edge_features: null # todo

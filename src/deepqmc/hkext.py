@@ -131,12 +131,14 @@ class ResidualConnection:
 
     def __call__(self, inp, update):
         def leaf_residual(x, y):
+            if x is None or y is None:
+                return y
             if x.shape != y.shape:
                 return y
             z = x + y
             return z / jnp.sqrt(2) if self.normalize else z
 
-        return tree_util.tree_map(leaf_residual, inp, update)
+        return tree_util.tree_map(leaf_residual, inp, update, is_leaf=lambda x: x is None)
 
 
 class SumPool:

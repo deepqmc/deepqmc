@@ -115,10 +115,6 @@ class OmniNet(hk.Module):
             :class:`Jastrow` instance.
         backflow_factory (~collections.abc.Callable): function that returns a
             :class:`Backflow` instance.
-        use_attentive_stream (bool): if :data:`True`, the GNN uses an two streams
-            (individual and attentive) as introduced in LapNet architecture. The
-            embedding dimension is doubled in this case. And after the GNN pass,
-            one half of the features is discarded.
     """
 
     def __init__(
@@ -134,13 +130,10 @@ class OmniNet(hk.Module):
         jastrow_factory,
         backflow_factory,
         nuclear_gnn_head=None,
-        use_attentive_stream=False,
     ):
         super().__init__()
         self.n_up = hamil.n_up
-        total_embedding_dim = (
-            2 * embedding_dim if use_attentive_stream else embedding_dim
-        )
+        total_embedding_dim = embedding_dim
         self.gnn = gnn_factory(hamil, total_embedding_dim) if gnn_factory else None
         self.jastrow = jastrow_factory() if jastrow_factory else None
         self.backflow = (
@@ -152,15 +145,12 @@ class OmniNet(hk.Module):
             else None
         )
         self.nuclear_gnn_head = nuclear_gnn_head() if nuclear_gnn_head else None
-        self.use_attentive_stream = use_attentive_stream
 
     def __call__(self, phys_conf):
         if self.gnn:
             graph_nodes = self.gnn(phys_conf)
-            embeddings = graph_nodes.electrons
+            embeddings = graph_nodes.electrons.attn
             nucleus_embeddings = graph_nodes.nuclei
-            if self.use_attentive_stream:
-                embeddings = jnp.split(embeddings, 2, axis=-1)[1]
         else:
             return None, None, None
         nuclei_dependent_params = (
