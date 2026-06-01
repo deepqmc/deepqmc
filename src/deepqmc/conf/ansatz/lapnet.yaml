@@ -110,3 +110,6 @@ omni_factory:
         attn_mlp_residual: # todo
           _target_: deepqmc.hkext.ResidualConnection # todo
           normalize: false # todo
+        indiv_mlp_residual: # todo
+          _target_: deepqmc.hkext.ResidualConnection # todo
+          normalize: false # todo

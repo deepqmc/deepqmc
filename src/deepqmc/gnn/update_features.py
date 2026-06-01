@@ -297,11 +297,13 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
         attn_mlp_factory,
         attention_residual,
         attn_mlp_residual,
+        indiv_mlp_residual,
     ):
         super().__init__(*args)
         self.num_heads = num_heads
         self.attention_residual = attention_residual
         self.attn_mlp_residual = attn_mlp_residual
+        self.indiv_mlp_residual = indiv_mlp_residual
         self.attn_mlp_factory = attn_mlp_factory
         self.indiv_mlp_factory = indiv_mlp_factory
 
@@ -333,6 +335,8 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
         if not self.layer_is_last:
             indiv_mlp = self.indiv_mlp_factory(g.shape[-1], name='mlp_indiv')
             indiv_mlp_out = indiv_mlp(g)
+            if self.indiv_mlp_residual:
+                indiv_mlp_out = self.indiv_mlp_residual(g, indiv_mlp_out)
         else:
             indiv_mlp_out = g
 
