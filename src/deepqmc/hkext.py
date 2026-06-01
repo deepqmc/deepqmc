@@ -226,13 +226,6 @@ class SparseMultiHeadAttention(hk.MultiHeadAttention):
     The expensive `S @ v` matmul is now done while `S` is still weak, so the
     `weak S, weak v` branch of `_sparse_matmul_laplacian` fires. The "dense" step is
     only the elementwise divide by `Z`, which produces a small `(H, T')` normalizer.
-
-    Caveat — numerical stability:
-    We drop the standard max-subtraction trick (`softmax(x) = exp(x - max(x))/...`)
-    because `max(logits[t, :])` depends on every key position and so would
-    re-densify S. With reasonable weight scales (default `w_init_scale=0.1`)
-    this is fine; if your logits can blow up, scale them down or accept the
-    loss of the trick.
     """
 
     def __call__(self, query, key, value, mask=None):
@@ -259,7 +252,10 @@ class SparseMultiHeadAttention(hk.MultiHeadAttention):
         # numerator = S @ v   computed BEFORE normalising, so S is still weak
         # Z = sum_T(S)        small (H, T') normalizer, takes the dense hit
         # attn = numerator / Z
-        S = jnp.exp(attn_logits)  # [..., H, T', T]
+
+        # max-subtraction trick for numerically stable softmax
+        max_val = jax.lax.stop_gradient(jnp.max(attn_logits, axis=-1, keepdims=True))
+        S = jnp.exp(attn_logits - max_val)  # [..., H, T', T]
 
         # Move H to batch position on both operands so the whole multi-head
         # einsum collapses into a single batched matmul — one pjit equation
