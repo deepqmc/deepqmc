@@ -41,7 +41,7 @@ omni_factory:
       _target_: deepqmc.hkext.MLP
       _partial_: true
       hidden_layers: ['log', 1]
-      bias: true # changed from false
+      bias: true # LapNet uses bias here, while our default Psiformer does not
       last_linear: true
       activation: null
       init: ferminet
