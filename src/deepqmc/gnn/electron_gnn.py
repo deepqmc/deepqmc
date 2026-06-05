@@ -260,32 +260,24 @@ class ElectronGNNLayer(hk.Module):
         return update_nodes
 
     def apply_update_rule(self, nodes, update_network, update_features, residual):
-        if self.update_rule != 'concatenate':
-            raise NotImplementedError(
-                'Stream-aware update only implemented for update_rule="concatenate". '
-                f'Got {self.update_rule!r}.'
-            )
-        if self.update_rule == 'concatenate':
-            updated_indiv = (
-                update_network(jnp.concatenate(update_features.indiv, axis=-1))
-                if update_features.indiv
-                else None
-            )
-            updated_attn = update_network(
-                jnp.concatenate(update_features.attn, axis=-1)
-            )
-            updated = ElectronStream(updated_indiv, updated_attn)
-        elif self.update_rule == 'featurewise':
-            updated = sum(
-                update_network[name](fi)
-                for fi, name in zip(update_features, update_network.keys())
-            )
-        elif self.update_rule == 'sum':
-            updated = update_network(sum(update_features))
-        elif self.update_rule == 'featurewise_shared':
-            updated = jnp.sum(update_network(jnp.stack(update_features)), axis=0)
-        else:
+        def combine(features):
+            if self.update_rule == 'concatenate':
+                return update_network(jnp.concatenate(features, axis=-1))
+            if self.update_rule == 'sum':
+                return update_network(sum(features))
+            if self.update_rule == 'featurewise_shared':
+                return jnp.sum(update_network(jnp.stack(features)), axis=0)
+            if self.update_rule == 'featurewise':
+                return sum(
+                    update_network[name](fi)
+                    for fi, name in zip(features, update_network.keys())
+                )
             raise ValueError(f'Unknown update rule: {self.update_rule}')
+
+        updated = ElectronStream(
+            indiv=combine(update_features.indiv) if update_features.indiv else None,
+            attn=combine(update_features.attn),
+        )
         if residual:
             updated = residual(nodes, updated)
         return updated
