@@ -34,10 +34,6 @@ import jax.numpy as jnp
 from folx import register_function
 from folx.api import FwdJacobian, FwdLaplArray
 
-# ============================================================================
-# 1) Pure-jax forward (the thing folx routes to the custom rule)
-# ============================================================================
-
 
 @jax.jit
 def sparse_attention(q, k, v):
@@ -52,21 +48,9 @@ def sparse_attention(q, k, v):
     return jnp.matmul(attn, v)
 
 
-# ============================================================================
-# 2) Custom forward-Laplacian rule (closely follows LapNet's algorithm)
-# ============================================================================
-
-
 def _sparse_attention_rule(args, kwargs, sparsity_threshold):
-    print("Using Claude's original implementation.")
     """Wide-scope forward Laplacian for `sparse_attention(q, k, v)`."""
     q_arr, k_arr, v_arr = args
-    # print(q_arr.shape)
-    # print(q_arr.laplacian.shape)
-    # print(q_arr.jacobian.weak)
-    # print(q_arr.jacobian.dense_array.shape)
-    # print(q_arr.jacobian.data.shape)
-    # print(q_arr.jacobian)
     assert q_arr.jacobian.weak, "expected weak q (Linear projection of x)"
     assert k_arr.jacobian.weak, "expected weak k"
 
@@ -82,6 +66,15 @@ def _sparse_attention_rule(args, kwargs, sparsity_threshold):
 
     # Densify v.jacobian here (LapNet does the same — `v = v.set_dense(force=True)`)
     if v_arr.jacobian.weak:
+        expected = jnp.arange(N * k_x).reshape(N, k_x)
+        # x0_idx is (k_x, H, N, D_v) for a weak v; the input index for slot s,
+        # electron i should be i*k_x + s, independent of (h, d).
+        actual_i_s = v_arr.jacobian.x0_idx[:, 0, :, 0].T  # (N=i, k_x=s)
+        # this is a static assert because folx tracing is eager on shapes/ints
+        assert jnp.all(
+            actual_i_s == expected
+        ), "v_jac layout violates electron-major, slot-minor"
+
         v_jac = v_arr.jacobian.dense_array
     else:
         v_jac = v_arr.jacobian.data  # (n_inputs, H, N, D_v)

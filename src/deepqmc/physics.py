@@ -99,12 +99,13 @@ def pairwise_diffs(coords1: jax.Array, coords2: jax.Array) -> jax.Array:
 def pairwise_self_distance(coords: jax.Array, full: bool = False) -> jax.Array:
     i, j = jnp.triu_indices(coords.shape[-2], k=1)
     diffs = coords[..., :, None, :] - coords[..., None, :, :]
-    dists = norm(diffs[..., i, j, :], safe=True, axis=-1)
     if full:
         diffs = coords[..., :, None, :] - coords[..., None, :, :]
         dists = norm(diffs, safe=True, axis=-1)
         # make the diagonal zero
         dists *= 1 - jnp.eye(dists.shape[-1], dtype=dists.dtype)
+    else:
+        dists = norm(diffs[..., i, j, :], safe=True, axis=-1)
     return dists
 
 

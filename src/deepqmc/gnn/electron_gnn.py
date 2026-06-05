@@ -37,7 +37,7 @@ class ElectronGNNLayer(hk.Module):
         n_nuc (int): the number of nuclei.
         n_up (int): the number of spin up electrons.
         n_down (int): the number of spin down electrons.
-        total_embedding_dim (int): the length of the electron embedding vectors.
+        embedding_dim (int): the length of the electron embedding vectors.
         edge_types (Tuple[str]): the types of edges to consider.
         self_interaction (bool): whether to consider edges where the sender and
             receiver electrons are the same.
@@ -90,7 +90,7 @@ class ElectronGNNLayer(hk.Module):
         n_nuc,
         n_up,
         n_down,
-        total_embedding_dim,
+        embedding_dim,
         edge_types,
         self_interaction,
         node_data,
@@ -120,7 +120,7 @@ class ElectronGNNLayer(hk.Module):
         ]
         assert (
             update_rule not in ['sum', 'featurewise_shared']
-            or total_embedding_dim == two_particle_stream_dim
+            or embedding_dim == two_particle_stream_dim
         )
         assert deep_features in [False, 'shared', 'separate']
         self.deep_features = deep_features
@@ -146,20 +146,20 @@ class ElectronGNNLayer(hk.Module):
                 self.n_down,
                 two_particle_stream_dim,
                 self.mapping,
-                self.last_layer,
+                layer_is_last=self.last_layer,
             )
             for uf in update_features
         ]
         self.g_factory = subnet_factory_by_lbl['g']
         self.g = (
             self.g_factory(
-                total_embedding_dim,
+                embedding_dim,
                 name='g',
             )
             if not self.update_rule == 'featurewise'
             else {
                 name: self.g_factory(
-                    total_embedding_dim,
+                    embedding_dim,
                     name=f'g_{name}',
                 )
                 for uf in self.update_features
@@ -309,7 +309,7 @@ class ElectronGNN(hk.Module):
     Args:
         hamil (:class:`~deepqmc.hamil.MolecularHamiltonian`): the Hamiltonian of
             the system on which the graph is defined.
-        total_embedding_dim (int): the length of the electron embedding vectors.
+        embedding_dim (int): the length of the electron embedding vectors.
         n_interactions (int): number of message passing interactions.
         edge_features (dict): a :data:`dict` of functions for each edge
             type, embedding the interparticle differences. Valid keys are:
@@ -339,7 +339,7 @@ class ElectronGNN(hk.Module):
     def __init__(
         self,
         hamil,
-        total_embedding_dim,
+        embedding_dim,
         *,
         n_interactions,
         edge_features,
@@ -361,7 +361,7 @@ class ElectronGNN(hk.Module):
             n_atom_types += 1
             self.ghost_coords = jnp.asarray(ghost_coords)
         self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
-        self.total_embedding_dim = total_embedding_dim
+        self.embedding_dim = embedding_dim
         self.node_data = {
             'n_nodes': {'nuclei': n_nuc, 'electrons': n_up + n_down},
             'n_node_types': {'electrons': 1 if n_up == n_down else 2},
@@ -377,7 +377,7 @@ class ElectronGNN(hk.Module):
                 n_nuc,
                 n_up,
                 n_down,
-                total_embedding_dim,
+                embedding_dim,
                 self.edge_types,
                 self_interaction,
                 self.node_data,
@@ -395,7 +395,7 @@ class ElectronGNN(hk.Module):
             n_nuc,
             n_up,
             n_down,
-            total_embedding_dim,
+            embedding_dim,
             self.node_data['n_node_types']['electrons'],
             self.node_data['node_types']['electrons'],
         )
@@ -437,7 +437,7 @@ class ElectronGNN(hk.Module):
                 of the molecule.
 
         Returns:
-            float, (:math:`N_\text{elec}`, :data:`total_embedding_dim`):
+            float, (:math:`N_\text{elec}`, :data:`embedding_dim`):
             the final embeddings of the electrons.
         """
         if self.ghost_coords is not None:
@@ -468,7 +468,7 @@ class NucleiEmbedding(hk.Module):
         n_down (int): the number of spin down electrons.
         charges (jax.Array): the nuclear charges of the molecule.
         n_atom_types (int): the number of different atom types in the molecule.
-        total_embedding_dim (int): the length of the output embedding vector
+        embedding_dim (int): the length of the output embedding vector
         atom_type_embedding (bool): if :data:`True`, initial embeddings are the same
             for atoms of the same type (nuclear charge), otherwise they are different
             for all nuclei.
@@ -486,7 +486,7 @@ class NucleiEmbedding(hk.Module):
         charges,
         n_atom_types,
         *,
-        total_embedding_dim,
+        embedding_dim,
         atom_type_embedding,
         subnet_type,
         edge_features,
@@ -512,9 +512,9 @@ class NucleiEmbedding(hk.Module):
                 init='ferminet',
             )
             self.embed_mlp = MLP(
-                total_embedding_dim,
+                embedding_dim,
                 'embed_mlp',
-                hidden_layers=(total_embedding_dim,),
+                hidden_layers=(embedding_dim,),
                 bias=True,
                 last_linear=True,
                 activation=jax.nn.silu,
@@ -531,7 +531,7 @@ class NucleiEmbedding(hk.Module):
         n_nuc_types = n_atom_types if atom_type_embedding else len(charges)
         if subnet_type == 'mlp':
             self.subnet = MLP(
-                total_embedding_dim,
+                embedding_dim,
                 hidden_layers=['log', 1],
                 bias=True,
                 last_linear=False,
@@ -539,7 +539,7 @@ class NucleiEmbedding(hk.Module):
                 init='deeperwin',
             )
         elif subnet_type == 'embed':
-            self.subnet = hk.Embed(n_nuc_types, total_embedding_dim)
+            self.subnet = hk.Embed(n_nuc_types, embedding_dim)
 
         self.input = (
             jnp.arange(len(charges))
@@ -572,7 +572,7 @@ class ElectronEmbedding(hk.Module):
         n_nuc (int): the number of nuclei.
         n_up (int): the number of spin up electrons.
         n_down (int): the number of spin down electrons.
-        total_embedding_dim (int): the desired length of the embedding vectors.
+        embedding_dim (int): the desired length of the embedding vectors.
         n_elec_types (int): the number of electron types to differentiate.
             Usual values are:
 
@@ -594,7 +594,7 @@ class ElectronEmbedding(hk.Module):
             positional embedding features.
         project_to_embedding_dim (bool): only relevant if ``positional_embeddings``
             is not ``False``, if ``True``, use a linear layer to project the initial
-            embeddings to have length ``total_embedding_dim``.
+            embeddings to have length ``embedding_dim``.
     """
 
     def __init__(
@@ -602,7 +602,7 @@ class ElectronEmbedding(hk.Module):
         n_nuc,
         n_up,
         n_down,
-        total_embedding_dim,
+        embedding_dim,
         n_elec_types,
         elec_types,
         *,
@@ -615,7 +615,7 @@ class ElectronEmbedding(hk.Module):
         self.n_nuc = n_nuc
         self.n_up = n_up
         self.n_down = n_down
-        self.total_embedding_dim = total_embedding_dim
+        self.embedding_dim = embedding_dim
         self.n_elec_types = n_elec_types
         self.elec_types = elec_types
         self.positional_embeddings = positional_embeddings
@@ -646,10 +646,10 @@ class ElectronEmbedding(hk.Module):
                 ]
                 x = jnp.concatenate([x, spins], axis=1)
             if self.project_to_embedding_dim:
-                x = hk.Linear(self.total_embedding_dim, with_bias=False, name='proj')(x)
+                x = hk.Linear(self.embedding_dim, with_bias=False, name='proj')(x)
         else:
             X = hk.Embed(
-                self.n_elec_types, self.total_embedding_dim, name='ElectronicEmbedding'
+                self.n_elec_types, self.embedding_dim, name='ElectronicEmbedding'
             )
             x = X(self.elec_types)
         x_indiv = x if self.use_individual_stream else None
@@ -666,7 +666,7 @@ class PermutationInvariantEmbedding(hk.Module):
         n_nuc,
         n_up,
         n_down,
-        total_embedding_dim,
+        embedding_dim,
         n_elec_types,
         elec_types,
         charges,
@@ -680,7 +680,7 @@ class PermutationInvariantEmbedding(hk.Module):
         super().__init__()
         self.n_up = n_up
         self.n_down = n_down
-        self.total_embedding_dim = total_embedding_dim
+        self.embedding_dim = embedding_dim
         self.edge_factory = MolecularGraphEdgeBuilder(
             n_nuc,
             n_up,
@@ -712,9 +712,9 @@ class PermutationInvariantEmbedding(hk.Module):
                 init='ferminet',
             )
         self.embed_mlp = MLP(
-            total_embedding_dim,
+            embedding_dim,
             'embed_mlp',
-            hidden_layers=(total_embedding_dim,),
+            hidden_layers=(embedding_dim,),
             bias=True,
             last_linear=True,
             activation=jax.nn.silu,

@@ -25,6 +25,7 @@ class UpdateFeature(hk.Module):
         n_down: int,
         two_particle_stream_dim: int,
         node_edge_mapping: NodeEdgeMapping,
+        *,
         layer_is_last: bool = False,
     ):
         super().__init__()
@@ -328,8 +329,9 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
         attention_residual,
         attn_mlp_residual,
         indiv_mlp_residual,
+        **base_kwargs,
     ):
-        super().__init__(*args)
+        super().__init__(*args, **base_kwargs)
         self.num_heads = num_heads
         self.attention_residual = attention_residual
         self.attn_mlp_residual = attn_mlp_residual
