@@ -29,14 +29,10 @@ Assumptions about inputs (matching LapNet's setting):
     stuck in the kqT_v rule.
 """
 
-import folx
-from folx import register_function
-from folx.api import FwdJacobian, FwdLaplArray
-import haiku as hk
 import jax
 import jax.numpy as jnp
-import numpy as np
-
+from folx import register_function
+from folx.api import FwdJacobian, FwdLaplArray
 
 # ============================================================================
 # 1) Pure-jax forward (the thing folx routes to the custom rule)

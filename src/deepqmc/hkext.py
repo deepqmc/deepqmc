@@ -4,7 +4,6 @@ from typing import Optional, Union
 import haiku as hk
 import jax
 import jax.numpy as jnp
-import numpy as np
 from haiku.initializers import VarianceScaling
 from jax import tree_util
 from jax.nn import sigmoid, softplus
@@ -220,8 +219,8 @@ class SparseMultiHeadAttention(hk.MultiHeadAttention):
         assert mask is None, "mask not supported in this minimal subclass"
 
         # --- project to Q/K/V via hk.Linear (folx handles default) ---
-        q = self._linear_projection(query, self.key_size, "query")    # (..., N, H, K)
-        k = self._linear_projection(key,   self.key_size, "key")
+        q = self._linear_projection(query, self.key_size, "query")  # (..., N, H, K)
+        k = self._linear_projection(key, self.key_size, "key")
         v = self._linear_projection(value, self.value_size, "value")  # (..., N, H, V)
 
         # Move H axis next to N for sparse_attention's contract
@@ -231,15 +230,16 @@ class SparseMultiHeadAttention(hk.MultiHeadAttention):
         v = jnp.swapaxes(v, -2, -3)
 
         # --- wide-scope sparse attention (folx routes to our custom rule) ---
-        attn_out = sparse_attention(q, k, v)                          # (..., H, N, V)
+        attn_out = sparse_attention(q, k, v)  # (..., H, N, V)
 
         # Reshape & final projection
-        attn_out = jnp.swapaxes(attn_out, -2, -3)                     # (..., N, H, V)
-        attn_out = attn_out.reshape(*attn_out.shape[:-2], -1)         # (..., N, H·V)
-        final = hk.Linear(self.model_size,
-                          w_init=self.w_init,
-                          with_bias=self.with_bias,
-                          b_init=self.b_init,
-                          name="linear")
+        attn_out = jnp.swapaxes(attn_out, -2, -3)  # (..., N, H, V)
+        attn_out = attn_out.reshape(*attn_out.shape[:-2], -1)  # (..., N, H·V)
+        final = hk.Linear(
+            self.model_size,
+            w_init=self.w_init,
+            with_bias=self.with_bias,
+            b_init=self.b_init,
+            name="linear",
+        )
         return final(attn_out)
-
