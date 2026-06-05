@@ -28,6 +28,7 @@ Assumptions about inputs (matching LapNet's setting):
     pays the full n_inputs · N² · D_v matmul cost — the same place we got
     stuck in the kqT_v rule.
 """
+
 import folx
 from folx import register_function
 from folx.api import FwdJacobian, FwdLaplArray
@@ -40,6 +41,7 @@ import numpy as np
 # ============================================================================
 # 1) Pure-jax forward (the thing folx routes to the custom rule)
 # ============================================================================
+
 
 @jax.jit
 def sparse_attention(q, k, v):
@@ -57,6 +59,7 @@ def sparse_attention(q, k, v):
 # ============================================================================
 # 2) Custom forward-Laplacian rule (closely follows LapNet's algorithm)
 # ============================================================================
+
 
 def _sparse_attention_rule(args, kwargs, sparsity_threshold):
     print("Using Claude's original implementation.")
@@ -76,7 +79,7 @@ def _sparse_attention_rule(args, kwargs, sparsity_threshold):
     D_v = v.shape[-1]
     scale = 1.0 / jnp.sqrt(D_k)
 
-    dq, dk = q_arr.jacobian.data, k_arr.jacobian.data       # (k_x, H, N, D_*)
+    dq, dk = q_arr.jacobian.data, k_arr.jacobian.data  # (k_x, H, N, D_*)
     k_x = dq.shape[0]
     lap_q, lap_k = q_arr.laplacian, k_arr.laplacian
     lap_v = v_arr.laplacian
@@ -85,11 +88,13 @@ def _sparse_attention_rule(args, kwargs, sparsity_threshold):
     if v_arr.jacobian.weak:
         v_jac = v_arr.jacobian.dense_array
     else:
-        v_jac = v_arr.jacobian.data                          # (n_inputs, H, N, D_v)
+        v_jac = v_arr.jacobian.data  # (n_inputs, H, N, D_v)
     n_inputs = v_jac.shape[0]
-    assert n_inputs == N * k_x, "expecting n_inputs = N · k_x for the Linear-of-x setting"
+    assert (
+        n_inputs == N * k_x
+    ), "expecting n_inputs = N · k_x for the Linear-of-x setting"
     # Re-shape so the n_inputs axis splits into (electron, slot)
-    v_jac_r = v_jac.reshape(N, k_x, H, N, D_v)               # (p, s, h, t, d)
+    v_jac_r = v_jac.reshape(N, k_x, H, N, D_v)  # (p, s, h, t, d)
 
     eye_N = jnp.eye(N, dtype=q.dtype)
     arange_N = jnp.arange(N)
@@ -109,7 +114,7 @@ def _sparse_attention_rule(args, kwargs, sparsity_threshold):
     dlogits_j = dlogits_j.at[..., arange_N, arange_N].add(-diag_j)
 
     # lap_logits = lap(q)@k.T + q@lap(k).T + 2·cross_kq on diagonal
-    cross_kq_diag = jnp.einsum('shid,shid->hi', dq, dk)      # (H, N)
+    cross_kq_diag = jnp.einsum('shid,shid->hi', dq, dk)  # (H, N)
     lap_logits = (
         jnp.matmul(lap_q, jnp.swapaxes(k, -2, -1)) * scale
         + jnp.matmul(q, jnp.swapaxes(lap_k, -2, -1)) * scale
@@ -120,78 +125,80 @@ def _sparse_attention_rule(args, kwargs, sparsity_threshold):
     # Step 2:  exp(logits)             (chain rule, still weak)
     # ----------------------------------------------------------------------
     max_logits = jax.lax.stop_gradient(jnp.max(logits, axis=-1, keepdims=True))
-    exp_logits = jnp.exp(logits - max_logits)                # (H, N, N)
-    dexp_i = exp_logits[None] * dlogits_i                    # (k_x, H, N, N)
+    exp_logits = jnp.exp(logits - max_logits)  # (H, N, N)
+    dexp_i = exp_logits[None] * dlogits_i  # (k_x, H, N, N)
     dexp_j = exp_logits[None] * dlogits_j
     # |grad logits|² for the exp chain-rule.  The i-side and j-side x0_idx
     # families are disjoint, so the squares add.
-    grad_logits_sq = (dlogits_i ** 2).sum(0) + (dlogits_j ** 2).sum(0)
+    grad_logits_sq = (dlogits_i**2).sum(0) + (dlogits_j**2).sum(0)
     lap_exp = exp_logits * (lap_logits + grad_logits_sq)
 
     # ----------------------------------------------------------------------
     # Step 3:  sum_exp = sum_j exp_logits  +  Y_num = exp_logits @ v
     # ----------------------------------------------------------------------
-    sum_exp = jnp.sum(exp_logits, axis=-1, keepdims=True)    # (H, N, 1)
-    sum_exp_v = jnp.matmul(exp_logits, v)                    # (H, N, D_v)
+    sum_exp = jnp.sum(exp_logits, axis=-1, keepdims=True)  # (H, N, 1)
+    sum_exp_v = jnp.matmul(exp_logits, v)  # (H, N, D_v)
 
     # -- gradient of sum_exp (dense over n_inputs) --
     # i-side stays weak (sum_j doesn't touch the i-indexed slots):
-    dsum_exp_i_weak = dexp_i.sum(-1)                          # (k_x, H, N)
+    dsum_exp_i_weak = dexp_i.sum(-1)  # (k_x, H, N)
     # j-side densifies (each j becomes its own input slot):
     # dsum_exp[a=j*k_x+s, h, i] = dexp_j[s, h, i, j]
-    dsum_exp_j_dense = dexp_j.transpose(3, 0, 1, 2)           # (N=j, k_x, H, N=i)
+    dsum_exp_j_dense = dexp_j.transpose(3, 0, 1, 2)  # (N=j, k_x, H, N=i)
     dsum_exp_j_dense = dsum_exp_j_dense.reshape(N * k_x, H, N)
     # i-side scattered to dense form:
     dsum_exp_i_dense = (
-        dsum_exp_i_weak.transpose(2, 0, 1)[:, :, :, None]    # (N=i_pos, k_x, H, 1)
-        * eye_N[:, None, None, :]                             # (N=i_pos, 1, 1, N=i_jac)
+        dsum_exp_i_weak.transpose(2, 0, 1)[:, :, :, None]  # (N=i_pos, k_x, H, 1)
+        * eye_N[:, None, None, :]  # (N=i_pos, 1, 1, N=i_jac)
     ).reshape(N * k_x, H, N)
-    dsum_exp = dsum_exp_i_dense + dsum_exp_j_dense           # (n_inputs, H, N)
+    dsum_exp = dsum_exp_i_dense + dsum_exp_j_dense  # (n_inputs, H, N)
 
-    lap_sum_exp = lap_exp.sum(-1)                             # (H, N)
+    lap_sum_exp = lap_exp.sum(-1)  # (H, N)
 
     # -- gradient of sum_exp_v = exp_logits @ v  (dense over n_inputs) --
     # 3a) exp_logits @ dv   — the irreducible matmul, structured via the
     #     (p, s, h, t, d) reshape of v_jac.
-    sum_exp_v_grad_v = jnp.einsum('hit,pshtd->pshid', exp_logits, v_jac_r)  # (N, k_x, H, N, D_v)
+    sum_exp_v_grad_v = jnp.einsum(
+        'hit,pshtd->pshid', exp_logits, v_jac_r
+    )  # (N, k_x, H, N, D_v)
     # 3b) dexp_i  @ v       — sparse, placed at i-diagonal.
-    sum_exp_v_grad_i = jnp.einsum('shij,hjd->shid', dexp_i, v)             # (k_x, H, N=i, D_v)
+    sum_exp_v_grad_i = jnp.einsum('shij,hjd->shid', dexp_i, v)  # (k_x, H, N=i, D_v)
     sum_exp_v_grad_i_dense = (
-        sum_exp_v_grad_i.transpose(2, 0, 1, 3)[:, :, :, None, :]            # (N=p, k_x, H, 1, D_v)
-        * eye_N[:, None, None, :, None]                                      # (N=p, 1, 1, N=i_jac, 1)
-    )                                                                        # (N, k_x, H, N, D_v)
+        sum_exp_v_grad_i.transpose(2, 0, 1, 3)[
+            :, :, :, None, :
+        ]  # (N=p, k_x, H, 1, D_v)
+        * eye_N[:, None, None, :, None]  # (N=p, 1, 1, N=i_jac, 1)
+    )  # (N, k_x, H, N, D_v)
     # 3c) dexp_j  @ v       — sparse, placed at j-row of n_inputs.
-    sum_exp_v_grad_j = jnp.einsum('shij,hjd->jshid', dexp_j, v)            # (N=j, k_x, H, N, D_v)
+    sum_exp_v_grad_j = jnp.einsum('shij,hjd->jshid', dexp_j, v)  # (N=j, k_x, H, N, D_v)
     dsum_exp_v_r = sum_exp_v_grad_v + sum_exp_v_grad_i_dense + sum_exp_v_grad_j
     dsum_exp_v = dsum_exp_v_r.reshape(N * k_x, H, N, D_v)
 
     # -- Laplacian of sum_exp and sum_exp_v --
     # lap(sum_exp_v) = lap(exp_logits) @ v + 2·cross(d_exp, d_v) + exp_logits @ lap(v)
-    lap_sum_exp_v_a = jnp.matmul(lap_exp, v)                                # (H, N, D_v)
+    lap_sum_exp_v_a = jnp.matmul(lap_exp, v)  # (H, N, D_v)
     lap_sum_exp_v_c = jnp.matmul(exp_logits, lap_v)
     # cross_i[h, i, d] = sum_{s, j} d_exp_i[s, h, i, j] · v_jac_r[i, s, h, j, d]
     #   (i-side weak: x0_idx = i*k_x + s, so the contributing v_jac row is i)
     cross_i = jnp.einsum('shij,ishjd->hid', dexp_i, v_jac_r)
     # cross_j[h, i, d] = sum_{s, j} d_exp_j[s, h, i, j] · v_jac_r[j, s, h, j, d]
     #   (j-side weak: x0_idx = j*k_x + s, contributing row of v_jac is j)
-    v_jac_r_diag_jj = v_jac_r[arange_N, :, :, arange_N, :]                  # (N=j, k_x, H, D_v)
+    v_jac_r_diag_jj = v_jac_r[arange_N, :, :, arange_N, :]  # (N=j, k_x, H, D_v)
     cross_j = jnp.einsum('shij,jshd->hid', dexp_j, v_jac_r_diag_jj)
     lap_sum_exp_v = lap_sum_exp_v_a + 2 * (cross_i + cross_j) + lap_sum_exp_v_c
 
     # ----------------------------------------------------------------------
     # Step 4:  Y = sum_exp_v / sum_exp[..., None]    (final divide, densifies)
     # ----------------------------------------------------------------------
-    Y = sum_exp_v / sum_exp                                                  # (H, N, D_v)
+    Y = sum_exp_v / sum_exp  # (H, N, D_v)
     # dY = (d sum_exp_v - Y · d sum_exp[..., None]) / sum_exp
-    dY = (
-        dsum_exp_v - Y[None] * dsum_exp[..., None]                           # (n_inputs, H, N, D_v)
-    ) / sum_exp
+    dY = (dsum_exp_v - Y[None] * dsum_exp[..., None]) / sum_exp  # (n_inputs, H, N, D_v)
 
     # lap(Y) for y = u/v:
     #   lap(y) = ( lap(u) − 2 ⟨du, dv⟩/v − y·lap(v) + 2·y·|dv|²/v ) / v
     # Here u = sum_exp_v (shape (H, N, D_v)), v_d = sum_exp (shape (H, N, 1)).
-    dudv = (dsum_exp_v * dsum_exp[..., None]).sum(0)                         # ⟨du, dv⟩, (H, N, D_v)
-    dv_sq = (dsum_exp ** 2).sum(0)                                            # |dv|², (H, N)
+    dudv = (dsum_exp_v * dsum_exp[..., None]).sum(0)  # ⟨du, dv⟩, (H, N, D_v)
+    dv_sq = (dsum_exp**2).sum(0)  # |dv|², (H, N)
     lap_Y = (
         lap_sum_exp_v
         - 2 * dudv / sum_exp
