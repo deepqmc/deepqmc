@@ -287,7 +287,37 @@ class NodeAttentionElectronUpdateFeature(UpdateFeature):
 
 
 class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
-    """TODO: docstring"""
+    r"""LapNet-style dual-stream attention block as an electron update feature.
+
+    Implements one Transformer-like layer of the LapNet ansatz.  Each electron carries
+    **two embeddings** (see :class:`~deepqmc.gnn.graph.ElectronStream`):
+
+      * ``indiv`` — a per-electron embedding whose forward-Laplacian Jacobian stays
+      sparse. Used as the queries and keys for attention.
+      * ``attn`` — a per-electron embedding whose Jacobian densifies once attention
+      mixes contributions from all electrons.  Used as the values for attention.
+
+    Args:
+        n_up (int):  number of spin-up electrons
+        n_down (int):  number of spin-down electrons
+        two_particle_stream_dim (int):  dimension of the two-particle stream, unused
+            here
+        node_edge_mapping (~deepqmc.gnn.utils.NodeEdgeMapping):  node/edge
+            mapping, unused here
+        num_heads (int):  number of attention heads.  ``num_heads`` must
+            divide the attentive embedding dimension; ``D_per_head =
+            h.shape[-1] // num_heads``.
+        indiv_mlp_factory (~typing.Type[~deepqmc.hkext.MLP]):  factory for the
+            MLP applied to the individual stream
+        attn_mlp_factory (~typing.Type[~deepqmc.hkext.MLP]):  factory for the
+            MLP applied to the attention output
+        attention_residual (Optional[~deepqmc.hkext.Residual]):  optional
+            residual connection wrapping the attention call
+        attn_mlp_residual (Optional[~deepqmc.hkext.Residual]):  optional
+            residual connection wrapping ``attn_mlp``
+        indiv_mlp_residual (Optional[~deepqmc.hkext.Residual]):  optional
+            residual connection wrapping ``indiv_mlp``
+    """
 
     def __init__(
         self,
