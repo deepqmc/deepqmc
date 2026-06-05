@@ -32,7 +32,7 @@ conf_coeff:
 omni_factory:
   _target_: deepqmc.wf.omni.OmniNet
   _partial_: true
-  embedding_dim: 256 # todo
+  embedding_dim: 256
   jastrow_factory: null
   backflow_factory:
     _target_: deepqmc.wf.omni.Backflow
@@ -41,7 +41,7 @@ omni_factory:
       _target_: deepqmc.hkext.MLP
       _partial_: true
       hidden_layers: ['log', 1]
-      bias: true # LapNet uses bias here, while our default Psiformer does not
+      bias: true # LapNet uses bias here, while Psiformer does not
       last_linear: true
       activation: null
       init: ferminet
@@ -67,16 +67,16 @@ omni_factory:
       project_to_embedding_dim: true
       use_individual_stream: true
     two_particle_stream_dim: 32 # not used, irrelevant
-    self_interaction: true # todo
-    edge_features: null # todo
-    layer_factory: # todo
-      _target_: deepqmc.gnn.electron_gnn.ElectronGNNLayer # todo
-      _partial_: true # todo
+    self_interaction: true
+    edge_features: null
+    layer_factory:
+      _target_: deepqmc.gnn.electron_gnn.ElectronGNNLayer
+      _partial_: true
       subnet_factory:
         _target_: deepqmc.hkext.Identity
         _partial_: true
-      electron_residual: false # todo
-      nucleus_residual: false # todo
+      electron_residual: false
+      nucleus_residual: false
       two_particle_residual: false
       deep_features: false
       update_rule: concatenate
@@ -86,30 +86,30 @@ omni_factory:
         num_heads: 4
         indiv_mlp_factory:
           _target_: deepqmc.hkext.MLP
-          _partial_: true # todo
-          hidden_layers: ['log', 2] # todo
-          bias: true # todo
-          last_linear: false # todo
-          activation: # todo
-            _target_: jax.numpy.tanh # todo
-            _partial_: true # todo
-          init: ferminet # todo
-        attn_mlp_factory:
-          _target_: deepqmc.hkext.MLP
           _partial_: true
-          hidden_layers: ['log', 2] # todo
-          bias: true # todo
+          hidden_layers: ['log', 2] # LapNet from [Li et al. 2024] uses just 1 dense layer here, we keep 2 layers for better direct comparison with Psiformer
+          bias: true 
           last_linear: false
           activation:
             _target_: jax.numpy.tanh
             _partial_: true
           init: ferminet
-        attention_residual: # todo
-          _target_: deepqmc.hkext.ResidualConnection # todo
-          normalize: false # todo
-        attn_mlp_residual: # todo
-          _target_: deepqmc.hkext.ResidualConnection # todo
-          normalize: false # todo
-        indiv_mlp_residual: # todo
-          _target_: deepqmc.hkext.ResidualConnection # todo
-          normalize: false # todo
+        attn_mlp_factory:
+          _target_: deepqmc.hkext.MLP
+          _partial_: true
+          hidden_layers: ['log', 2] # LapNet from [Li et al. 2024] uses just 1 dense layer here, we keep 2 layers for better direct comparison with Psiformer
+          bias: true
+          last_linear: false
+          activation:
+            _target_: jax.numpy.tanh
+            _partial_: true
+          init: ferminet
+        attention_residual:
+          _target_: deepqmc.hkext.ResidualConnection
+          normalize: false
+        attn_mlp_residual:
+          _target_: deepqmc.hkext.ResidualConnection
+          normalize: false
+        indiv_mlp_residual:
+          _target_: deepqmc.hkext.ResidualConnection
+          normalize: false
