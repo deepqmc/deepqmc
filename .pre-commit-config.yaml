@@ -47,7 +47,7 @@ repos:
     hooks:
     - id: pyright
       name: Check types with pyright
-      additional_dependencies: [jax_dataclasses, hydra-core]
+      additional_dependencies: [jax_dataclasses, hydra-core, tqdm, toml]
       args: ['src/deepqmc']
   - repo: https://github.com/codespell-project/codespell
     rev: v2.3.0
