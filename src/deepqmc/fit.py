@@ -1,7 +1,7 @@
 import operator
 from collections.abc import Generator, Iterable
 from functools import reduce
-from typing import Optional, Type
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
@@ -10,7 +10,7 @@ from .ewm import init_multi_mol_multi_state_ewm
 from .hamil import MolecularHamiltonian
 from .loss import LossFunctionFactory
 from .observable import ObservableMonitor
-from .optimizer import NoOptimizer, Optimizer, pmap_merge_states
+from .optimizer import NoOptimizer, pmap_merge_states
 from .parallel import (
     local_slice,
     pexp_normalize_mean,
@@ -21,7 +21,7 @@ from .parallel import (
     select_one_device,
     split_on_devices,
 )
-from .types import Ansatz, DataDict, KeyArray, Stats, TrainState
+from .types import Ansatz, DataDict, KeyArray, OptimizerFactory, Stats, TrainState
 from .utils import split_dict
 
 __all__ = ()
@@ -31,7 +31,7 @@ def fit_wf(  # noqa: C901
     rng: KeyArray,
     hamil: MolecularHamiltonian,
     ansatz: Ansatz,
-    optimizer_factory: Type[Optimizer],
+    optimizer_factory: OptimizerFactory,
     molecule_idx_sampler,
     sampler,
     steps: Iterable,

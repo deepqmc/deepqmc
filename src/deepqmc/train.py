@@ -38,7 +38,7 @@ from .sampling import (
     equilibrate,
     initialize_sampler_state,
 )
-from .types import Ansatz, KeyArray, TrainState
+from .types import Ansatz, KeyArray, OptimizerFactory, TrainState
 from .wf.base import init_wf_params
 
 __all__ = ['train']
@@ -47,9 +47,9 @@ log = logging.getLogger(__name__)
 
 
 def train(  # noqa: C901
-    hamil,
+    hamil: MolecularHamiltonian,
     ansatz: Ansatz,
-    opt,
+    opt: Optional[OptimizerFactory],
     sampler_factory: Callable[
         [KeyArray, MolecularHamiltonian, Ansatz, list[Molecule], int, int],
         tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],
@@ -158,7 +158,7 @@ def train(  # noqa: C901
         electronic_states,
         molecule_batch_size,
     )
-    opt = opt or NoOptimizer
+    optimizer_factory = opt or NoOptimizer
     observable_monitors = observable_monitors or []
     observables = [
         (
@@ -335,7 +335,7 @@ def train(  # noqa: C901
                     rng,
                     hamil,
                     ansatz,
-                    opt,
+                    optimizer_factory,
                     molecule_idx_sampler,
                     sampler,
                     pbar,

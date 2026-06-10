@@ -6,6 +6,8 @@ from typing_extensions import TypeAlias
 
 import jax
 import jax_dataclasses as jdc
+from .loss import LossAndGradFunction
+from optimizer import Optimizer
 
 
 class Psi(NamedTuple):
@@ -58,6 +60,7 @@ DataDict: TypeAlias = dict
 Batch: TypeAlias = tuple[PhysicalConfiguration, Weight, Optional[DataDict]]
 WaveFunction: TypeAlias = Callable[[PhysicalConfiguration], Psi]
 ParametrizedWaveFunction: TypeAlias = Callable[[Params, PhysicalConfiguration], Psi]
+OptimizerFactory: TypeAlias = Callable[[LossAndGradFunction], Optimizer]
 
 
 class TrainState(NamedTuple):
