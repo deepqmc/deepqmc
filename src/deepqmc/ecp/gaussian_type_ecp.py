@@ -172,9 +172,7 @@ class GaussianTypeECP(Potential):
             rng (jax.random.PRNGKey): key used for PRNG.
             phys_conf (:class:`deepqmc.types.PhysicalConfiguration`): electron and
                 nuclear coordinates.
-            mol (:class:`deepqmc.Molecule`): a molecule that is used to load the
-                ECP parameters.
-            wf (:class:`~deepqmc.types.WaveFunction): the wave function ansatz.
+            wf (:class:`~deepqmc.types.WaveFunction`): the wave function ansatz.
         """
         assert rng is not None
 

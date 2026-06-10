@@ -25,6 +25,16 @@ def compute_oscillator_strength(
 
     local_energies_mask (jax.Array): Optional, mask for the local energies.
     ratios_mask (jax.Array): Optional, mask for the ratios.
+
+    Returns:
+        tuple[
+            tuple[jax.Array, jax.Array],
+            tuple[jax.Array, jax.Array],
+            tuple[jax.Array, jax.Array],
+        ]:
+            the oscillator strength with error,
+            the transition dipole moment with error,
+            and the excitation energies with errors.
     """
 
     sample_size = local_energies.shape[-1]

@@ -22,15 +22,18 @@ def compute_wave_function_values(
     r"""Compute the value of all WFs at samples drawn from all WFs.
 
     Args:
-        params (dict): PyTree of WF parameters, with leading axis over the
-            different WFs. Shape: :data:`[n_wfs, ...]`.
+        ansatz (~deepqmc.types.Ansatz): the ansatz object.
+        params (~deepqmc.types.Params): PyTree of WF parameters, with leading axis
+            over the different WFs. Shape: :data:`[n_wfs, ...]`.
         phys_conf (~deepqmc.types.PhysicalConfiguration): input physical
             configuration samples, with leading axis over the different WFs
             the samples were drawn from.
             Shape: :data:`[n_wfs, elec_batch_size, ...]`
 
     Returns:
-        ~deepqmc.types.Psi: the WF values
+        tuple[~deepqmc.types.Psi, ~deepqmc.types.Stats]: the WF values and
+        auxiliary statistics.
+            The WF values are
             :math:`\Psi[i, \, j, \, :] = \Psi_i({\bf r} \sim \Psi^2_j)`,
             shape: :data:`[n_wfs, n_wfs, elec_batch_size]`.
     """
@@ -56,9 +59,8 @@ def compute_single_sample_psi_ratios(psi: Psi, mean_log_psi: jax.Array) -> jax.A
     Args:
         psi (~deepqmc.types.Psi): all WF values for a single molecule
             and electron sample, shape: :data:`[electronic_states, electronic_states]`.
-            mean_log_psi (jax.Array): mean log magnitude of the WFs, [electronic_states]
-        mean_log_psi (jax.Array): the mean log psi values for each state,
-            shape [electronic_states]
+        mean_log_psi (jax.Array): the mean log magnitude of the WFs,
+            shape :data:`[electronic_states]`.
 
     Returns:
         jax.Array: the WF ratios

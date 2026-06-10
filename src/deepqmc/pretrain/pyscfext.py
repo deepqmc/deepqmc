@@ -80,15 +80,17 @@ def pyscf_from_hamil(  # type: ignore
     Args:
         hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the
             molecule on which to perform the SCF calculation.
-        basis (str): the name of the Gaussian basis set to use.
-        coords (jax.Array): optional, nuclear coordinates differring from hamil.
+        basis (str or Mapping[int, str]): the Gaussian basis set to use, or a
+            per-atom basis mapping.
+        coords (jax.Array): optional, nuclear coordinates differing from hamil.
         n_states (int): optional, the number of electronic states to compute.
         cas (tuple[int,int]): optional, the active space definition for CASSCF.
         state_avg (bool): optional, whether to use state averaging in CASSCF
             for excited states.
-        fix_spin (int): optional, whether to target specific spin states
+        fix_spin (float): optional, whether to target specific spin states
             (S^2 value) in CASSCF.
-        workdir (str): optional, directory for storing pyscf results.
+        chkfile (str): optional, path to the PySCF checkpoint file to write.
+        kwargs: optional keyword arguments forwarded to :func:`pyscf.gto.M`.
 
     Returns:
         tuple: the pyscf molecule and the SCF calculation object.

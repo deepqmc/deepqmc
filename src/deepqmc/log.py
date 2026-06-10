@@ -248,12 +248,12 @@ class MetricLogger(Protocol):
     def update(
         self,
         step: int,
-        single_device_stat: Stats,
+        single_device_stats: Stats,
         multi_device_stats: Stats,
         mol_idxs: jax.Array,
         prefix: Optional[str] = None,
     ):
-        r"""Update the MetricLoger with single and multi device stats.
+        r"""Update the MetricLogger with single and multi device stats.
 
         Args:
             step (int): the step at which to add the new entries.
@@ -261,8 +261,8 @@ class MetricLogger(Protocol):
                 that are on a single device.
             multi_device_stats (dict): a dictionary containing the entries to add,
                 that are stored over multiple devices.
-            mol_idxs (Array[int]): indices of molecules considered in the given step.
-            prefix (str): optional, an optional prefix to append to the keys.
+            mol_idxs (jax.Array): indices of molecules considered in the given step.
+            prefix (Optional[str]): optional, an optional prefix to append to the keys.
         """
         ...
 
@@ -305,8 +305,8 @@ class TensorboardMetricLogger:
                 that are on a single device.
             multi_device_stats (dict): a dictionary containing the entries to add,
                 that are stored over multiple devices.
-            mol_idxs (Array[int]): indices of molecules considered in the given step.
-            prefix (~.typingOptional[str]): an optional prefix to append to the stat
+            mol_idxs (jax.Array): indices of molecules considered in the given step.
+            prefix (Optional[str]): an optional prefix to append to the stat
                 keys.
         """
         prefix = f'{prefix}/' if prefix else ''

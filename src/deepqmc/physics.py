@@ -44,8 +44,11 @@ class Potential(Protocol):
         r"""Compute the (local effective core) potential energy of the electrons.
 
         Args:
-            phys_conf (:class:`deepqmc.types.PhysicalConfiguration`): electron and
+            phys_conf (:class:`~deepqmc.types.PhysicalConfiguration`): electron and
                 nuclear coordinates.
+
+        Returns:
+            ~deepqmc.types.Energy: the local potential energy.
         """
         ...
 
@@ -59,6 +62,15 @@ class Potential(Protocol):
 
         When the potential is fully local, (e.g. Coulomb potential or
         PseudoHamiltonian), this function should return 0.0.
+
+        Args:
+            rng (Optional[:class:`~deepqmc.types.KeyArray`]): PRNG key, or None.
+            phys_conf (:class:`~deepqmc.types.PhysicalConfiguration`): electron and
+                nuclear coordinates.
+            wf (~deepqmc.types.WaveFunction): wave function.
+
+        Returns:
+            ~deepqmc.types.Energy: the non-local contribution to the energy.
         """
         return jnp.array(0.0)
 
@@ -73,10 +85,14 @@ class Potential(Protocol):
         Typically, -1/2Δ, where Δ is the laplacian of the wave function.
 
         Args:
-            phys_conf (:class:`deepqmc.types.PhysicalConfiguration`): electron and
+            phys_conf (:class:`~deepqmc.types.PhysicalConfiguration`): electron and
                 nuclear coordinates.
-            wf (:class:`deepqmc.types.WaveFunction`): wave function.
+            wf (:class:`~deepqmc.types.WaveFunction`): wave function.
             laplacian_factory (Callable): factory to compute the laplacian and gradient.
+
+        Returns:
+            tuple[~deepqmc.types.Energy, jax.Array, jax.Array]: the kinetic energy,
+            the laplacian of the log WF, and the squared quantum force.
         """
 
         def wave_function(r: jax.Array) -> jax.Array:

@@ -52,16 +52,16 @@ def clip_psi_ratio(
     :math:`\text{ratio}[i,\,j,\,:]=\frac{\Psi_i(r\sim\Psi^2_j)}{\Psi_j(r\sim\Psi^2_j)}`.
 
     Args:
-        clip_mask_fn (Callable[[jax.Array, jax.Array], (jax.Array, jax.Array)]):
-            function taking as input an electron batch of the ratios between two WFs,
-            the estimated overlap of these two WFs, and returning a tuple of the clipped
-            ratios and an identically shaped boolean mask array to be applied to the
-            gradients.
+        clip_mask_fn (Callable[[jax.Array], tuple[jax.Array, jax.Array]]): function
+            taking as input an electron batch of ratios and returning a tuple of the
+            clipped ratios and an identically shaped boolean mask array to be applied
+            to the gradients.
         psi_ratio (jax.Array): the electron batch of psi_ratios, shape:
             ``[mol_batch_size, electronic_states, electronic_states,
             electron_batch_size // device_count]``.
-        overlap (jax.Array): the overlap estimate of the electronic states, shape:
-            ``[mol_batch_size, electronic_states, electronic_states]``.
+
+    Returns:
+        tuple[jax.Array, jax.Array]: the clipped WF ratios and gradient mask.
     """
     return jax.vmap(jax.vmap(jax.vmap(clip_mask_fn)))(psi_ratio)
 
@@ -104,9 +104,7 @@ def psi_ratio_clip_and_mask(
     Args:
         ratio ([electron_batch_size]): ratio of log WF values:
             :math:`\frac{\Psi_i({\bf r}_j)}{\Psi_j({\bf r}_j)}`.
-        overlap (float): the approximate overlap of the two WFs:
-            :math:`S_{ij}`.
-        clip_width (float): clip width to use when clipping ratio
+        clip_width (float): clip width to use when clipping ratio.
         exclude_width (float): default: :data:`jnp.inf`, deviation threshold above which
             outlier ratios are excluded from the overlap gradient computation.
 
