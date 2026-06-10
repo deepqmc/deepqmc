@@ -26,6 +26,8 @@ loss_function_factory:
     _partial_: true
     clip_width: 5.0
     median_center: false
+observable_monitors:
+  - local_energy
 metric_logger_constructor:
   _target_: deepqmc.log.TensorboardMetricLogger
   _partial_: true
