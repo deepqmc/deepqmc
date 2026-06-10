@@ -9,6 +9,10 @@ import jax_dataclasses as jdc
 from .loss import LossAndGradFunction
 from optimizer import Optimizer
 
+from .hamil import MolecularHamiltonian
+from .molecule import Molecule
+from .sampling import MoleculeIdxSampler, MultiNuclearGeometrySampler
+
 
 class Psi(NamedTuple):
     r"""Represent wave function values.
@@ -114,3 +118,9 @@ class Ansatz(Protocol):
             ~deepqmc.types.Psi: the value of the wave function.
         """
         ...
+
+
+SamplerFactory: TypeAlias = Callable[
+    [KeyArray, MolecularHamiltonian, Ansatz, list[Molecule], int, int],
+    tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],
+]

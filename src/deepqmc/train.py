@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from functools import partial
 from itertools import count
 from typing import Optional, Type, Union
@@ -32,13 +32,8 @@ from .parallel import pmap_pmean, split_on_devices, split_rng_key_to_devices
 from .physics import pairwise_self_distance
 from .pretrain.pretraining import pretrain
 from .pretrain.pyscfext import compute_scf_solution
-from .sampling import (
-    MoleculeIdxSampler,
-    MultiNuclearGeometrySampler,
-    equilibrate,
-    initialize_sampler_state,
-)
-from .types import Ansatz, KeyArray, OptimizerFactory, TrainState
+from .sampling import equilibrate, initialize_sampler_state
+from .types import Ansatz, OptimizerFactory, SamplerFactory, TrainState
 from .wf.base import init_wf_params
 
 __all__ = ['train']
@@ -50,10 +45,7 @@ def train(  # noqa: C901
     hamil: MolecularHamiltonian,
     ansatz: Ansatz,
     opt: Optional[OptimizerFactory],
-    sampler_factory: Callable[
-        [KeyArray, MolecularHamiltonian, Ansatz, list[Molecule], int, int],
-        tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],
-    ],
+    sampler_factory: SamplerFactory,
     steps: int,
     seed: Optional[int],
     electron_batch_size: int,

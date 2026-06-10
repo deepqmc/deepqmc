@@ -21,6 +21,10 @@ from .parallel import (
     select_one_device,
     split_on_devices,
 )
+from .sampling.combined_samplers import (
+    MoleculeIdxSampler,
+    MultiNuclearGeometrySampler,
+)
 from .types import Ansatz, DataDict, KeyArray, OptimizerFactory, Stats, TrainState
 from .utils import split_dict
 
@@ -32,8 +36,8 @@ def fit_wf(  # noqa: C901
     hamil: MolecularHamiltonian,
     ansatz: Ansatz,
     optimizer_factory: OptimizerFactory,
-    molecule_idx_sampler,
-    sampler,
+    molecule_idx_sampler: MoleculeIdxSampler,
+    sampler: MultiNuclearGeometrySampler,
     steps: Iterable,
     train_state: TrainState,
     merge_keys: Optional[list[str]],
