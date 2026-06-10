@@ -72,67 +72,65 @@ def train(  # noqa: C901
     It initializes and equilibrates the MCMC sampling of the wave function ansatz,
     then optimizes or samples it using the variational principle. It optionally
     saves checkpoints and rewinds the training/evaluation if an error is encountered.
-    If an optimizer is supplied, the Ansatz is optimized, otherwise the Ansatz is
-    only sampled.
+    If an optimizer factory is supplied, the Ansatz is optimized, otherwise the
+    Ansatz is only sampled.
 
     Args:
-        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the
-            physical system.
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the physical
+            system.
         ansatz (~deepqmc.types.Ansatz): the wave function Ansatz.
-        opt (``kfac_jax`` or ``optax`` optimizers | :data:`None`):
-            the optimizer. Possible values are:
-
-            - :class:`kfac_jax.Optimizer`:
-                the partially initialized KFAC optimizer is used
-            - an :data:`optax` optimizer instance:
-                the supplied :data:`optax` optimizer is used.
-            - :data:`None`:
-                no optimizer is used, e.g. the evaluation of the Ansatz is performed.
-        sampler_factory (~collections.abc.Callable): a function that returns a Sampler
-            instance
+        opt (Optional[~deepqmc.types.OptimizerFactory]): optional optimizer factory
+            or ``None``. Possible values include partially-initialized KFAC
+            optimizers, an ``optax`` optimizer instance, or ``None`` to run
+            evaluation-only.
+        sampler_factory (~deepqmc.types.SamplerFactory): callable that returns a
+            ``(molecule_idx_sampler, sampler)`` pair used to create sampler state.
         steps (int): number of optimization steps.
-        seed (int | None): the seed used for PRNG, if omitted,
-            ``numpy.random.default_rng().integers(2 ** 32)`` will be called to obtain a
-            random seed from the OS.
-        electron_batch_size (int): the number of electron samples considered in a batch
+        seed (Optional[int]): the seed used for PRNG; if omitted a random seed is
+            drawn using ``numpy.random.default_rng().integers(2**32)``.
+        electron_batch_size (int): the number of electron samples considered in a
+            batch.
         molecule_batch_size (int): optional, the number of molecules considered in a
-            batch. Only needed for transferable training.
-        electronic_states (int): optional, the number of electronic states to consider.
-        mols (list[~deepqmc.molecule.Molecule]): optional, a sequence of molecules
-            to consider for transferable training. If None the default molecule from
-            hamil is used.
-        workdir (str): optional, path, where results should be saved.
-        train_state (~deepqmc.types.TrainState): optional, training checkpoint to
-            restore training or run evaluation.
-        init_step (int): optional, initial step index, useful if
-            calculation is restarted from checkpoint saved on disk.
-        max_restarts (int): optional, the maximum number of times the training is
+            batch (used for transferable training).
+        electronic_states (int): optional, the number of electronic states to
+            consider.
+        mols (Optional[list[~deepqmc.molecule.Molecule]]): optional sequence of
+            molecules to consider for transferable training. If ``None``, the default
+            molecule in ``hamil`` is used.
+        workdir (Optional[str]): optional path where results should be saved.
+        train_state (Optional[~deepqmc.types.TrainState]): optional training
+            checkpoint to restore training or run evaluation.
+        init_step (int): optional initial step index, useful when restarting from a
+            checkpoint saved on disk.
+        max_restarts (int): optional maximum number of times the training is
             retried before a :class:`NaNError` is raised.
-        max_eq_steps (int): optional, maximum number of equilibration steps if not
+        max_eq_steps (int): optional maximum number of equilibration steps if not
             detected earlier.
-        eq_allow_early_stopping (bool): default ``True``, whether to allow the
-            equilibration to stop early when the equilibration criterion has been met.
-        pretrain_steps (int): optional, the number of pretraining steps wrt. to the
-            Baseline wave function obtained with pyscf.
-        pretrain_kwargs (dict): optional, extra arguments for pretraining.
-        chkpt_constructor (~typing.Type[~deepqmc.log.CheckpointStore]): optional, an
-            object that saves training checkpoints to the working directory.
-        metric_logger_constructor (~typing.Type[~deepqmc.log.MetricLogger]): optional,
-            an object that consumes metric logging information. If not specified, the
-            default :class:`~deepqmc.log.TensorboardMetricLogger` is used to create
-            tensorboard logs.
-        h5_logger_constructor (~typing.Type[~deepqmc.log.H5Logger]): optional, an object
-            that consumes metric logging information. If not specified, the default
-            :class:`~deepqmc.log.H5Logger` is used to write comprehensive training
-            statistics to an h5file.
-        merge_keys (list[str]): optional, list of strings for selecting parameters to be
-            shared across electronic states. Matching merge keys with (substrings of)
-            parameter keys.
-        loss_function_factory (~deepqmc.loss.loss_function.LossFunctionFactory):
-            optional, a callable returning a suitable loss function for the
-            optimization.
-        observable_monitors (list[~deepqmc.observable.ObservableMonitor]): optional,
-            list of observable monitors to be evaluated during training or evaluation.
+        eq_allow_early_stopping (bool): whether to allow equilibration to stop early
+            when an equilibration criterion is met.
+        pretrain_steps (Optional[int]): optional number of pretraining steps with the
+            baseline wave function obtained from pyscf.
+        pretrain_kwargs (Optional[dict]): optional extra arguments for pretraining.
+        chkpt_constructor (Optional[Type[~deepqmc.log.CheckpointStore]]): optional
+            constructor for a checkpoint store used to save training checkpoints to
+            ``workdir``.
+        metric_logger_constructor (Optional[Type[~deepqmc.log.MetricLogger]]):
+            optional constructor for a metric logger; defaults to
+            :class:`~deepqmc.log.TensorboardMetricLogger` when omitted.
+        h5_logger_constructor (Optional[Type[~deepqmc.log.H5Logger]]): optional
+            constructor for an HDF5 logger; defaults to :class:`~deepqmc.log.H5Logger`
+            when omitted.
+        merge_keys (Optional[list[str]]): optional list of parameter-key substrings
+            that should be shared across electronic states.
+        loss_function_factory (
+            Optional[~deepqmc.loss.loss_function.LossFunctionFactory]
+        ):
+            optional callable returning a loss function for the optimization.
+        observable_monitors (
+            Optional[list[Union[~deepqmc.observable.ObservableMonitor, str]]]
+        ):
+            optional list of observable monitors (or monitor names) to evaluate during
+            training/evaluation.
     """
     mode = 'evaluation' if opt is None else 'training'
     if seed is None:
