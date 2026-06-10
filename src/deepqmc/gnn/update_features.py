@@ -123,12 +123,12 @@ class EdgeSumElectronUpdateFeature(UpdateFeature):
         normalize (bool): whether to normalize the sum by the number of senders
     """
 
-    def __init__(self, *args, edge_types, normalize):
+    def __init__(self, *args, edge_types, normalize, **base_kwargs):
         assert all(
             edge_type in {'up', 'down', 'same', 'anti', 'ee', 'ne'}
             for edge_type in edge_types
         )
-        super().__init__(*args)
+        super().__init__(*args, **base_kwargs)
         self.normalize = normalize
         self.edge_types = edge_types
 
@@ -181,13 +181,20 @@ class ConvolutionElectronUpdateFeature(UpdateFeature):
     """
 
     def __init__(
-        self, *args, edge_types, normalize, w_factory, h_factory, w_for_ne=True
+        self,
+        *args,
+        edge_types,
+        normalize,
+        w_factory,
+        h_factory,
+        w_for_ne=True,
+        **base_kwargs,
     ):
         assert all(
             edge_type in {'up', 'down', 'same', 'anti', 'ee', 'ne'}
             for edge_type in edge_types
         )
-        super().__init__(*args)
+        super().__init__(*args, **base_kwargs)
         self.normalize = normalize
         self.edge_types = edge_types
         layer_types = [typ for typ in edge_types if typ != 'ee']
@@ -258,8 +265,16 @@ class NodeAttentionElectronUpdateFeature(UpdateFeature):
             connection after the MLP layer
     """
 
-    def __init__(self, *args, num_heads, mlp_factory, attention_residual, mlp_residual):
-        super().__init__(*args)
+    def __init__(
+        self,
+        *args,
+        num_heads,
+        mlp_factory,
+        attention_residual,
+        mlp_residual,
+        **base_kwargs,
+    ):
+        super().__init__(*args, **base_kwargs)
         self.num_heads = num_heads
         self.attention_residual = attention_residual
         self.mlp_residual = mlp_residual
@@ -404,8 +419,9 @@ class CombinedNodeAttentionUpdateFeature(UpdateFeature):
         attention_residual,
         mlp_residual,
         elec_to_nuc,
+        **base_kwargs,
     ):
-        super().__init__(*args)
+        super().__init__(*args, **base_kwargs)
         self.num_heads = num_heads
         self.attention_residual = attention_residual
         self.mlp_residual = mlp_residual
