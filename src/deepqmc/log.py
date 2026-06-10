@@ -354,6 +354,50 @@ class TensorboardMetricLogger:
             }
         self.writer.add_custom_scalars(self.layout)
 
+    def _write_full_dataset_scalar(
+        self, step: int, prefix: Optional[str], k: str, v: jax.Array
+    ):
+        prefix = prefix or ''
+        self.writer.add_scalar(f'{prefix}{k}', v, step)
+
+    def _write_full_dataset_vector(
+        self,
+        step: int,
+        prefix: Optional[str],
+        k: str,
+        v: jax.Array,
+        mol_idxs: jax.Array,
+    ):
+        prefix = prefix or ''
+        for i, v_i in zip(mol_idxs, v):
+            self.writer.add_scalar(f'{prefix}{k}/{i}', v_i, step)
+
+    def _write_full_dataset_matrix(
+        self,
+        step: int,
+        prefix: Optional[str],
+        k: str,
+        v: jax.Array,
+        mol_idxs: jax.Array,
+    ):
+        prefix = prefix or ''
+        for i, v_i in zip(mol_idxs, v):
+            for j, v_ij in enumerate(v_i):
+                self.writer.add_scalar(f'{prefix}{k}/{i}/{j}', v_ij, step)
+
+    def _write_full_dataset_pairwise(
+        self,
+        step: int,
+        prefix: Optional[str],
+        k: str,
+        v: jax.Array,
+        mol_idxs: jax.Array,
+    ):
+        prefix = prefix or ''
+        for i, v_i in zip(mol_idxs, v):
+            for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
+                self.writer.add_scalar(f'{prefix}{k}/{i}/{l}-{j}', v_i[j, l], step)
+
     def write_in_full_dataset_format(
         self, step: int, stats: Stats, mol_idxs: jax.Array, prefix: Optional[str]
     ):
@@ -362,25 +406,13 @@ class TensorboardMetricLogger:
 
         for k, v in stats.items():
             if v.ndim == 0:
-                # Global statistic
-                self.writer.add_scalar(f'{prefix}{k}', v, step)
+                self._write_full_dataset_scalar(step, prefix, k, v)
             elif v.ndim == 1:
-                # Per molecule statistic
-                for i, v_i in zip(mol_idxs, v):
-                    self.writer.add_scalar(f'{prefix}{k}/{i}', v_i, step)
+                self._write_full_dataset_vector(step, prefix, k, v, mol_idxs)
             elif v.ndim == 2:
-                # Per molecule per state statistic
-                for i, v_i in zip(mol_idxs, v):
-                    for j, v_ij in enumerate(v_i):
-                        self.writer.add_scalar(f'{prefix}{k}/{i}/{j}', v_ij, step)
-            elif v.ndim == 3:
-                if v.shape[1] == v.shape[2]:
-                    # Per molecule per state pairwise statistic (upper triangular)
-                    for i, v_i in zip(mol_idxs, v):
-                        for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
-                            self.writer.add_scalar(
-                                f'{prefix}{k}/{i}/{l}-{j}', v_i[j, l], step
-                            )
+                self._write_full_dataset_matrix(step, prefix, k, v, mol_idxs)
+            elif v.ndim == 3 and v.shape[1] == v.shape[2]:
+                self._write_full_dataset_pairwise(step, prefix, k, v, mol_idxs)
 
     def add_batch_scalars(self, stats: Stats, prefix: Optional[str]):
         for k, v in stats.items():
