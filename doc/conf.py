@@ -77,6 +77,7 @@ autodoc_mock_imports = [
     'optax',
     'yaml',
     'tensorboardX',
+    'folx',
 ]
 toc_object_entries = False
 todo_include_todos = True
