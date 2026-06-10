@@ -47,7 +47,8 @@ dependencies = [
     'pyyaml',
     'tqdm',
     'uncertainties',
-    'chex<1.0.0'
+    'chex<1.0.0',
+    'folx',
 ]
 
 [project.optional-dependencies]

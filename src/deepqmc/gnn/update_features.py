@@ -309,9 +309,9 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
     **two embeddings** (see :class:`~deepqmc.gnn.graph.ElectronStream`):
 
       * ``indiv`` — a per-electron embedding whose forward-Laplacian Jacobian stays
-      sparse. Used as the queries and keys for attention.
+        sparse. Used as the queries and keys for attention.
       * ``attn`` — a per-electron embedding whose Jacobian densifies once attention
-      mixes contributions from all electrons.  Used as the values for attention.
+        mixes contributions from all electrons.  Used as the values for attention.
 
     Args:
         n_up (int):  number of spin-up electrons
