@@ -51,8 +51,8 @@ def sparse_attention(q, k, v):
 def _sparse_attention_rule(args, kwargs, sparsity_threshold):
     """Wide-scope forward Laplacian for `sparse_attention(q, k, v)`."""
     q_arr, k_arr, v_arr = args
-    assert q_arr.jacobian.weak, "expected weak q (Linear projection of x)"
-    assert k_arr.jacobian.weak, "expected weak k"
+    assert q_arr.jacobian.weak, 'expected weak q (Linear projection of x)'
+    assert k_arr.jacobian.weak, 'expected weak k'
 
     q, k, v = q_arr.x, k_arr.x, v_arr.x
     H, N, D_k = q.shape
@@ -73,7 +73,7 @@ def _sparse_attention_rule(args, kwargs, sparsity_threshold):
         # this is a static assert because folx tracing is eager on shapes/ints
         assert jnp.all(
             actual_i_s == expected
-        ), "v_jac layout violates electron-major, slot-minor"
+        ), 'v_jac layout violates electron-major, slot-minor'
 
         v_jac = v_arr.jacobian.dense_array
     else:
@@ -81,7 +81,7 @@ def _sparse_attention_rule(args, kwargs, sparsity_threshold):
     n_inputs = v_jac.shape[0]
     assert (
         n_inputs == N * k_x
-    ), "expecting n_inputs = N · k_x for the Linear-of-x setting"
+    ), 'expecting n_inputs = N · k_x for the Linear-of-x setting'
     # Re-shape so the n_inputs axis splits into (electron, slot)
     v_jac_r = v_jac.reshape(N, k_x, H, N, D_v)  # (p, s, h, t, d)
 
@@ -198,4 +198,4 @@ def _sparse_attention_rule(args, kwargs, sparsity_threshold):
     return FwdLaplArray(Y, FwdJacobian.from_dense(dY), lap_Y)
 
 
-register_function("sparse_attention", _sparse_attention_rule)
+register_function('sparse_attention', _sparse_attention_rule)

@@ -88,7 +88,7 @@ omni_factory:
           _target_: deepqmc.hkext.MLP
           _partial_: true
           hidden_layers: ['log', 2] # LapNet from [Li et al. 2024] uses just 1 dense layer here, we keep 2 layers for better direct comparison with Psiformer
-          bias: true 
+          bias: true
           last_linear: false
           activation:
             _target_: jax.numpy.tanh

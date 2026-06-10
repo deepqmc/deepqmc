@@ -137,7 +137,9 @@ class ResidualConnection:
             z = x + y
             return z / jnp.sqrt(2) if self.normalize else z
 
-        return tree_util.tree_map(leaf_residual, inp, update, is_leaf=lambda x: x is None)
+        return tree_util.tree_map(
+            leaf_residual, inp, update, is_leaf=lambda x: x is None
+        )
 
 
 class SumPool:
@@ -216,12 +218,12 @@ class SparseMultiHeadAttention(hk.MultiHeadAttention):
     """
 
     def __call__(self, query, key, value, mask=None):
-        assert mask is None, "mask not supported in this minimal subclass"
+        assert mask is None, 'mask not supported in this minimal subclass'
 
         # --- project to Q/K/V via hk.Linear (folx handles default) ---
-        q = self._linear_projection(query, self.key_size, "query")  # (..., N, H, K)
-        k = self._linear_projection(key, self.key_size, "key")
-        v = self._linear_projection(value, self.value_size, "value")  # (..., N, H, V)
+        q = self._linear_projection(query, self.key_size, 'query')  # (..., N, H, K)
+        k = self._linear_projection(key, self.key_size, 'key')
+        v = self._linear_projection(value, self.value_size, 'value')  # (..., N, H, V)
 
         # Move H axis next to N for sparse_attention's contract
         # (..., N, H, K) -> (..., H, N, K)
@@ -240,6 +242,6 @@ class SparseMultiHeadAttention(hk.MultiHeadAttention):
             w_init=self.w_init,
             with_bias=self.with_bias,
             b_init=self.b_init,
-            name="linear",
+            name='linear',
         )
         return final(attn_out)
