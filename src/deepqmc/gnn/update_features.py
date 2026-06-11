@@ -4,7 +4,7 @@ import haiku as hk
 import jax.numpy as jnp
 
 from ..hkext import Identity, SparseMultiHeadAttention
-from .graph import ElectronStream, GraphEdges, GraphNodes
+from .graph import GraphEdges, GraphNodes
 from .utils import NodeEdgeMapping
 
 
@@ -91,7 +91,7 @@ class NodeSumElectronUpdateFeature(UpdateFeature):
                 None,
                 jnp.tile(
                     reduce_fn(
-                        nodes.electrons.attn[node_idx[node_type]], axis=0, keepdims=True
+                        nodes.electrons[node_idx[node_type]], axis=0, keepdims=True
                     ),
                     (self.n_up + self.n_down, 1),
                 ),
@@ -278,7 +278,7 @@ class NodeAttentionElectronUpdateFeature(UpdateFeature):
     def __call__(
         self, nodes: GraphNodes, edges: Mapping[str, GraphEdges]
     ) -> Sequence[GraphNodes]:
-        h = nodes.electrons.attn
+        h = nodes.electrons
         heads_dim = h.shape[-1] // self.num_heads
         assert heads_dim * self.num_heads == h.shape[-1]
         attention_layer = hk.MultiHeadAttention(
@@ -351,9 +351,10 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
     def __call__(
         self, nodes: GraphNodes, edges: Mapping[str, GraphEdges]
     ) -> Sequence[GraphNodes]:
+        h_combined = nodes.electrons
+        # split the note features into individual and attentive streams
         # g.shape = h.shape = (n_el, embedding_dim)
-        g = nodes.electrons.indiv
-        h = nodes.electrons.attn
+        g, h = jnp.split(h_combined, 2, axis=-1)
 
         # update attentive stream
         heads_dim = h.shape[-1] // self.num_heads
@@ -372,13 +373,17 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
         if self.attn_mlp_residual:
             attn_mlp_out = self.attn_mlp_residual(attended, attn_mlp_out)
 
-        # update individual stream
-        indiv_mlp = self.indiv_mlp_factory(g.shape[-1], name='mlp_indiv')
-        indiv_mlp_out = indiv_mlp(g)
-        if self.indiv_mlp_residual:
-            indiv_mlp_out = self.indiv_mlp_residual(g, indiv_mlp_out)
+        # update individual stream (except for the last layer)
+        if not self.is_last_layer:
+            indiv_mlp = self.indiv_mlp_factory(g.shape[-1], name='mlp_indiv')
+            indiv_mlp_out = indiv_mlp(g)
+            if self.indiv_mlp_residual:
+                indiv_mlp_out = self.indiv_mlp_residual(g, indiv_mlp_out)
+        else:
+            indiv_mlp_out = jnp.zeros_like(g)
 
-        return [GraphNodes(None, ElectronStream(indiv_mlp_out, attn_mlp_out))]
+        h_combined = jnp.concatenate([indiv_mlp_out, attn_mlp_out], axis=-1)
+        return [GraphNodes(None, h_combined)]
 
 
 class CombinedNodeAttentionUpdateFeature(UpdateFeature):
@@ -422,8 +427,8 @@ class CombinedNodeAttentionUpdateFeature(UpdateFeature):
         self, nodes: GraphNodes, edges: Mapping[str, GraphEdges]
     ) -> Sequence[GraphNodes]:
         n_nuc = len(nodes.nuclei)
-        n_el = len(nodes.electrons.attn)
-        h = jnp.concatenate([nodes.nuclei, nodes.electrons.attn], axis=0)
+        n_el = len(nodes.electrons)
+        h = jnp.concatenate([nodes.nuclei, nodes.electrons], axis=0)
         mask = (
             None
             if self.elec_to_nuc

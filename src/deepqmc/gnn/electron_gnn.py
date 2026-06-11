@@ -7,22 +7,8 @@ import jax.numpy as jnp
 from jax import tree_util
 
 from ..hkext import MLP
-from .graph import (
-    ElectronStream,
-    Graph,
-    GraphNodes,
-    GraphUpdate,
-    MolecularGraphEdgeBuilder,
-)
+from .graph import Graph, GraphNodes, GraphUpdate, MolecularGraphEdgeBuilder
 from .utils import NodeEdgeMapping
-
-
-def _as_stream(elec):
-    # Accept either ElectronStream or a plain Array. Plain arrays count as
-    # "attentive stream only" — no separate sparse stream.
-    if isinstance(elec, ElectronStream):
-        return elec
-    return ElectronStream(indiv=None, attn=elec)
 
 
 class ElectronGNNLayer(hk.Module):
@@ -149,6 +135,8 @@ class ElectronGNNLayer(hk.Module):
             )
             for uf in update_features
         ]
+        for uf in self.update_features:
+            uf.is_last_layer = self.last_layer
         self.g_factory = subnet_factory_by_lbl['g']
         self.g = (
             self.g_factory(
@@ -211,13 +199,9 @@ class ElectronGNNLayer(hk.Module):
                 (uf(nodes, edges) for uf in self.update_features),
                 start=[],
             )
-            streams = [_as_stream(f.electrons) for f in fs if f.electrons is not None]
             return GraphNodes(
                 [f.nuclei for f in fs if f.nuclei is not None],
-                ElectronStream(
-                    [s.indiv for s in streams if s.indiv is not None],
-                    [s.attn for s in streams if s.attn is not None],
-                ),
+                [f.electrons for f in fs if f.electrons is not None],
             )
 
         return aggregate_edges_for_nodes
@@ -259,24 +243,19 @@ class ElectronGNNLayer(hk.Module):
         return update_nodes
 
     def apply_update_rule(self, nodes, update_network, update_features, residual):
-        def combine(features):
-            if self.update_rule == 'concatenate':
-                return update_network(jnp.concatenate(features, axis=-1))
-            if self.update_rule == 'sum':
-                return update_network(sum(features))
-            if self.update_rule == 'featurewise_shared':
-                return jnp.sum(update_network(jnp.stack(features)), axis=0)
-            if self.update_rule == 'featurewise':
-                return sum(
-                    update_network[name](fi)
-                    for fi, name in zip(features, update_network.keys())
-                )
+        if self.update_rule == 'concatenate':
+            updated = update_network(jnp.concatenate(update_features, axis=-1))
+        elif self.update_rule == 'featurewise':
+            updated = sum(
+                update_network[name](fi)
+                for fi, name in zip(update_features, update_network.keys())
+            )
+        elif self.update_rule == 'sum':
+            updated = update_network(sum(update_features))
+        elif self.update_rule == 'featurewise_shared':
+            updated = jnp.sum(update_network(jnp.stack(update_features)), axis=0)
+        else:
             raise ValueError(f'Unknown update rule: {self.update_rule}')
-
-        updated = ElectronStream(
-            indiv=combine(update_features.indiv) if update_features.indiv else None,
-            attn=combine(update_features.attn),
-        )
         if residual:
             updated = residual(nodes, updated)
         return updated
@@ -608,7 +587,6 @@ class ElectronEmbedding(hk.Module):
         positional_embeddings,
         use_spin,
         project_to_embedding_dim,
-        use_individual_stream=False,
     ):
         super().__init__()
         self.n_nuc = n_nuc
@@ -620,7 +598,6 @@ class ElectronEmbedding(hk.Module):
         self.positional_embeddings = positional_embeddings
         self.use_spin = use_spin
         self.project_to_embedding_dim = project_to_embedding_dim
-        self.use_individual_stream = use_individual_stream
 
     def __call__(self, phys_conf, nucleus_embedding):
         if self.positional_embeddings:
@@ -645,16 +622,13 @@ class ElectronEmbedding(hk.Module):
                 ]
                 x = jnp.concatenate([x, spins], axis=1)
             if self.project_to_embedding_dim:
-                x = hk.Linear(self.embedding_dim, with_bias=False, name='proj')(x)
+                x = hk.Linear(self.embedding_dim, with_bias=False)(x)
         else:
             X = hk.Embed(
                 self.n_elec_types, self.embedding_dim, name='ElectronicEmbedding'
             )
             x = X(self.elec_types)
-        x_indiv = x if self.use_individual_stream else None
-        # Both individual and attentive streams start from the same array; they diverge
-        # in the first GNN layer.
-        return ElectronStream(x_indiv, x)
+        return x
 
 
 class PermutationInvariantEmbedding(hk.Module):

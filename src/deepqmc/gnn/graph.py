@@ -4,7 +4,6 @@ import jax
 import jax.numpy as jnp
 import jax_dataclasses as jdc
 
-ElectronStream = namedtuple('ElectronStream', 'indiv attn')
 GraphNodes = namedtuple('GraphNodes', 'nuclei electrons')
 Graph = namedtuple('Graph', 'nodes edges')
 
