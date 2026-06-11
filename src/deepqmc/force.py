@@ -14,7 +14,7 @@ from .geom.coordinate_transform import (
     InvertibleCoordinateTransform,
 )
 from .hamil import MolecularHamiltonian
-from .physics import laplacian, nuclear_energy
+from .physics import nuclear_energy, reverse_forward_laplacian
 from .sampling.sampling_utils import diffs_to_nearest_nuc
 from .types import (
     Energy,
@@ -139,7 +139,9 @@ def make_zv_term_via_jvp(
     """Constructs the ZV term of the AC force estimators using jax.jvp."""
     wf_nuc_jvp = make_general_jvp_nuc_wf(wf, coordinate_transform)
     loop_hamil = deepcopy(hamil)
-    loop_hamil.laplacian = laplacian  # make sure not to use folx due to bugs
+    loop_hamil.laplacian = (
+        reverse_forward_laplacian  # make sure not to use folx due to bugs
+    )
 
     def zv_term_via_jvp(
         params: Params,

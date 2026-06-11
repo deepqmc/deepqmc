@@ -5,5 +5,5 @@ _target_: deepqmc.hamil.MolecularHamiltonian
 mol:
   _target_: deepqmc.molecule.Molecule
 laplacian_factory:
-  _target_: deepqmc.physics.laplacian
+  _target_: deepqmc.physics.reverse_forward_laplacian
   _partial_: true

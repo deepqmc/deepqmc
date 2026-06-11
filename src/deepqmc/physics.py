@@ -138,7 +138,7 @@ class NuclearCoulombPotential(Potential):
         return jnp.array(0.0)
 
 
-def laplacian(
+def reverse_forward_laplacian(
     f: Callable[[jax.Array], jax.Array],
 ) -> Callable[[jax.Array], tuple[jax.Array, jax.Array]]:
     def lap(x: jax.Array) -> tuple[jax.Array, jax.Array]:

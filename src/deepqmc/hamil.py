@@ -12,9 +12,10 @@ from .molecule import Molecule
 from .physics import (
     LaplacianFactory,
     NuclearCoulombPotential,
+    Potential,
     electronic_potential,
-    laplacian,
     nuclear_energy,
+    reverse_forward_laplacian,
 )
 from .types import (
     Energy,
@@ -112,7 +113,7 @@ class MolecularHamiltonian(Hamiltonian):
         ecp_type: Optional[str] = None,
         ecp_mask: Optional[list[bool]] = None,
         elec_std: float = 1.0,
-        laplacian_factory: LaplacianFactory = laplacian,
+        laplacian_factory: LaplacianFactory = reverse_forward_laplacian,
     ):
         self.mol = mol
         self.elec_std = elec_std
