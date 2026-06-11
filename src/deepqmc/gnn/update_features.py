@@ -178,13 +178,7 @@ class ConvolutionElectronUpdateFeature(UpdateFeature):
     """
 
     def __init__(
-        self,
-        *args,
-        edge_types,
-        normalize,
-        w_factory,
-        h_factory,
-        w_for_ne=True,
+        self, *args, edge_types, normalize, w_factory, h_factory, w_for_ne=True
     ):
         assert all(
             edge_type in {'up', 'down', 'same', 'anti', 'ee', 'ne'}
@@ -261,14 +255,7 @@ class NodeAttentionElectronUpdateFeature(UpdateFeature):
             connection after the MLP layer
     """
 
-    def __init__(
-        self,
-        *args,
-        num_heads,
-        mlp_factory,
-        attention_residual,
-        mlp_residual,
-    ):
+    def __init__(self, *args, num_heads, mlp_factory, attention_residual, mlp_residual):
         super().__init__(*args)
         self.num_heads = num_heads
         self.attention_residual = attention_residual

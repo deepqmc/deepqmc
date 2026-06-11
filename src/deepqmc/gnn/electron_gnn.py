@@ -127,12 +127,7 @@ class ElectronGNNLayer(hk.Module):
                 }
             )
         self.update_features = [
-            uf(
-                self.n_up,
-                self.n_down,
-                two_particle_stream_dim,
-                self.mapping,
-            )
+            uf(self.n_up, self.n_down, two_particle_stream_dim, self.mapping)
             for uf in update_features
         ]
         for uf in self.update_features:
@@ -193,7 +188,6 @@ class ElectronGNNLayer(hk.Module):
         return update_edges
 
     def get_aggregate_edges_for_nodes_fn(self):
-
         def aggregate_edges_for_nodes(nodes, edges):
             fs = sum(
                 (uf(nodes, edges) for uf in self.update_features),
@@ -226,7 +220,7 @@ class ElectronGNNLayer(hk.Module):
                             nodes.nuclei.shape[-1],
                             name=f'g_nuc_{name}',
                         )
-                        for uf in update_features.nuclei
+                        for uf in (update_features.nuclei)
                         for name in uf.names
                     }
                 )
