@@ -94,6 +94,17 @@ class MolecularHamiltonian(Hamiltonian):
             returns a tuple containing the laplacian and gradient of the wave function.
     """
 
+    mol: Molecule
+    ecp_type: Optional[str]
+    ecp_mask: Optional[list[bool]]
+    elec_std: float
+    laplacian: LaplacianFactory
+    potential: Potential
+    n_nuc: int
+    n_up: int
+    n_down: int
+    ns_valence: jax.Array
+
     def __init__(
         self,
         *,

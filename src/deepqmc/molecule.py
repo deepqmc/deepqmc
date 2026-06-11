@@ -2,7 +2,7 @@ import os
 import re
 from collections import OrderedDict
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from glob import glob
 from importlib import resources
 from pathlib import Path
@@ -29,7 +29,7 @@ def get_all_names() -> set[str]:
     return {filename.replace('.yaml', '') for filename in os.listdir(mol_conf_dir())}
 
 
-@dataclass(frozen=True, init=False)
+@dataclass(frozen=True)
 class Molecule:
     r"""Represents a molecule.
 
@@ -52,37 +52,29 @@ class Molecule:
     charges: jax.Array
     charge: int
     spin: int
-    data: dict
+    data: dict | None = None
+    unit: str = "bohr"
 
     # DERIVED PROPERTIES:
-    n_atom_types: int
+    n_atom_types: int = field(init=False)
 
-    def __init__(
-        self,
-        *,
-        coords,
-        charges,
-        charge,
-        spin,
-        unit='bohr',
-        data=None,
-    ):
+    def __post_init__(self):
         def set_attr(**kwargs):
             for k, v in kwargs.items():
                 object.__setattr__(self, k, v)
 
-        unit_multiplier = {'bohr': null, 'angstrom': angstrom_to_bohr}[unit]
+        unit_multiplier = {'bohr': null, 'angstrom': angstrom_to_bohr}[self.unit]
         set_attr(
-            coords=unit_multiplier(jnp.array(coords)),
-            charges=jnp.array(charges, dtype=float),
-            charge=charge,
-            spin=spin,
-            data=data or {},
+            coords=unit_multiplier(jnp.array(self.coords)),
+            charges=jnp.array(self.charges, dtype=float),
+            charge=self.charge,
+            spin=self.spin,
+            data=self.data or {},
         )
 
         # Derived properties
         set_attr(
-            n_atom_types=len(jnp.unique(jnp.array(charges))),
+            n_atom_types=len(jnp.unique(jnp.array(self.charges))),
         )
 
     def __len__(self):
