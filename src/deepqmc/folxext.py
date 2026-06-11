@@ -1,34 +1,3 @@
-"""Wide-scope folx-compatible forward-Laplacian rule for multi-head attention.
-
-Mirrors lapnet/networks/transformer_blocks.py::attention_sparse_dot_product (which
-uses lapjax LapTuples) into folx's FwdLaplArray world.
-
-Function exposed to folx:
-
-    sparse_attention(q, k, v)  ==  softmax(q @ k.T / sqrt(D_k)) @ v
-
-with q, k, v of shape (..., H, N, D_per_head).  Registered via
-folx.register_function so a plain `ForwardLaplacianOperator(thr)(fn)` routes to
-the rule whenever `sparse_attention` appears in the traced graph.
-
-Why wide-scope?  The matmul `exp(logits) @ v` is done while exp(logits)'s
-Jacobian is still in its sparse 2k_x-slot form (i-side + j-side), and `sum_j
-exp(logits)` is collapsed in this same sparse basis.  Only the final divide
-`/ sum_exp` densifies the output Jacobian.  Folx's default would densify the
-logits Jacobian very early (at the QK^T step), spending O(n_inputs · N² · D_k)
-on something a hand-written rule does in O(k_x · N² · D_k) ~ k_x/n_inputs ≈
-1/N cheaper.
-
-Assumptions about inputs (matching LapNet's setting):
-  - q, k come from per-electron Linear projections of the same upstream x of
-    shape (N, k_x), so q_arr.jacobian.x0_idx[s, ..., i, e] = i*k_x + s
-    (independent of head h and embedding e).
-  - v likewise has the same sparsity structure (weak).  If v is dense
-    (e.g. someone normalized it outside this rule), the rule still works but
-    pays the full n_inputs · N² · D_v matmul cost — the same place we got
-    stuck in the kqT_v rule.
-"""
-
 import jax
 import jax.numpy as jnp
 from folx import register_function
@@ -49,6 +18,40 @@ def sparse_attention(q, k, v):
 
 
 def _sparse_attention_rule(args, kwargs, sparsity_threshold):
+    r"""
+    Custom forward Laplacian propagation rule for multi-head dot-product attention.
+
+    This rule computes the exact forward Jacobian and Laplacian for the attention
+    mechanism $h = \\text{softmax}(QK^T / \\sqrt{d_k}) V$. It exploits the assumed
+    block-sparse structure of the input Jacobians and applies the deferred softmax
+    normalization trick.
+
+    Args:
+        args (tuple): A tuple containing three `folx.FwdLaplArray` objects (q, k, v).
+            - q: Query array of shape `(..., N, d_k)`.
+            - k: Key array of shape `(..., N, d_k)`.
+            - v: Value array of shape `(..., N, F)`.
+            Each array must expose `.x` (forward value), `.jacobian.dense_array`
+            (shape `(N * D, ..., N, feature)`), and `.laplacian`.
+        kwargs (dict): Additional keyword arguments passed to the target function.
+        sparsity_threshold (float): Threshold for sparsity (unused but required by
+            folx custom rule signature).
+
+    Returns:
+        folx.FwdLaplArray: An object containing:
+            - .x: The forward attention output of shape `(..., N, F)`.
+            - .jacobian: The dense Jacobian of shape `(N * D, ..., N, F)`.
+            - .laplacian: The trace of the Hessian (Laplacian) of shape `(..., N, F)`.
+
+    Notes:
+        - **Sparsity Assumption**: This function explicitly assumes that the derivative
+          of particle $j$'s features with respect to particle $i$'s coordinates is
+          exactly zero when $i \\neq j$. If dense, cross-particle interactions exist in
+          the input Jacobians, the diagonal extractions in this function will yield
+          incorrect results.
+        - $D$ is the spatial dimension, automatically inferred from
+          `q.jacobian.shape[0] // N`.
+    """
     q, k, v = args
     q_value, k_value, v_value = q.x, k.x, v.x
     q_jacobian, k_jacobian, v_jacobian = (
