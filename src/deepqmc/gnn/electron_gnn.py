@@ -146,7 +146,6 @@ class ElectronGNNLayer(hk.Module):
                 self.n_down,
                 two_particle_stream_dim,
                 self.mapping,
-                layer_is_last=self.last_layer,
             )
             for uf in update_features
         ]

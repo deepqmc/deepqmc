@@ -25,15 +25,12 @@ class UpdateFeature(hk.Module):
         n_down: int,
         two_particle_stream_dim: int,
         node_edge_mapping: NodeEdgeMapping,
-        *,
-        layer_is_last: bool = False,
     ):
         super().__init__()
         self.n_up = n_up
         self.n_down = n_down
         self.node_edge_mapping = node_edge_mapping
         self.two_particle_stream_dim = two_particle_stream_dim
-        self.layer_is_last = layer_is_last
 
     @property
     def names(self) -> list[str]:
@@ -123,12 +120,12 @@ class EdgeSumElectronUpdateFeature(UpdateFeature):
         normalize (bool): whether to normalize the sum by the number of senders
     """
 
-    def __init__(self, *args, edge_types, normalize, **base_kwargs):
+    def __init__(self, *args, edge_types, normalize):
         assert all(
             edge_type in {'up', 'down', 'same', 'anti', 'ee', 'ne'}
             for edge_type in edge_types
         )
-        super().__init__(*args, **base_kwargs)
+        super().__init__(*args)
         self.normalize = normalize
         self.edge_types = edge_types
 
@@ -188,13 +185,12 @@ class ConvolutionElectronUpdateFeature(UpdateFeature):
         w_factory,
         h_factory,
         w_for_ne=True,
-        **base_kwargs,
     ):
         assert all(
             edge_type in {'up', 'down', 'same', 'anti', 'ee', 'ne'}
             for edge_type in edge_types
         )
-        super().__init__(*args, **base_kwargs)
+        super().__init__(*args)
         self.normalize = normalize
         self.edge_types = edge_types
         layer_types = [typ for typ in edge_types if typ != 'ee']
@@ -272,9 +268,8 @@ class NodeAttentionElectronUpdateFeature(UpdateFeature):
         mlp_factory,
         attention_residual,
         mlp_residual,
-        **base_kwargs,
     ):
-        super().__init__(*args, **base_kwargs)
+        super().__init__(*args)
         self.num_heads = num_heads
         self.attention_residual = attention_residual
         self.mlp_residual = mlp_residual
@@ -344,9 +339,8 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
         attention_residual,
         attn_mlp_residual,
         indiv_mlp_residual,
-        **base_kwargs,
     ):
-        super().__init__(*args, **base_kwargs)
+        super().__init__(*args)
         self.num_heads = num_heads
         self.attention_residual = attention_residual
         self.attn_mlp_residual = attn_mlp_residual
@@ -379,13 +373,10 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
             attn_mlp_out = self.attn_mlp_residual(attended, attn_mlp_out)
 
         # update individual stream
-        if not self.layer_is_last:
-            indiv_mlp = self.indiv_mlp_factory(g.shape[-1], name='mlp_indiv')
-            indiv_mlp_out = indiv_mlp(g)
-            if self.indiv_mlp_residual:
-                indiv_mlp_out = self.indiv_mlp_residual(g, indiv_mlp_out)
-        else:
-            indiv_mlp_out = g
+        indiv_mlp = self.indiv_mlp_factory(g.shape[-1], name='mlp_indiv')
+        indiv_mlp_out = indiv_mlp(g)
+        if self.indiv_mlp_residual:
+            indiv_mlp_out = self.indiv_mlp_residual(g, indiv_mlp_out)
 
         return [GraphNodes(None, ElectronStream(indiv_mlp_out, attn_mlp_out))]
 
@@ -419,9 +410,8 @@ class CombinedNodeAttentionUpdateFeature(UpdateFeature):
         attention_residual,
         mlp_residual,
         elec_to_nuc,
-        **base_kwargs,
     ):
-        super().__init__(*args, **base_kwargs)
+        super().__init__(*args)
         self.num_heads = num_heads
         self.attention_residual = attention_residual
         self.mlp_residual = mlp_residual
