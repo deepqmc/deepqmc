@@ -19,8 +19,8 @@ from .exceptions import NanError, TrainingBlowup, TrainingCrash
 from .fit import fit_wf
 from .hamil import MolecularHamiltonian
 from .log import CheckpointStore, H5Logger, MetricLogger, TensorboardMetricLogger
+from .loss import LossFunctionFactory, create_loss_fn
 from .loss.clip import median_log_squeeze_and_mask
-from .loss.loss_function import LossFunctionFactory, create_loss_fn
 from .molecule import Molecule
 from .observable import (
     ObservableMonitor,

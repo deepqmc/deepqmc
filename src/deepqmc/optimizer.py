@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import optax
 
 from .kfacext import batch_size_extractor
-from .loss.loss_function import LossAndGradFunction
+from .loss import LossAndGradFunction
 from .parallel import PMAP_AXIS_NAME, pmap, pmean
 from .types import Batch, Energy, KeyArray, OptState, Params, Stats
 from .utils import filter_dict, tree_norm, tree_stack, tree_unstack

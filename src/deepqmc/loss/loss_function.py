@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Literal, Optional, Protocol, cast
+from typing import Literal, Optional, cast
 
 import jax
 import jax.numpy as jnp
@@ -28,6 +28,7 @@ from .energy import (
     compute_mean_energy,
     compute_mean_energy_tangent,
 )
+from .base import LossFunction
 from .overlap import (
     OverlapGradientScaleFactory,
     compute_mean_overlap,
@@ -47,35 +48,6 @@ from .spin import (
 )
 
 __all__ = ()
-
-
-class LossFunction(Protocol):
-    def __call__(
-        self,
-        params: list[Params],
-        rng: KeyArray,
-        batch: Batch,
-    ) -> tuple[jax.Array, tuple[Optional[Energy], Optional[jax.Array], Stats]]: ...
-
-
-class LossFunctionFactory(Protocol):
-    def __call__(
-        self,
-        hamil: MolecularHamiltonian,
-        ansatz: Ansatz,
-    ) -> LossFunction: ...
-
-
-class LossAndGradFunction(Protocol):
-    def __call__(
-        self,
-        params: list[Params],
-        rng: KeyArray,
-        batch: Batch,
-    ) -> tuple[
-        tuple[jax.Array, tuple[Energy, Optional[jax.Array], Stats]],
-        tuple[jax.Array, tuple[Energy, Optional[jax.Array], Stats]],
-    ]: ...
 
 
 def compute_log_psi_tangent(
