@@ -169,7 +169,9 @@ class KFACOptimizer(Optimizer):
             opt_state,
             rng,
             batch=batch,
-            momentum=0,
+            # a jnp scalar is required: python scalars cannot be converted to global
+            # arrays by the new pmap implementation in multi-process runs
+            momentum=jnp.asarray(0.0),
         )
         params = self.pmap_merge_states(
             self.pmap_tree_stack(params_list), self.merge_keys

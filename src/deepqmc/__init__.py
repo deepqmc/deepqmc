@@ -29,6 +29,15 @@ from .parallel import maybe_init_multi_host  # noqa: E402
 
 maybe_init_multi_host()
 
+import kfac_jax  # noqa: E402, F401
+
+# importing kfac-jax reverts jax to the legacy pmap implementation, which does not
+# support multi-process runs. Re-enable the new pmap implementation: kfac-jax remains
+# functional through its own compatibility code paths (see kfac_jax.utils.parallel).
+# The import is done here to ensure no later import flips the flag back.
+if 'jax_pmap_shmap_merge' in jax.config.values:
+    jax.config.update('jax_pmap_shmap_merge', True)
+
 from .conf.custom_resolvers import mode_subdir, process_idx_suffix  # noqa: E402
 
 jax.config.update('jax_default_matmul_precision', 'highest')

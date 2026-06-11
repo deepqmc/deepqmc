@@ -3,8 +3,6 @@ import operator
 from typing import Optional
 
 import jax
-import jax.numpy as jnp
-from jax.experimental.multihost_utils import broadcast_one_to_all
 
 from ..optimizer import merge_states
 from ..parallel import replicate_on_devices
@@ -37,7 +35,5 @@ def init_wf_params(
             'The following model parameters are shared between the'
             f' {electronic_states} states:\n  - {merged_params}'
         )
-    if jax.process_count() > 1:
-        params = jax.tree_util.tree_map(jnp.asarray, broadcast_one_to_all(params))
-    params = replicate_on_devices(params)
+    params = replicate_on_devices(params, globally=True)
     return params

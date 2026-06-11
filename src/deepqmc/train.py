@@ -23,7 +23,13 @@ from .loss.loss_function import LossFunctionFactory, create_loss_fn
 from .molecule import Molecule
 from .observable import ObservableMonitor, default_observable_monitors
 from .optimizer import NoOptimizer
-from .parallel import pmap_pmean, split_on_devices, split_rng_key_to_devices
+from .parallel import (
+    pmap,
+    pmean,
+    select_one_device,
+    split_on_devices,
+    split_rng_key_to_devices,
+)
 from .physics import pairwise_self_distance
 from .pretrain.pretraining import pretrain
 from .pretrain.pyscfext import compute_scf_solution
@@ -252,22 +258,25 @@ def train(  # noqa: C901
                 desc='equilibrate sampler',
                 disable=None,
             )
+
+            @pmap
+            def eq_criterion(r):
+                return pmean(pairwise_self_distance(r).mean())
+
             for step, smpl_state, mol_idxs, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
                 params,
                 molecule_idx_sampler,
                 sampler,
                 smpl_state,
-                lambda phys_conf: pmap_pmean(
-                    pairwise_self_distance(phys_conf.r)
-                ).mean(),
+                lambda phys_conf: select_one_device(eq_criterion(phys_conf.r)),
                 pbar,
                 block_size=10,
                 allow_early_stopping=eq_allow_early_stopping,
             ):
                 tau_rep = '|'.join(
                     '(' + '|'.join(f'{taus:.3f}' for taus in taum) + ')'
-                    for taum in smpl_state['elec']['tau'].mean(axis=0)
+                    for taum in jax.device_get(smpl_state['elec']['tau']).mean(axis=0)
                 )
                 pbar.set_postfix(tau=tau_rep)
                 if metric_logger:

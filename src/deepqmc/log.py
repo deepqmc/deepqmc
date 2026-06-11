@@ -3,7 +3,6 @@ import os
 import pickle
 import re
 import sys
-from copy import deepcopy
 from functools import partial
 from itertools import product
 from pathlib import Path
@@ -38,7 +37,10 @@ class Checkpoint(NamedTuple):
 
 def serialize_train_state(train_state: TrainState) -> TrainState:
     params, opt = select_one_device((train_state.params, train_state.opt))
-    sampler_state = deepcopy(train_state.sampler)
+    # copy the dict structure (but not the arrays) so the pops below do not
+    # mutate the input; deepcopy would eagerly copy the device-sharded arrays,
+    # which is not supported in multi-process runs
+    sampler_state = jax.tree_util.tree_map(lambda x: x, train_state.sampler)
     sampler_nuc, update_nuc_counter = select_one_device(
         (sampler_state.pop('nuc'), sampler_state.pop('update_nuc_counter'))
     )
@@ -54,19 +56,14 @@ def deserialize_train_state(train_state: TrainState) -> TrainState:
         if train_state.sampler['elec']['r'].ndim == 6:
             # Legacy checkpoints are already deserialized
             return train_state
-    if train_state.sampler['elec'].get('tau', None) is not None:
-        if train_state.sampler['elec']['tau'].ndim == 3:
-            # up to and including 147d4feb tau was not averaged over devices
-            train_state.sampler['elec']['tau'] = train_state.sampler['elec'][
-                'tau'
-            ].mean(axis=-1)
-    train_state.sampler['elec']['tau'] = jnp.repeat(
-        train_state.sampler['elec']['tau'][..., None], jax.device_count(), axis=-1
-    )
+    tau = train_state.sampler['elec'].pop('tau')
+    if tau.ndim == 3:
+        # up to and including 147d4feb tau was not averaged over devices
+        tau = tau.mean(axis=-1)
     params, opt = replicate_on_devices((train_state.params, train_state.opt))
     sampler = train_state.sampler
     sampler['elec'] = scatter_electrons_to_devices(sampler['elec'])
-    sampler['elec']['tau'] = jnp.squeeze(sampler['elec']['tau'], axis=-1)
+    sampler['elec']['tau'] = replicate_on_devices(tau)
     sampler['nuc'], sampler['update_nuc_counter'] = replicate_on_devices(
         (sampler['nuc'], sampler['update_nuc_counter'])
     )
