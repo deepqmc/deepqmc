@@ -86,9 +86,18 @@ def train_from_checkpoint(workdir, restdir, evaluate, chkpt='LAST', **kwargs):
     restdir = Path(to_absolute_path(get_original_cwd())) / restdir
     assert_valid_restdir(restdir, workdir)
     cfg, step, train_state = task_from_workdir(restdir, chkpt)
+    visited = {restdir.resolve()}
     while cfg.task.get('restdir', False):
         restdir = Path(to_absolute_path(get_original_cwd())) / cfg.task.restdir
         assert_valid_restdir(restdir, workdir)
+        if restdir.resolve() in visited:
+            raise ValueError(
+                f'Circular restdir reference: {restdir} was already visited while'
+                ' following the chain of restarts to the original training run.'
+                ' Check the task.restdir values stored in the .hydra/config.yaml'
+                ' files of the runs in the chain.'
+            )
+        visited.add(restdir.resolve())
         cfg, *_ = task_from_workdir(restdir, 'LAST')
     log.info(f'Found original config file in {restdir}')
     cfg.task.workdir = workdir
