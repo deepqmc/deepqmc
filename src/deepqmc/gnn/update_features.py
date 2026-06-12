@@ -287,13 +287,21 @@ class NodeAttentionElectronUpdateFeature(UpdateFeature):
 class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
     r"""LapNet-style dual-stream attention block as an electron update feature.
 
-    Implements one Transformer-like layer of the LapNet ansatz.  Each electron carries
-    **two embeddings** (see :class:`~deepqmc.gnn.graph.ElectronStream`):
+    Implements one Transformer-like layer of the LapNet ansatz.  The electron
+    embedding is the concatenation of **two streams** of equal width, split along the
+    feature axis:
 
-      * ``indiv`` — a per-electron embedding whose forward-Laplacian Jacobian stays
-        sparse. Used as the queries and keys for attention.
-      * ``attn`` — a per-electron embedding whose Jacobian densifies once attention
-        mixes contributions from all electrons.  Used as the values for attention.
+      * the *individual* stream ``g`` — a per-electron embedding whose forward-Laplacian
+        Jacobian stays sparse. Used as the queries and keys for attention.
+      * the *attentive* stream ``h`` — a per-electron embedding whose Jacobian densifies
+        once attention mixes contributions from all electrons. Used as the values for
+        attention.
+
+    The attentive stream is updated by sparse multi-head attention (``g``→Q/K, ``h``→V)
+    followed by an MLP, both with optional residual connections.  The individual stream
+    is updated by its own MLP, except on the last layer (``is_last_layer``), where it is
+    zeroed out since only the attentive stream feeds the downstream determinant.  The
+    two updated streams are concatenated back into a single array on output.
 
     Args:
         n_up (int):  number of spin-up electrons
@@ -309,11 +317,11 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
             MLP applied to the individual stream
         attn_mlp_factory (~typing.Type[~deepqmc.hkext.MLP]):  factory for the
             MLP applied to the attention output
-        attention_residual (Optional[~deepqmc.hkext.Residual]):  optional
+        attention_residual (Optional[~deepqmc.hkext.ResidualConnection]):  optional
             residual connection wrapping the attention call
-        attn_mlp_residual (Optional[~deepqmc.hkext.Residual]):  optional
+        attn_mlp_residual (Optional[~deepqmc.hkext.ResidualConnection]):  optional
             residual connection wrapping ``attn_mlp``
-        indiv_mlp_residual (Optional[~deepqmc.hkext.Residual]):  optional
+        indiv_mlp_residual (Optional[~deepqmc.hkext.ResidualConnection]):  optional
             residual connection wrapping ``indiv_mlp``
     """
 
@@ -339,7 +347,7 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
         self, nodes: GraphNodes, edges: Mapping[str, GraphEdges]
     ) -> Sequence[GraphNodes]:
         h_combined = nodes.electrons
-        # split the note features into individual and attentive streams
+        # split the node features into individual and attentive streams
         # g.shape = h.shape = (n_el, embedding_dim)
         g, h = jnp.split(h_combined, 2, axis=-1)
 
