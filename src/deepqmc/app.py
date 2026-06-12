@@ -122,7 +122,16 @@ def task_from_workdir(workdir, chkpt):
     if chkpt == 'LAST':
         chkpts = list(workdir.glob(CheckpointStore.PATTERN.format('*')))
         if not chkpts:
-            chkpts = (workdir / 'training').glob(CheckpointStore.PATTERN.format('*'))
+            chkpts = list(
+                (workdir / 'training').glob(CheckpointStore.PATTERN.format('*'))
+            )
+        if not chkpts:
+            raise ValueError(
+                f'No checkpoints ({CheckpointStore.PATTERN.format("*")}) found in'
+                f' {workdir}. The run may have ended before the first checkpoint'
+                ' was written, which only happens after the sampler equilibration'
+                ' is completed.'
+            )
         chkpt = sorted(
             chkpts,
             key=lambda path: CheckpointStore.extract_step_from_filename(path.name),
