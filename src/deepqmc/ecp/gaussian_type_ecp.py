@@ -111,9 +111,7 @@ class GaussianTypeECP(Potential):
 
         coulomb_term = jnp.einsum(
             'ij,ki->kji', self.loc_params[idxs, 0, 1, :], 1 / r_en
-        ) * jnp.exp(
-            jnp.einsum('ij,ki->kji', -self.loc_params[idxs, 0, 0, :], r_en**2)
-        )
+        ) * jnp.exp(jnp.einsum('ij,ki->kji', -self.loc_params[idxs, 0, 0, :], r_en**2))
         const_term = jnp.einsum(
             'ij,kji->kji',
             self.loc_params[idxs, 1, 1, :],
@@ -121,9 +119,7 @@ class GaussianTypeECP(Potential):
         )
         linear_term = jnp.einsum(
             'ij,ki->kji', self.loc_params[idxs, 2, 1, :], r_en
-        ) * jnp.exp(
-            jnp.einsum('ij,ki->kji', -self.loc_params[idxs, 2, 0, :], r_en**2)
-        )
+        ) * jnp.exp(jnp.einsum('ij,ki->kji', -self.loc_params[idxs, 2, 0, :], r_en**2))
 
         # Summation is carried over:
         # - individual cores in the molecule (idxs dimension)

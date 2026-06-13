@@ -23,7 +23,13 @@ from .loss.loss_function import LossFunctionFactory, create_loss_fn
 from .molecule import Molecule
 from .observable import ObservableMonitor, default_observable_monitors
 from .optimizer import NoOptimizer
-from .parallel import pmap_pmean, split_on_devices, split_rng_key_to_devices
+from .parallel import (
+    pmap,
+    pmean,
+    select_one_device,
+    split_on_devices,
+    split_rng_key_to_devices,
+)
 from .physics import pairwise_self_distance
 from .pretrain.pretraining import pretrain
 from .pretrain.pyscfext import compute_scf_solution
@@ -211,6 +217,7 @@ def train(  # noqa: C901
                     rng_pretrain_smpl_init, sampler, params, electron_batch_size, mols
                 )
                 pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
+                heartbeat_interval = max(1, pretrain_steps // 5)
                 for step, params, per_sample_losses, mol_idxs in pretrain(  # noqa: B007
                     rng_pretrain,
                     hamil,
@@ -234,6 +241,11 @@ def train(  # noqa: C901
                         for msem in ewm_state.mean
                     )
                     pbar.set_postfix(MSE=mse_rep)
+                    if (step + 1) % heartbeat_interval == 0:
+                        log.info(
+                            f'Pretraining progress: {step + 1}/{pretrain_steps},'
+                            f' MSE = {mse_rep}'
+                        )
                     if metric_logger:
                         metric_logger.update(
                             step, pretrain_stats, {}, mol_idxs, prefix='pretraining'
@@ -252,22 +264,25 @@ def train(  # noqa: C901
                 desc='equilibrate sampler',
                 disable=None,
             )
+
+            @pmap
+            def eq_criterion(r):
+                return pmean(pairwise_self_distance(r).mean())
+
             for step, smpl_state, mol_idxs, smpl_stats in equilibrate(  # noqa: B007
                 rng_eq,
                 params,
                 molecule_idx_sampler,
                 sampler,
                 smpl_state,
-                lambda phys_conf: pmap_pmean(
-                    pairwise_self_distance(phys_conf.r)
-                ).mean(),
+                lambda phys_conf: select_one_device(eq_criterion(phys_conf.r)),
                 pbar,
                 block_size=10,
                 allow_early_stopping=eq_allow_early_stopping,
             ):
                 tau_rep = '|'.join(
                     '(' + '|'.join(f'{taus:.3f}' for taus in taum) + ')'
-                    for taum in smpl_state['elec']['tau'].mean(axis=0)
+                    for taum in jax.device_get(smpl_state['elec']['tau']).mean(axis=0)
                 )
                 pbar.set_postfix(tau=tau_rep)
                 if metric_logger:
@@ -318,7 +333,7 @@ def train(  # noqa: C901
                     ],
                 ):
                     ewm_energies, best_ene = update_progress(
-                        pbar, best_ene, ewm_energies, mol_idxs, stats
+                        pbar, step, best_ene, ewm_energies, mol_idxs, stats
                     )
                     if jnp.isnan(observable_samples['psi/samples']['log']).any():
                         raise NanError()
@@ -366,7 +381,7 @@ def train(  # noqa: C901
             h5_logger.close()
 
 
-def update_progress(pbar, best_ene, ewm_energies, mol_idxs, stats):
+def update_progress(pbar, step, best_ene, ewm_energies, mol_idxs, stats):
     r"""Update the tqdm progress bar, maybe print progress message."""
     for i, mol_idx in enumerate(mol_idxs):
         ewm_energies[mol_idx] = [
@@ -379,9 +394,14 @@ def update_progress(pbar, best_ene, ewm_energies, mol_idxs, stats):
         '(' + '|'.join(f'{es:S}' for es in em) + ')' for em in ewm_energies
     )
     pbar.set_postfix(E=energies)
-    if best_ene is None or jnp.any(
+    significant_improvement = best_ene is None or jnp.any(
         jnp.array(jax.tree.map(lambda x, y: x.s < 0.5 * y.s, ewm_energies, best_ene))
-    ):
+    )
+    # pbar.n is not updated for disabled progress bars (e.g. on non-interactive
+    # SLURM runs), use the step number from the training loop instead
+    heartbeat = not (step + 1) % max(1, (pbar.total or 0) // 100)
+    if significant_improvement:
         best_ene = ewm_energies
-        log.info(f'Progress: {pbar.n + 1}/{pbar.total}, energy = {energies}')
+    if significant_improvement or heartbeat:
+        log.info(f'Progress: {step + 1}/{pbar.total}, energy = {energies}')
     return ewm_energies, best_ene

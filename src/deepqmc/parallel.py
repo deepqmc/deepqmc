@@ -4,7 +4,7 @@ from functools import partial
 from typing import Optional, TypeVar
 
 import jax
-from jax._src.distributed import initialize
+import numpy as np
 from jax.experimental.multihost_utils import broadcast_one_to_all
 
 from .types import KeyArray
@@ -17,9 +17,10 @@ T = TypeVar('T')
 def get_process_count() -> Optional[int]:
     r"""Get the number of processes in the current run.
 
-    Detecting multiple processes only implemented for SLURM.
+    Multiple processes are detected from the :data:`SLURM_NTASKS` (on SLURM) or
+    :data:`DEEPQMC_NUM_PROCESSES` (manual launch) environment variables.
     """
-    process_count = os.getenv('SLURM_NTASKS')
+    process_count = os.getenv('SLURM_NTASKS') or os.getenv('DEEPQMC_NUM_PROCESSES')
     if process_count is not None:
         return int(process_count)
     return None
@@ -28,29 +29,52 @@ def get_process_count() -> Optional[int]:
 def get_process_index() -> Optional[int]:
     r"""Get the process index of the current process.
 
-    Detecting multiple processes only implemented for SLURM.
+    The process index is detected from the :data:`SLURM_PROCID` (on SLURM) or
+    :data:`DEEPQMC_PROCESS_ID` (manual launch) environment variables.
     """
-    process_index = os.getenv('SLURM_PROCID')
+    process_index = os.getenv('SLURM_PROCID') or os.getenv('DEEPQMC_PROCESS_ID')
     if process_index is not None:
         return int(process_index)
+    return None
+
+
+def get_local_device_ids() -> Optional[list[int]]:
+    r"""Get the ids of the devices the current process should use.
+
+    If :data:`JAX_LOCAL_DEVICE_IDS` is set, defer to jax, which parses it inside
+    :func:`jax.distributed.initialize`. Otherwise, if :data:`CUDA_VISIBLE_DEVICES`
+    is set, the process uses all the devices visible to it. Note that the visible
+    devices are renumbered from zero within the process, so the raw ids from
+    :data:`CUDA_VISIBLE_DEVICES` must not be passed to jax. If neither variable is
+    set, returning :data:`None` defers to jax's cluster auto-detection, which on
+    SLURM and Open MPI assigns one GPU per process.
+    """
+    if os.getenv('JAX_LOCAL_DEVICE_IDS'):
+        return None
+    cuda_visible_devices = os.getenv('CUDA_VISIBLE_DEVICES')
+    if cuda_visible_devices:
+        return list(range(len(cuda_visible_devices.split(','))))
     return None
 
 
 def maybe_init_multi_host():
     r"""Initialize multi-host training if multiple processes are detected.
 
-    Detecting multiple processes only implemented for SLURM.
+    On SLURM clusters multiple processes are detected automatically. Otherwise, a
+    multi-process run can be configured manually through the
+    :data:`JAX_COORDINATOR_ADDRESS` (read by jax), :data:`DEEPQMC_NUM_PROCESSES`
+    and :data:`DEEPQMC_PROCESS_ID` environment variables.
     """
     process_count = get_process_count()
     process_id = get_process_index()
 
-    if process_count is not None and process_id is not None and int(process_count) > 1:
-        cuda_visible_devices = os.getenv('CUDA_VISIBLE_DEVICES')
-        assert cuda_visible_devices is not None
-        initialize(
-            num_processes=int(process_count),
-            process_id=int(process_id),
-            local_device_ids=[int(i) for i in cuda_visible_devices.split(',')],
+    if process_count is not None and process_id is not None and process_count > 1:
+        # coordinator_address is read from JAX_COORDINATOR_ADDRESS or detected
+        # from the SLURM environment inside jax.distributed.initialize
+        jax.distributed.initialize(
+            num_processes=process_count,
+            process_id=process_id,
+            local_device_ids=get_local_device_ids(),
         )
 
 
@@ -82,15 +106,23 @@ def replicate_on_devices(pytree, globally=False):
     :data:`jnp.repeat(input[None], jax.device_count(), 0)`, except that it also works
     for pytrees, and the output array will be sharded across the devices. Useful for
     replicating the same data across all devices.
+
+    Args:
+        pytree: the input pytree of arrays.
+        globally: if :data:`True`, the data of process zero is first broadcast to all
+            processes, guaranteeing identical data on all devices of all processes.
     """
-    pytree = jax.device_put_replicated(pytree, devices=jax.local_devices())
-    if globally:
-        # broadcast_on_to_all returns numpy arrays for some reason
-        pytree = jax.tree_util.tree_map(
-            jax.numpy.asarray,
-            broadcast_one_to_all(pytree),
-        )
-    return pytree
+    if globally and jax.process_count() > 1:
+        pytree = broadcast_one_to_all(pytree)
+    n_devices = jax.local_device_count()
+    # go through host numpy arrays, the input may be committed to a single device,
+    # in which case it could not be fed to the pmapped broadcast_to_devices directly
+    return jax.tree_util.tree_map(
+        lambda x: broadcast_to_devices(
+            np.repeat(np.asarray(x)[None], n_devices, axis=0)
+        ),
+        pytree,
+    )
 
 
 @jax.pmap
@@ -116,6 +148,34 @@ def select_one_device(pytree, idx=0):
         pytree: the input pytree of arrays.
         idx: the index of the entry to select from the leading device axis.
     """
+
+    def select(x):
+        if isinstance(x, jax.Array) and not isinstance(
+            x.sharding, jax.sharding.SingleDeviceSharding
+        ):
+            # eagerly indexing a device-sharded array triggers a resharding that
+            # is not supported in multi-process runs (and a process holding a
+            # single device is still part of the global array). The data is
+            # replicated across the device axis, so the local shard holds the
+            # requested entry; fetch it instead.
+            return x.addressable_data(idx)[0]
+        return x[idx]
+
+    return jax.tree_util.tree_map(select, pytree)
+
+
+@pmap
+def select_local_entries(pytree: T) -> T:
+    r"""Select the entries belonging to the local devices from gathered arrays.
+
+    The input arrays must have a leading axis of size :data:`jax.device_count()`
+    holding identical data on each local device (e.g. outputs of
+    :func:`jax.lax.all_gather`). Each device selects the entry corresponding to its
+    global position, undoing the :data:`all_gather`. Equivalent to
+    :data:`select_one_device(gathered)[local_slice()]`, but without leaving the
+    devices.
+    """
+    idx = jax.lax.axis_index(PMAP_AXIS_NAME)
     return jax.tree_util.tree_map(lambda x: x[idx], pytree)
 
 
@@ -304,10 +364,17 @@ def scatter_electrons_to_devices(pytree: T) -> T:
             :data:`[n_device, molecule_batch_size, electronic_states,
             electron_batch_size / n_device, ...]`
     """
-    reshaped_pytree: T = jax.tree_util.tree_map(
-        lambda x: jax.numpy.moveaxis(
-            x.reshape(*x.shape[:2], jax.device_count(), -1, *x.shape[3:]), 2, 0
-        )[local_slice()],
-        pytree,
-    )
+    device_count = jax.device_count()
+
+    def scatter(x):
+        assert x.shape[2] % device_count == 0, (
+            f'Cannot scatter electron batch of size {x.shape[2]} evenly across'
+            f' {device_count} devices. This can happen when restoring a checkpoint'
+            ' with a different total number of devices than it was created with.'
+        )
+        return jax.numpy.moveaxis(
+            x.reshape(*x.shape[:2], device_count, -1, *x.shape[3:]), 2, 0
+        )[local_slice()]
+
+    reshaped_pytree: T = jax.tree_util.tree_map(scatter, pytree)
     return broadcast_to_devices(reshaped_pytree)
