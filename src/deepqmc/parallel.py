@@ -150,9 +150,14 @@ def select_one_device(pytree, idx=0):
     """
 
     def select(x):
-        if isinstance(x, jax.Array) and len(x.sharding.device_set) > 1:
-            # eagerly indexing arrays sharded across multiple devices is not
-            # supported in multi-process runs, fetch the addressable shard instead
+        if isinstance(x, jax.Array) and not isinstance(
+            x.sharding, jax.sharding.SingleDeviceSharding
+        ):
+            # eagerly indexing a device-sharded array triggers a resharding that
+            # is not supported in multi-process runs (and a process holding a
+            # single device is still part of the global array). The data is
+            # replicated across the device axis, so the local shard holds the
+            # requested entry; fetch it instead.
             return x.addressable_data(idx)[0]
         return x[idx]
 
