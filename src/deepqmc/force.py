@@ -139,7 +139,7 @@ def make_zv_term_via_jvp(
     """Constructs the ZV term of the AC force estimators using jax.jvp."""
     wf_nuc_jvp = make_general_jvp_nuc_wf(wf, coordinate_transform)
     loop_hamil = deepcopy(hamil)
-    loop_hamil.laplacian = (
+    loop_hamil.lap_factory = (
         reverse_forward_laplacian  # make sure not to use folx due to bugs
     )
 
@@ -207,7 +207,7 @@ def vnl_ongradpsi(hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction):
     ) -> jax.Array:
         def vnl_ongradpsi_ij(i: int, val: jax.Array) -> jax.Array:
             wfgrad_ij = partial(make_grad_nuc_wf(wf, i // 3, i % 3), params)
-            v_nl_ongrad_ij = hamil.potential.nonloc_potential(rng, phys_conf, wfgrad_ij)
+            v_nl_ongrad_ij = hamil.pot.nonloc_potential(rng, phys_conf, wfgrad_ij)
             return val.at[i // 3, i % 3].set(v_nl_ongrad_ij)
 
         wf_value = wf(params, phys_conf)
@@ -266,12 +266,12 @@ def evaluate_hf_force_bare(
     """Constructs bare estimator of the HF force."""
     if coordinate_transform is None:
         coordinate_transform = CartesianCoordinateTransform(hamil.n_nuc)
-    charges_nuc = hamil.potential.ns_valence
+    charges_nuc = hamil.pot.ns_valence
     nuclear_force_fn = make_general_grad_fn(
         lambda pc: -nuclear_energy(pc, charges_nuc), coordinate_transform
     )
     electronic_force_fn = make_general_grad_fn(
-        lambda pc: -hamil.potential.local_potential(pc), coordinate_transform
+        lambda pc: -hamil.pot.local_potential(pc), coordinate_transform
     )
 
     def evaluate_hf_force_bare_(
@@ -280,13 +280,11 @@ def evaluate_hf_force_bare(
         force_nuc = nuclear_force_fn(phys_conf=phys_conf)
         force_elec = electronic_force_fn(phys_conf=phys_conf)
 
-        if isinstance(hamil.potential, GaussianTypeECP):
+        if isinstance(hamil.pot, GaussianTypeECP):
             assert isinstance(
                 coordinate_transform, CartesianCoordinateTransform
             ), 'ECP forces are only implemented with CartesianCoordinateTransform'
-            non_loc_force = -hamil.potential.grad_nonloc_potential(
-                wf, rng, phys_conf, params
-            )
+            non_loc_force = -hamil.pot.grad_nonloc_potential(wf, rng, phys_conf, params)
             force_elec += non_loc_force.flatten()
 
         return force_nuc + force_elec

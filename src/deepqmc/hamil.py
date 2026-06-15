@@ -99,8 +99,8 @@ class MolecularHamiltonian(Hamiltonian):
     ecp_type: Optional[str]
     ecp_mask: Optional[list[bool]]
     elec_std: float
-    laplacian: LaplacianFactory
-    potential: Potential
+    lap_factory: LaplacianFactory
+    pot: Potential
     n_nuc: int
     n_up: int
     n_down: int
@@ -128,33 +128,26 @@ class MolecularHamiltonian(Hamiltonian):
 
         self.ecp_mask = jnp.array(ecp_mask)
 
-        self.laplacian = laplacian_factory
-        self.potential: (
-            NuclearCoulombPotential | GaussianTypeECP | PseudoHamiltonian
-        )  # mypy otherwise complains about the following assignment
+        self.lap_factory = laplacian_factory
         if self.ecp_mask.any():
             assert (
                 self.ecp_type is not None
             ), 'ECP type must be specified if ECPs are used.'
             if 'PH' in str(self.ecp_type):
-                self.potential = PseudoHamiltonian(
-                    mol.charges, self.ecp_type, self.ecp_mask
-                )
+                self.pot = PseudoHamiltonian(mol.charges, self.ecp_type, self.ecp_mask)
             else:
-                self.potential = GaussianTypeECP(
-                    mol.charges, self.ecp_type, self.ecp_mask
-                )
+                self.pot = GaussianTypeECP(mol.charges, self.ecp_type, self.ecp_mask)
         else:
-            self.potential = NuclearCoulombPotential(mol.charges)
+            self.pot = NuclearCoulombPotential(mol.charges)
 
-        n_elec = int(sum(self.potential.ns_valence) - mol.charge)
+        n_elec = int(sum(self.pot.ns_valence) - mol.charge)
         assert not (n_elec + mol.spin) % 2
         assert n_elec > 1, 'The system must contain at least two active electrons.'
 
         self.n_nuc = len(mol.charges)
         self.n_up = (n_elec + mol.spin) // 2
         self.n_down = (n_elec - mol.spin) // 2
-        self.ns_valence = self.potential.ns_valence
+        self.ns_valence = self.pot.ns_valence
 
         self.mol_shells = [get_shell(z) for z in self.mol.charges]
         self.mol_ecp_shells = [
@@ -170,13 +163,13 @@ class MolecularHamiltonian(Hamiltonian):
         ) -> tuple[Energy, Stats]:
             wf = partial(ansatz, params)
 
-            Es_kin, lap_log_psis, quantum_force_2_sum = self.potential.kinetic_term(
-                phys_conf, wf, self.laplacian
+            Es_kin, lap_log_psis, quantum_force_2_sum = self.pot.kinetic_term(
+                phys_conf, wf, self.lap_factory
             )
             Es_nuc = nuclear_energy(phys_conf, self.ns_valence)
             Vs_el = electronic_potential(phys_conf)
-            Vs_loc = self.potential.local_potential(phys_conf)
-            Vs_nl = self.potential.nonloc_potential(rng, phys_conf, wf)
+            Vs_loc = self.pot.local_potential(phys_conf)
+            Vs_nl = self.pot.nonloc_potential(rng, phys_conf, wf)
             Es_loc = Es_kin + Vs_loc + Vs_nl + Vs_el + Es_nuc
             stats = {
                 'hamil/V_el': Vs_el,
