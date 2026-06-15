@@ -82,7 +82,7 @@ class NoOptimizer(Optimizer):
     def step(
         self, rng: KeyArray, params: Params, opt_state: OptState, batch: Batch
     ) -> tuple[Params, OptState, Energy, Optional[jax.Array], Stats]:
-        (loss, (E_loc, ratios, stats)), _ = self.loss_and_grad_fn(
+        (_, (E_loc, ratios, stats)), _ = self.loss_and_grad_fn(
             tree_unstack(params), rng, batch
         )
 
@@ -109,7 +109,7 @@ class OptaxOptimizer(Optimizer):
         self, rng: KeyArray, params: Params, opt_state: OptState, batch: Batch
     ) -> tuple[Params, OptState, Energy, Optional[jax.Array], Stats]:
         params_list = tree_unstack(params)
-        (loss, (E_loc, ratios, stats)), grads = self.energy_and_grad_fn(
+        (_, (E_loc, ratios, stats)), grads = self.energy_and_grad_fn(
             params_list, rng, batch
         )
         grads = pmean(grads)

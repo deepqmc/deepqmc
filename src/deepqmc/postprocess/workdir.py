@@ -80,7 +80,7 @@ def concatenate_subdir_results(
     assert all(
         result.keys() == results[0].keys() for result in results[1:]
     ), 'Mismatching keys between subdirs'
-    min_lengths = {
+    min_lengths = {  #  pyright: ignore
         key: min(len(result[key]) for result in results) for key in results[0].keys()
     }
     results = {

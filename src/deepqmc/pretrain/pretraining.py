@@ -104,9 +104,7 @@ def pretrain(  # noqa: C901
     @partial(jax.pmap, axis_name='device_axis')
     def pretrain_step(rng, params, smpl_state, opt_state, mol_idxs):
         rng, rng_sample = jax.random.split(rng)
-        smpl_state, phys_config, smpl_stats = sample_wf(
-            smpl_state, rng_sample, params, mol_idxs
-        )
+        smpl_state, phys_config, _ = sample_wf(smpl_state, rng_sample, params, mol_idxs)
 
         params, opt_state, per_sample_losses = _step(
             rng,

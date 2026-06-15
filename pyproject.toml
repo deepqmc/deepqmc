@@ -55,12 +55,6 @@ dev = [
     'pytest-regressions',
     'black',
     'codespell',
-    'flake8',
-    'flake8-bugbear',
-    'flake8-comprehensions',
-    'flake8-quotes',
-    'isort',
-    'mypy',
     'pep8-naming',
     'pre-commit',
     'pydocstyle',
@@ -89,10 +83,25 @@ where = ["src"]
 "*" = ["*.yaml"]
 
 [tool.black]
-target-version = ['py310']
+target-version = ['py312']
 skip-string-normalization = true
 preview = true
 
+[tool.ruff.lint]
+ignore = ["E741", "E731"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/deepqmc/types.py" = ["F821"]
+
 [tool.pyright]
-exclude = ['tests']
-reportMissingImports = false
+include = ["src"]
+typeCheckingMode = "standard"
+pythonVersion = "3.12"
+useLibraryCodeForTypes = true
+reportGeneralTypeIssues = "error"
+reportOptionalMemberAccess = "warning"
+reportOptionalSubscript = "warning"
+reportOptionalCall = "warning"
+reportUnusedImport = "error"
+reportUnusedVariable = "error"
+reportMissingImports = "error"

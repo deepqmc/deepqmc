@@ -170,7 +170,7 @@ def create_loss_fn(
     def loss_fn(
         params: list[Params], rng: KeyArray, batch: Batch
     ) -> tuple[jax.Array, tuple[Energy, Optional[jax.Array], Stats]]:
-        phys_conf, weight, data = batch
+        phys_conf, weight, _ = batch
         stacked_params = tree_stack(params)
         rng, rng_energy = jax.random.split(rng)
         local_energy, hamil_stats = compute_local_energy(
