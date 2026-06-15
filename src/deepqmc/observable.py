@@ -111,7 +111,7 @@ class ObservableMonitor:
         params: Params,
         phys_conf: PhysicalConfiguration,
         psi: Psi,
-        local_energy: jax.Array,
+        local_energy: jax.Array | None,
         psi_ratios: Optional[jax.Array],
     ) -> Stats:
         if step % self.period:

@@ -171,7 +171,7 @@ def pyscf_from_chkfile(chkfile: str, validate: Optional[dict] = None):
     if mc_dict:
         mc = CASSCF(mf, 0, 0)
         assert not isinstance(mc, _DFCAS | _DFCASCI | _DFCASSCF)
-        mc.__dict__.update(mc_dict)
+        mc.__dict__.update(mc_dict)  # pyright: ignore
         mc.ci = chk.load(chkfile, 'ci')
         nelecas = chk.load(chkfile, 'nelecas')
         assert isinstance(nelecas, tuple)

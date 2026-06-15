@@ -97,7 +97,7 @@ class MolecularHamiltonian(Hamiltonian):
 
     mol: Molecule
     ecp_type: Optional[str]
-    ecp_mask: Optional[list[bool]]
+    ecp_mask: jax.Array
     elec_std: float
     lap_factory: LaplacianFactory
     pot: Potential

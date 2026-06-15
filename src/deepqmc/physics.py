@@ -40,6 +40,8 @@ class Potential(Protocol):
     include the electron-electron repulsion.
     """
 
+    ns_valence: jax.Array
+
     def local_potential(self, phys_conf: PhysicalConfiguration) -> Energy:
         r"""Compute the (local effective core) potential energy of the electrons.
 

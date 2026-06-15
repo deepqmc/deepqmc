@@ -57,12 +57,19 @@ type DataDict = dict
 type Batch = tuple[PhysicalConfiguration, Weight, Optional[DataDict]]
 type WaveFunction = Callable[[PhysicalConfiguration], Psi]
 type ParametrizedWaveFunction = Callable[[Params, PhysicalConfiguration], Psi]
-type OptimizerFactory = Callable[[LossAndGradFunction], Optimizer]
+type OptimizerFactory = Callable[[LossAndGradFunction], Optimizer]  # pyright: ignore
 type SamplerFactory = Callable[
-    [KeyArray, MolecularHamiltonian, Ansatz, list[Molecule], int, int],
-    tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],
+    [
+        KeyArray,
+        MolecularHamiltonian,  # pyright: ignore
+        Ansatz,
+        list[Molecule],  # pyright: ignore
+        int,
+        int,
+    ],  # pyright: ignore
+    tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],  # pyright: ignore
 ]
-type AnsatzFactory = Callable[[MolecularHamiltonian], Ansatz]
+type AnsatzFactory = Callable[[MolecularHamiltonian], Ansatz]  # pyright: ignore
 
 
 class TrainState(NamedTuple):
