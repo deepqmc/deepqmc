@@ -2,16 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
 from typing import Any, NamedTuple, Optional, Protocol
-from typing_extensions import TypeAlias
 
 import jax
 import jax_dataclasses as jdc
-from .loss import LossAndGradFunction
-from optimizer import Optimizer
-
-from .hamil import MolecularHamiltonian
-from .molecule import Molecule
-from .sampling import MoleculeIdxSampler, MultiNuclearGeometrySampler
 
 
 class Psi(NamedTuple):
@@ -53,18 +46,23 @@ class PhysicalConfiguration:
         return self.r.shape[:-2]
 
 
-Params: TypeAlias = MutableMapping
-Stats: TypeAlias = dict
-Weight: TypeAlias = jax.Array
-Energy: TypeAlias = jax.Array
-KeyArray: TypeAlias = jax.Array
-SamplerState: TypeAlias = dict
-OptState: TypeAlias = Any
-DataDict: TypeAlias = dict
-Batch: TypeAlias = tuple[PhysicalConfiguration, Weight, Optional[DataDict]]
-WaveFunction: TypeAlias = Callable[[PhysicalConfiguration], Psi]
-ParametrizedWaveFunction: TypeAlias = Callable[[Params, PhysicalConfiguration], Psi]
-OptimizerFactory: TypeAlias = Callable[[LossAndGradFunction], Optimizer]
+type Params = MutableMapping
+type Stats = dict
+type Weight = jax.Array
+type Energy = jax.Array
+type KeyArray = jax.Array
+type SamplerState = dict
+type OptState = Any
+type DataDict = dict
+type Batch = tuple[PhysicalConfiguration, Weight, Optional[DataDict]]
+type WaveFunction = Callable[[PhysicalConfiguration], Psi]
+type ParametrizedWaveFunction = Callable[[Params, PhysicalConfiguration], Psi]
+type OptimizerFactory = Callable[[LossAndGradFunction], Optimizer]
+type SamplerFactory = Callable[
+    [KeyArray, MolecularHamiltonian, Ansatz, list[Molecule], int, int],
+    tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],
+]
+type AnsatzFactory = Callable[[MolecularHamiltonian], Ansatz]
 
 
 class TrainState(NamedTuple):
@@ -118,9 +116,3 @@ class Ansatz(Protocol):
             ~deepqmc.types.Psi: the value of the wave function.
         """
         ...
-
-
-SamplerFactory: TypeAlias = Callable[
-    [KeyArray, MolecularHamiltonian, Ansatz, list[Molecule], int, int],
-    tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],
-]

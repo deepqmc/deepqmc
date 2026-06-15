@@ -3,7 +3,7 @@ import platform
 import sys
 import warnings
 from pathlib import Path
-from typing import Callable, Optional, TypeAlias
+from typing import Optional
 
 import hydra
 from hydra.errors import InstantiationException
@@ -13,10 +13,8 @@ from tqdm.auto import tqdm
 
 from .hamil import MolecularHamiltonian
 from .molecule import Molecule, read_molecule_dataset
-from .types import Ansatz, TrainState
+from .types import Ansatz, AnsatzFactory, TrainState
 from .validate_kwargs import validate_kwargs
-
-AnsatzFactory: TypeAlias = Callable[[MolecularHamiltonian], Ansatz]
 
 __all__ = ()
 log = logging.getLogger(__name__)
