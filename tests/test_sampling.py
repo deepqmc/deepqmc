@@ -10,6 +10,10 @@ from deepqmc.sampling import (
     MultiNuclearGeometrySampler,
     chain,
 )
+from deepqmc.sampling.electron_sample_initializers import (
+    AtomCenteredElectronInitializer,
+    ShellBasedDistribution,
+)
 from deepqmc.sampling.nuclei_samplers import IdleNucleiSampler, no_elec_warp
 
 
@@ -37,7 +41,16 @@ class TestSampling:
     SAMPLE_SIZE = 10
 
     def test_sampler_init(self, helpers, samplers, ndarrays_regression):
-        sampler = chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply))
+        sampler = chain(
+            *samplers[:-1],
+            samplers[-1](
+                self.hamil,
+                self.ansatz.apply,
+                sample_initializer=AtomCenteredElectronInitializer(
+                    atom_centered_distribution=ShellBasedDistribution()
+                ),
+            ),
+        )
         smpl_state = sampler.init(
             helpers.rng(), self.params, self.SAMPLE_SIZE, self.mol.coords
         )
@@ -47,7 +60,16 @@ class TestSampling:
         )
 
     def test_sampler_sample(self, helpers, samplers, ndarrays_regression):
-        sampler = chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply))
+        sampler = chain(
+            *samplers[:-1],
+            samplers[-1](
+                self.hamil,
+                self.ansatz.apply,
+                sample_initializer=AtomCenteredElectronInitializer(
+                    atom_centered_distribution=ShellBasedDistribution()
+                ),
+            ),
+        )
         smpl_state = sampler.init(
             helpers.rng(), self.params, self.SAMPLE_SIZE, self.mol.coords
         )
@@ -77,7 +99,16 @@ class TestMultimoleculeSampling:
         self, helpers, samplers, ndarrays_regression
     ):
         sampler = MultiNuclearGeometrySampler(
-            chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply)),
+            chain(
+                *samplers[:-1],
+                samplers[-1](
+                    self.hamil,
+                    self.ansatz.apply,
+                    sample_initializer=AtomCenteredElectronInitializer(
+                        atom_centered_distribution=ShellBasedDistribution()
+                    ),
+                ),
+            ),
             IdleNucleiSampler(self.mol.charges),
             no_elec_warp,
             None,
@@ -98,7 +129,16 @@ class TestMultimoleculeSampling:
         self, helpers, samplers, ndarrays_regression
     ):
         sampler = MultiNuclearGeometrySampler(
-            chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply)),
+            chain(
+                *samplers[:-1],
+                samplers[-1](
+                    self.hamil,
+                    self.ansatz.apply,
+                    sample_initializer=AtomCenteredElectronInitializer(
+                        atom_centered_distribution=ShellBasedDistribution()
+                    ),
+                ),
+            ),
             IdleNucleiSampler(self.mol.charges),
             no_elec_warp,
             None,

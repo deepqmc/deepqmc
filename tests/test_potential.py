@@ -12,9 +12,9 @@ class TestPhysics:
         wf = lambda phys_conf: _wf.apply(params, phys_conf)
         ndarrays_regression.check(
             {
-                'local_potential': hamil.potential.local_potential(phys_conf),
+                'local_potential': hamil.pot.local_potential(phys_conf),
                 'nonlocal_potential': (
-                    hamil.potential.nonloc_potential(helpers.rng(), phys_conf, wf)
+                    hamil.pot.nonloc_potential(helpers.rng(), phys_conf, wf)
                     if ecp_type
                     else 0
                 ),

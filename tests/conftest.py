@@ -1,3 +1,4 @@
+from functools import partial
 import os
 from collections.abc import Sequence
 
@@ -9,7 +10,12 @@ from hydra.utils import instantiate
 from jax import config
 
 from deepqmc.hamil import MolecularHamiltonian
+from deepqmc.types import PhysicalConfiguration
 from deepqmc.molecule import Molecule
+from deepqmc.sampling.electron_sample_initializers import (
+    AtomCenteredElectronInitializer,
+    ShellBasedDistribution,
+)
 
 config.update('jax_enable_x64', True)
 
@@ -64,10 +70,29 @@ class Helpers:
         return R
 
     @staticmethod
-    def phys_conf(hamil=None, n=1, elec_std=1.0):
+    def phys_conf(hamil=None, rng=None, n=1):
         hamil = hamil or Helpers.hamil()
-        phys_conf = hamil.init_sample(Helpers.rng(), Helpers.R(hamil), n, elec_std)
-        return phys_conf[0] if n == 1 else phys_conf
+        rng = rng or Helpers.rng()
+        initializer = partial(
+            AtomCenteredElectronInitializer(
+                atom_centered_distribution=ShellBasedDistribution()
+            ),
+            charges=hamil.mol.charges,
+            ns_valence=hamil.ns_valence,
+            nuclear_coordinates=hamil.mol.coords,
+            n_up=hamil.n_up,
+            n_down=hamil.n_down,
+        )
+        if n == 1:
+            return PhysicalConfiguration(
+                r=initializer(rng), R=hamil.mol.coords, mol_idx=jax.numpy.zeros(1)
+            )
+        else:
+            return PhysicalConfiguration(
+                r=jax.vmap(initializer)(jax.random.split(rng, n)),
+                R=hamil.mol.coords,
+                mol_idx=jax.numpy.zeros(n),
+            )
 
     @staticmethod
     def transform_model(model, *model_args, **model_kwargs):
