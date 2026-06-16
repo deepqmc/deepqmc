@@ -22,7 +22,7 @@ class ElectronSampleInitializer(Protocol):
     Args:
         rng (~deepqmc.types.KeyArray): A random number generator seed.
         charges (jax.Array): The atomic number of the nuclei.
-        n_valence (jax.Array): The number of valence electrons for each atom. Without
+        ns_valence (jax.Array): The number of valence electrons for each atom. Without
             ECPs this equals the atomic number for each atom.
         nuclear_coordinates (~jax.Array): The nuclear coordinates.
         n_up (int): The number of spin-up electrons.
@@ -33,7 +33,7 @@ class ElectronSampleInitializer(Protocol):
         self,
         rng: KeyArray,
         charges: jax.Array,
-        n_valence: jax.Array,
+        ns_valence: jax.Array,
         nuclear_coordinates: jax.Array,
         n_up: int,
         n_down: int,
@@ -41,7 +41,7 @@ class ElectronSampleInitializer(Protocol):
 
 
 def assign_electrons_to_nuclei(
-    rng: KeyArray, n_valence: jax.Array, n_up: int, n_down: int
+    rng: KeyArray, ns_valence: jax.Array, n_up: int, n_down: int
 ):
     r"""Assign electrons to one of the nuclei.
 
@@ -49,22 +49,22 @@ def assign_electrons_to_nuclei(
 
     Args:
         rng (~deepqmc.types.KeyArray): Random number generator seed.
-        n_valence (jax.Array): The number of valence electrons for each atom. Without
+        ns_valence (jax.Array): The number of valence electrons for each atom. Without
             ECPs this equals the atomic number for each atom.
         n_up (int): The number of spin-up electrons.
         n_down (int): The number of spin-down electrons.
 
     Returns:
         jax.Array: The number of electrons assigned to each atom, shape:
-            ``[len(n_valence)]``.
+            ``[len(ns_valence)]``.
     """
-    charge = n_valence.sum() - n_up - n_down
-    valence_electrons = jnp.array(n_valence) - charge / len(n_valence)
+    charge = ns_valence.sum() - n_up - n_down
+    valence_electrons = jnp.array(ns_valence) - charge / len(ns_valence)
     electrons_of_atom = jnp.floor(valence_electrons).astype(int)
 
     def cond_fn(value):
         _, electrons_of_atom = value
-        return (sum(n_valence) - charge - electrons_of_atom.sum()) > 0
+        return (sum(ns_valence) - charge - electrons_of_atom.sum()) > 0
 
     def body_fn(value):
         rng, electrons_of_atom = value
@@ -261,7 +261,7 @@ class AtomCenteredElectronInitializer(ElectronSampleInitializer):
         self,
         rng: KeyArray,
         charges: jax.Array,
-        n_valence: jax.Array,
+        ns_valence: jax.Array,
         nuclear_coordinates: jax.Array,
         n_up: int,
         n_down: int,
@@ -270,7 +270,7 @@ class AtomCenteredElectronInitializer(ElectronSampleInitializer):
             jax.random.split(rng, 4)
         )
         electrons_of_nuclei = assign_electrons_to_nuclei(
-            rng_electron_assignment, n_valence, n_up, n_down
+            rng_electron_assignment, ns_valence, n_up, n_down
         )
         up_of_nuclei, down_of_nuclei = assign_spins_to_nuclei(
             rng_spin_assignment, electrons_of_nuclei, nuclear_coordinates, n_up, n_down
