@@ -19,6 +19,7 @@ from ..types import (
     Stats,
 )
 from ..utils import split_dict
+from .base import ElectronSampler
 from .electron_sample_initializers import ElectronSampleInitializer
 
 __all__ = [
@@ -28,7 +29,7 @@ __all__ = [
 ]
 
 
-class MetropolisSampler:
+class MetropolisSampler(ElectronSampler):
     r"""
     Metropolis--Hastings Monte Carlo sampler.
 
@@ -160,10 +161,10 @@ class MetropolisSampler:
 
     def phys_conf(self, R: jax.Array, r: jax.Array, **kwargs) -> PhysicalConfiguration:
         if r.ndim == 2:
-            return PhysicalConfiguration(R, r, jnp.array(0))  # type: ignore
+            return PhysicalConfiguration(R, r, jnp.array(0))
         n_smpl = len(r)
         return PhysicalConfiguration(
-            jnp.tile(R[None], (n_smpl, 1, 1)),  # type: ignore
+            jnp.tile(R[None], (n_smpl, 1, 1)),
             r,
             jnp.zeros(n_smpl, dtype=jnp.int32),
         )
