@@ -3,7 +3,6 @@ from .electron_samplers import (
     DecorrSampler,
     LangevinSampler,
     MetropolisSampler,
-    ResampledSampler,
 )
 from .sampling_utils import (
     chain,
@@ -17,7 +16,6 @@ __all__ = [
     'MetropolisSampler',
     'LangevinSampler',
     'DecorrSampler',
-    'ResampledSampler',
     'chain',
     'initialize_sampling',
     'initialize_sampler_state',

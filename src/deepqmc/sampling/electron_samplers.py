@@ -18,14 +18,13 @@ from ..types import (
     SamplerState,
     Stats,
 )
-from ..utils import multinomial_resampling, split_dict
+from ..utils import split_dict
 from .electron_sample_initializers import ElectronSampleInitializer
 
 __all__ = [
     'MetropolisSampler',
     'LangevinSampler',
     'DecorrSampler',
-    'ResampledSampler',
 ]
 
 
@@ -349,79 +348,4 @@ class DecorrSampler:
             jax.random.split(rng, self.length),
         )
         stats = {k: v[-1] for k, v in stats.items()}
-        return state, self.phys_conf(R, state['r']), stats  # type: ignore
-
-
-class ResampledSampler:
-    r"""
-    Add resampling to chained samplers.
-
-    This sampler cannot be used as the last element of a sampler chain.
-    The resampling is performed by accumulating weights on each MCMC walker
-    in each step. Based on a fixed resampling period :data:`period` and/or a
-    threshold :data:`threshold` on the normalized effective sample size the walker
-    positions are sampled according to the multinomial distribution defined by
-    these weights, and the weights are reset to one. Either :data:`period` or
-    :data:`threshold` have to be specified.
-
-
-    Args:
-        period (int): optional, if specified the walkers are resampled every
-            :data:`period` MCMC steps.
-        threshold (float): optional, if specified the walkers are resampled if
-            the effective sample size normalized with the batch size is below
-            :data:`threshold`.
-    """
-
-    def __init__(
-        self, *, period: Optional[int] = None, threshold: Optional[float] = None
-    ):
-        assert period is not None or threshold is not None
-        self.period = period
-        self.threshold = threshold
-
-    def update(self, state: SamplerState, params: Params, R: jax.Array) -> SamplerState:
-        state['log_weight'] -= 2 * state['psi'].log
-        state = self._update(state, params, R)  # type: ignore
-        state['log_weight'] += 2 * state['psi'].log
-        state['log_weight'] -= state['log_weight'].max()
-        return state
-
-    def init(self, *args, **kwargs):
-        state = super().init(*args, **kwargs)  # type: ignore
-        state = {
-            **state,
-            'step': jnp.array(0),
-            'log_weight': jnp.zeros_like(state['psi'].log),
-        }
-        return state
-
-    def resample_walkers(self, rng_re: KeyArray, state: SamplerState) -> SamplerState:
-        idx = multinomial_resampling(rng_re, jnp.exp(state['log_weight']))
-        state, other = split_dict(state, lambda k: k in self.WALKER_STATE)  # type: ignore
-        state = {
-            **jax.tree.map(lambda x: x[idx], state),
-            **other,
-            'step': jnp.array(0),
-            'log_weight': jnp.zeros_like(other['log_weight']),
-        }
-        return state
-
-    def sample(
-        self, rng: KeyArray, state: SamplerState, params: Params, R: jax.Array
-    ) -> tuple[SamplerState, PhysicalConfiguration, Stats]:
-        rng_re, rng_smpl = jax.random.split(rng)
-        state, _, stats = super().sample(rng_smpl, state, params, R)  # type: ignore
-        state['step'] += 1
-        weight = jnp.exp(state['log_weight'])
-        ess = jnp.sum(weight) ** 2 / jnp.sum(weight**2)
-        stats['sampling/effective sample size'] = ess
-        state = jax.lax.cond(
-            (self.period is not None and state['step'] >= self.period)
-            | (self.threshold is not None and ess / len(weight) < self.threshold),
-            self.resample_walkers,
-            lambda rng, state: state,
-            rng_re,
-            state,
-        )
         return state, self.phys_conf(R, state['r']), stats  # type: ignore
