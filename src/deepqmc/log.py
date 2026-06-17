@@ -197,11 +197,11 @@ class H5Logger:
     def __init__(
         self,
         workdir: str,
+        init_step: int = 0,
         additional_keys_to_whitelist: Optional[list[str]] = None,
+        aux_data: Optional[dict] = None,
         *,
         keys_whitelist: Optional[list[str]] = None,
-        init_step: int = 0,
-        aux_data: Optional[dict] = None,
     ):
         self.keys_whitelist = (
             keys_whitelist if keys_whitelist is not None else ['local_energy']

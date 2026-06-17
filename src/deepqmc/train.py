@@ -4,7 +4,7 @@ import time
 from collections.abc import Sequence
 from functools import partial
 from itertools import count
-from typing import Optional, Type, Union
+from typing import Optional, Callable
 
 import jax
 import jax.numpy as jnp
@@ -60,12 +60,12 @@ def train(  # noqa: C901
     eq_allow_early_stopping: bool = True,
     pretrain_steps: Optional[int] = None,
     pretrain_kwargs: Optional[dict] = None,
-    chkpt_constructor: Optional[Type[CheckpointStore]] = None,
-    metric_logger_constructor: Optional[Type[MetricLogger]] = None,
-    h5_logger_constructor: Optional[Type[H5Logger]] = None,
+    chkpt_constructor: Optional[Callable[..., CheckpointStore]] = None,
+    metric_logger_constructor: Optional[Callable[..., MetricLogger]] = None,
+    h5_logger_constructor: Optional[Callable[..., H5Logger]] = None,
     merge_keys: Optional[list[str]] = None,
     loss_function_factory: Optional[LossFunctionFactory] = None,
-    observable_monitors: Optional[list[Union[ObservableMonitor, str]]] = None,
+    observable_monitors: Optional[list[ObservableMonitor | str]] = None,
 ):
     r"""Train or evaluate a JAX wave function model.
 
