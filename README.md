@@ -13,9 +13,9 @@
 
 DeepQMC is an open-source software suite for variational optimization of deep-learning molecular wave functions. It implements the simulation of electronic ground and excited states using deep neural network trial wave functions. The package is based on [JAX](https://github.com/google/jax) and [Haiku](https://github.com/deepmind/dm-haiku) and is configured through a cli build of [Hydra](https://hydra.cc/).
 
-The program solves the molecular Hamiltonian, allowing the use of effective core potentials. Excited states are obtained via a penalty-based excited-state optimization approach. A spin penalty allows states in a fixed spin sector to be targeted.
+The program solves the molecular Hamiltonian, allowing the use of effective core potentials. Excited states are obtained via a penalty-based excited-state optimization approach. A spin penalty allows states in a fixed spin sector to be targeted. Furthermore, DeepQMC implements geometric transferability, that is a single ansatz can be optimized across multiple configurations of a set of atoms. This can either be done by training on a fixed set of molecular configurations or by dynamically sampling molecular configurations throughout the optimization, and can be combined with the optimization of electronic excited states.
 
-The software suite includes a general neural network wave function ansatz, that can be configured to obtain a wide range of molecular neural network wave functions. Config files for the instantiation of variants of [PsiFormer](https://arxiv.org/abs/2211.13672), [PauliNet](https://doi.org/10.1038/s41557-020-0544-y), [FermiNet](https://link.aps.org/doi/10.1103/PhysRevResearch.2.033429) and [DeepErwin](https://arxiv.org/abs/2205.09438) can be found under `src/deepqmc/conf/ansatz`.
+The software suite includes a general neural network wave function ansatz, that can be configured to obtain a wide range of molecular neural network wave functions. Config files for the instantiation of variants of [PsiFormer](https://arxiv.org/abs/2211.13672), [PauliNet](https://doi.org/10.1038/s41557-020-0544-y), [FermiNet](https://link.aps.org/doi/10.1103/PhysRevResearch.2.033429) and a transferable extension of the self-attention ansatz [TransPsiFormer](https://arxiv.org/abs/2503.19847) can be found under `src/deepqmc/conf/ansatz`.
 
 
 ### Installation
@@ -42,11 +42,6 @@ The above installation will result in the CPU version of JAX. However, running D
 # CUDA 12 installation
 pip install --upgrade "jax[cuda12]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 ```
-If issues involving a `cuSolver internal error` arise, please update `nvidia-cublas-cu12` (see [this issue](https://github.com/jax-ml/jax/issues/23616)):
-
-```
-pip install --upgrade nvidia-cublas-cu12
-```
 
 For further help setting up JAX, visit the [JAX Install Guide](https://github.com/google/jax#installation).
 
@@ -63,6 +58,10 @@ For further information about the DeepQMC package and tutorials covering the bas
 An introduction to the methodology, implementation details and exemplary experiments can be found in the associated [software paper](https://doi.org/10.1063/5.0157512).
 
 The penalty-based excited states approach and its implementation in DeepQMC is discussed in our recent paper on [excited state optimization](https://doi.org/10.1021/acs.jctc.4c00678).
+
+The geometrically transferable simulation with DeepQMC on fixed datasets is demonstrated in our paper on [tranferable simulation of excited state potential energy surfaces](https://arxiv.org/abs/2503.19847).
+
+An optimization of wave functions across continuous potential energy surfaces and subsequent optimization of molecular geometries is employed in our latest paper on [ab initio geometry optimization](https://arxiv.org/abs/2603.25381).
 
 ### Citation
 
@@ -85,7 +84,7 @@ If you use DeepQMC for your work, please cite our implementation paper:
 
 ```
 
-Experiments including excited state optimization should cite our excited state paper:
+Experiments including excited state optimization may cite our excited state paper:
 
 ```
 @article{10.1021/acs.jctc.4c00678,
@@ -101,13 +100,27 @@ Experiments including excited state optimization should cite our excited state p
 
 ```
 
+When employing transferable optimization consider citing:
+
+```
+@online{schatzle2025a,
+  author = {Schätzle, Z. and Szabó, P. B. and Cuzzocrea, A. and Noé, F.},
+  title = {Ab-Initio Simulation of Excited-State Potential Energy Surfaces with Transferable Deep Quantum {{Monte Carlo}}},
+  year = {2025},
+  month = {03}
+  doi = {10.48550/arXiv.2503.19847},
+  pubstate = {prepublished},
+}
+
+```
+
 The repository can be cited as:
 
 ```
 @software{deepqmc,
 	author = {Hermann, J. and Schätzle, Z. and Szabó, P. B. and Mezera, M and {DeepQMC Contributors}},
 	title = "{DeepQMC}",
-	year = {2025},
+	year = {2026},
 	publisher = {Zenodo},
 	copyright = {MIT},
 	url = {https://github.com/deepqmc/deepqmc},
