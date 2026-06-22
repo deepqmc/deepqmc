@@ -193,38 +193,6 @@ def make_bare_plus_zvq_term(
     return bare_plus_zvq_term
 
 
-# Currently not used but could help redeuce fluctuations
-# of the bare pp estiamtor
-def vnl_ongradpsi(hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction):
-    """Constructs the non local potential acting on the wf gradient.
-
-    WARNING: This doesn't work with general coordinates yet.
-    """
-    n_nuc = len(hamil.mol.coords)
-
-    def vnl_ongradpsi_(
-        rng: KeyArray, phys_conf: PhysicalConfiguration, params: Params
-    ) -> jax.Array:
-        def vnl_ongradpsi_ij(i: int, val: jax.Array) -> jax.Array:
-            wfgrad_ij = partial(make_grad_nuc_wf(wf, i // 3, i % 3), params)
-            v_nl_ongrad_ij = hamil.pot.nonloc_potential(rng, phys_conf, wfgrad_ij)
-            return val.at[i // 3, i % 3].set(v_nl_ongrad_ij)
-
-        wf_value = wf(params, phys_conf)
-        V_nl_ongradpsi = jax.lax.fori_loop(
-            0, n_nuc * 3, vnl_ongradpsi_ij, jnp.zeros_like(phys_conf.R)
-        )
-        grad_nuc_psi = make_grad_nuc_wf(wf)(params, phys_conf)
-        wf_ratio = (
-            jnp.exp(grad_nuc_psi.log - wf_value.log[None, None])
-            * wf_value.sign[None, None]
-            * grad_nuc_psi.sign
-        )
-        return V_nl_ongradpsi * wf_ratio
-
-    return vnl_ongradpsi_
-
-
 def antithetic_sampler(
     phys_conf: PhysicalConfiguration, r_cut: float
 ) -> tuple[PhysicalConfiguration, PhysicalConfiguration]:
