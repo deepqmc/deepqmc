@@ -85,12 +85,12 @@ def compute_mean_energy_tangent(
     Args:
         local_energy (~deepqmc.types.Energy): a batch of local energies.
         weight (~deepqmc.types.Weight): the weights of each sample in the batch.
-        log_psi_tangent (jax.Array): the jvp of the WF values with respect to the Ansatz
+        log_psi_tangent (~jax.Array): the jvp of the WF values with respect to the Ansatz
             parameters.
-        gradient_mask (jax.Array): a boolean samplewise mask to apply to the gradients.
+        gradient_mask (~jax.Array): a boolean samplewise mask to apply to the gradients.
 
     Returns:
-        jax.Array: the jvp of the mean energy with respect to the Ansatz parameters.
+        ~jax.Array: the jvp of the mean energy with respect to the Ansatz parameters.
     """
     per_mol_state_mean_energy = all_device_mean(
         local_energy * weight, axis=-1, keepdims=True

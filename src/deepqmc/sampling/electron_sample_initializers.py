@@ -21,8 +21,8 @@ class ElectronSampleInitializer(Protocol):
 
     Args:
         rng (~deepqmc.types.KeyArray): A random number generator seed.
-        charges (jax.Array): The atomic number of the nuclei.
-        ns_valence (jax.Array): The number of valence electrons for each atom. Without
+        charges (~jax.Array): The atomic number of the nuclei.
+        ns_valence (~jax.Array): The number of valence electrons for each atom. Without
             ECPs this equals the atomic number for each atom.
         nuclear_coordinates (~jax.Array): The nuclear coordinates.
         n_up (int): The number of spin-up electrons.
@@ -49,13 +49,13 @@ def assign_electrons_to_nuclei(
 
     Args:
         rng (~deepqmc.types.KeyArray): Random number generator seed.
-        ns_valence (jax.Array): The number of valence electrons for each atom. Without
+        ns_valence (~jax.Array): The number of valence electrons for each atom. Without
             ECPs this equals the atomic number for each atom.
         n_up (int): The number of spin-up electrons.
         n_down (int): The number of spin-down electrons.
 
     Returns:
-        jax.Array: The number of electrons assigned to each atom, shape:
+        ~jax.Array: The number of electrons assigned to each atom, shape:
             ``[len(ns_valence)]``.
     """
     charge = ns_valence.sum() - n_up - n_down
@@ -101,8 +101,8 @@ def assign_spins_to_nuclei(
 
     Args:
         rng (~deepqmc.types.KeyArray): Random number generator seed.
-        electrons_of_nuclei (jax.Array): The number of electrons around each nucleus.
-        nuclear_coordinates (jax.Array): The nuclear coordinates.
+        electrons_of_nuclei (~jax.Array): The number of electrons around each nucleus.
+        nuclear_coordinates (~jax.Array): The nuclear coordinates.
         n_up (int): The number of spin-up electrons.
         n_down (int): The number of spin-down electrons.
     """
@@ -161,13 +161,13 @@ def convert_to_nucleus_idx_representation(
     r"""Convert the count of electrons around nuclei to a nucleus index representation.
 
     Args:
-        electron_count_per_atom (jax.Array): The number of electrons around each
+        electron_count_per_atom (~jax.Array): The number of electrons around each
             nucleus, shape ``[n_nucleus]``.
         total_count (int): The total number of electrons, should equal to the sum of the
             entries in ``electron_count_per_atom``.
 
     Returns:
-        jax.Array: For each electron, the index of its nucleus, shape ``[total_count]``.
+        ~jax.Array: For each electron, the index of its nucleus, shape ``[total_count]``.
     """
     return (
         jnp.cumsum(electron_count_per_atom)[:, None] <= jnp.arange(total_count)

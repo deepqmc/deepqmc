@@ -59,11 +59,11 @@ def compute_single_sample_psi_ratios(psi: Psi, mean_log_psi: jax.Array) -> jax.A
     Args:
         psi (~deepqmc.types.Psi): all WF values for a single molecule
             and electron sample, shape: :data:`[electronic_states, electronic_states]`.
-        mean_log_psi (jax.Array): the mean log magnitude of the WFs,
+        mean_log_psi (~jax.Array): the mean log magnitude of the WFs,
             shape :data:`[electronic_states]`.
 
     Returns:
-        jax.Array: the WF ratios
+        ~jax.Array: the WF ratios
             :math:`R[i,\,j]=\frac{\Psi_i(r\sim\Psi^2_j)}{\Psi_j(r\sim\Psi^2_j)}`,
             shape :data:`[electronic_states, electronic_states]`.
     """
@@ -86,7 +86,7 @@ def compute_psi_ratio(
             shape: ``[mol_batch_size, electronic_states, electron_batch_size, ...]``.
 
     Returns:
-        tuple[jax.Array, ~deepqmc.types.Stats]: the tuple of the WF ratios and overlap
+        tuple[~jax.Array, ~deepqmc.types.Stats]: the tuple of the WF ratios and overlap
             statistics.
     """
     psi, stats = compute_wave_function_values(ansatz, params, phys_conf)
@@ -126,14 +126,14 @@ def compute_mean_overlap(
     r"""Compute an estimate of the overlap matrix from WF ratios.
 
     Args:
-        psi_ratio (jax.Array): the WF ratios
+        psi_ratio (~jax.Array): the WF ratios
             :math:`\text{ratio}[i,\,j,\,:]=\frac{\Psi_i(r\sim\Psi^2_j)}{\Psi_j(r\sim\Psi^2_j)}`,
             shape: :data:`[n_wfs, n_wfs, elec_batch_size]`.
         weight (~deepqmc.types.Weight): the sample weights, shape
             :data:`[n_wfs, elec_batch_size]`.
 
     Returns:
-        tuple[jax.Array, Stats]:
+        tuple[~jax.Array, Stats]:
             tuple of the symmetric overlap matrix estimate, shaped
             ``[mol_batch_size, n_wfs, n_wfs]``, and overlap statistics.
     """
@@ -195,19 +195,19 @@ def compute_mean_overlap_tangent(
     r"""Compute the tangent of the overlap matrix with respect to the Ansatz parameters.
 
     Args:
-        psi_ratio (jax.Array): the ratio of WF values.
+        psi_ratio (~jax.Array): the ratio of WF values.
         weight (~deepqmc.types.Weight): the weight of each sample.
-        log_psi_tangent (jax.Array): the jvp of the WF values with respect to the
+        log_psi_tangent (~jax.Array): the jvp of the WF values with respect to the
             parameters of the Ansatz.
-        ratio_gradient_mask (jax.Array): a samplewise boolean mask to apply to the
+        ratio_gradient_mask (~jax.Array): a samplewise boolean mask to apply to the
             gradients.
-        overlap (jax.Array): the overlap matrix estimate.
+        overlap (~jax.Array): the overlap matrix estimate.
         scale_factory (OverlapGradientScaleFactory): function that computes the scaling
             factor of the overlap gradient.
         data (DataDict): input data passed to the ``scale_factory`` function.
 
     Returns:
-        jax.Array: the jvp of the sum of the upper triangle of the overlap matrix with
+        ~jax.Array: the jvp of the sum of the upper triangle of the overlap matrix with
             respect to the Ansatz parameters.
     """
     weight = weight[:, None, :, :]

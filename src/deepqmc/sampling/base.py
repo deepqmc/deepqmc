@@ -31,7 +31,7 @@ class ElectronSampler(Protocol):
             params (~deepqmc.types.Params): the parameters of the wave function that is
                 being sampled.
             n (int): the number of walkers to propagate in parallel.
-            R (jax.Array): the nuclei positions of the molecular configuration.
+            R (~jax.Array): the nuclei positions of the molecular configuration.
 
         Returns:
             :type:`~deepqmc.types.SamplerState`: the sampler state holding electron
@@ -52,7 +52,7 @@ class ElectronSampler(Protocol):
                 previous step.
             params (~deepqmc.types.Params): the parameters of the wave function that is
                 being sampled.
-            R (jax.Array): the nuclei positions of the molecular configuration.
+            R (~jax.Array): the nuclei positions of the molecular configuration.
 
         Returns:
             tuple[:type:`~deepqmc.types.SamplerState`,
@@ -73,7 +73,7 @@ class ElectronSampler(Protocol):
             state (~deepqmc.types.SamplerState): the state of the sampler before
                 parameter update.
             params (~deepqmc.types.Params): the new parameters of the wave function.
-            R (jax.Array): the nuclei positions of the molecular configuration.
+            R (~jax.Array): the nuclei positions of the molecular configuration.
 
         Returns:
             :type:`~deepqmc.types.SamplerState`: the updated sampler state holding

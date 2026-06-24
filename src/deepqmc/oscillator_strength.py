@@ -16,21 +16,21 @@ def compute_oscillator_strength(
     """Computes the oscillator strength and error for a batch.
 
     Args:
-    local_energies (jax.Array): the electron batch of local energies, shape:
+    local_energies (~jax.Array): the electron batch of local energies, shape:
         ``[electronic_states, electron_batch_size]``.
-    ratios (jax.Array): the electron batch of wave function ratios, shape:
+    ratios (~jax.Array): the electron batch of wave function ratios, shape:
         ``[electronic_states, electronic_states, electron_batch_size]``.
-    rs (jax.Array): the electron batch of electron samples, shape:
+    rs (~jax.Array): the electron batch of electron samples, shape:
         ``[electronic_states, electron_batch_size, n_electrons, 3]``.
 
-    local_energies_mask (jax.Array): Optional, mask for the local energies.
-    ratios_mask (jax.Array): Optional, mask for the ratios.
+    local_energies_mask (~jax.Array): Optional, mask for the local energies.
+    ratios_mask (~jax.Array): Optional, mask for the ratios.
 
     Returns:
         tuple[
-            tuple[jax.Array, jax.Array],
-            tuple[jax.Array, jax.Array],
-            tuple[jax.Array, jax.Array],
+            tuple[~jax.Array, ~jax.Array],
+            tuple[~jax.Array, ~jax.Array],
+            tuple[~jax.Array, ~jax.Array],
         ]:
             the oscillator strength with error,
             the transition dipole moment with error,

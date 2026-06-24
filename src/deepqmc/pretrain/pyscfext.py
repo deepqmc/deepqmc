@@ -82,7 +82,7 @@ def pyscf_from_hamil(  # type: ignore
             molecule on which to perform the SCF calculation.
         basis (str or Mapping[int, str]): the Gaussian basis set to use, or a
             per-atom basis mapping.
-        coords (jax.Array): optional, nuclear coordinates differing from hamil.
+        coords (~jax.Array): optional, nuclear coordinates differing from hamil.
         n_states (int): optional, the number of electronic states to compute.
         cas (tuple[int,int]): optional, the active space definition for CASSCF.
         state_avg (bool): optional, whether to use state averaging in CASSCF

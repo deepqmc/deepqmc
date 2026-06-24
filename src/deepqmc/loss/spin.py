@@ -29,7 +29,7 @@ def compute_spin_contributions(
             compute spin for all states.
 
     Returns:
-        jax.Array: the samplewise contributions to spin expectation value.
+        ~jax.Array: the samplewise contributions to spin expectation value.
     """
 
     if states is None:
@@ -54,13 +54,13 @@ def compute_mean_spin(
     r"""Compute the mean of a batch of spin contributions.
 
     Args:
-        spin_contriutions (jax.Array): the batch of local spin_contributions.
+        spin_contriutions (~jax.Array): the batch of local spin_contributions.
         weight (~deepqmc.types.Weight): the weight of each sample in the batch.
         states: (list[int] | None): list of state indices to compute spin for. If None,
             compute spin for all states.
 
     Returns:
-        tuple[jax.Array, ~deepqmc.types.Stats]: a tuple of spin expectation value
+        tuple[~jax.Array, ~deepqmc.types.Stats]: a tuple of spin expectation value
         and statistics.
     """
     if states is None:
@@ -83,16 +83,16 @@ def compute_mean_spin_tangent(
     r"""Compute the tangent of the spin with respect to the Ansatz parameters.
 
     Args:
-        spin_contributions (jax.Array): a batch of spin contributions.
+        spin_contributions (~jax.Array): a batch of spin contributions.
         weight (~deepqmc.types.Weight): the weights of each sample in the batch.
-        log_psi_tangent (jax.Array): the jvp of the WF values with respect to the Ansatz
+        log_psi_tangent (~jax.Array): the jvp of the WF values with respect to the Ansatz
             parameters.
-        gradient_mask (jax.Array): a boolean samplewise mask to apply to the gradients.
+        gradient_mask (~jax.Array): a boolean samplewise mask to apply to the gradients.
         states: (list[int] | None): list of state indices to compute spin for. If None,
             compute spin for all states.
 
     Returns:
-        jax.Array: the jvp of the spin with respect to the Ansatz parameters.
+        ~jax.Array: the jvp of the spin with respect to the Ansatz parameters.
     """
     if states is None:
         states = list(range(weight.shape[1]))
@@ -142,7 +142,7 @@ def compute_spin_raising_contributions(
             compute spin for all states.
 
     Returns:
-        jax.Array: the samplewise contributions to the stochastic spin raising
+        ~jax.Array: the samplewise contributions to the stochastic spin raising
             expectation value.
     """
     if states is None:
@@ -183,19 +183,19 @@ def compute_mean_spin_raising_tangent(
     r"""Compute the tangent of the spin raising operator with respect to the parameters.
 
     Args:
-        spin_raising_contributions (jax.Array): a batch of spin raising contributions.
-        spin_raising_tangent (jax.Array): a batch of spin raising contribution tangents.
+        spin_raising_contributions (~jax.Array): a batch of spin raising contributions.
+        spin_raising_tangent (~jax.Array): a batch of spin raising contribution tangents.
             This is the gradient of the local values of the spin raising contributions.
             Necessary, because the stochastic spin raising operator is not self-adjoint.
         weight (~deepqmc.types.Weight): the weights of each sample in the batch.
-        log_psi_tangent (jax.Array): the jvp of the WF values with respect to the Ansatz
+        log_psi_tangent (~jax.Array): the jvp of the WF values with respect to the Ansatz
             parameters.
-        gradient_mask (jax.Array): a boolean samplewise mask to apply to the gradients.
+        gradient_mask (~jax.Array): a boolean samplewise mask to apply to the gradients.
         states: (list[int] | None): list of state indices to compute spin for. If None,
             compute spin for all states.
 
     Returns:
-        jax.Array: the jvp of the spin raising operator with respect to the
+        ~jax.Array: the jvp of the spin raising operator with respect to the
             Ansatz parameters.
     """
     if states is None:

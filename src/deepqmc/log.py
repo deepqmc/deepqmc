@@ -261,7 +261,7 @@ class MetricLogger(Protocol):
                 entries to add, that are on a single device.
             multi_device_stats (~deepqmc.types.Stats): a dictionary containing the
                 entries to add, that are stored over multiple devices.
-            mol_idxs (jax.Array): indices of molecules considered in the given step.
+            mol_idxs (~jax.Array): indices of molecules considered in the given step.
             prefix (Optional[str]): optional, an optional prefix to append to the keys.
         """
         ...
@@ -305,7 +305,7 @@ class TensorboardMetricLogger:
                 entries to add, that are on a single device.
             multi_device_stats (~deepqmc.types.Stats): a dictionary containing the
                 entries to add, that are stored over multiple devices.
-            mol_idxs (jax.Array): indices of molecules considered in the given step.
+            mol_idxs (~jax.Array): indices of molecules considered in the given step.
             prefix (Optional[str]): an optional prefix to append to the stat
                 keys.
         """

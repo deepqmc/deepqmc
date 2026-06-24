@@ -301,7 +301,7 @@ class ElectronGNN(hk.Module):
             the instance that creates the initial electron embeddings.
         layer_factory (~typing.Type[~deepqmc.gnn.electron_gnn.ElectronGNNLayer]): a
             callable that generates a layer of the GNN.
-        ghost_coords (jax.Array): optional, specifies the coordinates of one or more
+        ghost_coords (~jax.Array): optional, specifies the coordinates of one or more
             ghost atoms, useful for breaking spatial symmetries of the nuclear geometry.
     """
 
@@ -433,7 +433,7 @@ class NucleiEmbedding(hk.Module):
     Args:
         n_up (int): the number of spin up electrons.
         n_down (int): the number of spin down electrons.
-        charges (jax.Array): the nuclear charges of the molecule.
+        charges (~jax.Array): the nuclear charges of the molecule.
         n_atom_types (int): the number of different atom types in the molecule.
         embedding_dim (int): the length of the output embedding vector
         atom_type_embedding (bool): if :data:`True`, initial embeddings are the same
@@ -549,7 +549,7 @@ class ElectronEmbedding(hk.Module):
             - ``2``: treat spin up and spin down electrons as distinguishable already
                 in the initial embeddings.
 
-        elec_types (jax.Array): an integer array with length equal to the number of
+        elec_types (~jax.Array): an integer array with length equal to the number of
             electrons, with entries between ``0`` and ``n_elec_types``. Specifies the
             type for each electron.
         positional_embeddings (dict): optional, if not ``None``, a ``dict`` with edge

@@ -18,7 +18,7 @@ class IdleNucleiSampler:
     Keeps track of nuclei without updating positions.
 
     Args:
-        nuc_coords (jax.Array): initial coordinates of the sampled molecules
+        nuc_coords (~jax.Array): initial coordinates of the sampled molecules
 
 
     """
@@ -41,11 +41,11 @@ class ConstraintNucleiSampler:
     Samples nuclear positions around a fixed geometry.
 
     Args:
-        charges (jax.Array): the nuclear charges of the molecule (:math:`N_\text{nuc}`).
+        charges (~jax.Array): the nuclear charges of the molecule (:math:`N_\text{nuc}`).
         noise_fn (~collections.abc.Callable | list[~collections.abc.Callable]): a noise
             distribution (or per-coordinate list of distributions) to sample
             displacements from. Each callable must have the signature
-            ``(rng, shape) -> jax.Array``. Defaults to :func:`jax.random.normal`.
+            ``(rng, shape) -> ~jax.Array``. Defaults to :func:`jax.random.normal`.
         coordinate_transform
             (~deepqmc.geom.coordinate_transform.InvertibleCoordinateTransform):
             optional, an invertible coordinate transform applied before adding noise.

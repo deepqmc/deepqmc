@@ -63,7 +63,7 @@ class Optimizer(Protocol):
 
         Returns:
             tuple[~deepqmc.types.Params, ~deepqmc.types.OptState, ~deepqmc.types.Energy,
-            jax.Array | None, ~deepqmc.types.Stats]: the new model
+            ~jax.Array | None, ~deepqmc.types.Stats]: the new model
             parameters, an updated optimizer state, the energies obtained during the
             evaluation of the loss function, if applicable the wave function ratios
             obtained during the evaluation of the loss function and further statistics.

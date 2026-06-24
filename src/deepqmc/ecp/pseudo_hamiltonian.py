@@ -151,9 +151,9 @@ def apply_functions_to_columns(
     r"""Compute :math:`f^J_(x_{iJ})`.
 
     Args:
-        functions (Iterable[Callable[[jax.Array], jax.Array]]):
+        functions (Iterable[Callable[[~jax.Array], ~jax.Array]]):
             functions to apply, iterable of length ``n_funcs``.
-        x (jax.Array): input to the functions. Shape: ``(input_dim, n_funcs)``.
+        x (~jax.Array): input to the functions. Shape: ``(input_dim, n_funcs)``.
     """
     fx = jnp.stack([fn(xx) for fn, xx in zip(functions, x.T, strict=True)], axis=1)
     return fx

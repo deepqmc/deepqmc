@@ -191,7 +191,7 @@ class MolecularHamiltonian(Hamiltonian):
         r"""Return the hamiltonian parameters in format pyscf can parse.
 
         Args:
-            coords (jax.Array): optional, nuclear coordinates (:math:`N_\text{nuc}`, 3).
+            coords (~jax.Array): optional, nuclear coordinates (:math:`N_\text{nuc}`, 3).
         """
         coords = coords if coords is not None else self.mol.coords
         pyscf_kwargs = {

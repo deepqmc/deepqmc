@@ -38,9 +38,9 @@ def parse_gaussian_type_ecp_params(
     argument) from the pyscf package and parses them to jnp arrays.
 
     Args:
-        charges (jax.Array): an array of atomic numbers of the atoms in the molecule
+        charges (~jax.Array): an array of atomic numbers of the atoms in the molecule
         ecp_type (str): the type of the ECP to load, typically 'bfd' or 'ccECP'
-        ecp_mask (jax.Array): an array if booleans indicating whether to use an ECP
+        ecp_mask (~jax.Array): an array if booleans indicating whether to use an ECP
             for each atom.
     Returns:
         tuple: a tuple containing a an array of integers indicating the numbers of

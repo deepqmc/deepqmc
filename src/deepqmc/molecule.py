@@ -34,12 +34,12 @@ class Molecule:
     r"""Represents a molecule.
 
     The array-like arguments accept anything that can be transformed to
-    :class:`jax.Array`.
+    :class:`~jax.Array`.
 
     Args:
-        coords (jax.Array | list[float]):
+        coords (~jax.Array | list[float]):
             nuclear coordinates ((:math:`N_\text{nuc}`, 3), a.u.) as rows
-        charges (jax.Array | list[int | float]): atom charges (:math:`N_\text{nuc}`)
+        charges (~jax.Array | list[int | float]): atom charges (:math:`N_\text{nuc}`)
         charge (int): total charge of a molecule
         spin (int): total spin multiplicity
         unit (str): units of the coordinates, either 'bohr' or 'angstrom'

@@ -31,11 +31,11 @@ def clip_local_energy(
     electronic state dimensions.
 
     Args:
-        clip_mask_fn (Callable[[jax.Array], (jax.Array, jax.Array)]): function taking
+        clip_mask_fn (Callable[[~jax.Array], (~jax.Array, ~jax.Array)]): function taking
             as input an electron batch of local energies and returning a tuple of the
             clipped local energies and an identically shaped boolean mask array to be
             applied to the gradients.
-        local_energy (jax.Array): the electron batch of local energies, shape:
+        local_energy (~jax.Array): the electron batch of local energies, shape:
             ``[mol_batch_size, electronic_states, electron_batch_size // device_count]
             ``.
     """
@@ -52,16 +52,16 @@ def clip_psi_ratio(
     :math:`\text{ratio}[i,\,j,\,:]=\frac{\Psi_i(r\sim\Psi^2_j)}{\Psi_j(r\sim\Psi^2_j)}`.
 
     Args:
-        clip_mask_fn (Callable[[jax.Array], tuple[jax.Array, jax.Array]]): function
+        clip_mask_fn (Callable[[~jax.Array], tuple[~jax.Array, ~jax.Array]]): function
             taking as input an electron batch of ratios and returning a tuple of the
             clipped ratios and an identically shaped boolean mask array to be applied
             to the gradients.
-        psi_ratio (jax.Array): the electron batch of psi_ratios, shape:
+        psi_ratio (~jax.Array): the electron batch of psi_ratios, shape:
             ``[mol_batch_size, electronic_states, electronic_states,
             electron_batch_size // device_count]``.
 
     Returns:
-        tuple[jax.Array, jax.Array]: the clipped WF ratios and gradient mask.
+        tuple[~jax.Array, ~jax.Array]: the clipped WF ratios and gradient mask.
     """
     return jax.vmap(jax.vmap(jax.vmap(clip_mask_fn)))(psi_ratio)
 

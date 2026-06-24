@@ -93,7 +93,7 @@ class Potential(Protocol):
             laplacian_factory (Callable): factory to compute the laplacian and gradient.
 
         Returns:
-            tuple[~deepqmc.types.Energy, jax.Array, jax.Array]: the kinetic energy,
+            tuple[~deepqmc.types.Energy, ~jax.Array, ~jax.Array]: the kinetic energy,
             the laplacian of the log WF, and the squared quantum force.
         """
 
