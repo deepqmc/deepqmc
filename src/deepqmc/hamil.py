@@ -58,12 +58,15 @@ class Hamiltonian(Protocol):
         Return a function that calculates the local energy of the wave function.
 
         Args:
-            wf (~deepqmc.types.ParametrizedWaveFunction): the wave function ansatz.
-            return_grad (bool): whether to return a tuple with the quantum force.
+            ansatz (~deepqmc.types.ParametrizedWaveFunction): the wave function ansatz.
 
         Returns:
-            :class:`Callable[r, ...]`: a function that evaluates
-            the local energy of :data:`wf` at :data:`r`.
+            :class:`~collections.abc.Callable`\[[:data:`~deepqmc.types.KeyArray` |
+            None, :data:`~deepqmc.types.Params`,
+            :class:`~deepqmc.types.PhysicalConfiguration`],
+            tuple[:data:`~deepqmc.types.Energy`, :data:`~deepqmc.types.Stats`]\]:
+            a function that evaluates the local energy of :data:`ansatz` at a given
+            physical configuration.
         """
         ...
 
@@ -91,7 +94,7 @@ class MolecularHamiltonian(Hamiltonian):
             specifying whether to use an ECP for each nucleus.
         elec_std (float): optional, a default value of the scaling factor
             of the spread of electrons around the nuclei.
-        laplacian_factory (~deepqmc.hamil.LaplacianFactory): creates a function that
+        laplacian_factory (~deepqmc.physics.LaplacianFactory): creates a function that
             returns a tuple containing the laplacian and gradient of the wave function.
     """
 

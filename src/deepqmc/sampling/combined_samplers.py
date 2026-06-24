@@ -94,7 +94,7 @@ class MultiNuclearGeometrySampler:
     r"""This sampler samples from multiple nuclear geometries in parallel.
 
     Args:
-        elec_sampler (~deepqmc.sampling.electron_samplers.ElectronSampler):
+        elec_sampler (~deepqmc.sampling.combined_samplers.MultiElectronicStateSampler):
             the electronic sampler to use
         nuc_sampler (~deepqmc.sampling.nuclei_samplers.NucleiSampler): the nuclei
             sampler to use.

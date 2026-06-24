@@ -111,14 +111,17 @@ def train(  # noqa: C901
         pretrain_steps (Optional[int]): optional number of pretraining steps with the
             baseline wave function obtained from pyscf.
         pretrain_kwargs (Optional[dict]): optional extra arguments for pretraining.
-        chkpt_constructor (Optional[Type[~deepqmc.log.CheckpointStore]]): optional
-            constructor for a checkpoint store used to save training checkpoints to
+        chkpt_constructor (Optional[~collections.abc.Callable[...,
+            ~deepqmc.log.CheckpointStore]]): optional factory callable that returns a
+            :class:`~deepqmc.log.CheckpointStore` for saving training checkpoints to
             ``workdir``.
-        metric_logger_constructor (Optional[Type[~deepqmc.log.MetricLogger]]):
-            optional constructor for a metric logger; defaults to
+        metric_logger_constructor (Optional[~collections.abc.Callable[...,
+            ~deepqmc.log.MetricLogger]]): optional factory callable that returns a
+            :class:`~deepqmc.log.MetricLogger`; defaults to
             :class:`~deepqmc.log.TensorboardMetricLogger` when omitted.
-        h5_logger_constructor (Optional[Type[~deepqmc.log.H5Logger]]): optional
-            constructor for an HDF5 logger; defaults to :class:`~deepqmc.log.H5Logger`
+        h5_logger_constructor (Optional[~collections.abc.Callable[...,
+            ~deepqmc.log.H5Logger]]): optional factory callable that returns an
+            :class:`~deepqmc.log.H5Logger`; defaults to :class:`~deepqmc.log.H5Logger`
             when omitted.
         merge_keys (Optional[list[str]]): optional list of parameter-key substrings
             that should be shared across electronic states.

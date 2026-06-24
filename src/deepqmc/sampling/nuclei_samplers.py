@@ -38,13 +38,20 @@ class IdleNucleiSampler:
 
 class ConstraintNucleiSampler:
     r"""
-    Samples nuclear position around fixed geom.
+    Samples nuclear positions around a fixed geometry.
 
     Args:
-        nuc_coords (jax.Array): initial coordinates of the sampled molecules
-        width (float): width of the gaussians to be sampled around the initial positions
-        noise_fn (Callable): a noise distribution to sample from
-        constraints (List): a list of constraints of the form (idxs_at, idxs_set, fn)
+        charges (jax.Array): the nuclear charges of the molecule (:math:`N_\text{nuc}`).
+        noise_fn (~collections.abc.Callable | list[~collections.abc.Callable]): a noise
+            distribution (or per-coordinate list of distributions) to sample
+            displacements from. Each callable must have the signature
+            ``(rng, shape) -> jax.Array``. Defaults to :func:`jax.random.normal`.
+        coordinate_transform
+            (~deepqmc.geom.coordinate_transform.InvertibleCoordinateTransform):
+            optional, an invertible coordinate transform applied before adding noise.
+            Defaults to a plain Cartesian transform.
+        constraints (list | None): optional, a list of constraints of the form
+            ``(idxs_at, idxs_set, fn)``.
     """
 
     def __init__(

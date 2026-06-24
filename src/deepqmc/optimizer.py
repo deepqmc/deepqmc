@@ -66,7 +66,7 @@ class Optimizer(Protocol):
             jax.Array | None, ~deepqmc.types.Stats]: the new model
             parameters, an updated optimizer state, the energies obtained during the
             evaluation of the loss function, if applicable the wave function ratios
-            obtained during the evaluation of the loss dunction and further statistics.
+            obtained during the evaluation of the loss function and further statistics.
         """
         ...
 

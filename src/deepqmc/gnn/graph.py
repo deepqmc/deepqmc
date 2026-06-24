@@ -148,8 +148,6 @@ def MolecularGraphEdgeBuilder(n_nuc, n_up, n_down, edge_types, *, self_interacti
         Args:
             phys_conf (~deepqmc.types.PhysicalConfiguration): the physical
                 configuration of the molecule.
-            occupancies (dict): mapping of edge type names to arrays where the occupancy
-                of the given edge type is stored.
         """
         assert phys_conf.r.shape[0] == n_up + n_down
 
@@ -172,11 +170,12 @@ def GraphUpdate(
     The update function is tailored to be used in GNNs.
 
     Args:
-        aggregate_edges_for_nodes_fn (bool): whether to perform the aggregation
-            of edges for nodes.
-        update_nodes_fn (~collections.abc.Callable): optional, function that updates the
+        aggregate_edges_for_nodes_fn (~typing.Callable): function that
+            aggregates edge features for each node, called before
+            :data:`update_nodes_fn`.
+        update_nodes_fn (~typing.Callable): optional, function that updates the
             nodes.
-        update_edges_fn (~collections.abc.Callable): optional, function that updates the
+        update_edges_fn (~typing.Callable): optional, function that updates the
             edges.
     """
 

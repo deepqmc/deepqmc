@@ -52,7 +52,7 @@ class MLP(hk.Module):
         name: Optional[str] = None,
         *,
         hidden_layers: Sequence[Union[int, str]],
-        bias: bool,
+        bias: bool | str,
         last_linear: bool,
         activation: Callable[[jax.Array], jax.Array],
         init: Union[str, Callable],

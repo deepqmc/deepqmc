@@ -39,7 +39,10 @@ class MetropolisSampler(ElectronSampler):
     Args:
         hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the physical
             system.
-        wf: the :data:`apply` method of the :data:`haiku` transformed ansatz object.
+        wf (~deepqmc.types.ParametrizedWaveFunction): the wave function to sample.
+        sample_initializer
+            (~deepqmc.sampling.electron_sample_initializers.ElectronSampleInitializer):
+            callable that generates initial electron positions.
         tau (float): optional, the proposal step size scaling factor. Adjusted during
             every step if :data:`target_acceptance` is specified.
         target_acceptance (float): optional, if specified the proposal step size
