@@ -47,17 +47,29 @@ class PhysicalConfiguration:
 
 
 type Params = MutableMapping
+"""Alias for :class:`~collections.abc.MutableMapping`. A nested dictionary like object holding the parameters of a haiku neural network ansatz."""
 type Stats = dict
+"""Alias for :class:`dict`. A dictionary that is used to gather data for logging."""
 type Weight = jax.Array
+"""Alias for :class:`~jax.Array`. An array holding importance weights of electron configurations used for weighted averages."""
 type Energy = jax.Array
+"""Alias for :class:`~jax.Array`. An array holding the local energies of a batch of electron configurations."""
 type KeyArray = jax.Array
+"""Alias for :class:`~jax.Array`. An array holding data to generate random numbers."""
 type SamplerState = dict
+"""Alias for :class:`dict`. The state dict of any sampler, holding various data needed for MCMC sampling."""
 type OptState = Any
+"""Alias for :data:`~typing.Any`. The state object of an optimizer, holding various data needed for optimization."""
 type DataDict = dict
+"""Alias for :class:`dict`. A dictionary holding auxiliary data used actively in the training, i.e. for scaling losses."""
 type Batch = tuple[PhysicalConfiguration, Weight, Optional[DataDict]]
+r"""Alias for tuple\[:class:`~deepqmc.types.PhysicalConfiguration`, :data:`~deepqmc.types.Weight`, :data:`~deepqmc.types.DataDict` | None\]. A tuple holding a PhysicalConfiguration, importance weight and optionally auxiliary data of a batch."""
 type WaveFunction = Callable[[PhysicalConfiguration], Psi]
+r"""Alias for :class:`~collections.abc.Callable`\[\[:class:`~deepqmc.types.PhysicalConfiguration`\], :class:`~deepqmc.types.Psi`\]. A wave function that maps a Physical configuration to the (log) value of the wave function."""
 type ParametrizedWaveFunction = Callable[[Params, PhysicalConfiguration], Psi]
+r"""Alias for :class:`~collections.abc.Callable`\[\[:data:`~deepqmc.types.Params`, :class:`~deepqmc.types.PhysicalConfiguration`\], :class:`~deepqmc.types.Psi`\]. A wave function that requires model parameters to be provided for its evaluation."""
 type OptimizerFactory = Callable[[LossAndGradFunction], Optimizer]  # pyright: ignore
+r"""Alias for :class:`~collections.abc.Callable`\[\[:class:`~deepqmc.loss.LossAndGradFunction`\], :class:`~deepqmc.optimizer.Optimizer`\]. A factory function that returns an Optimizer instance from a loss (and gradient) function."""
 type SamplerFactory = Callable[
     [
         KeyArray,
@@ -69,7 +81,9 @@ type SamplerFactory = Callable[
     ],  # pyright: ignore
     tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],  # pyright: ignore
 ]
+r"""Alias for :class:`~collections.abc.Callable`\[\[:data:`~deepqmc.types.KeyArray`, :class:`~deepqmc.hamil.MolecularHamiltonian`, :class:`~deepqmc.types.Ansatz`, list\[:class:`~deepqmc.molecule.Molecule`\], int, int\], tuple\[:class:`~deepqmc.sampling.combined_samplers.MoleculeIdxSampler`, :class:`~deepqmc.sampling.combined_samplers.MultiNuclearGeometrySampler`\]\]. A factory function that returns a tuple of a molecule index sampler and an electron and nuclei sampler."""
 type AnsatzFactory = Callable[[MolecularHamiltonian], Ansatz]  # pyright: ignore
+r"""Alias for :class:`~collections.abc.Callable`\[\[:class:`~deepqmc.hamil.MolecularHamiltonian`\], :class:`~deepqmc.types.Ansatz`\]. A factory function that returns a haiku object that can be transformed to obtain a wave function ansatz."""
 
 
 class TrainState(NamedTuple):
@@ -88,7 +102,8 @@ class Ansatz(Protocol):
     the DeepQMC software suite. It is assumed that Ansatzes take as input a
     :class:`~deepqmc.types.PhysicalConfiguration` for a single sample of electron and
     nuclei configuration. To handle batches of samples, e.g. during training, the Ansatz
-    is ``vmap``-ed automatically by DeepQMC.
+    is ``vmap``-ed automatically by DeepQMC. The apply function of the Ansatz object is
+    a :func:`~deepqmc.types.ParametrizedWaveFunction`.
     """
 
     def init(self, rng: KeyArray, phys_conf: PhysicalConfiguration) -> Params:
