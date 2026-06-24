@@ -1,7 +1,6 @@
 import os
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from xml.etree import ElementTree
-from typing import Callable
 
 import jax
 import jax.numpy as jnp

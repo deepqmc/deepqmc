@@ -1,10 +1,10 @@
 import logging
 import os
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from functools import partial
 from itertools import count
-from typing import Optional, Callable
+from typing import Optional
 
 import jax
 import jax.numpy as jnp

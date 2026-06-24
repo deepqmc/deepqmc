@@ -1,6 +1,8 @@
-from collections.abc import Iterable, MutableMapping, Sequence
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable, MutableMapping, Sequence
 from functools import partial
-from typing import Callable, Optional, TypeVar
+from typing import Optional, TypeVar
 
 import jax
 import jax.numpy as jnp

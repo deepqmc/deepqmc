@@ -1,7 +1,8 @@
 import math
+from collections.abc import Callable
 from copy import deepcopy
 from functools import partial
-from typing import Callable, Optional
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
