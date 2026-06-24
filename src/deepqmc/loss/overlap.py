@@ -33,9 +33,9 @@ def compute_wave_function_values(
     Returns:
         tuple[~deepqmc.types.Psi, ~deepqmc.types.Stats]: the WF values and
         auxiliary statistics.
-            The WF values are
-            :math:`\Psi[i, \, j, \, :] = \Psi_i({\bf r} \sim \Psi^2_j)`,
-            shape: :data:`[n_wfs, n_wfs, elec_batch_size]`.
+        The WF values are
+        :math:`\Psi[i, \, j, \, :] = \Psi_i({\bf r} \sim \Psi^2_j)`,
+        shape: :data:`[n_wfs, n_wfs, elec_batch_size]`.
     """
     psi = jax.vmap(  # molecule_batch
         jax.vmap(  # electronic_states (wfs)
@@ -106,11 +106,12 @@ def symmetrize_overlap_with_clipped_geometric_mean(x: jax.Array) -> jax.Array:
     from all WFs. Given input :math:`x_{ij}` this function computes:
 
     .. math::
-        y_{ij}=\text{sign}(x_{ij}) \sqrt{\text{clamp}(0, \, x_{ij} \cdot x_{ji}, \, 1)}
+        y_{ij}=\text{sign}(x_{ij}) \sqrt{\max(0, \, x_{ij} \cdot x_{ji})}
 
-    Note that if the signs of :math:`x_{ij}` and :math:`x_{ji}` differ, the clamping
-    makes sure that :math:`y_{ij}` will be zero. Otherwise the two signs will agree,
-    and we can use either one of them to compute the sign of :math:`y_{ij}`.
+    The product is clamped from below at zero only, to keep the square root
+    defined when the signs of :math:`x_{ij}` and :math:`x_{ji}` differ (in which
+    case :math:`y_{ij}` is zero). Otherwise the two signs will agree, and we can
+    use either one of them to compute the sign of :math:`y_{ij}`.
 
     Args:
         x: the non-symmetric overlap values:
@@ -202,9 +203,10 @@ def compute_mean_overlap_tangent(
         ratio_gradient_mask (~jax.Array): a samplewise boolean mask to apply to the
             gradients.
         overlap (~jax.Array): the overlap matrix estimate.
-        scale_factory (OverlapGradientScaleFactory): function that computes the scaling
-            factor of the overlap gradient.
-        data (DataDict): input data passed to the ``scale_factory`` function.
+        scale_factory (~deepqmc.loss.overlap.OverlapGradientScaleFactory): function that
+            computes the scaling factor of the overlap gradient.
+        data (~deepqmc.types.DataDict): input data passed to the ``scale_factory``
+            function.
 
     Returns:
         ~jax.Array: the jvp of the sum of the upper triangle of the overlap matrix with

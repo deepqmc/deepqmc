@@ -170,13 +170,13 @@ def GraphUpdate(
     The update function is tailored to be used in GNNs.
 
     Args:
-        aggregate_edges_for_nodes_fn (~typing.Callable): function that
+        aggregate_edges_for_nodes_fn (~collections.abc.Callable): function that
             aggregates edge features for each node, called before
-            :data:`update_nodes_fn`.
-        update_nodes_fn (~typing.Callable): optional, function that updates the
-            nodes.
-        update_edges_fn (~typing.Callable): optional, function that updates the
-            edges.
+            ``update_nodes_fn``.
+        update_nodes_fn (~collections.abc.Callable): optional, function that updates
+            the nodes.
+        update_edges_fn (~collections.abc.Callable): optional, function that updates
+            the edges.
     """
 
     def update_graph(graph):

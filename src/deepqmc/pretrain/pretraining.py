@@ -31,20 +31,33 @@ def pretrain(  # noqa: C901
 ):
     r"""Perform pretraining of the Ansatz to (MC-)SCF orbitals.
 
+    This is a generator, one pretraining step is performed for every step drawn
+    from :data:`steps`.
+
     Args:
-        rng (~deepqmc.types.RNGSeed): key used for PRNG.
-        hamil (~deepqmc.hamil.qc.MolecularHamiltonian): hamiltonian of the molecule.
+        rng (~deepqmc.types.KeyArray): key used for PRNG.
+        hamil (~deepqmc.hamil.MolecularHamiltonian): hamiltonian of the molecule.
         ansatz (~deepqmc.types.Ansatz): the wave function Ansatz.
-        params (dict): the (initial) parameters of the Ansatz.
-        opt (``optax`` optimizers): the optimizer.
-        molecule_idx_sampler (~deepqmc.samplint.MoleculeIdxSampler): an object that
+        params (~deepqmc.types.Params): the (initial) parameters of the Ansatz.
+        opt (optax.GradientTransformation): the ``optax`` optimizer used to update
+            the parameters.
+        molecule_idx_sampler (~deepqmc.sampling.MoleculeIdxSampler): an object that
             iterates (samples) the indices of the molecule dataset.
-        sampler: the sampler instance to use.
-        dataset (dict): dictionary containing the coefficients for the pretraining.
+        sampler (~deepqmc.sampling.MultiNuclearGeometrySampler): the sampler used to
+            obtain the electron and nuclear configurations to pretrain on.
+        smpl_state (~deepqmc.types.SamplerState): the current state of :data:`sampler`.
+        dataset (dict): dictionary containing the (MC-)SCF baseline used as the
+            pretraining target, as returned by
+            :func:`~deepqmc.pretrain.pyscfext.compute_scf_solution`.
         merge_keys (list[str]): optional, list of strings for selecting parameters to be
             shared across electronic states. Matching merge keys with (substrings of)
             parameter keys.
         steps: an iterable yielding the step numbers for the pretraining.
+
+    Yields:
+        tuple: the current step number, the updated parameters, the per-sample
+        pretraining losses and the sampled molecule indices, one tuple for every
+        step in :data:`steps`.
     """
     target_fn = PretrainTarget(
         hamil, None, dataset['centers'], dataset['shells'], dataset['mo_coeffs']

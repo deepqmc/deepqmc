@@ -154,6 +154,19 @@ class ZMatrixTemplate(Generic[LT, Z]):
     zmatrix_constructor: Type[Z]
 
     def concretize(self, values: jax.Array) -> Z:
+        r"""Assign concrete values to the entries of this template.
+
+        Args:
+            values (~jax.Array): the flattened bond length, angle and dihedral
+                values, in the order in which they appear when iterating over the
+                template's lines.
+
+        Returns:
+            the resulting Z matrix (e.g. a
+            :class:`~deepqmc.geom.zmatrix.ConcreteZMatrix` or a
+            :class:`~deepqmc.geom.zmatrix.StochasticZMatrix`, depending on the
+            concrete template type).
+        """
         split_idxs = list(
             accumulate(min(3, i) for i in range(len(self.line_templates) - 1))
         )
@@ -167,6 +180,17 @@ class ZMatrixTemplate(Generic[LT, Z]):
         )
 
     def concretize_from_cartesian(self, cartesian: jax.Array) -> Z:
+        r"""Assign concrete values to the entries of this template, computed from a
+        Cartesian reference geometry.
+
+        Args:
+            cartesian (~jax.Array): Cartesian nuclear coordinates, of shape
+                ``(n_nuc, 3)``, used to evaluate the bond lengths, angles and
+                dihedrals of this template.
+
+        Returns:
+            the resulting Z matrix, with values computed from ``cartesian``.
+        """
         values = jnp.concatenate(
             [
                 line_template.compute_values(atom_idx, cartesian)
@@ -176,6 +200,23 @@ class ZMatrixTemplate(Generic[LT, Z]):
         return self.concretize(values)
 
     def clean_values(self, values: jax.Array):
+        r"""Wrap angle and dihedral values into their canonical ranges.
+
+        Bond angles are wrapped into :math:`[0, \pi]` and dihedral angles into
+        :math:`(-\pi, \pi]`, flipping the sign of the corresponding dihedral
+        whenever an angle had to be reflected back into range. This keeps values
+        produced e.g. by adding unconstrained Cartesian-like noise to a
+        :class:`~deepqmc.geom.coordinate_transform.ZMatrixCoordinateTransform`
+        well-defined before they are turned back into a Z matrix.
+
+        Args:
+            values (~jax.Array): the flattened bond length, angle and dihedral
+                values to clean.
+
+        Returns:
+            ~jax.Array: ``values`` with the angle and dihedral entries wrapped into
+            their canonical ranges.
+        """
         angle_idxs = jnp.cumsum(jnp.array([2, 2] + (len(self) - 2) * [3]))[
             : len(self) - 2
         ]

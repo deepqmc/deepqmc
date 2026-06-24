@@ -5,7 +5,6 @@ from .electron_samplers import (
     MetropolisSampler,
 )
 from .sampling_utils import (
-    chain,
     combine_samplers,
     equilibrate,
     initialize_sampler_state,
@@ -16,7 +15,6 @@ __all__ = [
     'MetropolisSampler',
     'LangevinSampler',
     'DecorrSampler',
-    'chain',
     'initialize_sampling',
     'initialize_sampler_state',
     'equilibrate',

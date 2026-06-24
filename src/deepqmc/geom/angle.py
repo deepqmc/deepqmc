@@ -65,7 +65,7 @@ def angle_jvp(i0, i1, i2, primals, tangents):
 
 @jax.custom_vjp
 def angle(i0, i1, i2, coords):
-    """Compute the angle between three atoms.
+    r"""Compute the angle between three atoms.
 
     This is the top-level, user-facing angle function. It has a well defined
     backward-mode gradient (as computed e.g. with ``jax.grad``), and a well defined
@@ -73,6 +73,17 @@ def angle(i0, i1, i2, coords):
     (as done e.g. by ``jax.hessian``).
     If other combinations of ``jax`` differentation transformations are used, jax
     might raise and error, or the derivative might be ill-defined around zero.
+
+    Args:
+        i0 (int): index of the first outer atom.
+        i1 (int): index of the vertex atom, at which the angle is formed.
+        i2 (int): index of the second outer atom.
+        coords (~jax.Array): Cartesian coordinates of the atoms, of shape
+            ``(n_atoms, 3)``.
+
+    Returns:
+        ~jax.Array: the angle between 0 and :math:`\pi`, in radians, spanned at
+        ``i1`` by the bonds to ``i0`` and ``i2``.
     """
     return _bare_angle(i0, i1, i2, coords)
 

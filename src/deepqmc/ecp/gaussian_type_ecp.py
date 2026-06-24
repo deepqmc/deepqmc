@@ -102,8 +102,14 @@ class GaussianTypeECP(Potential):
     Supports ECPs that are defined in pyscf package, such as 'bfd', 'ccECP',
     'ccECP_reg' or 'ccECP_He'. The ECP parameters are loaded directly from
     the pyscf package. The ECP is defined by the general formula:
-    :math: `\sum_{l=0}^{l_\text{max}} V_{\text{nl}}(\mathbf{r}) |lm\rangle\langle lm|`
-    :math: V_\text{nl}({r}) = \sum_{k=1}^{2} \beta_{lk} \text{e}^{-\alpha_k r^2}
+
+    .. math::
+        \sum_{l=0}^{l_\text{max}} V_{\text{nl}}(\mathbf{r}) |lm\rangle\langle lm|
+
+    where
+
+    .. math::
+        V_\text{nl}(r) = \sum_{k=1}^{2} \beta_{lk} \text{e}^{-\alpha_k r^2}
     """
 
     def __init__(self, charges: jax.Array, ecp_type: str, ecp_mask: jax.Array):
@@ -169,10 +175,10 @@ class GaussianTypeECP(Potential):
         replacing the remaining vmap with fori_loop over the 12 quadrature points.
 
         Args:
-            rng (jax.random.PRNGKey): key used for PRNG.
-            phys_conf (:class:`deepqmc.types.PhysicalConfiguration`): electron and
+            rng (~deepqmc.types.KeyArray): key used for PRNG.
+            phys_conf (~deepqmc.types.PhysicalConfiguration): electron and
                 nuclear coordinates.
-            wf (:class:`~deepqmc.types.WaveFunction`): the wave function ansatz.
+            wf (~deepqmc.types.WaveFunction): the wave function ansatz.
         """
         assert rng is not None
 

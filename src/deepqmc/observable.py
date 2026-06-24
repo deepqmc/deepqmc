@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from functools import partial
@@ -40,7 +42,7 @@ from .types import (
     Stats,
 )
 
-__all__ = ['default_observable_monitors', 'EnergyMonitor', 'WaveFunctionMonitor']
+__all__ = ['ObservableMonitor', 'EnergyMonitor', 'WaveFunctionMonitor']
 
 
 def rng_wrapper(observable_fn_factory):
@@ -65,6 +67,31 @@ def compute_mean_and_std(
 
 
 class ObservableMonitor:
+    r"""Base class for observable monitors evaluated during training or inference.
+
+    An :class:`ObservableMonitor` encapsulates a physical observable (e.g. forces,
+    spin) that is computed periodically from wave function samples.  The lifecycle
+    has two stages:
+
+    1. **Construction** — sets the sampling frequency and whether raw samples should
+       be stored alongside the statistics.
+    2. **Finalization** — :meth:`finalize` is called once the Hamiltonian and wave
+       function are known; subclasses override it to build :attr:`observable_fn`.
+       After finalization the monitor is ready to be called.
+
+    Subclasses must set the class attribute :attr:`name` and override
+    :meth:`finalize` to populate :attr:`observable_fn`.  Set
+    :attr:`requires_energy` to ``True`` when the observable function needs the
+    local energies as an additional input.
+
+    Args:
+        save_samples (bool): if ``True``, the raw per-sample observable values
+            are included in the returned statistics dictionary under the key
+            ``'<name>/samples'``.
+        period (int): number of training steps between consecutive evaluations;
+            must be at least 1.
+    """
+
     name: str
     save_samples: bool
     period: int
@@ -79,6 +106,21 @@ class ObservableMonitor:
     def finalize(
         self, hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction
     ) -> Self:
+        r"""Bind the monitor to a specific Hamiltonian and wave function.
+
+        Called once before training begins.  The default implementation returns
+        ``self`` unchanged; subclasses override this to construct
+        :attr:`observable_fn` from ``hamil`` and ``wf``.
+
+        Args:
+            hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the
+                physical system.
+            wf (~deepqmc.types.ParametrizedWaveFunction): the parametrized wave
+                function used during training.
+
+        Returns:
+            ~deepqmc.observable.ObservableMonitor: the finalized monitor (``self``).
+        """
         return self
 
     @partial(pmap, static_broadcasted_argnums=(0,))
@@ -114,6 +156,29 @@ class ObservableMonitor:
         local_energy: jax.Array | None,
         psi_ratios: Optional[jax.Array],
     ) -> Stats:
+        r"""Evaluate the observable at the current training step.
+
+        Returns an empty dictionary on steps that are not multiples of
+        :attr:`period`.  Otherwise distributes the RNG across devices,
+        calls :meth:`compute_observable`, and optionally attaches the raw
+        samples to the statistics dictionary.
+
+        Args:
+            step (int): current training step index.
+            rng (~deepqmc.types.KeyArray): RNG key for stochastic observables.
+            params (~deepqmc.types.Params): current wave function parameters.
+            phys_conf (~deepqmc.types.PhysicalConfiguration): electron and
+                nuclear configurations.
+            psi (~deepqmc.types.Psi): current wave function values.
+            local_energy (~jax.Array | None): per-sample local energies; may
+                be ``None`` if not yet computed.
+            psi_ratios (Optional[~jax.Array]): wave function ratios for
+                multi-state calculations, or ``None``.
+
+        Returns:
+            ~deepqmc.types.Stats: a statistics dictionary, or ``{}`` if this
+            step is skipped.
+        """
         if step % self.period:
             return {}
         rng = jnp.array(split_on_devices(rng, phys_conf.batch_shape))[0]
@@ -126,6 +191,8 @@ class ObservableMonitor:
 
 
 class SpinMonitor(ObservableMonitor):
+    r"""Monitor the total spin expectation value :math:`\langle S^2 \rangle`."""
+
     name: str = 'spin'
 
     def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
@@ -134,6 +201,8 @@ class SpinMonitor(ObservableMonitor):
 
 
 class BaseForceMonitor(ObservableMonitor, ABC):
+    r"""Abstract base class for Hellmann-Feynman force monitors with optional coordinate transform."""
+
     def __init__(
         self,
         save_samples: bool,
@@ -162,6 +231,8 @@ class BaseForceMonitor(ObservableMonitor, ABC):
 
 
 class BaseForceMonitorNotRequiringEnergy(BaseForceMonitor, ABC):
+    r"""Abstract base for force monitors that do not require local energies as input."""
+
     requires_energy = False
 
     @staticmethod
@@ -175,6 +246,8 @@ class BaseForceMonitorNotRequiringEnergy(BaseForceMonitor, ABC):
 
 
 class BaseForceMonitorRequiringEnergy(BaseForceMonitor, ABC):
+    r"""Abstract base for force monitors that require local energies as input."""
+
     requires_energy = True
 
     @staticmethod
@@ -188,6 +261,8 @@ class BaseForceMonitorRequiringEnergy(BaseForceMonitor, ABC):
 
 
 class BareForceMonitor(BaseForceMonitorNotRequiringEnergy):
+    r"""Monitor bare Hellmann-Feynman forces without variance reduction."""
+
     name: str = 'hf_force_bare'
 
     @staticmethod
@@ -200,6 +275,8 @@ class BareForceMonitor(BaseForceMonitorNotRequiringEnergy):
 
 
 class BareForceAntiMonitor(BareForceMonitor):
+    r"""Monitor bare Hellmann-Feynman forces with antithetic-sampling variance reduction."""
+
     name: str = 'hf_force_bare_anti'
 
     def __init__(
@@ -232,6 +309,8 @@ class BareForceAntiMonitor(BareForceMonitor):
 
 
 class ACZVForceMonitor(BaseForceMonitorRequiringEnergy):
+    r"""Monitor HF forces using the AC-ZV estimator [Assaraf03]_."""
+
     name: str = 'hf_force_ac_zv'
 
     @staticmethod
@@ -244,6 +323,8 @@ class ACZVForceMonitor(BaseForceMonitorRequiringEnergy):
 
 
 class ACZVZBForceMonitor(BaseForceMonitorRequiringEnergy):
+    r"""Monitor HF forces using the AC-ZV-ZB estimator [Assaraf03]_."""
+
     name: str = 'hf_force_ac_zvzb'
 
     @staticmethod
@@ -256,6 +337,8 @@ class ACZVZBForceMonitor(BaseForceMonitorRequiringEnergy):
 
 
 class ACZBForceMonitor(BaseForceMonitorRequiringEnergy):
+    r"""Monitor HF forces using the AC-ZB estimator [Assaraf03]_."""
+
     name: str = 'hf_force_ac_zb'
 
     @staticmethod
@@ -268,6 +351,8 @@ class ACZBForceMonitor(BaseForceMonitorRequiringEnergy):
 
 
 class ACZVQForceMonitor(BaseForceMonitorNotRequiringEnergy):
+    r"""Monitor HF forces using the AC-ZVQ estimator [Assaraf03]_; incompatible with ECPs."""
+
     name: str = 'hf_force_ac_zvq'
 
     def finalize(
@@ -286,6 +371,8 @@ class ACZVQForceMonitor(BaseForceMonitorNotRequiringEnergy):
 
 
 class ACZVQForceAntiMonitor(ACZVQForceMonitor):
+    r"""Monitor HF forces using AC-ZVQ with antithetic sampling; incompatible with ECPs."""
+
     name: str = 'hf_force_ac_zvq_anti'
 
     def __init__(
@@ -313,6 +400,8 @@ class ACZVQForceAntiMonitor(ACZVQForceMonitor):
 
 
 class ACZVZBQForceMonitor(BaseForceMonitorRequiringEnergy):
+    r"""Monitor HF forces using the AC-ZV-ZB-Q estimator [Assaraf03]_; incompatible with ECPs."""
+
     name: str = 'hf_force_ac_zvzbq'
 
     def finalize(
@@ -333,6 +422,8 @@ class ACZVZBQForceMonitor(BaseForceMonitorRequiringEnergy):
 
 
 class ACZVQZBForceMonitor(BaseForceMonitorRequiringEnergy):
+    r"""Monitor HF forces using the AC-ZVQ-ZB hybrid estimator; incompatible with ECPs."""
+
     name: str = 'hf_force_ac_zvqzb'
 
     def finalize(self, hamil: MolecularHamiltonian, wf) -> Self:
@@ -351,6 +442,8 @@ class ACZVQZBForceMonitor(BaseForceMonitorRequiringEnergy):
 
 
 class FiniteDifferenceForceMonitor(ObservableMonitor):
+    r"""Monitor interatomic forces via a finite-difference scheme."""
+
     name: str = 'finite_difference_force'
 
     def __init__(self, save_samples: bool, period: int, h: float = 1e-3):
@@ -388,6 +481,8 @@ class EnergyMonitor(ObservableMonitor):
 
 
 class PsiRatioMonitor(ObservableMonitor):
+    r"""Monitor wave function ratios between electronic states."""
+
     name: str = 'psi_ratio'
 
     @partial(pmap, static_broadcasted_argnums=(0,))
@@ -405,6 +500,8 @@ class PsiRatioMonitor(ObservableMonitor):
 
 
 class ElectronPositionMonitor(ObservableMonitor):
+    r"""Monitor the electron positions during training."""
+
     name: str = 'r'
 
     @partial(pmap, static_broadcasted_argnums=(0,))
@@ -421,6 +518,8 @@ class ElectronPositionMonitor(ObservableMonitor):
 
 
 class NuclearPositionMonitor(ObservableMonitor):
+    r"""Monitor the nuclear positions during training."""
+
     name: str = 'R'
 
     @partial(pmap, static_broadcasted_argnums=(0,))
@@ -455,6 +554,8 @@ class WaveFunctionMonitor(ObservableMonitor):
 
 
 class OscillatorStrengthMonitor(ObservableMonitor):
+    r"""Monitor oscillator strengths between electronic states."""
+
     name: str = 'oscillator_strength'
 
     @partial(pmap, static_broadcasted_argnums=(0,))

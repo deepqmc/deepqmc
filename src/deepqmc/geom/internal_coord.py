@@ -18,5 +18,15 @@ def difference(
 
 
 def distance(i0: int, i1: int, coords: jax.Array) -> jax.Array:
-    """Compute the distance between two atoms."""
+    r"""Compute the Euclidean distance between two atoms.
+
+    Args:
+        i0 (int): index of the first atom.
+        i1 (int): index of the second atom.
+        coords (~jax.Array): Cartesian coordinates of the atoms, of shape
+            ``(n_atoms, 3)``.
+
+    Returns:
+        ~jax.Array: the distance between the atoms at indices ``i0`` and ``i1``.
+    """
     return jnp.linalg.norm(difference(i0, i1, coords))

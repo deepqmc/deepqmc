@@ -61,12 +61,8 @@ class Hamiltonian(Protocol):
             ansatz (~deepqmc.types.ParametrizedWaveFunction): the wave function ansatz.
 
         Returns:
-            :class:`~collections.abc.Callable`\[[:data:`~deepqmc.types.KeyArray` |
-            None, :data:`~deepqmc.types.Params`,
-            :class:`~deepqmc.types.PhysicalConfiguration`],
-            tuple[:data:`~deepqmc.types.Energy`, :data:`~deepqmc.types.Stats`]\]:
-            a function that evaluates the local energy of :data:`ansatz` at a given
-            physical configuration.
+            ~collections.abc.Callable[[~deepqmc.types.KeyArray | None, ~deepqmc.types.Params, ~deepqmc.types.PhysicalConfiguration], tuple[~deepqmc.types.Energy, ~deepqmc.types.Stats]]: a function that evaluates the local energy of ``ansatz``
+                at a given physical configuration.
         """
         ...
 
@@ -88,7 +84,7 @@ class MolecularHamiltonian(Hamiltonian):
             :data:`'ecp'` argument.
             Supports ECPs that are implemented in the pyscf package, e.g. :data:`'bfd'`
             [Burkatzki et al. 2007] or :data:`'ccECP'` [Bennett et al. 2017].
-            Supports PseudoHamiltonians from [Ichibha23] and [Fu25], e.g. :data:`'PHcc'`
+            Supports PseudoHamiltonians from [Ichibha23] and [Fu26], e.g. :data:`'PHcc'`
             or :data:`'PHhf'`.
         ecp_mask (list[bool]): list of True and False values (:math:`N_\text{nuc}`)
             specifying whether to use an ECP for each nucleus.

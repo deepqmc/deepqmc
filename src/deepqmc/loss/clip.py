@@ -7,7 +7,13 @@ from ..parallel import all_device_mean, all_device_median, all_device_quantile
 from ..types import Energy
 from ..utils import log_squeeze
 
-__all__ = ()
+__all__ = [
+    "median_clip_and_mask",
+    "median_log_squeeze_and_mask",
+    "clip_local_energy",
+    "clip_psi_ratio",
+    "psi_ratio_clip_and_mask",
+]
 
 
 class LocalEnergyClipAndMaskFn(Protocol):
@@ -27,17 +33,16 @@ def clip_local_energy(
 ) -> tuple[Energy, jax.Array]:
     r"""Apply a clipping function to the local energies.
 
-    The clipping function is twice ``vmap``ed: over the molecule batch, and
+    The clipping function is twice ``vmapped``: over the molecule batch, and
     electronic state dimensions.
 
     Args:
-        clip_mask_fn (Callable[[~jax.Array], (~jax.Array, ~jax.Array)]): function taking
+        clip_mask_fn (~collections.abc.Callable[[~jax.Array], tuple[~deepqmc.types.Energy, ~jax.Array]]): function taking
             as input an electron batch of local energies and returning a tuple of the
             clipped local energies and an identically shaped boolean mask array to be
             applied to the gradients.
         local_energy (~jax.Array): the electron batch of local energies, shape:
-            ``[mol_batch_size, electronic_states, electron_batch_size // device_count]
-            ``.
+            ``[mol_batch_size, electronic_states, electron_batch_size // device_count]``.
     """
     return jax.vmap(jax.vmap(clip_mask_fn))(local_energy)
 
@@ -47,18 +52,17 @@ def clip_psi_ratio(
 ) -> tuple[jax.Array, jax.Array]:
     r"""Apply a clipping function to the wave function ratios.
 
-    The clipping function is thrice ``vmap``ed: over the molecule batch, and the two
+    The clipping function is thrice ``vmapped``: over the molecule batch, and the two
     electronic state dimensions of the wave function ratio array:
     :math:`\text{ratio}[i,\,j,\,:]=\frac{\Psi_i(r\sim\Psi^2_j)}{\Psi_j(r\sim\Psi^2_j)}`.
 
     Args:
-        clip_mask_fn (Callable[[~jax.Array], tuple[~jax.Array, ~jax.Array]]): function
+        clip_mask_fn (~collections.abc.Callable[[~jax.Array], tuple[~jax.Array, ~jax.Array]]): function
             taking as input an electron batch of ratios and returning a tuple of the
             clipped ratios and an identically shaped boolean mask array to be applied
             to the gradients.
         psi_ratio (~jax.Array): the electron batch of psi_ratios, shape:
-            ``[mol_batch_size, electronic_states, electronic_states,
-            electron_batch_size // device_count]``.
+            ``[mol_batch_size, electronic_states, electronic_states, electron_batch_size // device_count]``.
 
     Returns:
         tuple[~jax.Array, ~jax.Array]: the clipped WF ratios and gradient mask.
@@ -69,6 +73,23 @@ def clip_psi_ratio(
 def median_clip_and_mask(
     x: jax.Array, clip_width: float, median_center: bool, exclude_width: float = jnp.inf
 ) -> tuple[jax.Array, jax.Array]:
+    r"""Hard-clip values to a multiple of the mean absolute deviation from the center.
+
+    Args:
+        x (~jax.Array): values to clip, shape ``[electron_batch_size]``.
+        clip_width (float): number of mean absolute deviations (MADs) around the
+            center within which values are kept; values outside this range are
+            clipped to the boundary.
+        median_center (bool): if ``True``, use the median as the center; if
+            ``False``, use the mean.
+        exclude_width (float): deviation threshold in MADs above which samples are
+            excluded from gradient computation (gradient mask set to ``False``).
+            Defaults to :data:`jnp.inf` (no exclusion).
+
+    Returns:
+        tuple[~jax.Array, ~jax.Array]: the clipped values and a boolean gradient
+            mask of the same shape, where ``False`` marks excluded outliers.
+    """
     clip_center = all_device_median(x) if median_center else all_device_mean(x)
     abs_diff = jnp.abs(x - clip_center)
     mad = all_device_mean(abs_diff)
@@ -83,6 +104,33 @@ def median_log_squeeze_and_mask(
     quantile: Union[float, jax.Array] = 0.95,
     exclude_width: float = jnp.inf,
 ) -> tuple[jax.Array, jax.Array]:
+    r"""Softly squeeze values toward the median using a log-squeeze function.
+
+    Values far from the median are continuously compressed rather than hard-clipped.
+    The clipping scale is set to ``clip_width`` times the ``quantile``-th quantile
+    of absolute deviations from the median. Formally, the squeezed value is
+
+    .. math::
+        \tilde{x}_i = \bar{x} + 2w\,\operatorname{log\_squeeze}\!\left(\frac{x_i - \bar{x}}{2w}\right),
+
+    where :math:`\bar{x}` is the median and :math:`w = \texttt{clip\_width}\times Q_q(|x-\bar{x}|)`.
+    For :math:`|x_i - \bar{x}| \ll w` the squeezed value is close to :math:`x_i`;
+    for large outliers it saturates at :math:`\bar{x} \pm 2w`.
+
+    Args:
+        x (~jax.Array): values to squeeze, shape ``[electron_batch_size]``.
+        clip_width (float): multiplier applied to the quantile to obtain the
+            half-width :math:`w` of the squeeze window.
+        quantile (float): quantile of the absolute deviations used to set the
+            natural scale of the distribution; default ``0.95``.
+        exclude_width (float): deviation threshold in quantile units above which
+            samples are excluded from gradient computation (gradient mask set to
+            ``False``). Defaults to :data:`jnp.inf` (no exclusion).
+
+    Returns:
+        tuple[~jax.Array, ~jax.Array]: the squeezed values and a boolean gradient
+            mask of the same shape, where ``False`` marks excluded outliers.
+    """
     x_median = all_device_median(x)
     x_diff = x - x_median
     x_abs_diff = jnp.abs(x_diff)
@@ -102,14 +150,15 @@ def psi_ratio_clip_and_mask(
     r"""Clips WF ratios of a single batch of electron position samples.
 
     Args:
-        ratio ([electron_batch_size]): ratio of log WF values:
+        psi_ratio (~jax.Array): ratio of log WF values, shape
+            ``[electron_batch_size]``:
             :math:`\frac{\Psi_i({\bf r}_j)}{\Psi_j({\bf r}_j)}`.
         clip_width (float): clip width to use when clipping ratio.
         exclude_width (float): default: :data:`jnp.inf`, deviation threshold above which
             outlier ratios are excluded from the overlap gradient computation.
 
     Returns:
-        tuple of the clipped WF ratios and the gradient mask.
+        tuple[~jax.Array, ~jax.Array]: the clipped WF ratios and gradient mask.
     """
     clip_center = all_device_median(psi_ratio)
     deviation = jnp.abs(psi_ratio - clip_center)

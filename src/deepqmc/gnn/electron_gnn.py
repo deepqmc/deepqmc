@@ -12,9 +12,10 @@ from .utils import NodeEdgeMapping
 
 class ElectronGNNLayer(hk.Module):
     r"""
-    The message passing layer of :class:`ElectronGNN`.
+    The message passing layer of :class:`~deepqmc.gnn.electron_gnn.ElectronGNN`.
 
-    Derived from :class:`~deepqmc.gnn.gnn.MessagePassingLayer`.
+    Implements a message passing layer for the
+    :class:`~deepqmc.gnn.electron_gnn.ElectronGNN` architecture.
 
     Args:
         n_interactions (int): the number of message passing interactions.
@@ -23,10 +24,10 @@ class ElectronGNNLayer(hk.Module):
         n_up (int): the number of spin up electrons.
         n_down (int): the number of spin down electrons.
         embedding_dim (int): the length of the electron embedding vectors.
-        edge_types (Tuple[str]): the types of edges to consider.
+        edge_types (tuple[str]): the types of edges to consider.
         self_interaction (bool): whether to consider edges where the sender and
             receiver electrons are the same.
-        node_data (Dict[str, Any]): a dictionary containing information about the
+        node_data (dict[str, Any]): a dictionary containing information about the
             nodes of the graph.
         two_particle_stream_dim (int): the feature dimension of the two particle
             streams.
@@ -46,7 +47,7 @@ class ElectronGNNLayer(hk.Module):
         update_features (list[~deepqmc.gnn.update_features.UpdateFeature]): a list of
             partially initialized update feature classes to use when computing the
             update features of the one particle embeddings. For more details see the
-            documentation of :class:`deepqmc.gnn.update_features`.
+            documentation of :mod:`~deepqmc.gnn.update_features`.
         update_rule (str): how to combine the update features for the update of the
             one particle embeddings.
             Possible values:
@@ -273,10 +274,8 @@ class ElectronGNN(hk.Module):
     r"""
     A neural network acting on graphs defined by electrons and nuclei.
 
-    Derived from :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork`.
-
     Args:
-        hamil (:class:`~deepqmc.hamil.MolecularHamiltonian`): the Hamiltonian of
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of
             the system on which the graph is defined.
         embedding_dim (int): the length of the electron embedding vectors.
         n_interactions (int): number of message passing interactions.
@@ -294,12 +293,12 @@ class ElectronGNN(hk.Module):
             receiver electrons are the same.
         two_particle_stream_dim (int): the feature dimension of the two particle
             streams. Only active if :data:`deep_features` are used.
-        nuclei_embedding (~typing.Type[~deepqmc.gnn.electron_gnn.NucleiEmbedding]):
+        nuclei_embedding (type[~deepqmc.gnn.electron_gnn.NucleiEmbedding]):
             optional, the instance responsible for creating the initial nuclear
             embeddings. Set to :data:`None` if nuclear embeddings are not needed.
-        electron_embedding (~typing.Type[~deepqmc.gnn.electron_gnn.ElectronEmbedding]):
+        electron_embedding (type[~deepqmc.gnn.electron_gnn.ElectronEmbedding]):
             the instance that creates the initial electron embeddings.
-        layer_factory (~typing.Type[~deepqmc.gnn.electron_gnn.ElectronGNNLayer]): a
+        layer_factory (type[~deepqmc.gnn.electron_gnn.ElectronGNNLayer]): a
             callable that generates a layer of the GNN.
         ghost_coords (~jax.Array): optional, specifies the coordinates of one or more
             ghost atoms, useful for breaking spatial symmetries of the nuclear geometry.
@@ -400,12 +399,12 @@ class ElectronGNN(hk.Module):
         Execute the graph neural network.
 
         Args:
-            phys_conf (PhysicalConfiguration): the physical configuration
-                of the molecule.
+            phys_conf (~deepqmc.types.PhysicalConfiguration): the physical
+                configuration of the molecule.
 
         Returns:
-            float, (:math:`N_\text{elec}`, :data:`embedding_dim`):
-            the final embeddings of the electrons.
+            the final electron and nuclear embeddings, bundled as a ``GraphNodes``
+            named tuple.
         """
         if self.ghost_coords is not None:
             phys_conf = phys_conf._replace(

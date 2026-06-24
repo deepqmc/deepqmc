@@ -69,9 +69,15 @@ doc = [
     'toml',
     'docutils',
     'pydata-sphinx-theme',
+    'nbsphinx',
+]
+notebooks = [
+    'jupyter',
+    'ipykernel',
 ]
 
 [project.urls]
+homepage = 'https://deepqmc.github.io'
 repository = 'https://github.com/deepqmc/deepqmc'
 documentation = 'https://deepqmc.github.io'
 

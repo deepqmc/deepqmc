@@ -1,7 +1,17 @@
 from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
-from typing import Any, NamedTuple, Optional, Protocol
+from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
+
+if TYPE_CHECKING:
+    from .hamil import MolecularHamiltonian
+    from .loss.base import LossAndGradFunction
+    from .molecule import Molecule
+    from .optimizer import Optimizer
+    from .sampling.combined_samplers import (
+        MoleculeIdxSampler,
+        MultiNuclearGeometrySampler,
+    )
 
 import jax
 import jax_dataclasses as jdc
@@ -68,21 +78,21 @@ type WaveFunction = Callable[[PhysicalConfiguration], Psi]
 r"""Alias for :class:`~collections.abc.Callable`\[\[:class:`~deepqmc.types.PhysicalConfiguration`\], :class:`~deepqmc.types.Psi`\]. A wave function that maps a Physical configuration to the (log) value of the wave function."""
 type ParametrizedWaveFunction = Callable[[Params, PhysicalConfiguration], Psi]
 r"""Alias for :class:`~collections.abc.Callable`\[\[:data:`~deepqmc.types.Params`, :class:`~deepqmc.types.PhysicalConfiguration`\], :class:`~deepqmc.types.Psi`\]. A wave function that requires model parameters to be provided for its evaluation."""
-type OptimizerFactory = Callable[[LossAndGradFunction], Optimizer]  # pyright: ignore
+type OptimizerFactory = Callable[[LossAndGradFunction], Optimizer]
 r"""Alias for :class:`~collections.abc.Callable`\[\[:class:`~deepqmc.loss.LossAndGradFunction`\], :class:`~deepqmc.optimizer.Optimizer`\]. A factory function that returns an Optimizer instance from a loss (and gradient) function."""
 type SamplerFactory = Callable[
     [
         KeyArray,
-        MolecularHamiltonian,  # pyright: ignore
+        MolecularHamiltonian,
         Ansatz,
-        list[Molecule],  # pyright: ignore
+        list[Molecule],
         int,
         int,
-    ],  # pyright: ignore
-    tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],  # pyright: ignore
+    ],
+    tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],
 ]
 r"""Alias for :class:`~collections.abc.Callable`\[\[:data:`~deepqmc.types.KeyArray`, :class:`~deepqmc.hamil.MolecularHamiltonian`, :class:`~deepqmc.types.Ansatz`, list\[:class:`~deepqmc.molecule.Molecule`\], int, int\], tuple\[:class:`~deepqmc.sampling.combined_samplers.MoleculeIdxSampler`, :class:`~deepqmc.sampling.combined_samplers.MultiNuclearGeometrySampler`\]\]. A factory function that returns a tuple of a molecule index sampler and an electron and nuclei sampler."""
-type AnsatzFactory = Callable[[MolecularHamiltonian], Ansatz]  # pyright: ignore
+type AnsatzFactory = Callable[[MolecularHamiltonian], Ansatz]
 r"""Alias for :class:`~collections.abc.Callable`\[\[:class:`~deepqmc.hamil.MolecularHamiltonian`\], :class:`~deepqmc.types.Ansatz`\]. A factory function that returns a haiku object that can be transformed to obtain a wave function ansatz."""
 
 

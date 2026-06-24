@@ -196,10 +196,11 @@ def confs_from_mc(mc, tol=-1):
             to make sure that all determinants are included
             (even those with numerically zero weight).
 
-            *mc.fcisolver.large_ci(
     Returns:
-        list: the list of configurations in deepqmc format,
-        with weight larger than :data:`tol`.
+        tuple[~jax.Array, ~jax.Array]: the CI coefficients and the corresponding
+        electronic configurations (in deepqmc format), for each electronic state,
+        sorted by decreasing CI weight and restricted to configurations with
+        weight larger than :data:`tol`.
     """
     cis = mc.ci if isinstance(mc.ci, list) else [mc.ci]
     # This is required because pyscf returns a list only if multiple roots are specified
@@ -237,14 +238,32 @@ def compute_scf_solution(
 ):
     r"""Compute the SCF solutions for :data:`mols`.
 
+    Runs a Hartree-Fock or CASSCF calculation with :mod:`pyscf` for every molecule
+    in :data:`mols`, and assembles the resulting Gaussian basis, molecular orbital
+    coefficients and CI configurations into the ``dataset`` consumed by
+    :func:`~deepqmc.pretrain.pretrain`. If :data:`workdir` is given, the PySCF
+    checkpoints are cached under ``{workdir}/pyscf_chkpts`` and restored from
+    there on subsequent calls.
+
     Args:
-        mols (~deepqmc.Molecule): the molecule or a sequence of molecules to
+        mols (~deepqmc.molecule.Molecule): the molecule or a sequence of molecules to
             consider.
         hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the
             system.
         n_states (int): the number of electronic states to consider.
         basis (str): the name of a Gaussian basis set.
         cas (tuple[int,int]): optional the active space specification for CAS-SCF.
+        workdir (Optional[str]): optional directory used to cache/restore the
+            PySCF checkpoints, one per molecule in :data:`mols`.
+        pyscf_kwargs: optional extra keyword arguments forwarded to
+            :func:`~deepqmc.pretrain.pyscfext.pyscf_from_hamil`.
+
+    Returns:
+        dict: a dictionary with the keys ``centers`` and ``shells`` describing the
+        shared Gaussian basis (see :meth:`~deepqmc.pretrain.gto.GTOBasis.from_pyscf`),
+        and ``mo_coeffs``, ``confs`` and ``conf_coeffs`` holding, respectively, the
+        molecular orbital coefficients and the electronic configurations with their
+        CI coefficients, each batched over molecules and electronic states.
     """
 
     mols = mols if isinstance(mols, Sequence) else [mols]

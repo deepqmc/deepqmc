@@ -15,7 +15,7 @@ DeepQMC is an open-source software suite for variational optimization of deep-le
 
 The program solves the molecular Hamiltonian, allowing the use of effective core potentials. Excited states are obtained via a penalty-based excited-state optimization approach. A spin penalty allows states in a fixed spin sector to be targeted. Furthermore, DeepQMC implements geometric transferability, that is a single ansatz can be optimized across multiple configurations of a set of atoms. This can either be done by training on a fixed set of molecular configurations or by dynamically sampling molecular configurations throughout the optimization, and can be combined with the optimization of electronic excited states.
 
-The software suite includes a general neural network wave function ansatz, that can be configured to obtain a wide range of molecular neural network wave functions. Config files for the instantiation of variants of [PsiFormer](https://arxiv.org/abs/2211.13672), [PauliNet](https://doi.org/10.1038/s41557-020-0544-y), [FermiNet](https://link.aps.org/doi/10.1103/PhysRevResearch.2.033429) and a transferable extension of the self-attention ansatz [TransPsiFormer](https://arxiv.org/abs/2503.19847) can be found under `src/deepqmc/conf/ansatz`.
+The software suite includes a general neural network wave function ansatz, that can be configured to obtain a wide range of molecular neural network wave functions. Config files for the instantiation of variants of [Psiformer](https://arxiv.org/abs/2211.13672), [PauliNet](https://doi.org/10.1038/s41557-020-0544-y), [FermiNet](https://link.aps.org/doi/10.1103/PhysRevResearch.2.033429) and a transferable extension of the self-attention ansatz [TransPsiformer](https://arxiv.org/abs/2503.19847) can be found under `src/deepqmc/conf/ansatz`.
 
 
 ### Installation
@@ -107,7 +107,7 @@ When employing transferable optimization consider citing:
   author = {Schätzle, Z. and Szabó, P. B. and Cuzzocrea, A. and Noé, F.},
   title = {Ab-Initio Simulation of Excited-State Potential Energy Surfaces with Transferable Deep Quantum {{Monte Carlo}}},
   year = {2025},
-  month = {03}
+  month = {03},
   doi = {10.48550/arXiv.2503.19847},
   pubstate = {prepublished},
 }

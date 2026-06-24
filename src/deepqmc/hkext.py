@@ -36,13 +36,13 @@ class MLP(hk.Module):
         last_linear (bool): optional, if :data:`True` the activation function
             is not applied to the activation of the last layer.
         activation (~collections.abc.Callable): optional, the activation function.
-        init (str | Callable): optional, specifies the initialization of the
-            linear weights. Possible string values are:
+        init (str | ~collections.abc.Callable): optional, specifies the initialization
+            of the linear weights. Possible string values are:
 
             - ``'default'``: the default haiku initialization method is used.
-            - ``'ferminet'``: the initialization method of the :class:`ferminet`
+            - ``'ferminet'``: the initialization method of the ``ferminet``
                 package is used.
-            - ``'deeperwin'``: the initialization method of the :class:`deeperwin`
+            - ``'deeperwin'``: the initialization method of the ``deeperwin``
                 package is used.
     """
 

@@ -56,8 +56,8 @@ class ElectronicCuspAsymptotic(CuspAsymptotic):
             cusp equations.
         trainable_alpha (bool): whether the :math:`\alpha` is trainable
         cusp_function (~collections.abc.Callable): an instance of either
-            :class:`deepqmc.wf.nn_wave_function.cusp.DeepQMCCusp` or
-            :class:`deepqmc.wf.nn_wave_function.cusp.PsiformerCusp`.
+            :class:`~deepqmc.wf.cusp.DeepQMCCusp` or
+            :class:`~deepqmc.wf.cusp.PsiformerCusp`.
     """
 
     def __init__(self, *, same_scale, anti_scale, alpha=1.0, **kwargs):
@@ -82,13 +82,13 @@ class NuclearCuspAsymptotic(CuspAsymptotic):
     r"""Calculate a multiplicative factor, that implements the nuclear cusps.
 
     Args:
-        nuclear_charges ([float]): the array of nuclear charges of the molecule
+        nuclear_charges (~jax.Array): the array of nuclear charges of the molecule
         alpha (float): default 1, the :math:`\alpha` parameter in the above
             cusp equations.
         trainable_alpha (bool): whether the :math:`\alpha` is trainable
         cusp_function (~collections.abc.Callable): an instance of either
-            :class:`deepqmc.wf.nn_wave_function.cusp.DeepQMCCusp` or
-            :class:`deepqmc.wf.nn_wave_function.cusp.PsiformerCusp`.
+            :class:`~deepqmc.wf.cusp.DeepQMCCusp` or
+            :class:`~deepqmc.wf.cusp.PsiformerCusp`.
     """
 
     def __init__(self, nuclear_charges, *, alpha=1.0, **kwargs):

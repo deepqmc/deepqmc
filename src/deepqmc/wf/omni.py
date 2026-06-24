@@ -96,7 +96,7 @@ class OmniNet(hk.Module):
     deep QMC Ansatzes.
 
     Args:
-        mol (~deepqmc.Molecule): the molecule to consider.
+        mol (~deepqmc.molecule.Molecule): the molecule to consider.
         n_orb_up (int): the number of spin-up orbitals in a single deterimant,
             to compute backflow factors for. This is equal to the number of
             spin-up electrons, except when full determinants are used, in which case

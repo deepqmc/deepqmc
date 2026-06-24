@@ -39,6 +39,25 @@ warnings.filterwarnings(
 def read_molecules(
     directory: Path | str | None = None, whitelist: Optional[str] = None
 ) -> Optional[list[Molecule]]:
+    r"""Read a dataset of molecules for transferable training.
+
+    Reads every molecule ``.yaml`` file below :data:`directory` (see
+    :func:`~deepqmc.molecule.read_molecule_dataset`), optionally restricted to
+    filenames matching :data:`whitelist`. Meant to be used as the ``mols`` entry
+    of a training config, e.g. via ``_target_: deepqmc.app.read_molecules``.
+
+    Args:
+        directory (Optional[str | ~pathlib.Path]): the directory containing the
+            molecule ``.yaml`` files; relative paths are resolved against the
+            original working directory. If :data:`None`, no molecules are read.
+        whitelist (Optional[str]): optional regular expression; only molecule
+            files whose name matches it are read.
+        verbose (bool): optional, whether to log the molecules that were found.
+
+    Returns:
+        Optional[list[~deepqmc.molecule.Molecule]]: the molecules found in
+        :data:`directory`, or :data:`None` if :data:`directory` is :data:`None`.
+    """
     if directory is None:
         return None
     path = Path(directory)
@@ -57,6 +76,22 @@ def read_molecules(
 
 
 def instantiate_ansatz(hamil: MolecularHamiltonian, ansatz: AnsatzFactory) -> Ansatz:
+    r"""Instantiate a wave function :class:`~deepqmc.types.Ansatz` for a Hamiltonian.
+
+    Wraps the given :data:`~deepqmc.types.AnsatzFactory` in a
+    :func:`haiku.transform`, producing an object with ``init`` and ``apply``
+    methods that can be used to initialize and evaluate the wave function
+    (see the :ref:`tutorial <tutorial>`).
+
+    Args:
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the
+            physical system the ansatz is instantiated for.
+        ansatz (~deepqmc.types.AnsatzFactory): a callable that returns an
+            uninstantiated wave function model when called with :data:`hamil`.
+
+    Returns:
+        ~deepqmc.types.Ansatz: the instantiated wave function ansatz.
+    """
     import haiku as hk
 
     return hk.without_apply_rng(
@@ -69,6 +104,24 @@ def instantiate_ansatz(hamil: MolecularHamiltonian, ansatz: AnsatzFactory) -> An
 def train_from_factories(
     hamil: MolecularHamiltonian, ansatz: AnsatzFactory, **kwargs
 ) -> TrainState:
+    r"""Instantiate the Ansatz and start training or evaluation.
+
+    Convenience wrapper combining :func:`instantiate_ansatz` and
+    :func:`~deepqmc.train.train`. This is the function invoked by the default
+    ``train`` hydra task configs, via ``_target_: deepqmc.app.train_from_factories``.
+
+    Args:
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the
+            physical system.
+        ansatz (~deepqmc.types.AnsatzFactory): a callable that returns an
+            uninstantiated wave function model when called with :data:`hamil`.
+        kwargs: further keyword arguments forwarded to
+            :func:`~deepqmc.train.train`.
+
+    Returns:
+        ~deepqmc.types.TrainState: the final training/evaluation state, as
+        returned by :func:`~deepqmc.train.train`.
+    """
     from .train import train
 
     instantiated_ansatz = instantiate_ansatz(hamil, ansatz)
@@ -89,6 +142,30 @@ def assert_valid_restdir(restdir: Path, workdir: str):
 def train_from_checkpoint(
     workdir: str, restdir: str, evaluate: bool, chkpt='LAST', **kwargs
 ):
+    r"""Restore a previous run and continue training or run evaluation.
+
+    Restores the hydra task config and the :class:`~deepqmc.types.TrainState`
+    checkpoint from :data:`restdir`, following the chain of ``restdir``
+    references if the run in :data:`restdir` was itself restored from an
+    earlier one, and re-invokes the restored task with the restored state. This
+    is the function invoked by the ``restart`` and ``evaluate`` hydra task
+    configs, via ``_target_: deepqmc.app.train_from_checkpoint``.
+
+    Args:
+        workdir (str): the working directory of the current job (supplied by
+            hydra); used to derive the training/evaluation subdirectory and to
+            guard against restoring from the directory currently being written to.
+        restdir (str): the working directory of a previous run to restore from;
+            if relative, it is resolved against the original working directory.
+        evaluate (bool): if :data:`True`, run evaluation only: the optimizer
+            state is dropped and the restored ansatz is no longer updated.
+        chkpt (str): optional, the name of the checkpoint file to restore, or
+            ``'LAST'`` (default) to restore the most recent checkpoint found in
+            :data:`restdir`.
+        kwargs: keyword arguments overriding those of the restored task config,
+            e.g. ``keep_sampler_state`` to control whether the sampler state is
+            also restored.
+    """
     restdir_path = Path(restdir)
     if not restdir_path.is_absolute():
         restdir_path = Path(to_absolute_path(get_original_cwd())) / restdir

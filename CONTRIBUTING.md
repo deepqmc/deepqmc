@@ -9,8 +9,7 @@
 
 - [Black](https://github.com/psf/black) style
 - No extra blank lines
-- Has to pass [flake8](https://gitlab.com/pycqa/flake8)
-- Imports sorted with [isort](https://github.com/timothycrosley/isort)
+- Has to pass [ruff](https://docs.astral.sh/ruff/) (linting and import sorting)
 - [Google style](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) docstrings
-- Has to pass [mypy](https://github.com/python/mypy)
+- Has to pass [pyright](https://microsoft.github.io/pyright/) type checking
 - Has to pass [codespell](https://github.com/codespell-project/codespell)

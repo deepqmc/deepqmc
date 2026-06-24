@@ -95,7 +95,7 @@ def dihedral_jvp(i0, i1, i2, i3, primals, tangents):
 
 @jax.custom_vjp
 def dihedral(i0, i1, i2, i3, coords):
-    """Compute the dihedral angle between four atoms.
+    r"""Compute the dihedral angle between four atoms.
 
     This is the top-level, user-facing dihedral function. It has a well defined
     backward-mode gradient (as computed e.g. with ``jax.grad``), and a well defined
@@ -103,6 +103,20 @@ def dihedral(i0, i1, i2, i3, coords):
     (as done e.g. by ``jax.hessian``).
     If other combinations of ``jax`` differentation transformations are used, jax
     might raise and error, or the derivative might be ill-defined around zero.
+
+    Args:
+        i0 (int): index of the atom defining, together with ``i1`` and ``i2``, the
+            first of the two half-planes.
+        i1 (int): index of the second atom, shared by both half-planes.
+        i2 (int): index of the third atom, shared by both half-planes.
+        i3 (int): index of the atom defining, together with ``i1`` and ``i2``, the
+            second of the two half-planes.
+        coords (~jax.Array): Cartesian coordinates of the atoms, of shape
+            ``(n_atoms, 3)``.
+
+    Returns:
+        ~jax.Array: the signed dihedral angle around the ``i1``-``i2`` bond, in
+        radians, in the interval :math:`(-\pi, \pi]`.
     """
     return _bare_dihedral(i0, i1, i2, i3, coords)
 

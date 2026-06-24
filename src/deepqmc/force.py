@@ -208,7 +208,29 @@ def antithetic_wrapper(
     wf: ParametrizedWaveFunction,
     r_cut: float,
 ):
-    """Wraps force evaluation with an antithetic sampler."""
+    """Wrap a force estimator with antithetic-sampling variance reduction.
+
+    For each sample, mirrors the electrons that lie within ``r_cut`` of their nearest
+    nucleus through that nucleus, evaluates ``evaluate_force`` on both the original
+    and the mirrored configuration, and returns their importance-weighted average.
+    This reduces the variance of the force estimator without introducing additional
+    bias. Only compatible with estimators that do not require the local energy or the
+    mean energy as an input, e.g. :func:`evaluate_hf_force_bare` or
+    :func:`evaluate_hf_force_ac_zvq`.
+
+    Args:
+        evaluate_force (~collections.abc.Callable): a force estimator of signature
+            ``(rng, params, phys_conf) -> jax.Array``, e.g. as returned by
+            :func:`evaluate_hf_force_bare`.
+        wf (~deepqmc.types.ParametrizedWaveFunction): the parametrized wave function.
+        r_cut (float): the cutoff radius around each nucleus within which electrons
+            are mirrored.
+
+    Returns:
+        ~collections.abc.Callable: a function of signature ``(rng, params, phys_conf)
+        -> jax.Array`` that evaluates the antithetic-sampling force estimate for a
+        batch of samples.
+    """
 
     def evaluate_force_antithetic(
         rng: KeyArray, params: Params, phys_conf: PhysicalConfiguration
@@ -232,7 +254,25 @@ def evaluate_hf_force_bare(
     wf: ParametrizedWaveFunction,
     coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
 ):
-    """Constructs bare estimator of the HF force."""
+    """Construct the bare estimator of the Hellmann-Feynman force.
+
+    The bare estimator is the direct gradient of the local energy with respect to the
+    nuclear coordinates, without any variance-reduction terms. It therefore has the
+    largest variance among the estimators implemented in this module, but is also the
+    cheapest to evaluate. If the Hamiltonian uses a Gaussian-type effective core
+    potential, the non-local ECP contribution to the force is added as well.
+
+    Args:
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the system.
+        wf (~deepqmc.types.ParametrizedWaveFunction): the parametrized wave function.
+        coordinate_transform (~deepqmc.geom.coordinate_transform.InvertibleCoordinateTransform):
+            optional, the coordinate system in which the force is expressed. Defaults
+            to Cartesian nuclear coordinates.
+
+    Returns:
+        ~collections.abc.Callable: a function of signature ``(rng, params, phys_conf)
+        -> jax.Array`` that evaluates the bare force for a batch of samples.
+    """
     if coordinate_transform is None:
         coordinate_transform = CartesianCoordinateTransform(hamil.n_nuc)
     charges_nuc = hamil.pot.ns_valence
@@ -266,7 +306,27 @@ def evaluate_hf_force_ac_zv(
     wf: ParametrizedWaveFunction,
     coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
 ):
-    """Constructs ac_zv estimator [10.1063/5.0052266] of the HF force."""
+    """Construct the AC-ZV (zero-variance) Hellmann-Feynman force estimator.
+
+    Adds a zero-variance (ZV) correction term to :func:`evaluate_hf_force_bare`,
+    computed via a JVP of the local energy through the nuclear coordinates
+    [Tiihonen21]_. This reduces the variance of the estimator compared to the bare
+    estimator, at the cost of an additional local-energy-gradient evaluation.
+
+    Args:
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the system.
+        wf (~deepqmc.types.ParametrizedWaveFunction): the parametrized wave function.
+        coordinate_transform (~deepqmc.geom.coordinate_transform.InvertibleCoordinateTransform):
+            optional, the coordinate system in which the force is expressed. Defaults
+            to Cartesian nuclear coordinates.
+
+    Returns:
+        ~collections.abc.Callable: a function of signature ``(rng, params, phys_conf,
+        e_loc=None, energy=None) -> jax.Array`` that evaluates the AC-ZV force for a
+        batch of samples. If ``e_loc`` is not provided it is computed internally;
+        ``energy`` is accepted for interface uniformity with the other estimators but
+        is not used.
+    """
     if coordinate_transform is None:
         coordinate_transform = CartesianCoordinateTransform(hamil.n_nuc)
     zv_term = make_zv_term_via_jvp(hamil, wf, coordinate_transform)
@@ -299,7 +359,27 @@ def evaluate_hf_force_ac_zvzb(
     wf: ParametrizedWaveFunction,
     coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
 ):
-    """Constructs ac_zvzb estimator [10.1063/5.0052266] of the HF force."""
+    """Construct the AC-ZVZB (zero-variance zero-bias) Hellmann-Feynman force estimator.
+
+    Adds both the zero-variance (ZV) correction of :func:`evaluate_hf_force_ac_zv` and
+    a zero-bias (ZB) correction to :func:`evaluate_hf_force_bare`. The ZB term
+    corrects for the bias introduced by using finite Monte Carlo samples of a wave
+    function that does not exactly satisfy the Schrödinger equation
+    [Tiihonen21]_.
+
+    Args:
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the system.
+        wf (~deepqmc.types.ParametrizedWaveFunction): the parametrized wave function.
+        coordinate_transform (~deepqmc.geom.coordinate_transform.InvertibleCoordinateTransform):
+            optional, the coordinate system in which the force is expressed. Defaults
+            to Cartesian nuclear coordinates.
+
+    Returns:
+        ~collections.abc.Callable: a function of signature ``(rng, params, phys_conf,
+        e_loc, energy) -> jax.Array`` that evaluates the AC-ZVZB force for a batch of
+        samples, given the local energies ``e_loc`` and the mean energy ``energy`` of
+        the batch.
+    """
 
     if coordinate_transform is None:
         coordinate_transform = CartesianCoordinateTransform(hamil.n_nuc)
@@ -336,7 +416,26 @@ def evaluate_hf_force_ac_zb(
     wf: ParametrizedWaveFunction,
     coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
 ):
-    """Constructs ac_zvzb estimator [10.1063/5.0052266] of the HF force."""
+    """Construct the AC-ZB (zero-bias) Hellmann-Feynman force estimator.
+
+    Adds only the zero-bias (ZB) correction term to :func:`evaluate_hf_force_bare`,
+    without the zero-variance (ZV) term of :func:`evaluate_hf_force_ac_zv`
+    [Tiihonen21]_. Cheaper to evaluate than :func:`evaluate_hf_force_ac_zvzb`, but
+    with a higher variance since it lacks the ZV correction.
+
+    Args:
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the system.
+        wf (~deepqmc.types.ParametrizedWaveFunction): the parametrized wave function.
+        coordinate_transform (~deepqmc.geom.coordinate_transform.InvertibleCoordinateTransform):
+            optional, the coordinate system in which the force is expressed. Defaults
+            to Cartesian nuclear coordinates.
+
+    Returns:
+        ~collections.abc.Callable: a function of signature ``(rng, params, phys_conf,
+        e_loc, energy) -> jax.Array`` that evaluates the AC-ZB force for a batch of
+        samples, given the local energies ``e_loc`` and the mean energy ``energy`` of
+        the batch.
+    """
     if coordinate_transform is None:
         coordinate_transform = CartesianCoordinateTransform(hamil.n_nuc)
     grad_nuc_log_wf = make_general_grad_fn(
@@ -367,7 +466,25 @@ def evaluate_hf_force_ac_zvq(
     wf: ParametrizedWaveFunction,
     coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
 ):
-    """Constructs ac_zvQ estimator [10.1063/1.1621615] of the HF force."""
+    """Construct the AC-ZVQ (zero-variance, closed-form) Hellmann-Feynman force estimator.
+
+    Combines the bare nuclear and electronic force with a zero-variance correction
+    expressed in closed form through the auxiliary function ``Q``, following
+    [Assaraf03]_. Unlike :func:`evaluate_hf_force_ac_zv`, this estimator does not
+    require an rng key or an extra local-energy evaluation, but it is not compatible
+    with effective core potentials.
+
+    Args:
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the system.
+        wf (~deepqmc.types.ParametrizedWaveFunction): the parametrized wave function.
+        coordinate_transform (~deepqmc.geom.coordinate_transform.InvertibleCoordinateTransform):
+            optional, the coordinate system in which the force is expressed. Defaults
+            to Cartesian nuclear coordinates.
+
+    Returns:
+        ~collections.abc.Callable: a function of signature ``(params, phys_conf) ->
+        jax.Array`` that evaluates the AC-ZVQ force for a batch of samples.
+    """
 
     if coordinate_transform is None:
         coordinate_transform = CartesianCoordinateTransform(hamil.n_nuc)
@@ -389,7 +506,26 @@ def evaluate_hf_force_ac_zvzbq(
     wf: ParametrizedWaveFunction,
     coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
 ):
-    """Constructs ac_zvzbQ estimator [10.1063/1.1621615] of the HF force."""
+    """Construct the AC-ZVZBQ (zero-variance zero-bias, closed-form) force estimator.
+
+    Adds a zero-bias (ZB) correction, expressed via the auxiliary function ``Q``,
+    to :func:`evaluate_hf_force_ac_zvq` [Assaraf03]_. Like the ZVQ estimator, this
+    does not require an rng key, but it is not compatible with effective core
+    potentials.
+
+    Args:
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the system.
+        wf (~deepqmc.types.ParametrizedWaveFunction): the parametrized wave function.
+        coordinate_transform (~deepqmc.geom.coordinate_transform.InvertibleCoordinateTransform):
+            optional, the coordinate system in which the force is expressed. Defaults
+            to Cartesian nuclear coordinates.
+
+    Returns:
+        ~collections.abc.Callable: a function of signature ``(params, phys_conf,
+        e_loc, energy) -> jax.Array`` that evaluates the AC-ZVZBQ force for a batch of
+        samples, given the local energies ``e_loc`` and the mean energy ``energy`` of
+        the batch.
+    """
 
     if coordinate_transform is None:
         coordinate_transform = CartesianCoordinateTransform(hamil.n_nuc)
@@ -414,7 +550,28 @@ def evaluate_hf_force_ac_zvzbq(
 def evaluate_finite_difference_force(
     hamil: MolecularHamiltonian, wf: ParametrizedWaveFunction, step_size: float
 ):
-    """Evaluates the inter atomic force based on a finite difference scheme."""
+    """Construct a finite-difference estimator of the interatomic force.
+
+    Displaces each nuclear coordinate by :math:`\\pm` ``step_size`` (electron
+    positions are co-displaced to follow the nearest nucleus) and estimates the force
+    from the resulting change in the local energy, importance-weighted by the ratio
+    of wave function values. Unlike the Hellmann-Feynman estimators in this module,
+    this estimator does not require differentiating through the Hamiltonian, but
+    its cost scales with the number of nuclear degrees of freedom, and its accuracy
+    is limited by the finite step size.
+
+    Args:
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the system.
+        wf (~deepqmc.types.ParametrizedWaveFunction): the parametrized wave function.
+        step_size (float): the finite-difference step size, in Cartesian nuclear
+            coordinates.
+
+    Returns:
+        ~collections.abc.Callable: a function of signature ``(rng, params, phys_conf,
+        e_loc, energy) -> jax.Array`` that evaluates the finite-difference force for a
+        batch of samples, given the local energies ``e_loc``. ``energy`` is accepted
+        for interface uniformity with the other estimators but is not used.
+    """
 
     def evaluate_finite_difference_force_(
         rng: KeyArray,
@@ -454,7 +611,28 @@ def evaluate_hf_force_ac_zvqzb(
     wf: ParametrizedWaveFunction,
     coordinate_transform: Optional[InvertibleCoordinateTransform] = None,
 ):
-    """Constructs the hybrid ZVQ + full ZB estimator [10.1063/1.1621615]."""
+    """Construct the hybrid AC-ZVQ + ZB Hellmann-Feynman force estimator.
+
+    Combines the closed-form zero-variance correction of
+    :func:`evaluate_hf_force_ac_zvq` with a zero-bias correction computed via a
+    general autodiff gradient of the log wave function with respect to the nuclear
+    coordinates, instead of the closed-form ``Q`` function used in
+    :func:`evaluate_hf_force_ac_zvzbq` [Assaraf03]_. Not compatible with effective
+    core potentials.
+
+    Args:
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the system.
+        wf (~deepqmc.types.ParametrizedWaveFunction): the parametrized wave function.
+        coordinate_transform (~deepqmc.geom.coordinate_transform.InvertibleCoordinateTransform):
+            optional, the coordinate system in which the force is expressed. Defaults
+            to Cartesian nuclear coordinates.
+
+    Returns:
+        ~collections.abc.Callable: a function of signature ``(params, phys_conf,
+        e_loc, energy) -> jax.Array`` that evaluates the hybrid AC-ZVQ + ZB force for
+        a batch of samples, given the local energies ``e_loc`` and the mean energy
+        ``energy`` of the batch.
+    """
 
     if coordinate_transform is None:
         coordinate_transform = CartesianCoordinateTransform(hamil.n_nuc)

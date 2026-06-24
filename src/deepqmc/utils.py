@@ -96,10 +96,39 @@ def split_dict(
 
 
 def InverseSchedule(init_value: float, decay_rate: float) -> Callable[[int], float]:
+    r"""Create a schedule that decays inversely proportional to the step count.
+
+    Returns a callable computing :math:`f(n) = \text{init\_value} / (1 + n /
+    \text{decay\_rate})`. Commonly used as the learning rate or damping schedule
+    of :class:`~deepqmc.optimizer.KFACOptimizer`, e.g. via
+    ``_target_: deepqmc.utils.InverseSchedule`` in a hydra config.
+
+    Args:
+        init_value (float): the value of the schedule at step 0.
+        decay_rate (float): the number of steps after which the value has decayed
+            to half of :data:`init_value`.
+
+    Returns:
+        ~collections.abc.Callable[[int], float]: a function mapping the step
+        number to the current schedule value.
+    """
     return lambda n: init_value / (1 + n / decay_rate)
 
 
 def ConstantSchedule(value: float) -> Callable[[int], float]:
+    r"""Create a schedule that returns the same value at every step.
+
+    Commonly used as the learning rate or damping schedule of
+    :class:`~deepqmc.optimizer.KFACOptimizer`, e.g. via
+    ``_target_: deepqmc.utils.ConstantSchedule`` in a hydra config.
+
+    Args:
+        value (float): the constant value of the schedule.
+
+    Returns:
+        ~collections.abc.Callable[[int], float]: a function mapping the step
+        number to :data:`value`.
+    """
     return lambda n: value
 
 

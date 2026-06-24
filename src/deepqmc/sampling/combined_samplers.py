@@ -96,9 +96,9 @@ class MultiNuclearGeometrySampler:
     Args:
         elec_sampler (~deepqmc.sampling.combined_samplers.MultiElectronicStateSampler):
             the electronic sampler to use
-        nuc_sampler (~deepqmc.sampling.nuclei_samplers.NucleiSampler): the nuclei
+        nuc_sampler (~deepqmc.sampling.base.NucleiSampler): the nuclei
             sampler to use.
-        warp_elec_fn (~deepqmc.sampling.electron_samplers.ElectronWarp): the function
+        warp_elec_fn (~deepqmc.sampling.base.ElectronWarp): the function
             that warps the electrons to the new nuclear geometry.
         update_nuc_period (int): optional, the number of steps between nuclear updates.
         elec_equilibration_steps (int): optional, the number of steps to equilibrate the

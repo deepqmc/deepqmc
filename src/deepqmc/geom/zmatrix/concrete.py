@@ -90,7 +90,13 @@ class ConcreteZMatrixLineTemplate(ZMatrixLineTemplate):
 
 
 class ConcreteZMatrix(ZMatrix):
-    """Concrete Z matrix representation."""
+    r"""A Z matrix with concrete (fixed) values for its bond lengths, angles and
+    dihedrals.
+
+    Instances are typically obtained by calling ``concretize`` or
+    ``concretize_from_cartesian`` on a :class:`ConcreteZMatrixTemplate`, rather than
+    constructed directly.
+    """
 
     lines: Sequence[ConcreteZMatrixLine]
 
@@ -98,6 +104,11 @@ class ConcreteZMatrix(ZMatrix):
         self.lines = lines
 
     def to_cartesian(self) -> jax.Array:
+        r"""Convert the Z matrix to Cartesian nuclear coordinates.
+
+        Returns:
+            ~jax.Array: the Cartesian nuclear coordinates, of shape ``(n_nuc, 3)``.
+        """
         cartesian = jnp.zeros((0, 3))
         for line in self.lines:
             cartesian = place_next_atom_of_zmatrix(cartesian, line)
@@ -129,6 +140,27 @@ class ConcreteZMatrixTemplate(ZMatrixTemplate):
 
     @classmethod
     def from_simplified_config(cls, line_templates: Sequence[Any]):
+        r"""Construct a template from a simplified, config-friendly specification.
+
+        This is the constructor typically used from Hydra configs, e.g. to build
+        the ``zmatrix_template`` of a
+        :class:`~deepqmc.geom.coordinate_transform.ZMatrixCoordinateTransform`.
+
+        Args:
+            line_templates (~collections.abc.Sequence[typing.Any]): one entry per
+                atom, in the same order as the nuclear charges. Each entry is either
+
+                - a sequence ``(bond_atom_idx, angle_atom_idx, dihedral_atom_idx)``
+                  of (up to three) atom indices, using ``None`` for entries that
+                  don't apply (e.g. the first three atoms, which don't need a full
+                  bond, angle and dihedral); or
+                - a mapping with the key ``atom_idxs`` (the same sequence of
+                  indices as above) and, optionally, ``charge`` (the nuclear charge
+                  of the atom, only used for bookkeeping).
+
+        Returns:
+            ConcreteZMatrixTemplate: the resulting Z matrix template.
+        """
         lines = []
         for line_template in line_templates:
             if not isinstance(line_template, Mapping):

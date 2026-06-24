@@ -251,8 +251,10 @@ class OppositeSpinExchangeSampler:
     The sampler cannot be used as the last element of a sampler chain.
 
     Args:
-        up_logits_fn (Callable): function returning weights for spin-up elec swaps
-        down_logits_fn (Callable): function returning weights for spin-down elec swaps
+        up_logits_fn (~collections.abc.Callable): function returning weights for
+            spin-up elec swaps
+        down_logits_fn (~collections.abc.Callable): function returning weights for
+            spin-down elec swaps
     """
 
     def __init__(

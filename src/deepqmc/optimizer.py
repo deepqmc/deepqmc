@@ -72,6 +72,19 @@ class Optimizer(Protocol):
 
 
 class NoOptimizer(Optimizer):
+    r"""Evaluation-only optimizer that freezes the wave function parameters.
+
+    Implements the :class:`~deepqmc.optimizer.Optimizer` protocol without
+    performing any parameter update.  The loss function is still evaluated on
+    each step so that energies and wave function statistics are collected, but
+    gradients are discarded and the parameters are returned unchanged.  Use
+    this class to run inference with a trained ansatz.
+
+    Args:
+        loss_and_grad_fn (~deepqmc.loss.LossAndGradFunction): callable that
+            returns the loss, local energies, and gradients.
+    """
+
     def __init__(
         self,
         loss_and_grad_fn: LossAndGradFunction,
@@ -90,6 +103,20 @@ class NoOptimizer(Optimizer):
 
 
 class OptaxOptimizer(Optimizer):
+    r"""First-order optimizers bafrom the :mod:`optax` module.
+
+    Wraps any :mod:`optax` optimizer and handles device-parallel gradient
+    averaging (:func:`pmean`) and parameter stacking automatically.  Per-step
+    statistics include ``opt/param_norm``, ``opt/grad_norm``, and
+    ``opt/update_norm``.
+
+    Args:
+        loss_and_grad_fn (~deepqmc.loss.LossAndGradFunction): callable that
+            returns the loss, local energies, and gradients.
+        optax_opt: an :mod:`optax` optimizer instance (e.g.
+            ``optax.adam(learning_rate=1e-3)``).
+    """
+
     def __init__(
         self,
         loss_and_grad_fn: LossAndGradFunction,
@@ -132,6 +159,21 @@ class OptaxOptimizer(Optimizer):
 
 
 class KFACOptimizer(Optimizer):
+    r"""Second-order optimizer using the KFAC method [Martens15]_.
+
+    Wraps the :mod:`kfac_jax` optimizer and wires up the multi-device
+    infrastructure required by DeepQMC (``pmap``, ``pmap_axis_name``, batch
+    size extraction).
+
+    Args:
+        loss_and_grad_fn (~deepqmc.loss.LossAndGradFunction): callable that
+            returns the loss, local energies, and gradients; passed directly to
+            :mod:`kfac_jax` as ``value_and_grad_func``.
+        kfac: a partially-initialized :mod:`kfac_jax` optimizer constructor,
+            i.e. a callable that accepts ``value_and_grad_func`` and related
+            keyword arguments and returns the optimizer object.
+    """
+
     def __init__(self, loss_and_grad_fn, *, kfac):
         self.kfac = kfac(
             value_and_grad_func=loss_and_grad_fn,
@@ -182,7 +224,24 @@ class KFACOptimizer(Optimizer):
 
 
 def merge_states(params: Params, merge_keys: Optional[tuple[str, ...]]) -> Params:
-    """Averages the parameters along the state axis."""
+    r"""Average selected parameters across electronic states.
+
+    For each parameter key that contains at least one of the substrings in
+    ``merge_keys``, the parameter tensor is averaged along the state axis
+    (axis 0) and the result is broadcast back so all states share the same
+    values.  Parameters whose keys do not match are left unchanged.  This is
+    used to enforce weight-sharing across electronic states during training.
+
+    Args:
+        params (~deepqmc.types.Params): parameter pytree; the outermost axis of
+            each leaf is the electronic-state axis.
+        merge_keys (Optional[tuple[str, ...]]): substrings used to select which
+            parameter groups to merge; if ``None`` no parameters are merged.
+
+    Returns:
+        ~deepqmc.types.Params: parameter pytree with the selected leaves
+            replaced by their state-averaged values.
+    """
     av = lambda x: jnp.mean(x, axis=0, keepdims=True).repeat(x.shape[0], axis=0)
     params_filtered = filter_dict(params, merge_keys)
     params_averaged = jax.tree.map(av, params_filtered)

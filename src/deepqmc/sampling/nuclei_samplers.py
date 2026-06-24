@@ -101,12 +101,17 @@ class ConstraintNucleiSampler:
         update = self.constraint_fn(noise)
         internal_coords = self.coordinate_transform.from_cartesian(state['R0'])
         state['R'] = self.coordinate_transform.to_cartesian(internal_coords + update)
-        # TODO: combine with deepqmc_pub_transferabiliry coordinate handlers?
+        # TODO: combine with the transferable-training coordinate handlers?
         return state, state['R'] - state['R0'], {}
 
 
 class PermutationNucleiSampler:
-    r"""Nuclei sampler that permutes nuclei with the same atomic number."""
+    r"""
+    Nuclei sampler that permutes nuclei with the same atomic number.
+
+    Args:
+        charges (~jax.Array): the nuclear charges of the molecule (:math:`N_\text{nuc}`).
+    """
 
     def __init__(self, charges: jax.Array):
         charges = jnp.asarray(charges)
@@ -137,7 +142,15 @@ class PermutationNucleiSampler:
 
 
 class ZMatrixSampler:
-    r"""Nuclei sampler sampling nuclei positions using a Z-matrix."""
+    r"""
+    Nuclei sampler sampling nuclei positions using a Z-matrix.
+
+    Args:
+        charges (~jax.Array): the nuclear charges of the molecule (:math:`N_\text{nuc}`).
+        z_matrix_template (~deepqmc.geom.zmatrix.StochasticZMatrixTemplate): the
+            template defining the Z-matrix connectivity and the noise distribution
+            from which new internal coordinates are sampled.
+    """
 
     def __init__(
         self, charges: jax.Array, *, z_matrix_template: StochasticZMatrixTemplate
@@ -162,14 +175,37 @@ class ZMatrixSampler:
 def no_elec_warp(
     rng: KeyArray, R: jax.Array, dR: jax.Array, smpl_state: SamplerState
 ) -> SamplerState:
-    r"""Identity electron warp function."""
+    r"""
+    Identity electron warp function.
+
+    Leaves the electron positions in ``smpl_state`` unchanged when the nuclei move.
+
+    Args:
+        rng (~deepqmc.types.KeyArray): unused, present for interface compatibility.
+        R (~jax.Array): the new nuclear coordinates.
+        dR (~jax.Array): the nuclear displacement, i.e. the difference between the
+            new and the previous nuclear coordinates.
+        smpl_state (~deepqmc.types.SamplerState): the electron sampler state.
+    """
     return smpl_state
 
 
 def nn_elec_warp(
     rng: KeyArray, R: jax.Array, dR: jax.Array, smpl_state: SamplerState
 ) -> SamplerState:
-    r"""Nearest neighbor electron warp function."""
+    r"""
+    Nearest neighbor electron warp function.
+
+    Displaces each electron by the same displacement as its nearest nucleus, so
+    that electrons remain attached to their nucleus as the nuclear geometry changes.
+
+    Args:
+        rng (~deepqmc.types.KeyArray): unused, present for interface compatibility.
+        R (~jax.Array): the new nuclear coordinates.
+        dR (~jax.Array): the nuclear displacement, i.e. the difference between the
+            new and the previous nuclear coordinates.
+        smpl_state (~deepqmc.types.SamplerState): the electron sampler state.
+    """
     R_old = R - dR
     dists = pairwise_distance(R_old[..., None, None, :, :], smpl_state['r'])
     mn = jnp.argmin(dists, axis=-2)
@@ -184,7 +220,21 @@ def fn_elec_warp(
     smpl_state: SamplerState,
     fn: Callable[[jax.Array], jax.Array],
 ) -> SamplerState:
-    r"""Electron warp function using a user-defined distance scaling function."""
+    r"""
+    Electron warp function using a user-defined distance scaling function.
+
+    Displaces each electron by a weighted average of all nuclear displacements,
+    with weights given by ``fn`` applied to the electron-nucleus distances.
+
+    Args:
+        rng (~deepqmc.types.KeyArray): unused, present for interface compatibility.
+        R (~jax.Array): the new nuclear coordinates.
+        dR (~jax.Array): the nuclear displacement, i.e. the difference between the
+            new and the previous nuclear coordinates.
+        smpl_state (~deepqmc.types.SamplerState): the electron sampler state.
+        fn (~collections.abc.Callable[[~jax.Array], ~jax.Array]): a function applied
+            elementwise to the electron-nucleus distances to obtain the weights.
+    """
     R_old = R - dR
     dists = pairwise_distance(R_old[..., None, None, :, :], smpl_state['r'])
     dR = jnp.einsum(

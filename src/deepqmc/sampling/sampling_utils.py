@@ -42,7 +42,7 @@ def chain(*samplers) -> ElectronSampler:
             to combine.
 
     Returns:
-        :type:`~deepqmc.sampling.base.ElectronSampler`: the combined sampler.
+        ~deepqmc.sampling.base.ElectronSampler: the combined sampler.
     """
     name = 'Sampler'
     bases = tuple(map(type, samplers))
@@ -114,6 +114,37 @@ def equilibrate(
     n_blocks: int = 5,
     allow_early_stopping: bool = True,
 ):
+    r"""Run MCMC sampling steps until the walkers have equilibrated.
+
+    A generator that repeatedly samples the wave function and, if
+    ``allow_early_stopping`` is set, stops once ``criterion`` has stabilized: once
+    ``block_size * n_blocks`` steps have been taken, the first and last
+    ``block_size``-sized blocks of ``criterion`` values are compared, and sampling
+    stops as soon as the difference between their means is smaller than the smaller
+    of their two standard deviations.
+
+    Args:
+        rng (~deepqmc.types.KeyArray): key used for PRNG.
+        params (~deepqmc.types.Params): the wave function parameters.
+        molecule_idx_sampler (~deepqmc.sampling.MoleculeIdxSampler): samples the
+            indices of the molecules to consider in each step.
+        sampler (~deepqmc.sampling.MultiNuclearGeometrySampler): the sampler to
+            equilibrate.
+        state (~deepqmc.types.SamplerState): the initial sampler state.
+        criterion (~collections.abc.Callable): a function of the sampled
+            :class:`~deepqmc.types.PhysicalConfiguration` returning a scalar used to
+            assess equilibration.
+        steps (~collections.abc.Iterable[int]): the step indices to (potentially) run.
+        block_size (int): the number of steps in each of the two compared blocks.
+        n_blocks (int): the number of blocks worth of samples to buffer before the
+            equilibration criterion is first evaluated.
+        allow_early_stopping (bool): if :data:`False`, run through all of ``steps``
+            regardless of ``criterion``.
+
+    Yields:
+        tuple: the current step, the updated sampler state, the sampled molecule
+        indices, and the sampling statistics of that step.
+    """
     sample_wf = pmap(sampler.sample)
 
     buffer_size = block_size * n_blocks
@@ -145,6 +176,42 @@ def initialize_sampling(
     update_nuc_period: Optional[int] = None,
     elec_equilibration_steps: Optional[int] = None,
 ) -> tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler]:
+    r"""Assemble the molecule-index and combined electron/nuclear samplers.
+
+    This is the function typically passed (as a :data:`~deepqmc.types.SamplerFactory`,
+    partially applied with the sampler-specific keyword arguments) as the
+    ``sampler_factory`` argument of :func:`~deepqmc.train.train`.
+
+    Args:
+        rng (~deepqmc.types.KeyArray): key used for PRNG.
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the molecular Hamiltonian.
+        ansatz (~deepqmc.types.Ansatz): the wave function ansatz.
+        mols (list[~deepqmc.molecule.Molecule]): the molecules to sample from.
+        electronic_states (int): the number of electronic states to sample.
+        molecule_batch_size (int): the number of molecules to sample in each step.
+        elec_sampler (~collections.abc.Callable): a partially applied
+            :class:`~deepqmc.sampling.base.ElectronSampler`, missing only the
+            ``hamil`` and ``wf`` arguments, e.g. as created by
+            :func:`~deepqmc.sampling.combine_samplers`.
+        nuc_sampler (~collections.abc.Callable): optional, a partially applied
+            :class:`~deepqmc.sampling.base.NucleiSampler`, missing only the
+            ``charges`` argument. Defaults to
+            :class:`~deepqmc.sampling.nuclei_samplers.IdleNucleiSampler`, i.e. fixed
+            nuclear geometries.
+        elec_warp_fn (~collections.abc.Callable): optional, a
+            :class:`~deepqmc.sampling.base.ElectronWarp`, used to move electrons along
+            with the nuclei when the nuclear geometry is updated. Defaults to
+            :func:`~deepqmc.sampling.nuclei_samplers.no_elec_warp`.
+        update_nuc_period (int): optional, the number of steps between nuclear
+            geometry updates.
+        elec_equilibration_steps (int): optional, the number of electron sampling
+            steps to take between two nuclear geometry updates.
+
+    Returns:
+        tuple[~deepqmc.sampling.MoleculeIdxSampler,
+        ~deepqmc.sampling.MultiNuclearGeometrySampler]: the molecule-index sampler and
+        the combined electron/nuclear sampler.
+    """
     molecule_idx_sampler = MoleculeIdxSampler(
         rng, len(mols), molecule_batch_size, 'once'
     )
@@ -167,6 +234,22 @@ def initialize_sampling(
 
 
 def initialize_sampler_state(rng, sampler, params, electron_batch_size, nuc_coords):
+    r"""Initialize the sampler state, split across the available devices.
+
+    Args:
+        rng (~deepqmc.types.KeyArray): key used for PRNG.
+        sampler (~deepqmc.sampling.MultiNuclearGeometrySampler): the sampler to
+            initialize.
+        params (~deepqmc.types.Params): the wave function parameters.
+        electron_batch_size (int): the total number of electron walkers to create,
+            split evenly across all devices.
+        nuc_coords (~jax.Array): the initial nuclear coordinates of the sampled
+            molecule(s).
+
+    Returns:
+        ~deepqmc.types.SamplerState: the initialized, device-sharded sampler state.
+    """
+
     @jax.pmap
     def sampler_state_initializer(rng, params):
         return sampler.init(

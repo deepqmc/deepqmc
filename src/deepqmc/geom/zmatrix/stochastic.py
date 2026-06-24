@@ -1,5 +1,5 @@
-from collections.abc import Callable, Mapping, Sequence
-from typing import Any, Generator, Optional, Protocol, Type
+from collections.abc import Callable, Generator, Mapping, Sequence
+from typing import Any, Optional, Protocol, Type
 
 import jax
 import jax.numpy as jnp
@@ -25,9 +25,28 @@ def rng_iterator(rng: KeyArray) -> Generator[KeyArray, None, None]:
 
 
 class DistributionFactory(Protocol):
-    """Protocol for distribution factories."""
+    r"""Protocol for distribution factories.
 
-    def __call__(self, loc: jax.Array) -> Callable[[KeyArray], jax.Array]: ...
+    A :class:`DistributionFactory` is called with the value of a bond length, angle
+    or dihedral found in a reference geometry, and returns a sampler function for a
+    (typically noisy) distribution over that coordinate. This is the extension
+    point used to implement custom noise distributions for entries of a
+    :class:`StochasticZMatrixTemplate`.
+    """
+
+    def __call__(self, loc: jax.Array) -> Callable[[KeyArray], jax.Array]:
+        r"""Create a sampler function for a distribution located around ``loc``.
+
+        Args:
+            loc (~jax.Array): the value of the coordinate (bond length, angle or
+                dihedral) found in the reference geometry, used to center or
+                otherwise parametrize the returned distribution.
+
+        Returns:
+            ~collections.abc.Callable[[~deepqmc.types.KeyArray], ~jax.Array]: a
+            function that samples a value from the distribution, given an rng key.
+        """
+        ...
 
 
 class StochasticZMatrixEntry(ZMatrixEntry):
@@ -139,10 +158,28 @@ class StochasticZMatrix(ZMatrix):
         self.lines = lines
 
     def __call__(self, rng: KeyArray) -> ConcreteZMatrix:
+        r"""Sample a :class:`~deepqmc.geom.zmatrix.ConcreteZMatrix` from the
+        distributions of this Z matrix.
+
+        Args:
+            rng (~deepqmc.types.KeyArray): an rng key for sampling.
+
+        Returns:
+            ~deepqmc.geom.zmatrix.ConcreteZMatrix: a Z matrix with concrete,
+            sampled values.
+        """
         lines = [line(rng) for rng, line in zip(rng_iterator(rng), self.lines)]
         return ConcreteZMatrix(lines)
 
     def to_cartesian(self, rng: KeyArray) -> jax.Array:
+        r"""Sample this Z matrix and convert it to Cartesian nuclear coordinates.
+
+        Args:
+            rng (~deepqmc.types.KeyArray): an rng key for sampling.
+
+        Returns:
+            ~jax.Array: the Cartesian nuclear coordinates, of shape ``(n_nuc, 3)``.
+        """
         return self(rng).to_cartesian()
 
 
@@ -166,6 +203,33 @@ class StochasticZMatrixTemplate(ZMatrixTemplate):
 
     @classmethod
     def from_simplified_config(cls, lines: Sequence[Mapping[str, Any]]):
+        r"""Construct a template from a simplified, config-friendly specification.
+
+        This is the constructor typically used from Hydra configs, e.g. to build
+        the ``z_matrix_template`` of a Z-matrix-based nuclei sampler
+        (``deepqmc.sampling.nuclei_samplers.ZMatrixSampler``).
+
+        Args:
+            lines
+                (~collections.abc.Sequence[~collections.abc.Mapping[str, typing.Any]]):
+                one entry per atom, in the same order as the nuclear charges. Each
+                entry is a mapping with the keys:
+
+                - ``atom_idxs``: a sequence ``(bond_atom_idx, angle_atom_idx,
+                  dihedral_atom_idx)`` of (up to three) atom indices, using
+                  ``None`` for entries that don't apply (e.g. the first three
+                  atoms, which don't need a full bond, angle and dihedral).
+                - ``distribution_factories``: a sequence of (up to three)
+                  :class:`DistributionFactory` instances (or ``None``), one per
+                  entry of ``atom_idxs``, used to sample the corresponding bond
+                  length, angle or dihedral around the value found in the
+                  reference geometry.
+                - ``charge`` (optional): the nuclear charge of the atom, only used
+                  for bookkeeping.
+
+        Returns:
+            StochasticZMatrixTemplate: the resulting Z matrix template.
+        """
         line_templates = [
             StochasticZMatrixLineTemplate.from_simplified_config(**line)
             for line in lines
@@ -174,7 +238,15 @@ class StochasticZMatrixTemplate(ZMatrixTemplate):
 
 
 class UniformDistributionFactory(DistributionFactory):
-    """Create uniform distributions."""
+    r"""Create uniform distributions over a fixed, absolute interval.
+
+    Note that the sampled values do not depend on ``loc``, i.e. the reference
+    value of the coordinate is ignored.
+
+    Args:
+        low (float): the lower bound of the uniform distribution.
+        high (float): the upper bound of the uniform distribution.
+    """
 
     def __init__(self, low: float, high: float):
         self.low = low
@@ -188,7 +260,19 @@ class UniformDistributionFactory(DistributionFactory):
 
 
 class RadiallyUniformDistributionFactory(DistributionFactory):
-    """Create radially uniform distributions."""
+    r"""Create distributions over a fixed, absolute radial interval, with a
+    probability density proportional to the sampled value rather than uniform in
+    the value itself.
+
+    This samples ``r`` in ``[low, high]`` as the radius of a point picked
+    uniformly at random inside an annulus between ``low`` and ``high``, which is
+    the appropriate measure e.g. for sampling bond lengths uniformly with respect
+    to the enclosed area. The sampled values do not depend on ``loc``.
+
+    Args:
+        low (float): the lower bound of the sampled radius.
+        high (float): the upper bound of the sampled radius.
+    """
 
     def __init__(self, low: float, high: float):
         self.low = low
@@ -204,7 +288,17 @@ class RadiallyUniformDistributionFactory(DistributionFactory):
 
 
 class CenteredRadiallyUniformDistributionFactory(DistributionFactory):
-    """Create radially uniform distributions centered on some value."""
+    r"""Like :class:`RadiallyUniformDistributionFactory`, but centered on ``loc``.
+
+    Samples ``r`` in ``[loc - low, loc + high]``, with a probability density
+    proportional to ``r`` rather than uniform in ``r`` itself.
+
+    Args:
+        low (float): the offset below ``loc`` of the lower bound of the sampled
+            radius.
+        high (float): the offset above ``loc`` of the upper bound of the sampled
+            radius.
+    """
 
     def __init__(self, low: float, high: float):
         self.low = low
@@ -223,7 +317,17 @@ class CenteredRadiallyUniformDistributionFactory(DistributionFactory):
 
 
 class ClippedAsymmetricNormalDistributionFactory(DistributionFactory):
-    """Create clipped, asymmetric normal distributions."""
+    r"""Create normal distributions centered on ``loc``, with different standard
+    deviations on either side of ``loc``, clipped to an absolute range.
+
+    Args:
+        low_scale (float): the standard deviation used for samples below ``loc``.
+        high_scale (float): the standard deviation used for samples above ``loc``.
+        low (float | None): optional, an absolute lower bound the samples are
+            clipped to.
+        high (float | None): optional, an absolute upper bound the samples are
+            clipped to.
+    """
 
     def __init__(
         self,
@@ -247,7 +351,16 @@ class ClippedAsymmetricNormalDistributionFactory(DistributionFactory):
 
 
 class ClippedNormalDistributionFactory(DistributionFactory):
-    """Create clipped normal distributions."""
+    r"""Create normal distributions centered on ``loc``, clipped to an absolute
+    range.
+
+    Args:
+        scale (float): the standard deviation of the normal distribution.
+        low (float | None): optional, an absolute lower bound the samples are
+            clipped to.
+        high (float | None): optional, an absolute upper bound the samples are
+            clipped to.
+    """
 
     def __init__(
         self, scale: float, low: Optional[float] = None, high: Optional[float] = None
@@ -266,7 +379,11 @@ class ClippedNormalDistributionFactory(DistributionFactory):
 
 
 class DeltaDistributionFactory(DistributionFactory):
-    """Create delta distributions."""
+    r"""Create a degenerate "distribution" that deterministically returns ``loc``.
+
+    Useful to keep a bond length, angle or dihedral fixed at its reference value
+    while other entries of the same Z matrix are sampled stochastically.
+    """
 
     def __call__(self, loc: jax.Array):
         def delta_distribution(rng: KeyArray):
@@ -276,7 +393,14 @@ class DeltaDistributionFactory(DistributionFactory):
 
 
 class CenteredUniformDistributionFactory(DistributionFactory):
-    """Create uniform distributions centered on some value."""
+    r"""Create uniform distributions centered on ``loc``.
+
+    Args:
+        low (float): the offset below ``loc`` of the lower bound of the uniform
+            distribution.
+        high (float): the offset above ``loc`` of the upper bound of the uniform
+            distribution.
+    """
 
     def __init__(self, low: float, high: float):
         self.low = low

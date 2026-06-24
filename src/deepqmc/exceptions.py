@@ -13,7 +13,12 @@ class TrainingBlowup(Exception):
 
 
 class TrainingCrash(Exception):
-    """Exception if training ends before completion of total training steps."""
+    """Exception if training ends before completion of total training steps.
+
+    Args:
+        train_state (~deepqmc.types.TrainState): the last training state that was
+            checkpointed before the crash.
+    """
 
     def __init__(self, train_state):
         super().__init__()

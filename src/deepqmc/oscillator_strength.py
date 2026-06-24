@@ -13,28 +13,32 @@ def compute_oscillator_strength(
     local_energies_mask: Optional[jax.Array] = None,
     ratios_mask: Optional[jax.Array] = None,
 ):
-    """Computes the oscillator strength and error for a batch.
+    """Compute the oscillator strength and its error for a batch of samples.
+
+    Estimates the oscillator strength, transition dipole moment, and excitation
+    energy between all pairs of electronic states from a batch of local energies and
+    wave function ratios, together with their statistical errors. This is a batch
+    postprocessing counterpart of :class:`~deepqmc.observable.OscillatorStrengthMonitor`,
+    useful for recomputing oscillator strengths from samples gathered after training,
+    e.g. via :func:`~deepqmc.postprocess.mc_utils.read_and_convert_result`.
 
     Args:
-    local_energies (~jax.Array): the electron batch of local energies, shape:
-        ``[electronic_states, electron_batch_size]``.
-    ratios (~jax.Array): the electron batch of wave function ratios, shape:
-        ``[electronic_states, electronic_states, electron_batch_size]``.
-    rs (~jax.Array): the electron batch of electron samples, shape:
-        ``[electronic_states, electron_batch_size, n_electrons, 3]``.
-
-    local_energies_mask (~jax.Array): Optional, mask for the local energies.
-    ratios_mask (~jax.Array): Optional, mask for the ratios.
+        local_energies (~jax.Array): the electron batch of local energies, shape:
+            ``[electronic_states, electron_batch_size]``.
+        ratios (~jax.Array): the electron batch of wave function ratios, shape:
+            ``[electronic_states, electronic_states, electron_batch_size]``.
+        rs (~jax.Array): the electron batch of electron samples, shape:
+            ``[electronic_states, electron_batch_size, n_electrons, 3]``.
+        local_energies_mask (~jax.Array): optional, a boolean mask selecting the
+            valid entries of ``local_energies``.
+        ratios_mask (~jax.Array): optional, a boolean mask selecting the valid
+            entries of ``ratios``.
 
     Returns:
-        tuple[
-            tuple[~jax.Array, ~jax.Array],
-            tuple[~jax.Array, ~jax.Array],
-            tuple[~jax.Array, ~jax.Array],
-        ]:
-            the oscillator strength with error,
-            the transition dipole moment with error,
-            and the excitation energies with errors.
+        tuple[tuple[~jax.Array, ~jax.Array], tuple[~jax.Array, ~jax.Array], tuple[~jax.Array, ~jax.Array]]:
+        a tuple of ``(oscillator_strength, error)``, ``(transition_dipole_moment,
+        error)`` and ``(excitation_energy, error)`` pairs, each array of shape
+        ``[electronic_states, electronic_states]``.
     """
 
     sample_size = local_energies.shape[-1]

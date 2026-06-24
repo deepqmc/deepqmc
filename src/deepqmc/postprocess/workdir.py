@@ -8,7 +8,28 @@ import numpy as np
 
 
 def gather_electron_axis(pytree, electron_batch_axis=4):
-    r"""Gather the electron samples from the devices to a single axis."""
+    r"""Merge the per-device electron-sample axis of arrays read from a result file.
+
+    Local energies, wave function values and other per-sample quantities are stored
+    in the ``result.h5`` file of a deepQMC workdir with the same
+    ``[n_iterations, n_device, ..., electron_batch_size / n_device, ...]`` layout
+    they have during training, see
+    :func:`~deepqmc.parallel.gather_electrons_on_one_device`. This function merges
+    the device axis (axis 1) into the electron batch axis, to arrive at the more
+    convenient ``[n_iterations, ..., electron_batch_size, ...]`` layout.
+
+    Args:
+        pytree: a pytree of arrays all with shape ``[n_iterations, n_device, ...,
+            electron_batch_size / n_device, ...]``.
+        electron_batch_axis (int): optional, the axis carrying the electron batch
+            before merging, e.g. 4 for arrays of shape ``[n_iterations, n_device,
+            molecule_batch_size, electronic_states, electron_batch_size / n_device,
+            ...]``, the most common case.
+
+    Returns:
+        a pytree of arrays all with shape ``[n_iterations, ..., electron_batch_size,
+        ...]``.
+    """
     return jax.tree.map(
         lambda x: np.moveaxis(x, 1, electron_batch_axis - 1).reshape(
             x.shape[0],
@@ -108,7 +129,25 @@ def read_subdir(path: Path, keys: list[str]) -> tuple[dict, Optional[int]]:
 
 
 def read_workdir(path: Path, keys: list[str]) -> tuple[dict, Optional[int]]:
-    r"""Read values of given keys from result.h5 files in a deepQMC workdir."""
+    r"""Read values of given keys from result.h5 files in a deepQMC workdir.
+
+    Automatically detects whether ``path`` contains a single-node ``training``/
+    ``evaluation`` subdir, or multiple ``training_0``, ``training_1``, ... /
+    ``evaluation_0``, ``evaluation_1``, ... multi-node subdirs, and concatenates the
+    results of the latter along the electron batch axis.
+
+    Args:
+        path (~pathlib.Path): the deepQMC workdir, e.g. as passed to
+            ``hydra.run.dir``.
+        keys (list[str]): the names of the datasets to read from the ``result.h5``
+            files, e.g. ``['local_energy', 'mol_idxs']``.
+
+    Returns:
+        tuple[dict, Optional[int]]: a dictionary mapping each of the requested
+        ``keys`` present in the result files to the corresponding array, and the
+        iteration of the last checkpoint file found in the workdir, or :data:`None`
+        if no ``training``/``evaluation`` subdir or checkpoint was found.
+    """
     eval_subdirs = [subdir.name for subdir in path.glob('evaluation*')]
     train_subdirs = [subdir.name for subdir in path.glob('training*')]
     if not eval_subdirs and not train_subdirs:
@@ -132,14 +171,15 @@ def convert_to_per_molecule_format(
     r"""Convert results (local energies, psi values, etc.) to per molecule format.
 
     Args:
-        raw_result [n_iter, molecule_batch_size, ...]: the result
-            values in batched format used during training/evaluation.
-        mol_idxs [n_iter, molecule_batch_size]: the global dataset indices of the
-            molecules considered in each iteration.
+        raw_result (~numpy.ndarray): the result values in batched format used
+            during training/evaluation, shape: ``[n_iter, molecule_batch_size,
+            ...]``.
+        mol_idxs (~numpy.ndarray): the global dataset indices of the molecules
+            considered in each iteration, shape: ``[n_iter, molecule_batch_size]``.
 
     Returns:
-        [n_iter_per_molecule, n_molecules, ...]: the results
-            rearranged into per molecule format.
+        ~numpy.ndarray: the results rearranged into per molecule format, shape:
+        ``[n_iter_per_molecule, n_molecules, ...]``.
     """
     mol_idxs = mol_idxs.astype(int)
     quantity_shape = raw_result.shape[2:]
@@ -160,8 +200,26 @@ def read_and_reshape_result(
 ):
     r"""Read and reshape results from a deepQMC workdir.
 
-    Use when the result file contains result for a single molecule,
-    and no mol_idxs entry.
+    Use when retrieving all individual samples from a result file that
+    contains results for a single molecule, and no ``mol_idxs`` entry,
+    e.g. for a standard (non-transferable) training or evaluation run.
+
+    Args:
+        path (~pathlib.Path): the deepQMC workdir, e.g. as passed to
+            ``hydra.run.dir``.
+        *keys (str): the names of the datasets to read from the ``result.h5`` files,
+            e.g. ``'local_energy'``.
+        read_workdir (~collections.abc.Callable): optional, the function used to
+            read the raw results from ``path``, defaults to
+            :func:`~deepqmc.postprocess.workdir.read_workdir`.
+        gather_electrons (bool): optional, whether to merge the per-device electron
+            batch axis of the results via
+            :func:`~deepqmc.postprocess.workdir.gather_electron_axis`. If
+            :data:`False`, only the results of the first device are kept.
+
+    Returns:
+        the array for the requested key, or a dictionary mapping each requested key
+        to its array if more than one key was requested.
     """
     results, _ = read_workdir(path, keys)
     min_idxs = {
@@ -183,8 +241,27 @@ def read_and_convert_result(
 ):
     r"""Read and convert results from a deepQMC workdir to per molecule format.
 
-    Use when the result file contains results for multiple molecules,
-    and the mol_idxs entry.
+    Use when the result file contains results for multiple molecules, and the
+    ``mol_idxs`` entry, e.g. for a transferable training or evaluation run. See also
+    :func:`~deepqmc.postprocess.workdir.convert_to_per_molecule_format`.
+
+    Args:
+        path (~pathlib.Path): the deepQMC workdir, e.g. as passed to
+            ``hydra.run.dir``.
+        *keys (str): the names of the datasets to read from the ``result.h5`` files,
+            e.g. ``'local_energy'``.
+        read_workdir (~collections.abc.Callable): optional, the function used to
+            read the raw results from ``path``, defaults to
+            :func:`~deepqmc.postprocess.workdir.read_workdir`.
+        gather_electrons (bool): optional, whether to merge the per-device electron
+            batch axis of the results via
+            :func:`~deepqmc.postprocess.workdir.gather_electron_axis`. If
+            :data:`False`, only the results of the first device are kept.
+
+    Returns:
+        the array for the requested key, or a dictionary mapping each requested key
+        to its array if more than one key was requested, rearranged into per
+        molecule format.
     """
     results, _ = read_workdir(path, [*keys, 'mol_idxs'])
     min_idxs = {
@@ -211,7 +288,18 @@ def read_and_convert_result(
 def read_average_iteration_time(path, discard_first=10):
     r"""Read the average iteration time from a deepQMC workdir.
 
-    Needs the ``time`` entry in the result.h5 file.
+    Needs the ``time`` entry in the result.h5 file. Computes the average wall-clock
+    time per training/evaluation iteration, discarding the first few iterations
+    (which include JIT compilation overhead) from the estimate.
+
+    Args:
+        path (~pathlib.Path): the deepQMC workdir, e.g. as passed to
+            ``hydra.run.dir``.
+        discard_first (int): optional, the number of initial iterations to discard
+            from the estimate.
+
+    Returns:
+        float: the average wall-clock time per iteration, in seconds.
     """
     times = read_workdir(path, ['time'])[0]['time']
     average_time = (times[-1] - times[discard_first - 1]) / (len(times) - discard_first)

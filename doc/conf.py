@@ -1,15 +1,25 @@
 import datetime
 import os
 import sys
-
+import types as _types
 import toml
 
+
+# Provide a minimal jax_dataclasses stub so that @jdc.pytree_dataclass
+# does not replace classes with Mock objects during the Sphinx build.
+# Without this, PhysicalConfiguration (and similar classes) would be
+# replaced by MagicMock(name='pytree_dataclass()'), causing Sphinx to
+# render their type annotations as "jax_dataclasses.pytree_dataclass".
+_jdc_stub = _types.ModuleType('jax_dataclasses')
+_jdc_stub.pytree_dataclass = lambda cls: cls  # identity decorator
+_jdc_stub.replace = lambda obj, **changes: obj  # no-op; never called during docs build
+sys.modules['jax_dataclasses'] = _jdc_stub
 sys.path.insert(0, os.path.abspath('../src'))
 with open('../pyproject.toml') as f:
     metadata = toml.load(f)['project']
 project = 'DeepQMC'
 author = ''  # ' '.join(metadata['authors'][0].split()[:-1])
-release = version = '1.2.0'
+release = version = metadata['version']
 description = ''  # metadata['description']
 year_range = (2019, datetime.date.today().year)
 year_str = (
@@ -28,14 +38,21 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinxcontrib.katex',
     'sphinx.ext.autosectionlabel',
+    'nbsphinx',
 ]
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'jax': ('https://jax.readthedocs.io/en/latest', None),
     'haiku': ('https://dm-haiku.readthedocs.io/en/latest', None),
     'pyscf': ('http://pyscf.org', None),
+    'numpy': ('https://numpy.org/doc/stable', None),
 }
-exclude_patterns = ['build', '.DS_Store']
+exclude_patterns = ['build', '.DS_Store', '**.ipynb_checkpoints']
+
+# Example notebooks are executed once by their authors and checked in with their
+# outputs already saved (actually running a DeepQMC training during the docs build
+# is not feasible); the build must therefore always use the stored outputs.
+nbsphinx_execute = 'never'
 autosectionlabel_prefix_document = True
 html_theme = 'pydata_sphinx_theme'
 html_theme_options = {
@@ -51,6 +68,8 @@ html_theme_options = {
         }
     ],
     'navigation_with_keys': False,
+    'navbar_persistent': ['search-button'],
+    'header_links_before_dropdown': 6,
 }
 html_sidebars = {
     '**': [
@@ -70,7 +89,6 @@ autodoc_mock_imports = [
     'tqdm',
     'uncertainties',
     'jax',
-    'jax_dataclasses',
     'kfac_jax',
     'haiku',
     'omegaconf',
@@ -82,5 +100,5 @@ toc_object_entries = False
 todo_include_todos = True
 napoleon_numpy_docstring = False
 napoleon_use_ivar = True
-autodoc_typehints = 'none'
-autodoc_type_aliases = {'PhysicalConfiguration': 'deepqmc.types.PhysicalConfiguration'}
+autodoc_typehints = 'description'
+autodoc_typehints_description_target = 'documented_params'

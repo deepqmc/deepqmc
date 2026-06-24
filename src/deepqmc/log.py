@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 import pickle
@@ -25,7 +27,13 @@ from .parallel import (
 from .types import Stats, TrainState
 from .utils import flatten_dict, tree_any
 
-__all__ = ['CheckpointStore', 'H5LogTable', 'TensorboardMetricLogger']
+__all__ = [
+    'Checkpoint',
+    'CheckpointStore',
+    'MetricLogger',
+    'TensorboardMetricLogger',
+    'H5Logger',
+]
 log = logging.getLogger(__name__)
 
 
@@ -194,6 +202,28 @@ class H5LogTable:
 
 
 class H5Logger:
+    r"""Log selected training data to an HDF5 file.
+
+    Writes a ``result.h5`` file in the working directory. Only entries whose
+    key contains at least one of the whitelisted phrases are written; all
+    others are silently dropped.  The file is opened in SWMR mode so an
+    external reader can access it while training is still running.
+
+    Args:
+        workdir (str): directory in which ``result.h5`` is created.
+        init_step (int): initial training step; existing datasets in the file
+            are resized to this length, enabling seamless resumption from a
+            checkpoint.
+        additional_keys_to_whitelist (Optional[list[str]]): extra key
+            substrings to append to the default whitelist.
+        aux_data (Optional[dict]): key-value pairs stored as HDF5 file
+            attributes; typically used for static metadata such as molecular
+            coordinates.
+        keys_whitelist (Optional[list[str]]): overrides the default whitelist
+            entirely when provided; ``additional_keys_to_whitelist`` is still
+            appended on top.
+    """
+
     def __init__(
         self,
         workdir: str,
@@ -215,6 +245,13 @@ class H5Logger:
         self.flush()
 
     def update(self, single_device_data: Stats):
+        r"""Write a new row of whitelisted entries to the HDF5 file.
+
+        Args:
+            single_device_data (~deepqmc.types.Stats): flat or nested
+                statistics dictionary; entries whose flattened key contains a
+                whitelisted phrase are appended to the corresponding dataset.
+        """
         data = flatten_dict(single_device_data)
         data_filtered = {
             key: value
