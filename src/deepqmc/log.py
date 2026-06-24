@@ -197,7 +197,7 @@ class H5Logger:
     def __init__(
         self,
         workdir: str,
-        init_step: int = 0,
+        init_step: int,
         additional_keys_to_whitelist: Optional[list[str]] = None,
         aux_data: Optional[dict] = None,
         *,
