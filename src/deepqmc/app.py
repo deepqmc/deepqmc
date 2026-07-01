@@ -37,7 +37,9 @@ warnings.filterwarnings(
 
 
 def read_molecules(
-    directory: Path | str | None = None, whitelist: Optional[str] = None
+    directory: Path | str | None = None,
+    whitelist: Optional[str] = None,
+    verbose: bool = True,
 ) -> Optional[list[Molecule]]:
     r"""Read a dataset of molecules for transferable training.
 
@@ -63,10 +65,12 @@ def read_molecules(
     path = Path(directory)
     if not path.is_absolute():
         path = to_absolute_path(get_original_cwd()) / path
-    log.info(f'Reading molecules from {path}')
+    if verbose:
+        log.info(f'Reading molecules from {path}')
     molecules = read_molecule_dataset(path, whitelist)
-    log.info(f'Read molecules from files: {", ".join(molecules.keys())}')
-    log.info(f'Read {len(molecules)} molecules')
+    if verbose:
+        log.info(f'Read molecules from files: {", ".join(molecules.keys())}')
+        log.info(f'Read {len(molecules)} molecules')
     if len(molecules) == 0:
         raise ValueError(
             f'No molecules found in {path}, with whitelist {whitelist!r}. '

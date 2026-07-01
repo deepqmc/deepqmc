@@ -46,7 +46,9 @@ def validate_batch_size(cfg: DictConfig) -> None:
         f'evenly split across {jax.device_count()} devices!'
     )
     mols = (
-        call(cfg.get('mols')) if isinstance(cfg.get('mols'), dict) else cfg.get('mols')
+        call(cfg.get('mols'), verbose=False)
+        if isinstance(cfg.get('mols'), dict)
+        else cfg.get('mols')
     )
     len_mols = len(mols) if mols is not None else 1
     assert cfg.get('molecule_batch_size', 0) <= len_mols or len_mols == 1, (
