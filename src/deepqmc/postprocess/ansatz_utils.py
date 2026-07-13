@@ -11,14 +11,14 @@ from ..types import Ansatz, WaveFunction
 from .checkpoint_utils import load_parameters
 
 
-def instantiate_predefined_ansatz(name: str, H: MolecularHamiltonian) -> Ansatz:
+def instantiate_predefined_ansatz(ansatz_name: str, H: MolecularHamiltonian) -> Ansatz:
     r"""Instantiate one of the predefined ansatzes.
 
-    The hydra configuration file ``name.yaml`` must be present in the
+    The hydra configuration file ``ansatz_name.yaml`` must be present in the
     ``src/deepqmc/conf/ansatz`` directory.
 
     Args:
-        name (str): the name of the predefined ansatz configuration, e.g.
+        ansatz_name (str): the name of the predefined ansatz configuration, e.g.
             ``'psiformer'`` or ``'transpsiformer'``.
         H (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the system the
             ansatz is instantiated for.
@@ -29,7 +29,7 @@ def instantiate_predefined_ansatz(name: str, H: MolecularHamiltonian) -> Ansatz:
     """
     with resources.as_file(resources.files('deepqmc.conf')) as conf_dir:
         with initialize_config_dir(version_base=None, config_dir=str(conf_dir)):
-            cfg = compose(config_name='config', overrides=[f'ansatz={name}'])
+            cfg = compose(config_name='config', overrides=[f'ansatz={ansatz_name}'])
 
     _ansatz = instantiate(cfg['ansatz'], _recursive_=True, _convert_='all')
 
@@ -37,7 +37,7 @@ def instantiate_predefined_ansatz(name: str, H: MolecularHamiltonian) -> Ansatz:
 
 
 def instantiate_wf_from_checkpoint(
-    ansatz_name: str, H: MolecularHamiltonian, chkpt_path: Path
+    ansatz_name: str, H: MolecularHamiltonian, chkpt_path: Path, state: int = 0
 ) -> WaveFunction:
     r"""Instantiate a predefined ansatz and load its parameters from a checkpoint file.
 
@@ -54,12 +54,12 @@ def instantiate_wf_from_checkpoint(
             ansatz was trained for.
         chkpt_path (~pathlib.Path): path to a ``chkpt-*.pt`` file written by
             :class:`~deepqmc.log.CheckpointStore`.
-
+        state (int): the index of the electronic state for which to load parameters.
     Returns:
         ~deepqmc.types.WaveFunction: the trained wave function, with its parameters
             already bound, ready to be evaluated on a
             :class:`~deepqmc.types.PhysicalConfiguration`.
     """
     ansatz = instantiate_predefined_ansatz(ansatz_name, H)
-    params = load_parameters(chkpt_path, squeeze_electronic_states=True)
+    params = load_parameters(chkpt_path, state=state)
     return partial(ansatz.apply, params)

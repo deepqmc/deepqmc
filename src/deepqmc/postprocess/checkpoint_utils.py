@@ -2,32 +2,33 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
+from typing import Optional
 
 from ..log import CheckpointStore
 from ..types import Params, PhysicalConfiguration
 
 
 def load_parameters(
-    chkpt_path: Path, squeeze_electronic_states: bool = False
+    chkpt_path: Path,
+    state: Optional[int] = None,
 ) -> Params:
     r"""Load ansatz parameters from a checkpoint file.
 
     Args:
         chkpt_path (~pathlib.Path): path to a ``chkpt-*.pt`` file written by
             :class:`~deepqmc.log.CheckpointStore`.
-        squeeze_electronic_states (bool): optional, if :data:`True` removes the
-            leading electronic-state axis of the loaded parameters. Useful when
-            the parameters should be used with an ansatz instantiated without an
-            explicit state axis, e.g. via
-            :func:`~deepqmc.postprocess.ansatz_utils.instantiate_predefined_ansatz`.
+        state (int, optional): if the ansatz has multiple electronic states, the
+            index of the state to load parameters for. If ``None``, the parameters
+            for all electronic states are returned, with the electronic-state
+            dimension preserved.
 
     Returns:
         ~deepqmc.types.Params: the ansatz parameters stored in the checkpoint.
     """
     _step, train_state = CheckpointStore.load(chkpt_path, deserialize=False)
     params = train_state.params
-    if squeeze_electronic_states:
-        params = jax.tree.map(lambda x: x.squeeze(axis=0), params)
+    if state is not None:
+        params = jax.tree.map(lambda x: x[state], params)
 
     return params
 
