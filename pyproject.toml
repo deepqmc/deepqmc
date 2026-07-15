@@ -10,10 +10,11 @@ authors = [
     {name = "Jan Hermann"},
     {name = "Zeno Schätzle", email = "zeno.schaetzle@fu-berlin.de"},
     {name = "Péter Bernát Szabó", email = "peter.bernat.szabo@fu-berlin.de"},
+    {name = "Matěj Mezera", email = "m.mezera@fu-berlin.de"},
 ]
 maintainers = [
     {name = "Zeno Schätzle", email = "zeno.schaetzle@fu-berlin.de"},
-    {name = "Péter Bernát Szabó", email = "peter.bernat.szabo@fu-berlin.de"},
+    {name = "Matěj Mezera", email = "m.mezera@fu-berlin.de"},
 ]
 readme = 'README.md'
 license = {text = 'MIT'}
