@@ -42,9 +42,9 @@ extensions = [
 ]
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
-    'jax': ('https://jax.readthedocs.io/en/latest', None),
+    'jax': ('https://docs.jax.dev/en/latest', None),
     'haiku': ('https://dm-haiku.readthedocs.io/en/latest', None),
-    'pyscf': ('http://pyscf.org', None),
+    'pyscf': ('https://pyscf.org', None),
     'numpy': ('https://numpy.org/doc/stable', None),
 }
 exclude_patterns = ['build', '.DS_Store', '**.ipynb_checkpoints']
