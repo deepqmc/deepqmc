@@ -25,3 +25,4 @@ repos:
     hooks:
       - id: codespell
         args: ["--ignore-words", ".codespellignore"]
+        exclude: '\.ipynb$'
