@@ -1,6 +1,7 @@
 import logging
 
 import jax
+import jax.numpy as jnp
 from hydra.utils import call
 from omegaconf import DictConfig
 
@@ -57,8 +58,40 @@ def validate_batch_size(cfg: DictConfig) -> None:
     )
 
 
+def validate_mols_consistency(cfg: DictConfig) -> None:
+    """Make sure that ``mols`` is compatible with the Hamiltonian's molecule.
+
+    The molecules in ``mols`` and the molecule specified in ``hamil.mol`` are
+    assumed to be equivalent up to their geometry, i.e. they must share the same
+    charges, total charge and spin.
+    """
+
+    mols = (
+        call(cfg.get('mols'), verbose=False)
+        if isinstance(cfg.get('mols'), dict)
+        else cfg.get('mols')
+    )
+    if not mols:
+        return
+    hamil_mol = call(cfg['hamil']['mol'])
+    for i, mol in enumerate(mols):
+        assert jnp.array_equal(mol.charges, hamil_mol.charges), (
+            f'Molecule {i} in `mols` has charges {mol.charges}, incompatible with '
+            f'the charges {hamil_mol.charges} of `hamil.mol`!'
+        )
+        assert mol.charge == hamil_mol.charge, (
+            f'Molecule {i} in `mols` has total charge {mol.charge}, incompatible '
+            f'with the total charge {hamil_mol.charge} of `hamil.mol`!'
+        )
+        assert mol.spin == hamil_mol.spin, (
+            f'Molecule {i} in `mols` has spin {mol.spin}, incompatible with the '
+            f'spin {hamil_mol.spin} of `hamil.mol`!'
+        )
+
+
 def validate_kwargs(cfg: DictConfig) -> None:
     """Check that the combinations of configuration options are sensible."""
 
     validate_pretrain_kwargs(cfg)
     validate_batch_size(cfg)
+    validate_mols_consistency(cfg)
