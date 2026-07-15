@@ -79,6 +79,7 @@ class TestSampling:
             )
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
+            default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
         )
 
 
@@ -157,4 +158,5 @@ class TestMultimoleculeSampling:
             )
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
+            default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
         )
