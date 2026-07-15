@@ -91,7 +91,7 @@ deepqmc = 'deepqmc.app:cli'
 where = ["src"]
 
 [tool.setuptools.package-data]
-"*" = ["*.yaml"]
+"*" = ["*.yaml", "*.xml", "LICENCE"]
 
 [tool.black]
 target-version = ['py312']
