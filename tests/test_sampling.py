@@ -8,12 +8,12 @@ from deepqmc.sampling import (
     LangevinSampler,
     MetropolisSampler,
     MultiNuclearGeometrySampler,
-    chain,
 )
 from deepqmc.sampling.electron_sample_initializers import (
     AtomCenteredElectronInitializer,
     ShellBasedDistribution,
 )
+from deepqmc.sampling.sampling_utils import chain
 from deepqmc.sampling.nuclei_samplers import IdleNucleiSampler, no_elec_warp
 
 
