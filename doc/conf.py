@@ -53,6 +53,16 @@ exclude_patterns = ['build', '.DS_Store', '**.ipynb_checkpoints']
 # outputs already saved (actually running a DeepQMC training during the docs build
 # is not feasible); the build must therefore always use the stored outputs.
 nbsphinx_execute = 'never'
+# Force Python syntax highlighting for code cells regardless of whether a
+# notebook carries its own kernelspec/language_info metadata (cleaned-up
+# example notebooks intentionally omit it).
+nbsphinx_codecell_lexer = 'ipython3'
+# `!shell command` cells are valid ipython3 syntax and render correctly, but an
+# auxiliary Sphinx pass (unrelated to nbsphinx's own rendering) also tries to
+# lex them as plain Python for indexing purposes and warns when that fails,
+# even though it then falls back gracefully. Harmless; suppressed so it
+# doesn't fail `sphinx-build -W`.
+suppress_warnings = ['misc.highlighting_failure']
 autosectionlabel_prefix_document = True
 html_theme = 'pydata_sphinx_theme'
 html_theme_options = {

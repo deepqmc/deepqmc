@@ -12,3 +12,5 @@ To run one yourself, install the ``notebooks`` extra and register a kernel for i
 
 .. toctree::
    :maxdepth: 1
+
+   examples/ground_state_lih
