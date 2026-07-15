@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
-from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Protocol
 
 if TYPE_CHECKING:
     from .hamil import MolecularHamiltonian
