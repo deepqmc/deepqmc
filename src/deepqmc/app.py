@@ -289,7 +289,7 @@ def maybe_log_code_version() -> None:
             sha = git_command(['rev-parse', '--short', 'HEAD'])
             diff = git_command(['diff'])
         except Exception:
-            sha = 'deepqmc 1.2.0'
+            sha = 'deepqmc 1.2.1'
             diff = None
         log.debug(f'Running with code version: {sha}')
         if diff:
