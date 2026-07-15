@@ -34,6 +34,7 @@ classifiers = [
 requires-python = ">=3.12"
 dependencies = [
     'dm-haiku',
+    'folx',
     'h5py',
     'hydra-core',
     'jax<0.9.0',
