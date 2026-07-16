@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
+from ..optimizer import pmap_merge_states
 from ..parallel import (
     gather_electrons_on_one_device,
     rng_iterator,
@@ -25,22 +26,38 @@ def pretrain(  # noqa: C901
     sampler,
     smpl_state,
     dataset,
-    *,
+    merge_keys,
     steps,
 ):
     r"""Perform pretraining of the Ansatz to (MC-)SCF orbitals.
 
+    This is a generator, one pretraining step is performed for every step drawn
+    from :data:`steps`.
+
     Args:
-        rng (~deepqmc.types.RNGSeed): key used for PRNG.
-        hamil (~deepqmc.hamil.qc.MolecularHamiltonian): hamiltonian of the molecule.
+        rng (~deepqmc.types.KeyArray): key used for PRNG.
+        hamil (~deepqmc.hamil.MolecularHamiltonian): hamiltonian of the molecule.
         ansatz (~deepqmc.types.Ansatz): the wave function Ansatz.
-        params (dict): the (initial) parameters of the Ansatz.
-        opt (``optax`` optimizers): the optimizer.
-        molecule_idx_sampler (~deepqmc.samplint.MoleculeIdxSampler): an object that
+        params (~deepqmc.types.Params): the (initial) parameters of the Ansatz.
+        opt (optax.GradientTransformation): the ``optax`` optimizer used to update
+            the parameters.
+        molecule_idx_sampler (~deepqmc.sampling.MoleculeIdxSampler): an object that
             iterates (samples) the indices of the molecule dataset.
-        sampler: the sampler instance to use.
-        dataset (dict): dictionary containing the coefficients for the pretraining.
+        sampler (~deepqmc.sampling.MultiNuclearGeometrySampler): the sampler used to
+            obtain the electron and nuclear configurations to pretrain on.
+        smpl_state (~deepqmc.types.SamplerState): the current state of :data:`sampler`.
+        dataset (dict): dictionary containing the (MC-)SCF baseline used as the
+            pretraining target, as returned by
+            :func:`~deepqmc.pretrain.pyscfext.compute_scf_solution`.
+        merge_keys (list[str]): optional, list of strings for selecting parameters to be
+            shared across electronic states. Matching merge keys with (substrings of)
+            parameter keys.
         steps: an iterable yielding the step numbers for the pretraining.
+
+    Yields:
+        tuple: the current step number, the updated parameters, the per-sample
+        pretraining losses and the sampled molecule indices, one tuple for every
+        step in :data:`steps`.
     """
     target_fn = PretrainTarget(
         hamil, None, dataset['centers'], dataset['shells'], dataset['mo_coeffs']
@@ -72,7 +89,7 @@ def pretrain(  # noqa: C901
                 jnp.apply_along_axis(jnp.pad, -1, target[1], (n_up, 0)),
             )
         # in full determinant mode off diagonal elements are pretrained against zero
-        losses = jax.tree_util.tree_map(lambda o, t: (o - t) ** 2, orbs, target)
+        losses = jax.tree.map(lambda o, t: (o - t) ** 2, orbs, target)
         loss = sum(map(jnp.mean, losses))
         per_sample_losses = sum(map(partial(jnp.mean, axis=(-3, -2, -1)), losses))
         return loss, per_sample_losses
@@ -100,9 +117,7 @@ def pretrain(  # noqa: C901
     @partial(jax.pmap, axis_name='device_axis')
     def pretrain_step(rng, params, smpl_state, opt_state, mol_idxs):
         rng, rng_sample = jax.random.split(rng)
-        smpl_state, phys_config, smpl_stats = sample_wf(
-            smpl_state, rng_sample, params, mol_idxs
-        )
+        smpl_state, phys_config, _ = sample_wf(smpl_state, rng_sample, params, mol_idxs)
 
         params, opt_state, per_sample_losses = _step(
             rng,
@@ -116,6 +131,9 @@ def pretrain(  # noqa: C901
         mol_idxs = molecule_idx_sampler.sample()
         params, opt_state, per_sample_losses = pretrain_step(
             rng, params, smpl_state, opt_state, mol_idxs
+        )
+        params = pmap_merge_states(
+            params, tuple(merge_keys) if merge_keys is not None else None
         )
         yield step, params, gather_electrons_on_one_device(
             per_sample_losses

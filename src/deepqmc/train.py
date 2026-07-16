@@ -4,10 +4,11 @@ import time
 from collections.abc import Callable, Sequence
 from functools import partial
 from itertools import count
-from typing import Optional, Type
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 from tqdm.auto import tqdm, trange
 from uncertainties import ufloat
@@ -18,22 +19,21 @@ from .exceptions import NanError, TrainingBlowup, TrainingCrash
 from .fit import fit_wf
 from .hamil import MolecularHamiltonian
 from .log import CheckpointStore, H5Logger, MetricLogger, TensorboardMetricLogger
+from .loss import LossFunctionFactory, create_loss_fn
 from .loss.clip import median_log_squeeze_and_mask
-from .loss.loss_function import LossFunctionFactory, create_loss_fn
 from .molecule import Molecule
-from .observable import ObservableMonitor, default_observable_monitors
+from .observable import (
+    ObservableMonitor,
+    default_observable_monitors,
+    observable_monitor_from_name,
+)
 from .optimizer import NoOptimizer
 from .parallel import pmap_pmean, split_on_devices, split_rng_key_to_devices
 from .physics import pairwise_self_distance
 from .pretrain.pretraining import pretrain
 from .pretrain.pyscfext import compute_scf_solution
-from .sampling import (
-    MoleculeIdxSampler,
-    MultiNuclearGeometrySampler,
-    equilibrate,
-    initialize_sampler_state,
-)
-from .types import Ansatz, KeyArray, TrainState
+from .sampling import equilibrate, initialize_sampler_state
+from .types import Ansatz, OptimizerFactory, SamplerFactory, TrainState
 from .wf.base import init_wf_params
 
 __all__ = ['train']
@@ -42,15 +42,12 @@ log = logging.getLogger(__name__)
 
 
 def train(  # noqa: C901
-    hamil,
+    hamil: MolecularHamiltonian,
     ansatz: Ansatz,
-    opt,
-    sampler_factory: Callable[
-        [KeyArray, MolecularHamiltonian, Ansatz, list[Molecule], int, int],
-        tuple[MoleculeIdxSampler, MultiNuclearGeometrySampler],
-    ],
+    opt: Optional[OptimizerFactory],
+    sampler_factory: SamplerFactory,
     steps: int,
-    seed: int,
+    seed: Optional[int],
     electron_batch_size: int,
     molecule_batch_size: int = 1,
     electronic_states: int = 1,
@@ -63,82 +60,81 @@ def train(  # noqa: C901
     eq_allow_early_stopping: bool = True,
     pretrain_steps: Optional[int] = None,
     pretrain_kwargs: Optional[dict] = None,
-    chkpt_constructor: Optional[Type[CheckpointStore]] = None,
-    metric_logger_constructor: Optional[Type[MetricLogger]] = None,
-    h5_logger_constructor: Optional[Type[H5Logger]] = None,
+    chkpt_constructor: Optional[Callable[..., CheckpointStore]] = None,
+    metric_logger_constructor: Optional[Callable[..., MetricLogger]] = None,
+    h5_logger_constructor: Optional[Callable[..., H5Logger]] = None,
     merge_keys: Optional[list[str]] = None,
     loss_function_factory: Optional[LossFunctionFactory] = None,
-    observable_monitors: Optional[list[ObservableMonitor]] = None,
+    observable_monitors: Optional[list[ObservableMonitor | str]] = None,
 ):
     r"""Train or evaluate a JAX wave function model.
 
     It initializes and equilibrates the MCMC sampling of the wave function ansatz,
     then optimizes or samples it using the variational principle. It optionally
     saves checkpoints and rewinds the training/evaluation if an error is encountered.
-    If an optimizer is supplied, the Ansatz is optimized, otherwise the Ansatz is
-    only sampled.
+    If an optimizer factory is supplied, the Ansatz is optimized, otherwise the
+    Ansatz is only sampled.
 
     Args:
-        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the
-            physical system.
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the physical
+            system.
         ansatz (~deepqmc.types.Ansatz): the wave function Ansatz.
-        opt (``kfac_jax`` or ``optax`` optimizers | :data:`None`):
-            the optimizer. Possible values are:
-
-            - :class:`kfac_jax.Optimizer`:
-                the partially initialized KFAC optimizer is used
-            - an :data:`optax` optimizer instance:
-                the supplied :data:`optax` optimizer is used.
-            - :data:`None`:
-                no optimizer is used, e.g. the evaluation of the Ansatz is performed.
-        sampler_factory (~collections.abc.Callable): a function that returns a Sampler
-            instance
+        opt (Optional[~deepqmc.types.OptimizerFactory]): optional optimizer factory
+            or ``None``. Possible values include partially-initialized KFAC
+            optimizers, an ``optax`` optimizer instance, or ``None`` to run
+            evaluation-only.
+        sampler_factory (~deepqmc.types.SamplerFactory): callable that returns a
+            ``(molecule_idx_sampler, sampler)`` pair used to create sampler state.
         steps (int): number of optimization steps.
-        seed (int): the seed used for PRNG.
-        electron_batch_size (int): the number of electron samples considered in a batch
+        seed (Optional[int]): the seed used for PRNG; if omitted a random seed is
+            drawn using ``numpy.random.default_rng().integers(2**32)``.
+        electron_batch_size (int): the number of electron samples considered in a
+            batch.
         molecule_batch_size (int): optional, the number of molecules considered in a
-            batch. Only needed for transferable training.
-        electronic_states (int): optional, the number of electronic states to consider.
-        mols (list[~deepqmc.molecule.Molecule]): optional, a sequence of molecules
-            to consider for transferable training. If None the default molecule from
-            hamil is used.
-        workdir (str): optional, path, where results should be saved.
-        train_state (~deepqmc.types.TrainState): optional, training checkpoint to
-            restore training or run evaluation.
-        init_step (int): optional, initial step index, useful if
-            calculation is restarted from checkpoint saved on disk.
-        max_restarts (int): optional, the maximum number of times the training is
+            batch (used for transferable training).
+        electronic_states (int): optional, the number of electronic states to
+            consider.
+        mols (Optional[list[~deepqmc.molecule.Molecule]]): optional sequence of
+            molecules to consider for transferable training. If ``None``, the default
+            molecule in ``hamil`` is used.
+        workdir (Optional[str]): optional path where results should be saved.
+        train_state (Optional[~deepqmc.types.TrainState]): optional training
+            checkpoint to restore training or run evaluation.
+        init_step (int): optional initial step index, useful when restarting from a
+            checkpoint saved on disk.
+        max_restarts (int): optional maximum number of times the training is
             retried before a :class:`NaNError` is raised.
-        max_eq_steps (int): optional, maximum number of equilibration steps if not
+        max_eq_steps (int): optional maximum number of equilibration steps if not
             detected earlier.
-        eq_allow_early_stopping (bool): default ``True``, whether to allow the
-            equilibration to stop early when the equilibration criterion has been met.
-        pretrain_steps (int): optional, the number of pretraining steps wrt. to the
-            Baseline wave function obtained with pyscf.
-        pretrain_kwargs (dict): optional, extra arguments for pretraining.
-        chkpt_constructor (~typing.Type[~deepqmc.log.CheckpointStore]): optional, an
-            object that saves training checkpoints to the working directory.
-        metric_logger_constructor (~typing.Type[~deepqmc.log.MetricLogger]): optional,
-            an object that consumes metric logging information. If not specified, the
-            default :class:`~deepqmc.log.TensorboardMetricLogger` is used to create
-            tensorboard logs.
-        h5_logger_constructor (~typing.Type[~deepqmc.log.H5Logger]): optional, an object
-            that consumes metric logging information. If not specified, the default
-            :class:`~deepqmc.log.H5Logger` is used to write comprehensive training
-            statistics to an h5file.
-        merge_keys (list[str]): optional, list of strings for selecting parameters to be
-            shared across electronic states. Matching merge keys with (substrings of)
-            parameter keys.
-        loss_function_factory (~deepqmc.loss.loss_function.LossFunctionFactory):
-            optional, a callable returning a suitable loss function for the
-            optimization.
-        observable_monitors (list[~deepqmc.observable.ObservableMonitor]): optional,
-            list of observable monitors to be evaluated during training or evaluation.
+        eq_allow_early_stopping (bool): whether to allow equilibration to stop early
+            when an equilibration criterion is met.
+        pretrain_steps (Optional[int]): optional number of pretraining steps with the
+            baseline wave function obtained from pyscf.
+        pretrain_kwargs (Optional[dict]): optional extra arguments for pretraining.
+        chkpt_constructor (Optional[~collections.abc.Callable[..., ~deepqmc.log.CheckpointStore]]): optional factory callable that returns a
+            :class:`~deepqmc.log.CheckpointStore` for saving training checkpoints to
+            ``workdir``.
+        metric_logger_constructor (Optional[~collections.abc.Callable[..., ~deepqmc.log.MetricLogger]]): optional factory callable that returns a
+            :class:`~deepqmc.log.MetricLogger`; defaults to
+            :class:`~deepqmc.log.TensorboardMetricLogger` when omitted.
+        h5_logger_constructor (Optional[~collections.abc.Callable[..., ~deepqmc.log.H5Logger]]): optional factory callable that returns an
+            :class:`~deepqmc.log.H5Logger`; defaults to :class:`~deepqmc.log.H5Logger`
+            when omitted.
+        merge_keys (Optional[list[str]]): optional list of parameter-key substrings
+            that should be shared across electronic states.
+        loss_function_factory (Optional[~deepqmc.loss.LossFunctionFactory]): optional
+            callable returning a loss function for the optimization.
+        observable_monitors (Optional[list[~deepqmc.observable.ObservableMonitor | str]]): optional list of observable monitors (or monitor names) to evaluate
+            during training/evaluation.
     """
     mode = 'evaluation' if opt is None else 'training'
+    if seed is None:
+        seed = int(np.random.default_rng().integers(2**32))
+        log.info('Seed not provided, using random seed %d', seed)
     rng = jax.random.PRNGKey(seed + jax.process_index())
     rng, rng_smpl = jax.random.split(rng)
     mols = mols if isinstance(mols, Sequence) else [hamil.mol]
+    mols = mols * molecule_batch_size if len(mols) == 1 else mols
     molecule_idx_sampler, sampler = sampler_factory(
         rng_smpl,
         hamil,
@@ -147,8 +143,17 @@ def train(  # noqa: C901
         electronic_states,
         molecule_batch_size,
     )
-    opt = opt or NoOptimizer
-    observable_monitors = default_observable_monitors() + (observable_monitors or [])
+    optimizer_factory = opt or NoOptimizer
+    observable_monitors = observable_monitors or []
+    observables = [
+        (
+            observable
+            if isinstance(observable, ObservableMonitor)
+            else observable_monitor_from_name(observable)
+        )
+        for observable in observable_monitors
+    ]
+    observables = default_observable_monitors() + observables
     chkpts = None
     if workdir:
         workdir = os.path.join(workdir, mode + process_idx_suffix())
@@ -161,8 +166,8 @@ def train(  # noqa: C901
         log.debug('Setting up h5_logger...')
         h5_logger = (h5_logger_constructor or H5Logger)(
             workdir,
-            [observable.name for observable in observable_monitors],
-            init_step=init_step,
+            init_step,
+            [observable.name for observable in observables],
             aux_data={f'mol-{i}': m.coords for i, m in enumerate(mols)},
         )
         init_time = time.time()
@@ -208,7 +213,11 @@ def train(  # noqa: C901
                     split_rng_key_to_devices(rng), 2
                 )
                 pretrain_smpl_state = initialize_sampler_state(
-                    rng_pretrain_smpl_init, sampler, params, electron_batch_size, mols
+                    rng_pretrain_smpl_init,
+                    sampler,
+                    params,
+                    electron_batch_size,
+                    jnp.stack([mol.coords for mol in mols]),
                 )
                 pbar = tqdm(range(pretrain_steps), desc='pretrain', disable=None)
                 for step, params, per_sample_losses, mol_idxs in pretrain(  # noqa: B007
@@ -221,6 +230,7 @@ def train(  # noqa: C901
                     sampler,
                     pretrain_smpl_state,
                     pretrain_dataset,
+                    merge_keys,
                     steps=pbar,
                 ):  # noqa: B007
                     per_mol_state_losses = per_sample_losses.mean(axis=-1)
@@ -244,7 +254,11 @@ def train(  # noqa: C901
         if train_state is None or train_state.sampler is None:
             rng, rng_eq, rng_smpl_init = split_on_devices(rng, 3)
             smpl_state = initialize_sampler_state(
-                rng_smpl_init, sampler, params, electron_batch_size, mols
+                rng_smpl_init,
+                sampler,
+                params,
+                electron_batch_size,
+                jnp.stack([mol.coords for mol in mols]),
             )
             log.info('Equilibrating sampler...')
             pbar = tqdm(
@@ -306,15 +320,16 @@ def train(  # noqa: C901
                     rng,
                     hamil,
                     ansatz,
-                    opt,
+                    optimizer_factory,
                     molecule_idx_sampler,
                     sampler,
                     pbar,
                     train_state,
+                    merge_keys,
                     loss_function_factory,
                     observable_monitors=[
-                        monitor.finalize(hamil, ansatz.apply)
-                        for monitor in observable_monitors
+                        observable.finalize(hamil, ansatz.apply)
+                        for observable in observables
                     ],
                 ):
                     ewm_energies, best_ene = update_progress(
@@ -328,11 +343,7 @@ def train(  # noqa: C901
                         if mode == 'training':
                             assert chkpts
                             # the convention is that chkpt-i contains the step i-1 -> i
-                            chkpts.update(
-                                step + 1,
-                                train_state,
-                                stats['local_energy/std'].mean(),
-                            )
+                            chkpts.update(step + 1, train_state)
                         if metric_logger:
                             metric_logger.update(step, stats, {}, mol_idxs)
                         observable_samples |= {
@@ -368,20 +379,23 @@ def train(  # noqa: C901
 
 def update_progress(pbar, best_ene, ewm_energies, mol_idxs, stats):
     r"""Update the tqdm progress bar, maybe print progress message."""
-    for i, mol_idx in enumerate(mol_idxs):
-        ewm_energies[mol_idx] = [
-            ufloat(mean, sqerr)
-            for (mean, sqerr) in zip(
-                stats['energy/ewm'][i], stats['energy/ewm_error'][i]
+    if stats.get('energy/ewm') is not None:
+        for i, mol_idx in enumerate(mol_idxs):
+            ewm_energies[mol_idx] = [
+                ufloat(mean, sqerr)
+                for (mean, sqerr) in zip(
+                    stats['energy/ewm'][i], stats['energy/ewm_error'][i]
+                )
+            ]
+        energies = '|'.join(
+            '(' + '|'.join(f'{es:S}' for es in em) + ')' for em in ewm_energies
+        )
+        pbar.set_postfix(E=energies)
+        if best_ene is None or jnp.any(
+            jnp.array(
+                jax.tree.map(lambda x, y: x.s < 0.5 * y.s, ewm_energies, best_ene)
             )
-        ]
-    energies = '|'.join(
-        '(' + '|'.join(f'{es:S}' for es in em) + ')' for em in ewm_energies
-    )
-    pbar.set_postfix(E=energies)
-    if best_ene is None or jnp.any(
-        jnp.array(jax.tree.map(lambda x, y: x.s < 0.5 * y.s, ewm_energies, best_ene))
-    ):
-        best_ene = ewm_energies
-        log.info(f'Progress: {pbar.n + 1}/{pbar.total}, energy = {energies}')
+        ):
+            best_ene = ewm_energies
+            log.info(f'Progress: {pbar.n + 1}/{pbar.total}, energy = {energies}')
     return ewm_energies, best_ene

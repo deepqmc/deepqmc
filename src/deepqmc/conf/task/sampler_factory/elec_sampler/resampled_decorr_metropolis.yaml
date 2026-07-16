@@ -1,0 +1,15 @@
+_target_: deepqmc.sampling.combine_samplers
+_partial_: true
+samplers:
+  - _target_: deepqmc.sampling.ResampledSampler
+    threshold: 0.95
+  - _target_: deepqmc.sampling.DecorrSampler
+    length: 20
+  - _target_: deepqmc.sampling.MetropolisSampler
+    _partial_: true
+    tau: 1.0
+    max_age: 20
+    sample_initializer:
+      _target_: deepqmc.sampling.electron_sample_initializers.AtomCenteredElectronInitializer
+      atom_centered_distribution:
+        _target_: deepqmc.sampling.electron_sample_initializers.ShellBasedDistribution

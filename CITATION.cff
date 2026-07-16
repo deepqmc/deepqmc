@@ -1,0 +1,107 @@
+cff-version: 1.2.0
+message: >-
+  If you use DeepQMC for your work, please cite the preferred citation below.
+  If your work involves excited-state optimization or geometrically
+  transferable training specifically, please also cite the corresponding
+  paper listed under "references".
+title: DeepQMC
+type: software
+authors:
+  - given-names: Jan
+    family-names: Hermann
+  - given-names: Zeno
+    family-names: Schätzle
+    email: zeno.schaetzle@fu-berlin.de
+  - given-names: Péter Bernát
+    family-names: Szabó
+    email: peter.bernat.szabo@fu-berlin.de
+  - given-names: M.
+    family-names: Mezera
+  - name: DeepQMC Contributors
+repository-code: https://github.com/deepqmc/deepqmc
+url: https://deepqmc.github.io
+doi: 10.5281/zenodo.3960826
+license: MIT
+preferred-citation:
+  type: article
+  title: >-
+    DeepQMC: An open-source software suite for variational optimization of
+    deep-learning molecular wave functions
+  authors:
+    - given-names: Zeno
+      family-names: Schätzle
+    - given-names: Péter Bernát
+      family-names: Szabó
+    - given-names: M.
+      family-names: Mezera
+    - given-names: Jan
+      family-names: Hermann
+    - given-names: Frank
+      family-names: Noé
+  journal: The Journal of Chemical Physics
+  volume: 159
+  issue: 9
+  start: "094108"
+  year: 2023
+  month: 9
+  doi: 10.1063/5.0157512
+  url: https://doi.org/10.1063/5.0157512
+references:
+  - type: article
+    title: >-
+      An Improved Penalty-Based Excited-State Variational Monte Carlo
+      Approach with Deep-Learning Ansatzes
+    authors:
+      - given-names: Péter Bernát
+        family-names: Szabó
+      - given-names: Zeno
+        family-names: Schätzle
+      - given-names: M.
+        family-names: Entwistle
+      - given-names: Frank
+        family-names: Noé
+    journal: Journal of Chemical Theory and Computation
+    year: 2024
+    month: 8
+    doi: 10.1021/acs.jctc.4c00678
+    url: https://doi.org/10.1021/acs.jctc.4c00678
+    notes: Cite this when using the excited-state optimization approach.
+  - type: unpublished
+    title: >-
+      Ab-Initio Simulation of Excited-State Potential Energy Surfaces with
+      Transferable Deep Quantum Monte Carlo
+    authors:
+      - given-names: Zeno
+        family-names: Schätzle
+      - given-names: Péter Bernát
+        family-names: Szabó
+      - given-names: A.
+        family-names: Cuzzocrea
+      - given-names: Frank
+        family-names: Noé
+    year: 2025
+    month: 3
+    doi: 10.48550/arXiv.2503.19847
+    url: https://doi.org/10.48550/arXiv.2503.19847
+    notes: >-
+      Cite this when using geometrically transferable training on a fixed
+      set of molecular configurations, the dynamic overlap penalty, or
+      non-adiabatic coupling calculations.
+  - type: unpublished
+    title: >-
+      Enabling ab initio geometry optimization of strongly correlated
+      systems with transferable deep quantum Monte Carlo
+    authors:
+      - given-names: Péter Bernát
+        family-names: Szabó
+      - given-names: Zeno
+        family-names: Schätzle
+      - given-names: Frank
+        family-names: Noé
+    year: 2026
+    doi: 10.48550/arXiv.2603.25381
+    url: https://doi.org/10.48550/arXiv.2603.25381
+    notes: >-
+      Cite this when using continuous transferable simulation of potential
+      energy surfaces via dynamic nuclear geometry sampling, e.g. for ab
+      initio geometry optimization.

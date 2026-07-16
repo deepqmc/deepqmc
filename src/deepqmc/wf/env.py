@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from jax.nn import softplus
 from kfac_jax import register_scale_and_shift
 
-from ..physics import pairwise_diffs
+from ..geom import pairwise_diffs
 from ..utils import norm, unflatten
 
 
@@ -193,14 +193,30 @@ class SimplifiedNucleusDependentEnvelopes(hk.Module):
                     nuc_params['zetas_down'], self.per_orbital_exponent
                 ),
             )
-        pis = (
-            self.pis
-            if self.fixed_pi
-            else (
+        if self.fixed_pi:
+            pis = self.pis
+        elif nuc_params is None:
+            pis = (
+                self.reshape_parameters(
+                    hk.get_parameter(
+                        'pis_up',
+                        (self.n_nuc, self.n_orb, self.n_det, self.n_env_per_nuc),
+                    ),
+                    True,
+                ),
+                self.reshape_parameters(
+                    hk.get_parameter(
+                        'pis_down',
+                        (self.n_nuc, self.n_orb, self.n_det, self.n_env_per_nuc),
+                    ),
+                    True,
+                ),
+            )
+        else:
+            pis = (
                 self.reshape_parameters(nuc_params['pis_up'], True),
                 self.reshape_parameters(nuc_params['pis_down'], True),
             )
-        )
         return jnp.concatenate(
             [
                 self.call_for_one_spin(zeta, pi, dist)

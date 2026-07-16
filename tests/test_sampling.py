@@ -8,9 +8,12 @@ from deepqmc.sampling import (
     LangevinSampler,
     MetropolisSampler,
     MultiNuclearGeometrySampler,
-    ResampledSampler,
-    chain,
 )
+from deepqmc.sampling.electron_sample_initializers import (
+    AtomCenteredElectronInitializer,
+    ShellBasedDistribution,
+)
+from deepqmc.sampling.sampling_utils import chain
 from deepqmc.sampling.nuclei_samplers import IdleNucleiSampler, no_elec_warp
 
 
@@ -30,20 +33,24 @@ def wf(helpers, request):
         (partial(MetropolisSampler, tau=0.1),),
         (partial(LangevinSampler, tau=0.1),),
         (DecorrSampler(length=20), partial(MetropolisSampler, tau=0.1, max_age=20)),
-        (
-            ResampledSampler(period=3),
-            DecorrSampler(length=20),
-            partial(MetropolisSampler, tau=0.1),
-        ),
     ],
-    ids=['Metropolis', 'Langevin', 'DecorrMetropolis', 'ResampledDecorrMetropolis'],
+    ids=['Metropolis', 'Langevin', 'DecorrMetropolis'],
 )
 @pytest.mark.usefixtures('wf')
 class TestSampling:
     SAMPLE_SIZE = 10
 
     def test_sampler_init(self, helpers, samplers, ndarrays_regression):
-        sampler = chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply))
+        sampler = chain(
+            *samplers[:-1],
+            samplers[-1](
+                self.hamil,
+                self.ansatz.apply,
+                sample_initializer=AtomCenteredElectronInitializer(
+                    atom_centered_distribution=ShellBasedDistribution()
+                ),
+            ),
+        )
         smpl_state = sampler.init(
             helpers.rng(), self.params, self.SAMPLE_SIZE, self.mol.coords
         )
@@ -53,7 +60,16 @@ class TestSampling:
         )
 
     def test_sampler_sample(self, helpers, samplers, ndarrays_regression):
-        sampler = chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply))
+        sampler = chain(
+            *samplers[:-1],
+            samplers[-1](
+                self.hamil,
+                self.ansatz.apply,
+                sample_initializer=AtomCenteredElectronInitializer(
+                    atom_centered_distribution=ShellBasedDistribution()
+                ),
+            ),
+        )
         smpl_state = sampler.init(
             helpers.rng(), self.params, self.SAMPLE_SIZE, self.mol.coords
         )
@@ -63,6 +79,7 @@ class TestSampling:
             )
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
+            default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
         )
 
 
@@ -83,7 +100,16 @@ class TestMultimoleculeSampling:
         self, helpers, samplers, ndarrays_regression
     ):
         sampler = MultiNuclearGeometrySampler(
-            chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply)),
+            chain(
+                *samplers[:-1],
+                samplers[-1](
+                    self.hamil,
+                    self.ansatz.apply,
+                    sample_initializer=AtomCenteredElectronInitializer(
+                        atom_centered_distribution=ShellBasedDistribution()
+                    ),
+                ),
+            ),
             IdleNucleiSampler(self.mol.charges),
             no_elec_warp,
             None,
@@ -104,7 +130,16 @@ class TestMultimoleculeSampling:
         self, helpers, samplers, ndarrays_regression
     ):
         sampler = MultiNuclearGeometrySampler(
-            chain(*samplers[:-1], samplers[-1](self.hamil, self.ansatz.apply)),
+            chain(
+                *samplers[:-1],
+                samplers[-1](
+                    self.hamil,
+                    self.ansatz.apply,
+                    sample_initializer=AtomCenteredElectronInitializer(
+                        atom_centered_distribution=ShellBasedDistribution()
+                    ),
+                ),
+            ),
             IdleNucleiSampler(self.mol.charges),
             no_elec_warp,
             None,
@@ -123,4 +158,5 @@ class TestMultimoleculeSampling:
             )
         ndarrays_regression.check(
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
+            default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
         )

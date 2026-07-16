@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+### Added
+
+- Geometrically transferable training, allowing a single ansatz to be optimized jointly across multiple molecular configurations (`task=train_transferable`). The underlying mechanism has been in place since 1.1.0 but was never documented until now:
+    - `TransPsiformer`, a transferable extension of Psiformer that explicitly accounts for changes in the nuclear geometry
+    - Dynamic sampling of the nuclear geometry directly in internal (bond length/angle/dihedral) coordinates throughout training, enabling continuous potential energy surfaces and ab initio geometry optimization
+- Pseudo-Hamiltonians, a local alternative to effective core potentials, for S, Cr, Mn, Fe, Co, Ni, Cu and Zn
+- Antithetic-sampling variance reduction for Hellmann-Feynman force estimators
+- Spin-exchange proposal for electron sampling
+- Spin penalty applicable to a subset of electronic states, with linear scaling
+- `deepqmc.postprocess`, a module for loading checkpoints, reinstantiating trained ansatzes, and computing Monte Carlo sampling statistics from a finished run
+- Support for specifying observable monitors by name in config files
+
+### Changed
+
+- Migrated code style enforcement from flake8/isort/mypy to ruff and pyright
+- Extensive docstring and type-hint overhaul across the codebase
+- Pinned to Python 3.12 or newer
+
+### Fixed
+
+- Compatibility with the PRNG key changes in JAX v0.5.0
+- Various dependency-resolution and CI issues
+
+### Removed
+
+- Outdated scripts and unused sampler/ansatz configurations
+
 ## [1.2.0] - 2024-09-10
 
 ### Added
@@ -76,7 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove defaults from code and fully transition to ansatz initialization through hydra
 - Implement pseudo potentials
 - Implement training on multiple molecular configurations (undocumented)
-- Add configuration files for PauliNet, FermiNet, DeepErwin and PsiFormer
+- Add configuration files for PauliNet, FermiNet, DeepErwin and Psiformer
 - Add multi-GPU support
 
 ### Fixed
@@ -108,8 +137,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Complete rewrite of the DeepQMC package in JAX
-
-## [Unreleased]
 
 ### Removed
 

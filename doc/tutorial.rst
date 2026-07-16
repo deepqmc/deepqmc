@@ -3,7 +3,8 @@
 Tutorial
 ========
 
-This section exemplifies the use of the API of DeepQMC. For running calculations it is recommended to use the high-level command line API, which can be fully configured through hydra (see :ref:`cli <cli>`). For further information and a more detailed descriptions of the functions presented here consult the :ref:`api <api>` documentation and the accompanying software paper [Schaetzle23]_.
+This section exemplifies the use of the API of DeepQMC. For running calculations it is recommended to use the high-level command line interface, which can be fully configured through hydra (see :ref:`cli <cli>`).
+For further information and a more detailed descriptions of the functions presented here consult the :ref:`api <api>` documentation and the accompanying software paper [Schaetzle23]_.
 
 Create a molecule
 -----------------
@@ -47,7 +48,6 @@ The neural network wave function ansatz is available in the :mod:`deepqmc.wf` su
 
     import os
 
-    import haiku as hk
     from hydra import compose, initialize_config_dir
     from hydra.utils import instantiate
 
@@ -73,12 +73,20 @@ Instantiate a sampler
 The variational Monte Carlo method requires sampling the probability density associated with the square of the wave function. A :class:`~deepqmc.sampling.Sampler` can be instantiated from a :class:`~deepqmc.hamil.MolecularHamiltonian` and a wave function. The instantiation is handled within the :func:`~deepqmc.train.train` wrapper of the training loop. :func:`~deepqmc.train.train` therefore accepts a sampler factory, that is a function that constructs a :class:`~deepqmc.sampling.Sampler`.::
 
     from deepqmc.sampling import initialize_sampling, MetropolisSampler, DecorrSampler, combine_samplers
+    from deepqmc.sampling.electron_sample_initializers import AtomCenteredElectronInitializer, ShellBasedDistribution
     from functools import partial
 
-    elec_sampler = partial(combine_samplers, samplers=[DecorrSampler(length=20), MetropolisSampler])
+    metropolis_sampler = partial(
+        MetropolisSampler,
+        sample_initializer=AtomCenteredElectronInitializer(
+            atom_centered_distribution=ShellBasedDistribution()
+        ),
+    )
+    elec_sampler = partial(combine_samplers, samplers=[DecorrSampler(length=20), metropolis_sampler])
     sampler_factory = partial(initialize_sampling, elec_sampler=elec_sampler)
 
 The above example combines the :class:`~deepqmc.sampling.DecorrSampler` and the :class:`~deepqmc.sampling.MetropolisSampler` to create a Metropolis-Hastings sampler that performs 20 decorrelating steps each time before returning the next set of samples.
+:class:`~deepqmc.sampling.MetropolisSampler` additionally requires a ``sample_initializer``, used to generate the very first electron configuration before equilibration; here :class:`~deepqmc.sampling.electron_sample_initializers.AtomCenteredElectronInitializer` combined with a :class:`~deepqmc.sampling.electron_sample_initializers.ShellBasedDistribution` places electrons in atomic shells around the nuclei according to their charges.
 
 Optimize the ansatz
 -------------------
@@ -112,9 +120,10 @@ For a detailed description of the excited states methodology, see [Szabo24]_.
 Logging
 -------
 
-The terminal output shows only how far has the training progressed and the current estimate of the energy. More detailed monitoring of the training is available via `Tensorboard <https://www.tensorflow.org/tensorboard>`_. When :func:`~deepqmc.train.train` is called with an optional ``workdir`` argument, the training run creates a Tensorboard event file::
+The terminal output shows only how far has the training progressed and the current estimate of the energy. More detailed monitoring of the training is available via `Tensorboard <https://www.tensorflow.org/tensorboard>`_. When :func:`~deepqmc.train.train` is called with an optional ``workdir`` argument, the training run creates a Tensorboard event file.
+The local energies are logged to disk only if requested via the ``observable_monitors`` argument; passing the string ``'local_energy'`` is a shorthand for :class:`~deepqmc.observable.EnergyMonitor`, DeepQMC's built-in monitor for the local energy::
 
-    train(H, ansatz, kfac, sampler_factory, steps=10000, electron_batch_size=2000, seed=42, workdir='runs/01')
+    train(H, ansatz, kfac, sampler_factory, steps=10000, electron_batch_size=2000, workdir='runs/01', observable_monitors=['local_energy'])
 
 .. code:: none
 
@@ -129,16 +138,16 @@ Furthermore, several other quantities are dumped during the training to the ``wo
 
     >>> import h5py
     >>> with h5py.File('runs/01/training/result.h5') as f: print(f.keys(),f['local_energy'].keys())
-    <KeysViewHDF5 ['local_energy']> <KeysViewHDF5 ['max', 'mean', 'min', 'samples', 'std']>
+    <KeysViewHDF5 ['local_energy', 'psi', 'sampling']> <KeysViewHDF5 ['max', 'mean', 'min', 'samples', 'std']>
 
 Additional observables can also be computed and logged during a run by specifying the ``observable_monitors`` argument to :func:`~deepqmc.train.train`.
 For example, to evaluate the spin of the wave function during training one can use the :class:`~deepqmc.observable.SpinMonitor` class::
 
     from deepqmc.observable import SpinMonitor
-    observable_monitors = [SpinMonitor(period=1, save_samples=True)]
-    train(H, ansatz, kfac, sampler_factory, steps=10000, electron_batch_size=2000, seed=42, workdir='runs/02', observable_monitors=observable_monitors)
+    observable_monitors = ['local_energy', SpinMonitor(period=1, save_samples=True)]
+    train(H, ansatz, kfac, sampler_factory, steps=10000, electron_batch_size=2000, workdir='runs/02', observable_monitors=observable_monitors)
 
-Then the ``runs/02/training/result.h5`` file will contain the keys ``spin/samples``, ``spin/mean``, and ``spin/std``.
+``observable_monitors`` accepts a mix of monitor names and already-constructed monitor instances, as shown above. The ``runs/02/training/result.h5`` file will then additionally contain the keys ``spin/samples``, ``spin/mean``, and ``spin/std``.
 Note: since logging all samples can result in very large ``result.h5`` files, it may be useful to disable saving of individual samples by setting save_samples=False if not explicitly required.
 See also the :mod:`~deepqmc.observable` submodule for more details.
 
@@ -148,16 +157,23 @@ Evaluate the energy
 A rough estimate of the expectation value of the energy of a trained wave function can be obtained already from the local energies of the training run. A rigorous estimation of the energy expectation value up to the statistical sampling error can be obtained when evaluating the energy expectation value of the trained wavefunction without further optimization. This is achieved by passing a training checkpoint to the :func:`~deepqmc.train` function, and specifying the optimizer to be ``None``::
 
     >>> from deepqmc.log import CheckpointStore
-    >>> step, train_state =CheckpointStore.load('runs/01/training/chkpt-10000.pt')
-    >>> train(H, ansatz, None, sampler_factory, train_state=train_state, steps=500, electron_batch_size=2000, seed=42, workdir='runs/01')
+    >>> step, train_state = CheckpointStore.load('runs/01/training/chkpt-10000.pt')
+    >>> train(H, ansatz, None, sampler_factory, train_state=train_state, steps=500, electron_batch_size=2000, workdir='runs/01', observable_monitors=['local_energy'])
     evaluating: 100%|█████████| 500/500 [01:20<00:00,  6.20it/s, E=-8.07000(19)]
 
 The evaluation generates the same type of logs as the training, but writes to ``workdir/evaluation`` instead. The final energy can be read from the progress bar, the Tensorboard event file or computed from the local energies logged to the ``workdir/evaluation/result.h5`` file.
 
+    >>> with h5py.File('runs/01/evaluation/result.h5') as f:
+    >>>     E_loc = f['local_energy/samples'][:].squeeze()
+
+    >>> mean, error, _ = clipped_mean_and_sampling_error(E_loc)
+    >>> print(f'The energy of the trained wave function is {mean:.4f}+-{error:.4f}')
+    The energy of the trained wave function is -8.0701+-0.0002
+
 Pseudopotentials
 -------------------
 
-DeepQMC currently supports ``bfd`` [Burkatzki07]_ and ``ccECP`` [Bennett17]_ pseudopotentials as well as a local pseudopotential (or pseudo Hamiltonian, ``PH``) from [Ichibha23]_ and [Fu25]_. These can be enabled by passing the ``ecp_type`` argument to the Hamiltonian definition. A certain number of core electrons are then replaced with the specified pseudopotential, reducing the total number of electrons explicitly treated and thus decreasing the computational cost. The ``PH`` option provides the greatest speedup in iteration time but is only available for a limited set of elements (S and Cr-Zn). The pseudopotentials for all nuclei heavier than He in the molecule will be used if the argument ``ecp_type`` is passed. They can be turned off or on for individual nuclei by specifying ``ecp_mask``, a boolean array with ``True`` (``False``) for each nucleus with pseudopotential turned on (off). The following example defines the Hamiltonian of a TiO molecule where the titanium core is replaced by a pseudopotential and the oxygen core is left unaffected::
+DeepQMC currently supports ``bfd`` [Burkatzki07]_ and ``ccECP`` [Bennett17]_ pseudopotentials as well as a local pseudopotential (or pseudo Hamiltonian, ``PH``) from [Ichibha23]_ and [Fu26]_. These can be enabled by passing the ``ecp_type`` argument to the Hamiltonian definition. A certain number of core electrons are then replaced with the specified pseudopotential, reducing the total number of electrons explicitly treated and thus decreasing the computational cost. The ``PH`` option provides the greatest speedup in iteration time but is only available for a limited set of elements (S and Cr-Zn). The pseudopotentials for all nuclei heavier than He in the molecule will be used if the argument ``ecp_type`` is passed. They can be turned off or on for individual nuclei by specifying ``ecp_mask``, a boolean array with ``True`` (``False``) for each nucleus with pseudopotential turned on (off). The following example defines the Hamiltonian of a TiO molecule where the titanium core is replaced by a pseudopotential and the oxygen core is left unaffected::
 
     mol = Molecule(  # TiO
         coords=[[0.0, 0.0, 0.0], [1.668, 0.0, 0.0]],

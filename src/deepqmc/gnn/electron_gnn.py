@@ -4,7 +4,6 @@ from itertools import accumulate
 import haiku as hk
 import jax
 import jax.numpy as jnp
-from jax import tree_util
 
 from ..hkext import MLP
 from .graph import Graph, GraphNodes, GraphUpdate, MolecularGraphEdgeBuilder
@@ -13,9 +12,10 @@ from .utils import NodeEdgeMapping
 
 class ElectronGNNLayer(hk.Module):
     r"""
-    The message passing layer of :class:`ElectronGNN`.
+    The message passing layer of :class:`~deepqmc.gnn.electron_gnn.ElectronGNN`.
 
-    Derived from :class:`~deepqmc.gnn.gnn.MessagePassingLayer`.
+    Implements a message passing layer for the
+    :class:`~deepqmc.gnn.electron_gnn.ElectronGNN` architecture.
 
     Args:
         n_interactions (int): the number of message passing interactions.
@@ -24,10 +24,10 @@ class ElectronGNNLayer(hk.Module):
         n_up (int): the number of spin up electrons.
         n_down (int): the number of spin down electrons.
         embedding_dim (int): the length of the electron embedding vectors.
-        edge_types (Tuple[str]): the types of edges to consider.
+        edge_types (tuple[str]): the types of edges to consider.
         self_interaction (bool): whether to consider edges where the sender and
             receiver electrons are the same.
-        node_data (Dict[str, Any]): a dictionary containing information about the
+        node_data (dict[str, Any]): a dictionary containing information about the
             nodes of the graph.
         two_particle_stream_dim (int): the feature dimension of the two particle
             streams.
@@ -47,7 +47,7 @@ class ElectronGNNLayer(hk.Module):
         update_features (list[~deepqmc.gnn.update_features.UpdateFeature]): a list of
             partially initialized update feature classes to use when computing the
             update features of the one particle embeddings. For more details see the
-            documentation of :class:`deepqmc.gnn.update_features`.
+            documentation of :mod:`~deepqmc.gnn.update_features`.
         update_rule (str): how to combine the update features for the update of the
             one particle embeddings.
             Possible values:
@@ -276,10 +276,8 @@ class ElectronGNN(hk.Module):
     r"""
     A neural network acting on graphs defined by electrons and nuclei.
 
-    Derived from :class:`~deepqmc.gnn.gnn.GraphNeuralNetwork`.
-
     Args:
-        hamil (:class:`~deepqmc.hamil.MolecularHamiltonian`): the Hamiltonian of
+        hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of
             the system on which the graph is defined.
         embedding_dim (int): the length of the electron embedding vectors.
         n_interactions (int): number of message passing interactions.
@@ -297,14 +295,14 @@ class ElectronGNN(hk.Module):
             receiver electrons are the same.
         two_particle_stream_dim (int): the feature dimension of the two particle
             streams. Only active if :data:`deep_features` are used.
-        nuclei_embedding (~typing.Type[~deepqmc.gnn.electron_gnn.NucleiEmbedding]):
+        nuclei_embedding (type[~deepqmc.gnn.electron_gnn.NucleiEmbedding]):
             optional, the instance responsible for creating the initial nuclear
             embeddings. Set to :data:`None` if nuclear embeddings are not needed.
-        electron_embedding (~typing.Type[~deepqmc.gnn.electron_gnn.ElectronEmbedding]):
+        electron_embedding (type[~deepqmc.gnn.electron_gnn.ElectronEmbedding]):
             the instance that creates the initial electron embeddings.
-        layer_factory (~typing.Type[~deepqmc.gnn.electron_gnn.ElectronGNNLayer]): a
+        layer_factory (type[~deepqmc.gnn.electron_gnn.ElectronGNNLayer]): a
             callable that generates a layer of the GNN.
-        ghost_coords (jax.Array): optional, specifies the coordinates of one or more
+        ghost_coords (~jax.Array): optional, specifies the coordinates of one or more
             ghost atoms, useful for breaking spatial symmetries of the nuclear geometry.
     """
 
@@ -403,12 +401,12 @@ class ElectronGNN(hk.Module):
         Execute the graph neural network.
 
         Args:
-            phys_conf (PhysicalConfiguration): the physical configuration
-                of the molecule.
+            phys_conf (~deepqmc.types.PhysicalConfiguration): the physical
+                configuration of the molecule.
 
         Returns:
-            float, (:math:`N_\text{elec}`, :data:`embedding_dim`):
-            the final embeddings of the electrons.
+            the final electron and nuclear embeddings, bundled as a ``GraphNodes``
+            named tuple.
         """
         if self.ghost_coords is not None:
             phys_conf = phys_conf._replace(
@@ -436,7 +434,7 @@ class NucleiEmbedding(hk.Module):
     Args:
         n_up (int): the number of spin up electrons.
         n_down (int): the number of spin down electrons.
-        charges (jax.Array): the nuclear charges of the molecule.
+        charges (~jax.Array): the nuclear charges of the molecule.
         n_atom_types (int): the number of different atom types in the molecule.
         embedding_dim (int): the length of the output embedding vector
         atom_type_embedding (bool): if :data:`True`, initial embeddings are the same
@@ -552,7 +550,7 @@ class ElectronEmbedding(hk.Module):
             - ``2``: treat spin up and spin down electrons as distinguishable already
                 in the initial embeddings.
 
-        elec_types (jax.Array): an integer array with length equal to the number of
+        elec_types (~jax.Array): an integer array with length equal to the number of
             electrons, with entries between ``0`` and ``n_elec_types``. Specifies the
             type for each electron.
         positional_embeddings (dict): optional, if not ``None``, a ``dict`` with edge
@@ -600,14 +598,14 @@ class ElectronEmbedding(hk.Module):
                 self.positional_embeddings.keys(),
                 self_interaction=False,
             )
-            feats = tree_util.tree_map(
+            feats = jax.tree.map(
                 lambda f, e: f(e.single_array)
                 .swapaxes(0, 1)
                 .reshape(self.n_up + self.n_down, -1),
                 self.positional_embeddings,
                 edge_factory(phys_conf),
             )
-            x = tree_util.tree_reduce(partial(jnp.concatenate, axis=1), feats)
+            x = jax.tree.reduce(partial(jnp.concatenate, axis=1), feats)
             if self.use_spin:
                 spins = jnp.concatenate([jnp.ones(self.n_up), -jnp.ones(self.n_down)])[
                     :, None

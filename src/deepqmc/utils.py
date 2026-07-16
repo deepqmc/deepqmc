@@ -1,11 +1,15 @@
-from collections.abc import MutableMapping, Sequence
-from typing import Optional, TypeVar, Union
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable, MutableMapping, Sequence
+from functools import partial
+from typing import Optional, TypeVar
 
 import jax
 import jax.numpy as jnp
 from jax import ops
 from jax.random import uniform
 from jax.scipy.special import gammaln
+from jaxtyping import PyTree
 
 from .types import Stats
 
@@ -14,11 +18,11 @@ __all__ = ()
 T = TypeVar('T')
 
 
-def flatten(x, start_axis=0):
+def flatten(x: jax.Array, start_axis: int = 0) -> jax.Array:
     return x.reshape(*x.shape[:start_axis], -1)
 
 
-def unflatten(x, axis, shape):
+def unflatten(x: jax.Array, axis: int, shape: tuple[int, ...]) -> jax.Array:
     if axis < 0:
         axis = len(x.shape) + axis
     begin = x.shape[:axis]
@@ -55,24 +59,24 @@ def triu_flat(x):
     return x[..., i, j]
 
 
-def tree_norm(x):
-    return jax.tree_util.tree_reduce(lambda norm, x: norm + jnp.linalg.norm(x), x, 0)
+def tree_norm(x: PyTree) -> float:
+    return jax.tree.reduce(lambda norm, x: norm + jnp.linalg.norm(x), x, 0.0)
 
 
-def tree_stack(trees: list[T]) -> T:
-    return jax.tree_util.tree_map(lambda *v: jnp.stack(v), *trees)
+def tree_stack(trees: list[PyTree]) -> PyTree:
+    return jax.tree.map(lambda *v: jnp.stack(v), *trees)
 
 
-def tree_unstack(tree: T) -> list[T]:
-    leaves, treedef = jax.tree_util.tree_flatten(tree)
+def tree_unstack(tree: PyTree) -> list[PyTree]:
+    leaves, treedef = jax.tree.flatten(tree)
     return [treedef.unflatten(leaf) for leaf in zip(*leaves)]
 
 
-def tree_any(x):
-    return jax.tree_util.tree_reduce(lambda is_any, leaf: is_any or leaf, x, False)
+def tree_any(x: PyTree) -> bool:
+    return jax.tree.reduce(lambda is_any, leaf: is_any or leaf, x, False)
 
 
-def norm(rs, safe=False, axis=-1):
+def norm(rs: jax.Array, safe: bool = False, axis: int = -1) -> jax.Array:
     eps = jnp.finfo(rs.dtype).eps
     return (
         jnp.sqrt(eps + (rs * rs).sum(axis=axis))
@@ -81,18 +85,50 @@ def norm(rs, safe=False, axis=-1):
     )
 
 
-def split_dict(dct, cond):
-    included, excluded = {}, {}
+def split_dict(
+    dct: dict[str, T], cond: Callable[[str], bool]
+) -> tuple[dict[str, T], dict[str, T]]:
+    included: dict[str, T] = {}
+    excluded: dict[str, T] = {}
     for k, v in dct.items():
         (included if cond(k) else excluded)[k] = v
     return included, excluded
 
 
-def InverseSchedule(init_value, decay_rate):
+def InverseSchedule(init_value: float, decay_rate: float) -> Callable[[int], float]:
+    r"""Create a schedule that decays inversely proportional to the step count.
+
+    Returns a callable computing :math:`f(n) = \text{init\_value} / (1 + n /
+    \text{decay\_rate})`. Commonly used as the learning rate or damping schedule
+    of :class:`~deepqmc.optimizer.KFACOptimizer`, e.g. via
+    ``_target_: deepqmc.utils.InverseSchedule`` in a hydra config.
+
+    Args:
+        init_value (float): the value of the schedule at step 0.
+        decay_rate (float): the number of steps after which the value has decayed
+            to half of :data:`init_value`.
+
+    Returns:
+        ~collections.abc.Callable[[int], float]: a function mapping the step
+        number to the current schedule value.
+    """
     return lambda n: init_value / (1 + n / decay_rate)
 
 
-def ConstantSchedule(value):
+def ConstantSchedule(value: float) -> Callable[[int], float]:
+    r"""Create a schedule that returns the same value at every step.
+
+    Commonly used as the learning rate or damping schedule of
+    :class:`~deepqmc.optimizer.KFACOptimizer`, e.g. via
+    ``_target_: deepqmc.utils.ConstantSchedule`` in a hydra config.
+
+    Args:
+        value (float): the constant value of the schedule.
+
+    Returns:
+        ~collections.abc.Callable[[int], float]: a function mapping the step
+        number to :data:`value`.
+    """
     return lambda n: value
 
 
@@ -131,7 +167,7 @@ def per_mol_stats(
     mol_idx: jax.Array,
     prefix: str,
     mean_only: bool = False,
-) -> Union[jax.Array, Stats]:
+) -> jax.Array | Stats:
     mean = segment_nanmean(data, mol_idx, n_mols)
     if mean_only:
         return mean
@@ -153,14 +189,14 @@ def log_squeeze(x: jax.Array):
 
 
 def weighted_std(
-    x: jax.Array, weights: jax.Array, axis: Union[int, Sequence[int], None] = None
+    x: jax.Array, weights: jax.Array, axis: int | Sequence[int] | None = None
 ) -> jax.Array:
     mean = jnp.average(x, axis=axis, weights=weights, keepdims=True)
     variance = jnp.average((x - mean) ** 2, axis=axis, weights=weights)
     return jnp.sqrt(variance)
 
 
-def filter_dict(x: MutableMapping, keys_whitelist: Optional[list[str]]) -> dict:
+def filter_dict(x: MutableMapping, keys_whitelist: Optional[Iterable[str]]) -> dict:
     x_filtered = (
         {
             key: value
@@ -197,3 +233,102 @@ def better_where(condition, true_val, false_val):
         condition, range(len(condition.shape), len(true_val.shape))
     )
     return jnp.where(condition, true_val, false_val)
+
+
+def to_tuple(o):
+    return tuple([to_tuple(i) for i in o]) if isinstance(o, Iterable) else o
+
+
+def scaled_normal(key, shape, mean=0, std=1):
+    return mean + jax.random.normal(key, shape) * std
+
+
+def broadcast_pytree_structure(x, y) -> tuple:
+    """Recursively broadcast two pytrees at the structure level."""
+
+    class CombinedLeaf:
+        """A helper class which jax.tree.map recognizes as a leaf by default."""
+
+        __slots__ = ('x', 'y')
+
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+
+    def broadcast_and_combine_pytree_structure(x, y):
+        x_children = jax.tree.structure(x).children()
+        y_children = jax.tree.structure(y).children()
+        if x_children and y_children:
+            return jax.tree.map(
+                broadcast_and_combine_pytree_structure,
+                x,
+                y,
+                is_leaf=lambda x: x is None,
+            )
+
+        if not y_children:
+            return jax.tree.map(lambda x_leaf: CombinedLeaf(x_leaf, y), x)
+
+        if not x_children:
+            return jax.tree.map(lambda y_leaf: CombinedLeaf(x, y_leaf), y)
+
+    combined = broadcast_and_combine_pytree_structure(x, y)
+    return jax.tree.map(lambda combined_leaf: combined_leaf.x, combined), jax.tree.map(
+        lambda combined_leaf: combined_leaf.y, combined
+    )
+
+
+def batched_vmap(func, batch_size: int, in_axes: int | tuple = 0, out_axis: int = 0):
+    """A version of jax.vmap that splits the mapped axis into batches of a given size.
+
+    Useful to reduce the memory requirements of vmap.
+    """
+
+    def is_none(x) -> bool:
+        return x is None
+
+    def arg_size_reducer(acc: int | None, x: int | None):
+        if x is None:
+            return acc
+        if acc is None:
+            return x
+        assert acc == x, 'All mapped axes must have the same size'
+        return acc
+
+    def batch_slicer(i_batch: int, x: jax.Array, axis: int | None) -> jax.Array:
+        if axis is None:
+            return x
+        return jnp.take(
+            x,
+            jnp.arange(i_batch * batch_size, (i_batch + 1) * batch_size),
+            axis=axis,
+            unique_indices=True,
+            indices_are_sorted=True,
+        )
+
+    def mapped_func(*args):
+        broadcasted_in_axes, _ = broadcast_pytree_structure(in_axes, args)
+        arg_size = jax.tree.reduce(
+            arg_size_reducer,
+            jax.tree.map(
+                lambda axis, x: None if axis is None else x.shape[axis],
+                broadcasted_in_axes,
+                args,
+                is_leaf=is_none,
+            ),
+            initializer=None,
+        )
+        assert arg_size is not None, 'At least one argument must be mapped'
+
+        outs = []
+        for i_batch in range(arg_size // batch_size):
+            args_batch = jax.tree.map(
+                partial(batch_slicer, i_batch),
+                args,
+                broadcasted_in_axes,
+                is_leaf=is_none,
+            )
+            outs.append(jax.vmap(func, in_axes)(*args_batch))
+        return jax.tree.map(lambda *x: jnp.concatenate(x, axis=out_axis), *outs)
+
+    return mapped_func

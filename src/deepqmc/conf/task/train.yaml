@@ -1,5 +1,5 @@
 defaults:
-  - sampler_factory: decorr_langevin
+  - sampler_factory: default
   - opt: kfac
 _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
@@ -31,6 +31,8 @@ loss_function_factory:
 mols:
   _target_: deepqmc.app.read_molecules
   directory: null
+observable_monitors:
+  - local_energy
 metric_logger_constructor:
   _target_: deepqmc.log.TensorboardMetricLogger
   _partial_: true

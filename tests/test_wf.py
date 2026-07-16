@@ -1,7 +1,7 @@
 import jax_dataclasses as jdc
 from jax import grad
 
-from deepqmc.physics import laplacian
+from deepqmc.physics import reverse_forward_laplacian
 
 
 class TestNeuralNetworkWaveFunction:
@@ -26,7 +26,7 @@ class TestNeuralNetworkWaveFunction:
         hamil = helpers.hamil()
         phys_conf = helpers.phys_conf(hamil)
         wf, params = helpers.create_ansatz(hamil)
-        lap_log_psis, quantum_force = laplacian(
+        lap_log_psis, quantum_force = reverse_forward_laplacian(
             lambda r: wf.apply(params, jdc.replace(phys_conf, r=r.reshape(-1, 3))).log
         )(phys_conf.r.flatten())
         ndarrays_regression.check(

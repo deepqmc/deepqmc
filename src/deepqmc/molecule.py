@@ -2,7 +2,7 @@ import os
 import re
 from collections import OrderedDict
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from glob import glob
 from importlib import resources
 from pathlib import Path
@@ -14,8 +14,9 @@ import jax.numpy as jnp
 import yaml
 from hydra.core.global_hydra import GlobalHydra
 from hydra.utils import get_original_cwd, to_absolute_path
+from pyscf.data.elements import _symbol
 
-from .units import angstrom_to_bohr, null
+from .units import angstrom_to_bohr, bohr_to_angstrom, null
 
 __all__ = ['Molecule']
 
@@ -28,17 +29,17 @@ def get_all_names() -> set[str]:
     return {filename.replace('.yaml', '') for filename in os.listdir(mol_conf_dir())}
 
 
-@dataclass(frozen=True, init=False)
+@dataclass(frozen=True)
 class Molecule:
     r"""Represents a molecule.
 
     The array-like arguments accept anything that can be transformed to
-    :class:`jax.Array`.
+    :class:`~jax.Array`.
 
     Args:
-        coords (jax.Array | list[float]):
+        coords (~jax.Array | list[float]):
             nuclear coordinates ((:math:`N_\text{nuc}`, 3), a.u.) as rows
-        charges (jax.Array | list[int | float]): atom charges (:math:`N_\text{nuc}`)
+        charges (~jax.Array | list[int | float]): atom charges (:math:`N_\text{nuc}`)
         charge (int): total charge of a molecule
         spin (int): total spin multiplicity
         unit (str): units of the coordinates, either 'bohr' or 'angstrom'
@@ -51,37 +52,29 @@ class Molecule:
     charges: jax.Array
     charge: int
     spin: int
-    data: dict
+    data: dict | None = None
+    unit: str = "bohr"
 
     # DERIVED PROPERTIES:
-    n_atom_types: int
+    n_atom_types: int = field(init=False)
 
-    def __init__(
-        self,
-        *,
-        coords,
-        charges,
-        charge,
-        spin,
-        unit='bohr',
-        data=None,
-    ):
+    def __post_init__(self):
         def set_attr(**kwargs):
             for k, v in kwargs.items():
                 object.__setattr__(self, k, v)
 
-        unit_multiplier = {'bohr': null, 'angstrom': angstrom_to_bohr}[unit]
+        unit_multiplier = {'bohr': null, 'angstrom': angstrom_to_bohr}[self.unit]
         set_attr(
-            coords=unit_multiplier(jnp.array(coords)),
-            charges=jnp.array(charges, dtype=float),
-            charge=charge,
-            spin=spin,
-            data=data or {},
+            coords=unit_multiplier(jnp.array(self.coords)),
+            charges=jnp.array(self.charges, dtype=float),
+            charge=self.charge,
+            spin=self.spin,
+            data=self.data or {},
         )
 
         # Derived properties
         set_attr(
-            n_atom_types=len(jnp.unique(jnp.array(charges))),
+            n_atom_types=len(jnp.unique(jnp.array(self.charges))),
         )
 
     def __len__(self):
@@ -99,6 +92,16 @@ class Molecule:
             f'  spin={self.spin}\n'
             ')'
         )
+
+    def xyz_string(self) -> str:
+        xyz = f'{len(self)}\n\n'
+        xyz += '\n'.join(
+            f'{_symbol(charge)} {coord[0]} {coord[1]} {coord[2]}'
+            for charge, coord in zip(
+                self.charges.astype(int), bohr_to_angstrom(self.coords)
+            )
+        )
+        return xyz
 
     @classmethod
     def from_name(cls, name: str) -> Self:
@@ -129,6 +132,16 @@ class Molecule:
                 file = to_absolute_path(file)
         with open(file, 'r') as stream:
             return cls(**yaml.safe_load(stream))
+
+    def update_coords(self, coords: jax.Array, unit: str = 'bohr') -> Self:
+        return self.__class__(
+            coords=coords,
+            charge=self.charge,
+            spin=self.spin,
+            charges=self.charges,
+            unit=unit,
+            data=self.data,
+        )
 
 
 class MoleculeDict(OrderedDict):

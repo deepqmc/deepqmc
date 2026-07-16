@@ -5,7 +5,6 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 from haiku.initializers import VarianceScaling
-from jax import tree_util
 from jax.nn import sigmoid, softplus
 
 from .folxext import sparse_attention
@@ -39,13 +38,13 @@ class MLP(hk.Module):
         last_linear (bool): optional, if :data:`True` the activation function
             is not applied to the activation of the last layer.
         activation (~collections.abc.Callable): optional, the activation function.
-        init (str | Callable): optional, specifies the initialization of the
-            linear weights. Possible string values are:
+        init (str | ~collections.abc.Callable): optional, specifies the initialization
+            of the linear weights. Possible string values are:
 
             - ``'default'``: the default haiku initialization method is used.
-            - ``'ferminet'``: the initialization method of the :class:`ferminet`
+            - ``'ferminet'``: the initialization method of the ``ferminet``
                 package is used.
-            - ``'deeperwin'``: the initialization method of the :class:`deeperwin`
+            - ``'deeperwin'``: the initialization method of the ``deeperwin``
                 package is used.
     """
 
@@ -55,7 +54,7 @@ class MLP(hk.Module):
         name: Optional[str] = None,
         *,
         hidden_layers: Sequence[Union[int, str]],
-        bias: bool,
+        bias: bool | str,
         last_linear: bool,
         activation: Callable[[jax.Array], jax.Array],
         init: Union[str, Callable],
@@ -135,7 +134,7 @@ class ResidualConnection:
             z = x + y
             return z / jnp.sqrt(2) if self.normalize else z
 
-        return tree_util.tree_map(leaf_residual, inp, update)
+        return jax.tree.map(leaf_residual, inp, update)
 
 
 class SumPool:
@@ -150,7 +149,7 @@ class SumPool:
         assert out_dim == 1
 
     def __call__(self, x):
-        return tree_util.tree_map(lambda leaf: leaf.sum(axis=-1, keepdims=True), x)
+        return jax.tree.map(lambda leaf: leaf.sum(axis=-1, keepdims=True), x)
 
 
 class Identity:

@@ -54,10 +54,12 @@ class GTOBasis(hk.Module):
 
     @classmethod
     def from_pyscf(cls, mol):
-        r"""Create the input of the constructor from a :class:`~deepqmc.Molecule`.
+        r"""Create the input of the constructor from a :mod:`pyscf` molecule.
 
         Args:
-            mol (~deepqmc.Molecule): the molecule to consider.
+            mol: a :mod:`pyscf` molecule with Cartesian Gaussian-type orbitals
+                (``mol.cart == True``), such as the one returned by
+                :func:`~deepqmc.pretrain.pyscfext.pyscf_from_hamil`.
         """
         assert mol.cart
         centers = mol.atom_coords()

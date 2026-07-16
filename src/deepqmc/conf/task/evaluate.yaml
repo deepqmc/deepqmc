@@ -1,4 +1,5 @@
 _target_: deepqmc.app.train_from_checkpoint
 evaluate: true
 keep_sampler_state: false
+steps: 1000
 restdir: ???

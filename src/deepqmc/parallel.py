@@ -10,6 +10,8 @@ from jax.experimental.multihost_utils import broadcast_one_to_all
 from .types import KeyArray
 
 PMAP_AXIS_NAME = 'device_axis'
+r"""Alias for :class:`str`. The default ``axis_name`` used for :func:`jax.pmap` calls
+and collective operations (e.g. :func:`jax.lax.pmean`) across the package."""
 
 T = TypeVar('T')
 
@@ -41,6 +43,8 @@ def maybe_init_multi_host():
 
     Detecting multiple processes only implemented for SLURM.
     """
+    if os.getenv('DEEPQMC_DISABLE_MULTIHOST'):
+        return
     process_count = get_process_count()
     process_id = get_process_index()
 
@@ -55,22 +59,22 @@ def maybe_init_multi_host():
 
 
 def pmap(fn, axis_name=PMAP_AXIS_NAME, **kwargs):
-    r"""Alias of jax.pmap, with default :data:`axis_name` value for convenience."""
+    r"""Alias of jax.pmap, with default ``axis_name`` value :data:`~deepqmc.parallel.PMAP_AXIS_NAME` for convenience."""
     return jax.pmap(fn, axis_name, **kwargs)
 
 
 def pmean(x, axis_name=PMAP_AXIS_NAME, **kwargs):
-    r"""Alias of jax.lax.pmean, with default :data:`axis_name` value for convenience."""
+    r"""Alias of jax.lax.pmean, with default ``axis_name`` value :data:`~deepqmc.parallel.PMAP_AXIS_NAME` for convenience."""
     return jax.lax.pmean(x, axis_name, **kwargs)
 
 
 def pmax(x, axis_name=PMAP_AXIS_NAME, **kwargs):
-    r"""Alias of jax.lax.pmax, with default :data:`axis_name` value for convenience."""
+    r"""Alias of jax.lax.pmax, with default ``axis_name`` value :data:`~deepqmc.parallel.PMAP_AXIS_NAME` for convenience."""
     return jax.lax.pmax(x, axis_name, **kwargs)
 
 
 def pmin(x, axis_name=PMAP_AXIS_NAME, **kwargs):
-    r"""Alias of jax.lax.pmin, with default :data:`axis_name` value for convenience."""
+    r"""Alias of jax.lax.pmin, with default ``axis_name`` value :data:`~deepqmc.parallel.PMAP_AXIS_NAME` for convenience."""
     return jax.lax.pmin(x, axis_name, **kwargs)
 
 
@@ -86,7 +90,7 @@ def replicate_on_devices(pytree, globally=False):
     pytree = jax.device_put_replicated(pytree, devices=jax.local_devices())
     if globally:
         # broadcast_on_to_all returns numpy arrays for some reason
-        pytree = jax.tree_util.tree_map(
+        pytree = jax.tree.map(
             jax.numpy.asarray,
             broadcast_one_to_all(pytree),
         )
@@ -104,19 +108,19 @@ def broadcast_to_devices(pytree: T) -> T:
     return pytree
 
 
-def select_one_device(pytree, idx=0):
+def select_one_device(pytree: T, idx=0) -> T:
     r"""Select one entry from the device axis.
 
-    Selects the a single entry from the device axis, resulting in an array that is
+    Selects a single entry from the device axis, resulting in an array that is
     stored only on a single device. Useful for getting data that is identical across
     devices to a single device. Can be thought of as an inverse of
-    :class:`deepqmc.parallel.replicate_on_devices`.
+    :func:`~deepqmc.parallel.replicate_on_devices`.
 
     Args:
         pytree: the input pytree of arrays.
         idx: the index of the entry to select from the leading device axis.
     """
-    return jax.tree_util.tree_map(lambda x: x[idx], pytree)
+    return jax.tree.map(lambda x: x[idx], pytree)
 
 
 def split_rng_key_to_devices(rng):
@@ -209,14 +213,14 @@ def all_device_max(x, axis_name=PMAP_AXIS_NAME, **mean_kwargs):
 
 
 def all_device_std(x, axis_name=PMAP_AXIS_NAME, **mean_kwargs):
-    r"""Compute mean across all devices.
+    r"""Compute standard deviation across all devices.
 
     Args:
         x: the input data stored on multiple devices.
         axis_name: optional, name of pmap-ed axis.
     """
     first_mean_kwargs = mean_kwargs | {'keepdims': True}
-    mean = pmean(jax.numpy.mean(x, **first_mean_kwargs), axis_name)
+    mean = pmean(jax.numpy.mean(x, **first_mean_kwargs), axis_name)  # type: ignore
     var = pmean(jax.numpy.mean((x - mean) ** 2, **mean_kwargs), axis_name)
     return jax.numpy.sqrt(var)
 
@@ -268,13 +272,13 @@ def gather_electrons_on_one_device(pytree, electron_batch_axis=3):
             :data:`[n_device, ... , electron_batch_size / n_device, ...]`
         electron_batch_axis: the axis carrying the electron batch
 
-    Result:
+    Returns:
         a pytree of arrays all with shape:
             :data:`[..., electron_batch_size, ...]`.
     """
     all_gathered = pmap_all_gather(pytree)
     on_one_device = select_one_device(all_gathered)
-    return jax.tree_util.tree_map(
+    return jax.tree.map(
         lambda x: jax.numpy.moveaxis(x, 0, electron_batch_axis - 1).reshape(
             *x.shape[1:electron_batch_axis], -1, *x.shape[electron_batch_axis + 1 :]
         ),
@@ -293,18 +297,18 @@ def scatter_electrons_to_devices(pytree: T) -> T:
     r"""Scatter electron sample type arrays across all devices.
 
     Can be thought of as an inverse of
-    :class:`~deepqmc.parallel.gather_electrons_on_one_device`.
+    :func:`~deepqmc.parallel.gather_electrons_on_one_device`.
 
     Args:
         pytree: a pytree of arrays all with shape:
             :data:`[molecule_batch_size, electronic_states, electron_batch_size]`
 
-    Result:
+    Returns:
         a pytree of arrays all with shape:
             :data:`[n_device, molecule_batch_size, electronic_states,
             electron_batch_size / n_device, ...]`
     """
-    reshaped_pytree: T = jax.tree_util.tree_map(
+    reshaped_pytree: T = jax.tree.map(
         lambda x: jax.numpy.moveaxis(
             x.reshape(*x.shape[:2], jax.device_count(), -1, *x.shape[3:]), 2, 0
         )[local_slice()],

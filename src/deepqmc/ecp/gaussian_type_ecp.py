@@ -6,25 +6,41 @@ from pyscf.gto.basis import load_ecp
 from pyscf.lib.parameters import ELEMENTS
 from scipy.special import legendre
 
-from ..physics import Potential, pairwise_distance
-from ..types import Energy, KeyArray, PhysicalConfiguration, WaveFunction
+from ..geom.general import pairwise_distance
+from ..physics import Potential
+from ..types import (
+    Energy,
+    KeyArray,
+    ParametrizedWaveFunction,
+    Params,
+    PhysicalConfiguration,
+    WaveFunction,
+)
+from .ecp_force_utils import (
+    compute_nl_pot_coefs_and_grad_analytical,
+    make_wf_ratio_and_grad,
+)
 from .ecp_utils import (
-    get_quadrature_points,
+    compute_wf_ratio,
     get_unit_icosahedron_sph,
     pad_list_of_3D_arrays_to_one_array,
+    single_quadrature_phys_conf,
+    sph2cart,
 )
 
 
-def parse_gaussian_type_ecp_params(charges, ecp_type, ecp_mask):
+def parse_gaussian_type_ecp_params(
+    charges: jax.Array, ecp_type: str, ecp_mask: jax.Array
+) -> tuple[jax.Array, jax.Array, jax.Array]:
     """Load and parse the ECP parameters from the pyscf package.
 
     This function loads the ECP parameters for an atom (given by `charge`
     argument) from the pyscf package and parses them to jnp arrays.
 
     Args:
-        charges (jax.Array): an array of atomic numbers of the atoms in the molecule
+        charges (~jax.Array): an array of atomic numbers of the atoms in the molecule
         ecp_type (str): the type of the ECP to load, typically 'bfd' or 'ccECP'
-        ecp_mask (jax.Array): an array if booleans indicating whether to use an ECP
+        ecp_mask (~jax.Array): an array if booleans indicating whether to use an ECP
             for each atom.
     Returns:
         tuple: a tuple containing a an array of integers indicating the numbers of
@@ -86,20 +102,27 @@ class GaussianTypeECP(Potential):
     Supports ECPs that are defined in pyscf package, such as 'bfd', 'ccECP',
     'ccECP_reg' or 'ccECP_He'. The ECP parameters are loaded directly from
     the pyscf package. The ECP is defined by the general formula:
-    :math: `\sum_{l=0}^{l_\text{max}} V_{\text{nl}}(\mathbf{r}) |lm\rangle\langle lm|`
-    :math: V_\text{nl}({r}) = \sum_{k=1}^{2} \beta_{lk} \text{e}^{-\alpha_k r^2}
+
+    .. math::
+        \sum_{l=0}^{l_\text{max}} V_{\text{nl}}(\mathbf{r}) |lm\rangle\langle lm|
+
+    where
+
+    .. math::
+        V_\text{nl}(r) = \sum_{k=1}^{2} \beta_{lk} \text{e}^{-\alpha_k r^2}
     """
 
-    def __init__(
-        self, charges: jax.Array, ecp_type: Optional[str], ecp_mask: jax.Array
-    ):
+    def __init__(self, charges: jax.Array, ecp_type: str, ecp_mask: jax.Array):
         self.ecp_mask = ecp_mask
         self.ns_valence, self.loc_params, self.nl_params = (
             parse_gaussian_type_ecp_params(charges, ecp_type, ecp_mask)
         )
         # to filter out masked nuclei:
         self.nuc_with_nl_pot = jnp.unique(jnp.nonzero(self.nl_params)[0])
-        self.quadrature_thetas = get_unit_icosahedron_sph()[:, 0]
+
+        unit_icosahedron_sph = get_unit_icosahedron_sph()
+        self.unit_icosahedron = sph2cart(unit_icosahedron_sph)
+        self.quadrature_thetas = unit_icosahedron_sph[:, 0]
 
     def local_potential(self, phys_conf: PhysicalConfiguration) -> Energy:
         dists = pairwise_distance(phys_conf.r, phys_conf.R)
@@ -152,20 +175,18 @@ class GaussianTypeECP(Potential):
         replacing the remaining vmap with fori_loop over the 12 quadrature points.
 
         Args:
-            rng (jax.random.PRNGKey): key used for PRNG.
-            phys_conf (:class:`deepqmc.types.PhysicalConfiguration`): electron and
+            rng (~deepqmc.types.KeyArray): key used for PRNG.
+            phys_conf (~deepqmc.types.PhysicalConfiguration): electron and
                 nuclear coordinates.
-            mol (:class:`deepqmc.Molecule`): a molecule that is used to load the
-                ECP parameters.
-            wf (:class:`~deepqmc.types.WaveFunction): the wave function ansatz.
+            wf (~deepqmc.types.WaveFunction): the wave function ansatz.
         """
         assert rng is not None
 
         # get value of the denominator (which is constant)
-        denominator_wf_sign, denominator_wf_exponent = wf(phys_conf)
+        denominator = wf(phys_conf)
 
-        def add_nl_potential_for_one_nucleus(i, val):
-            nucleus_index = self.nuc_with_nl_pot[i]
+        def add_nl_potential_for_one_nucleus(j, val):
+            nucleus_index = self.nuc_with_nl_pot[j]
             nl_params = self.nl_params[nucleus_index]
             l_max_p1 = nl_params.shape[0]  # l_max_p1 = l_max + 1
 
@@ -175,10 +196,6 @@ class GaussianTypeECP(Potential):
                     for l in range(l_max_p1)
                 ],
                 axis=-1,
-            )
-
-            quadrature_phys_conf = get_quadrature_points(
-                rng, phys_conf.R[nucleus_index], phys_conf
             )
 
             # (2l+1)/12 coefficient
@@ -196,18 +213,17 @@ class GaussianTypeECP(Potential):
             def nl_potential_for_one_nucleus_and_one_electron(
                 i,
                 val,
-                quadrature_phys_conf=quadrature_phys_conf,
                 legendre_values=legendre_values,
                 coefs=coefs,
                 nl_pot_coefs=nl_pot_coefs,
             ):
                 # numerator
-                sign, exponent = jax.vmap(wf)(quadrature_phys_conf[i])  # shape (12,)
-                wf_ratio = (
-                    denominator_wf_sign
-                    * sign
-                    * jnp.exp(exponent - denominator_wf_exponent)
-                )  # shape (12,)
+                rng_quadrature = jax.random.fold_in(jax.random.fold_in(rng, j), i)
+                quadrature_phys_conf = jax.vmap(
+                    single_quadrature_phys_conf, (None, None, None, None, 0)
+                )(rng_quadrature, i, nucleus_index, phys_conf, self.unit_icosahedron)
+                numerator = jax.vmap(wf)(quadrature_phys_conf)  # shape (12,)
+                wf_ratio = compute_wf_ratio(numerator, denominator)
                 wf_ratio_tile = (
                     wf_ratio[..., None] * legendre_values
                 )  # shape (12,l_max)
@@ -222,7 +238,7 @@ class GaussianTypeECP(Potential):
 
             nl_potential_for_one_nucleus = jax.lax.fori_loop(
                 0,
-                self.ns_valence.astype(int).sum(),
+                phys_conf.r.shape[-2],
                 nl_potential_for_one_nucleus_and_one_electron,
                 0.0,
             )
@@ -237,3 +253,78 @@ class GaussianTypeECP(Potential):
         )
 
         return total_nl_potential
+
+    def grad_nonloc_potential(
+        self,
+        wf: ParametrizedWaveFunction,
+        rng: KeyArray,
+        phys_conf: PhysicalConfiguration,
+        params: Params,
+    ) -> jax.Array:
+        def add_nl_potential_for_one_nucleus(j, val):
+
+            nucleus_index = self.nuc_with_nl_pot[j]
+            nl_params = self.nl_params[nucleus_index]
+            l_max_p1 = nl_params.shape[0]
+            legendre_values = jnp.stack(
+                [
+                    jnp.polyval(legendre(l).coef, jnp.cos(self.quadrature_thetas))
+                    for l in range(l_max_p1)
+                ],
+                axis=-1,
+            )
+            coefs = jnp.tile((jnp.arange(l_max_p1) * 2 + 1) / 12, (len(phys_conf), 1))
+            dists = pairwise_distance(phys_conf.r, phys_conf.R[nucleus_index, None])
+            dsit_vec = phys_conf.R[nucleus_index, None] - phys_conf.r
+            nl_pot_coefs, nl_pot_coefs_grad = compute_nl_pot_coefs_and_grad_analytical(
+                dsit_vec, dists, nl_params
+            )
+
+            def nl_potential_for_one_nucleus_and_one_electron(
+                i,
+                val,
+                nucleus_index=nucleus_index,
+                legendre_values=legendre_values,
+                coefs=coefs,
+                nl_pot_coefs=nl_pot_coefs,
+                nl_pot_coefs_grad=nl_pot_coefs_grad,
+            ):
+
+                wf_ratio, wf_ratio_grad = make_wf_ratio_and_grad(wf)(
+                    params, rng, nucleus_index, i, phys_conf
+                )
+                wf_ratio_tile = wf_ratio[..., None] * legendre_values
+                wf_ratio_tile_grad = (
+                    wf_ratio_grad[:, nucleus_index, :][..., None]
+                    * legendre_values[:, None, :]
+                )
+
+                num_integral_one_e = jnp.sum(wf_ratio_tile, axis=0)
+                num_integral_one_e_wfgrad = jnp.sum(wf_ratio_tile_grad, axis=0)
+                coef = coefs[i]
+                nl_pot_coefs = nl_pot_coefs[i]
+                nl_pot_coefs_grad = nl_pot_coefs_grad[i]
+                nl_potential_one_e = nl_pot_coefs_grad * jnp.sum(
+                    coef[None] * num_integral_one_e, axis=(-1,)
+                ) + nl_pot_coefs * jnp.sum(
+                    coef[None] * num_integral_one_e_wfgrad, axis=(-1,)
+                )
+
+                return val + nl_potential_one_e
+
+            nl_potential_for_one_nucleus = jax.lax.fori_loop(
+                0,
+                phys_conf.r.shape[-2],
+                nl_potential_for_one_nucleus_and_one_electron,
+                jnp.zeros(3),
+            )
+            return val.at[j].set(nl_potential_for_one_nucleus)
+
+        grad_nl_potential = jax.lax.fori_loop(
+            0,
+            len(self.nuc_with_nl_pot),
+            add_nl_potential_for_one_nucleus,
+            jnp.zeros_like(phys_conf.R),
+        )
+
+        return grad_nl_potential

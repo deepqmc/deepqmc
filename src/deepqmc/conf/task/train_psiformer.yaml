@@ -1,5 +1,5 @@
 defaults:
-  - sampler_factory: decorr_metropolis_psiformer
+  - sampler_factory: default
   - opt: kfac_psiformer
 _target_: deepqmc.app.train_from_factories
 hamil: ${hamil}
@@ -26,6 +26,8 @@ loss_function_factory:
     _partial_: true
     clip_width: 5
     median_center: true
+observable_monitors:
+  - local_energy
 metric_logger_constructor:
   _target_: deepqmc.log.TensorboardMetricLogger
   _partial_: true

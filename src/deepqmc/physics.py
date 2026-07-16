@@ -1,19 +1,22 @@
 from collections.abc import Callable
+from functools import partial
 from typing import Optional, Protocol
 
 import jax
 import jax.numpy as jnp
 import jax_dataclasses as jdc
 
+from .geom.general import pairwise_distance, pairwise_self_distance
 from .types import (
     Energy,
     KeyArray,
     ParametrizedWaveFunction,
     Params,
     PhysicalConfiguration,
+    Psi,
     WaveFunction,
 )
-from .utils import norm, triu_flat
+from .utils import triu_flat
 
 __all__ = ()
 
@@ -37,12 +40,17 @@ class Potential(Protocol):
     include the electron-electron repulsion.
     """
 
+    ns_valence: jax.Array
+
     def local_potential(self, phys_conf: PhysicalConfiguration) -> Energy:
         r"""Compute the (local effective core) potential energy of the electrons.
 
         Args:
-            phys_conf (:class:`deepqmc.types.PhysicalConfiguration`): electron and
+            phys_conf (~deepqmc.types.PhysicalConfiguration): electron and
                 nuclear coordinates.
+
+        Returns:
+            ~deepqmc.types.Energy: the local potential energy.
         """
         ...
 
@@ -56,6 +64,15 @@ class Potential(Protocol):
 
         When the potential is fully local, (e.g. Coulomb potential or
         PseudoHamiltonian), this function should return 0.0.
+
+        Args:
+            rng (Optional[~deepqmc.types.KeyArray]): PRNG key, or None.
+            phys_conf (~deepqmc.types.PhysicalConfiguration): electron and
+                nuclear coordinates.
+            wf (~deepqmc.types.WaveFunction): wave function.
+
+        Returns:
+            ~deepqmc.types.Energy: the non-local contribution to the energy.
         """
         return jnp.array(0.0)
 
@@ -70,10 +87,15 @@ class Potential(Protocol):
         Typically, -1/2Δ, where Δ is the laplacian of the wave function.
 
         Args:
-            phys_conf (:class:`deepqmc.types.PhysicalConfiguration`): electron and
+            phys_conf (~deepqmc.types.PhysicalConfiguration): electron and
                 nuclear coordinates.
-            wf (:class:`deepqmc.types.WaveFunction`): wave function.
-            laplacian_factory (Callable): factory to compute the laplacian and gradient.
+            wf (~deepqmc.types.WaveFunction): wave function.
+            laplacian_factory (~collections.abc.Callable): factory to compute the
+                laplacian and gradient.
+
+        Returns:
+            tuple[~deepqmc.types.Energy, ~jax.Array, ~jax.Array]: the kinetic energy,
+            the laplacian of the log WF, and the squared quantum force.
         """
 
         def wave_function(r: jax.Array) -> jax.Array:
@@ -85,30 +107,6 @@ class Potential(Protocol):
         )
         Es_kin = -0.5 * (lap_log_psis + (quantum_force**2).sum(axis=-1))
         return Es_kin, lap_log_psis, (quantum_force**2).sum(axis=-1)
-
-
-def pairwise_distance(coords1: jax.Array, coords2: jax.Array) -> jax.Array:
-    return jnp.linalg.norm(coords1[..., :, None, :] - coords2[..., None, :, :], axis=-1)
-
-
-def pairwise_diffs(coords1: jax.Array, coords2: jax.Array) -> jax.Array:
-    diffs = coords1[..., :, None, :] - coords2[..., None, :, :]
-    return jnp.concatenate([diffs, (diffs**2).sum(axis=-1, keepdims=True)], axis=-1)
-
-
-def pairwise_self_distance(coords: jax.Array, full: bool = False) -> jax.Array:
-    i, j = jnp.triu_indices(coords.shape[-2], k=1)
-    diffs = coords[..., :, None, :] - coords[..., None, :, :]
-    dists = norm(diffs[..., i, j, :], safe=True, axis=-1)
-    if full:
-        dists = (
-            jnp.zeros(diffs.shape[:-1])
-            .at[..., i, j]
-            .set(dists)
-            .at[..., j, i]
-            .set(dists)
-        )
-    return dists
 
 
 def nuclear_energy(phys_conf: PhysicalConfiguration, ns_valence: jax.Array) -> Energy:
@@ -143,7 +141,7 @@ class NuclearCoulombPotential(Potential):
         return jnp.array(0.0)
 
 
-def laplacian(
+def reverse_forward_laplacian(
     f: Callable[[jax.Array], jax.Array],
 ) -> Callable[[jax.Array], tuple[jax.Array, jax.Array]]:
     def lap(x: jax.Array) -> tuple[jax.Array, jax.Array]:
@@ -159,49 +157,83 @@ def laplacian(
 
 
 def evaluate_spin(
-    hamil, wf: ParametrizedWaveFunction
+    hamil, parametrized_wf: ParametrizedWaveFunction
 ) -> Callable[[Params, PhysicalConfiguration], jax.Array]:
     """Returns a function to evaluate the spin expectation value (s^2)."""
-    nspins = (hamil.n_up, hamil.n_down)
+
+    up_minus_down = hamil.n_up - hamil.n_down
 
     def evaluate_spin_(params: Params, phys_conf: PhysicalConfiguration) -> jax.Array:
-        na, nb = sorted(nspins, reverse=True)
-        s2 = (na - nb) / 2 * ((na - nb) / 2 + 1) + nb
+        s2 = up_minus_down / 2 * (up_minus_down / 2 + 1) + hamil.n_down
+        wf = partial(parametrized_wf, params)
 
-        psi = wf(params, phys_conf)
-        r_up, r_down = jnp.split(phys_conf.r, nspins[:1], axis=-2)
+        orig_psi = wf(phys_conf)
+        permute_single_down_with_all_up = make_permute_single_down_with_all_up(
+            wf, phys_conf, orig_psi, hamil.n_up
+        )
 
-        def _inner(j, val):
-            i, s2 = val
-            r_perm = jnp.concatenate(
-                (r_up.at[i].set(r_down[j]), r_down.at[j].set(r_up[i]))
-            )
-            psi_perm = wf(params, jdc.replace(phys_conf, r=r_perm))
-            s2 -= psi.sign * psi_perm.sign * jnp.exp(psi_perm.log - psi.log)
-            return i, s2
+        s2 = jax.lax.fori_loop(
+            hamil.n_up, hamil.n_up + hamil.n_down, permute_single_down_with_all_up, s2
+        )
 
-        def _outer(i, s2):
-            return jax.lax.fori_loop(0, nspins[1], _inner, (i, s2))[1]
-
-        s2 = jax.lax.fori_loop(0, nspins[0], _outer, s2)
         return s2
 
     return evaluate_spin_
 
 
-def coulomb_force(
-    r1: jax.Array,
-    r2: jax.Array,
-    c1: jax.Array,
-    c2: jax.Array,
-    remove_self_int: bool = False,
-) -> jax.Array:
-    dists = r1[:, None] - r2[None]
-    force = (
-        (c1[:, None] * c2[None])[..., None]
-        * dists
-        / jnp.linalg.norm(dists, axis=-1, keepdims=True) ** 3
-    )
-    if remove_self_int:
-        force = force.at[jnp.arange(len(r1)), jnp.arange(len(r2))].set(0)
-    return force.sum(-2)
+def make_permute_single_down_with_all_up(
+    wf: WaveFunction, phys_conf: PhysicalConfiguration, orig_psi: Psi, n_up: int
+) -> Callable[[jax.Array, jax.Array], jax.Array]:
+    r"""Return a function that accumulates permuted wave function ratios.
+
+    The returned function computes
+    :math:`- \sum_{\alpha} \frac{\hat P_{\alpha\beta} \Psi}{\Psi}`,
+    for one value of :math:`beta`.
+    """
+
+    def permute_single_down_with_all_up(
+        down_idx: jax.Array, outer_accumulator: jax.Array
+    ) -> jax.Array:
+        original_electron_indices = jnp.arange(phys_conf.r.shape[0])
+
+        def permute_single_down_with_single_up(
+            up_idx: jax.Array, inner_accumulator: jax.Array
+        ) -> jax.Array:
+            permuted_electron_indices = (
+                original_electron_indices.at[down_idx]
+                .set(up_idx)
+                .at[up_idx]
+                .set(down_idx)
+            )
+            permuted_phys_conf = jdc.replace(
+                phys_conf, r=phys_conf.r[permuted_electron_indices]
+            )
+            permuted_psi = wf(permuted_phys_conf)
+            inner_accumulator -= (
+                orig_psi.sign
+                * permuted_psi.sign
+                * jnp.exp(permuted_psi.log - orig_psi.log)
+            )
+            return inner_accumulator
+
+        return jax.lax.fori_loop(
+            0, n_up, permute_single_down_with_single_up, outer_accumulator
+        )
+
+    return permute_single_down_with_all_up
+
+
+def make_stochastic_spin_raising_operator(
+    hamil, parametrized_wf: ParametrizedWaveFunction
+):
+    def evaluate_stochastic_spin_raising_operator(
+        params: Params, phys_conf: PhysicalConfiguration, down_idx: jax.Array
+    ):
+        wf = partial(parametrized_wf, params)
+        orig_psi = wf(phys_conf)
+        permute_single_down_with_all_up = make_permute_single_down_with_all_up(
+            wf, phys_conf, orig_psi, hamil.n_up
+        )
+        return permute_single_down_with_all_up(down_idx, jnp.array(1.0))
+
+    return evaluate_stochastic_spin_raising_operator

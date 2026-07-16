@@ -1,10 +1,13 @@
 *.pyc
-/poetry.lock
+__pycache__/
 /pip-wheel-metadata/
 /src/*.egg-info/
 /dist/
 /htmlcov/
 /.coverage
 /doc/build/
+/compiled_docs/
 /runs
 /conf/
+/doc/examples/*_workdir/
+/doc/examples/**/.ipynb_checkpoints/

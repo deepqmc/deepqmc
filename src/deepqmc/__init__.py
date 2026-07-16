@@ -33,5 +33,5 @@ from .conf.custom_resolvers import mode_subdir, process_idx_suffix  # noqa: E402
 
 jax.config.update('jax_default_matmul_precision', 'highest')
 OmegaConf.register_new_resolver('eval', eval)
-OmegaConf.register_new_resolver('process_idx_suffix', process_idx_suffix)
+OmegaConf.register_new_resolver('process_idx_suffix', process_idx_suffix, replace=True)
 OmegaConf.register_new_resolver('mode_subdir', mode_subdir)

@@ -4,7 +4,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 
-from ..physics import pairwise_diffs, pairwise_self_distance
+from ..geom import pairwise_diffs, pairwise_self_distance
 from ..types import Psi
 from ..utils import flatten, triu_flat
 
@@ -44,8 +44,8 @@ class NeuralNetworkWaveFunction(hk.Module):
     Implements the neural network wave function.
 
     Configuration files to obtain the PauliNet [HermannNC20]_, FermiNet [PfauPRR20]_,
-    DeepErwin [Gerard22]_ and PsiFormer [Glehn22]_ architectures are provided. For a
-    detailed description of the implemented architecture see [Schaetzle23]_.
+    and Psiformer [Glehn23]_ architectures are provided. For a detailed description
+    of the implemented architecture see [Schaetzle23]_.
 
     Args:
         hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the system.
@@ -64,8 +64,8 @@ class NeuralNetworkWaveFunction(hk.Module):
 
             - ``'mult'``: the backflow is a multiplicative factor
             - ``'add'``: the backflow is an additive term
-            - ``'both'``: the backflow consist of a multiplicative factor
-                and an additive term
+            - ``'both'``: the backflow consist of a multiplicative factor and an
+                additive term
         conf_coeff (~collections.abc.Callable): returns a function that combines the
             determinants to obtain the WF value
     """

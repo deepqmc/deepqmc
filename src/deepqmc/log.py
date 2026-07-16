@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 import pickle
@@ -7,13 +9,12 @@ from copy import deepcopy
 from functools import partial
 from itertools import product
 from pathlib import Path
-from typing import NamedTuple, Optional, Protocol, Union
+from typing import NamedTuple, Optional, Protocol
 
 import h5py
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax.tree_util import tree_map
 from tensorboardX import SummaryWriter
 
 from .parallel import (
@@ -26,13 +27,18 @@ from .parallel import (
 from .types import Stats, TrainState
 from .utils import flatten_dict, tree_any
 
-__all__ = ['CheckpointStore', 'H5LogTable', 'TensorboardMetricLogger']
+__all__ = [
+    'Checkpoint',
+    'CheckpointStore',
+    'MetricLogger',
+    'TensorboardMetricLogger',
+    'H5Logger',
+]
 log = logging.getLogger(__name__)
 
 
 class Checkpoint(NamedTuple):
     step: int
-    loss: jax.typing.ArrayLike
     path: Path
 
 
@@ -50,27 +56,30 @@ def serialize_train_state(train_state: TrainState) -> TrainState:
 
 
 def deserialize_train_state(train_state: TrainState) -> TrainState:
-    if train_state.sampler['elec'].get('r', None) is not None:
-        if train_state.sampler['elec']['r'].ndim == 6:
-            # Legacy checkpoints are already deserialized
-            return train_state
-    if train_state.sampler['elec'].get('tau', None) is not None:
-        if train_state.sampler['elec']['tau'].ndim == 3:
-            # up to and including 147d4feb tau was not averaged over devices
-            train_state.sampler['elec']['tau'] = train_state.sampler['elec'][
-                'tau'
-            ].mean(axis=-1)
-    train_state.sampler['elec']['tau'] = jnp.repeat(
-        train_state.sampler['elec']['tau'][..., None], jax.device_count(), axis=-1
-    )
+    if train_state.sampler is None:
+        sampler = None
+    else:
+        if train_state.sampler['elec'].get('r', None) is not None:
+            if train_state.sampler['elec']['r'].ndim == 6:
+                # Legacy checkpoints are already deserialized
+                return train_state
+        if train_state.sampler['elec'].get('tau', None) is not None:
+            if train_state.sampler['elec']['tau'].ndim == 3:
+                # up to and including 147d4feb tau was not averaged over devices
+                train_state.sampler['elec']['tau'] = train_state.sampler['elec'][
+                    'tau'
+                ].mean(axis=-1)
+        train_state.sampler['elec']['tau'] = jnp.repeat(
+            train_state.sampler['elec']['tau'][..., None], jax.device_count(), axis=-1
+        )
+        sampler = train_state.sampler
+        sampler['elec'] = scatter_electrons_to_devices(sampler['elec'])
+        sampler['elec']['tau'] = jnp.squeeze(sampler['elec']['tau'], axis=-1)
+        sampler['nuc'], sampler['update_nuc_counter'] = replicate_on_devices(
+            (sampler['nuc'], sampler['update_nuc_counter'])
+        )
     params, opt = replicate_on_devices((train_state.params, train_state.opt))
-    sampler = train_state.sampler
-    sampler['elec'] = scatter_electrons_to_devices(sampler['elec'])
-    sampler['elec']['tau'] = jnp.squeeze(sampler['elec']['tau'], axis=-1)
-    sampler['nuc'], sampler['update_nuc_counter'] = replicate_on_devices(
-        (sampler['nuc'], sampler['update_nuc_counter'])
-    )
-    return TrainState(sampler, params, opt)
+    return TrainState(sampler, params, opt)  # type: ignore
 
 
 class CheckpointStore:
@@ -91,14 +100,10 @@ class CheckpointStore:
         self.size = size
         self.interval = interval
         self.chkpts: list[Checkpoint] = []
-        self.buffer: Union[
-            tuple[None, None, None], tuple[int, TrainState, jax.typing.ArrayLike]
-        ] = (None, None, None)
+        self.buffer: tuple[None, None] | tuple[int, TrainState] = (None, None)
 
-    def update(
-        self, step: int, state: TrainState, loss: jax.typing.ArrayLike = jnp.inf
-    ):
-        self.buffer = (step, state, loss)
+    def update(self, step: int, state: TrainState):
+        self.buffer = (step, state)
         if not self.chkpts or (step >= self.interval + self.chkpts[-1].step):
             self.dump()
         while len(self.chkpts) > self.size:
@@ -107,26 +112,24 @@ class CheckpointStore:
             # preceding the variational training.
 
     def dump(self):
-        step, state, loss = self.buffer
-        assert (
-            isinstance(state, TrainState)
-            and isinstance(step, int)
-            and isinstance(loss, jax.typing.ArrayLike)
-        )
+        step, state = self.buffer
+        assert isinstance(state, TrainState) and isinstance(step, int)
         path = self.workdir / self.PATTERN.format(step)
         with path.open('wb') as f:
             pickle.dump((step, serialize_train_state(state)), f)
-        self.chkpts.append(Checkpoint(step, loss, path))
+        self.chkpts.append(Checkpoint(step, path))
 
     @staticmethod
-    def load(path: Path) -> tuple[int, TrainState]:
+    def load(path: Path, deserialize: bool = True) -> tuple[int, TrainState]:
         with open(path, 'rb') as f:
             step, state = pickle.load(f)
-        return step, deserialize_train_state(state)
+        if deserialize:
+            state = deserialize_train_state(state)
+        return step, state
 
     def close(self):
         if all(self.buffer) and not tree_any(
-            tree_map(lambda x: x.is_deleted(), self.buffer[1])
+            jax.tree.map(lambda x: x.is_deleted(), self.buffer[1])
         ):
             self.dump()
         # If the training crashes KFAC might have already freed the buffers and the
@@ -146,7 +149,7 @@ class CheckpointStore:
         return int(match.groups()[0])
 
 
-def resize_if_dataset(size: int, name: str, obj: Union[h5py.Dataset, h5py.Group]):
+def resize_if_dataset(size: int, name: str, obj: h5py.Dataset | h5py.Group):
     r"""Resize dataset objects of HDF5 files.
 
     A ``partial`` of this function can be used as the visitor function argument of
@@ -199,14 +202,36 @@ class H5LogTable:
 
 
 class H5Logger:
+    r"""Log selected training data to an HDF5 file.
+
+    Writes a ``result.h5`` file in the working directory. Only entries whose
+    key contains at least one of the whitelisted phrases are written; all
+    others are silently dropped.  The file is opened in SWMR mode so an
+    external reader can access it while training is still running.
+
+    Args:
+        workdir (str): directory in which ``result.h5`` is created.
+        init_step (int): initial training step; existing datasets in the file
+            are resized to this length, enabling seamless resumption from a
+            checkpoint.
+        additional_keys_to_whitelist (Optional[list[str]]): extra key
+            substrings to append to the default whitelist.
+        aux_data (Optional[dict]): key-value pairs stored as HDF5 file
+            attributes; typically used for static metadata such as molecular
+            coordinates.
+        keys_whitelist (Optional[list[str]]): overrides the default whitelist
+            entirely when provided; ``additional_keys_to_whitelist`` is still
+            appended on top.
+    """
+
     def __init__(
         self,
         workdir: str,
+        init_step: int,
         additional_keys_to_whitelist: Optional[list[str]] = None,
+        aux_data: Optional[dict] = None,
         *,
         keys_whitelist: Optional[list[str]] = None,
-        init_step: int = 0,
-        aux_data: Optional[dict] = None,
     ):
         self.keys_whitelist = (
             keys_whitelist if keys_whitelist is not None else ['local_energy']
@@ -220,6 +245,13 @@ class H5Logger:
         self.flush()
 
     def update(self, single_device_data: Stats):
+        r"""Write a new row of whitelisted entries to the HDF5 file.
+
+        Args:
+            single_device_data (~deepqmc.types.Stats): flat or nested
+                statistics dictionary; entries whose flattened key contains a
+                whitelisted phrase are appended to the corresponding dataset.
+        """
         data = flatten_dict(single_device_data)
         data_filtered = {
             key: value
@@ -253,21 +285,21 @@ class MetricLogger(Protocol):
     def update(
         self,
         step: int,
-        single_device_stat: Stats,
+        single_device_stats: Stats,
         multi_device_stats: Stats,
         mol_idxs: jax.Array,
         prefix: Optional[str] = None,
     ):
-        r"""Update the MetricLoger with single and multi device stats.
+        r"""Update the MetricLogger with single and multi device stats.
 
         Args:
             step (int): the step at which to add the new entries.
-            single_device_stats (dict): a dictionary containing the entries to add,
-                that are on a single device.
-            multi_device_stats (dict): a dictionary containing the entries to add,
-                that are stored over multiple devices.
-            mol_idxs (Array[int]): indices of molecules considered in the given step.
-            prefix (str): optional, an optional prefix to append to the keys.
+            single_device_stats (~deepqmc.types.Stats): a dictionary containing the
+                entries to add, that are on a single device.
+            multi_device_stats (~deepqmc.types.Stats): a dictionary containing the
+                entries to add, that are stored over multiple devices.
+            mol_idxs (~jax.Array): indices of molecules considered in the given step.
+            prefix (Optional[str]): optional, an optional prefix to append to the keys.
         """
         ...
 
@@ -306,12 +338,12 @@ class TensorboardMetricLogger:
 
         Args:
             step (int): the step at which to add the new entries.
-            single_device_stats (dict): a dictionary containing the entries to add,
-                that are on a single device.
-            multi_device_stats (dict): a dictionary containing the entries to add,
-                that are stored over multiple devices.
-            mol_idxs (Array[int]): indices of molecules considered in the given step.
-            prefix (~.typingOptional[str]): an optional prefix to append to the stat
+            single_device_stats (~deepqmc.types.Stats): a dictionary containing the
+                entries to add, that are on a single device.
+            multi_device_stats (~deepqmc.types.Stats): a dictionary containing the
+                entries to add, that are stored over multiple devices.
+            mol_idxs (~jax.Array): indices of molecules considered in the given step.
+            prefix (Optional[str]): an optional prefix to append to the stat
                 keys.
         """
         prefix = f'{prefix}/' if prefix else ''
@@ -359,6 +391,50 @@ class TensorboardMetricLogger:
             }
         self.writer.add_custom_scalars(self.layout)
 
+    def _write_full_dataset_scalar(
+        self, step: int, prefix: Optional[str], k: str, v: jax.Array
+    ):
+        prefix = prefix or ''
+        self.writer.add_scalar(f'{prefix}{k}', v, step)
+
+    def _write_full_dataset_vector(
+        self,
+        step: int,
+        prefix: Optional[str],
+        k: str,
+        v: jax.Array,
+        mol_idxs: jax.Array,
+    ):
+        prefix = prefix or ''
+        for i, v_i in zip(mol_idxs, v):
+            self.writer.add_scalar(f'{prefix}{k}/{i}', v_i, step)
+
+    def _write_full_dataset_matrix(
+        self,
+        step: int,
+        prefix: Optional[str],
+        k: str,
+        v: jax.Array,
+        mol_idxs: jax.Array,
+    ):
+        prefix = prefix or ''
+        for i, v_i in zip(mol_idxs, v):
+            for j, v_ij in enumerate(v_i):
+                self.writer.add_scalar(f'{prefix}{k}/{i}/{j}', v_ij, step)
+
+    def _write_full_dataset_pairwise(
+        self,
+        step: int,
+        prefix: Optional[str],
+        k: str,
+        v: jax.Array,
+        mol_idxs: jax.Array,
+    ):
+        prefix = prefix or ''
+        for i, v_i in zip(mol_idxs, v):
+            for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
+                self.writer.add_scalar(f'{prefix}{k}/{i}/{l}-{j}', v_i[j, l], step)
+
     def write_in_full_dataset_format(
         self, step: int, stats: Stats, mol_idxs: jax.Array, prefix: Optional[str]
     ):
@@ -367,25 +443,13 @@ class TensorboardMetricLogger:
 
         for k, v in stats.items():
             if v.ndim == 0:
-                # Global statistic
-                self.writer.add_scalar(f'{prefix}{k}', v, step)
+                self._write_full_dataset_scalar(step, prefix, k, v)
             elif v.ndim == 1:
-                # Per molecule statistic
-                for i, v_i in zip(mol_idxs, v):
-                    self.writer.add_scalar(f'{prefix}{k}/{i}', v_i, step)
+                self._write_full_dataset_vector(step, prefix, k, v, mol_idxs)
             elif v.ndim == 2:
-                # Per molecule per state statistic
-                for i, v_i in zip(mol_idxs, v):
-                    for j, v_ij in enumerate(v_i):
-                        self.writer.add_scalar(f'{prefix}{k}/{i}/{j}', v_ij, step)
-            elif v.ndim == 3:
-                assert v.shape[1] == v.shape[2]
-                # Per molecule per state pairwise statistic (upper triangular)
-                for i, v_i in zip(mol_idxs, v):
-                    for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
-                        self.writer.add_scalar(
-                            f'{prefix}{k}/{i}/{l}-{j}', v_i[j, l], step
-                        )
+                self._write_full_dataset_matrix(step, prefix, k, v, mol_idxs)
+            elif v.ndim == 3 and v.shape[1] == v.shape[2]:
+                self._write_full_dataset_pairwise(step, prefix, k, v, mol_idxs)
 
     def add_batch_scalars(self, stats: Stats, prefix: Optional[str]):
         for k, v in stats.items():
@@ -445,17 +509,17 @@ class TensorboardMetricLogger:
                     self.writer.add_scalar(f'{prefix}{k}/mean/{j}', v_mean_j, step)
                     self.writer.add_scalar(f'{prefix}{k}/std/{j}', v_std_j, step)
             elif v.ndim == 3:
-                assert v.shape[1] == v.shape[2]
-                # Per molecule per state pairwise statistic (upper triangular)
-                v_mean = v.mean(axis=0)
-                v_std = v.std(axis=0)
-                for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
-                    self.writer.add_scalar(
-                        f'{prefix}{k}/mean/{l}-{j}', v_mean[j, l], step
-                    )
-                    self.writer.add_scalar(
-                        f'{prefix}{k}/std/{l}-{j}', v_std[j, l], step
-                    )
+                if v.shape[1] == v.shape[2]:
+                    # Per molecule per state pairwise statistic (upper triangular)
+                    v_mean = v.mean(axis=0)
+                    v_std = v.std(axis=0)
+                    for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
+                        self.writer.add_scalar(
+                            f'{prefix}{k}/mean/{l}-{j}', v_mean[j, l], step
+                        )
+                        self.writer.add_scalar(
+                            f'{prefix}{k}/std/{l}-{j}', v_std[j, l], step
+                        )
 
     def close(self):
         self.writer.close()

@@ -10,12 +10,18 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: 3.x
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
       - name: Install dependencies
-        run: pip install sphinx Jinja2 sphinxcontrib-katex toml docutils pydata-sphinx-theme
-      - uses: actions/checkout@v2
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[doc]
       - name: Build
         run: sphinx-build -W -E doc doc/build
       - run: touch doc/build/.nojekyll

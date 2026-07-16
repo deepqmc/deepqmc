@@ -4,39 +4,35 @@ on:
   pull_request:
   schedule:
     - cron: '0 6 * * 1'
+
+
 jobs:
   all:
     if: github.event_name != 'schedule' || github.repository == 'deepqmc/deepqmc'
-    name: All
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11']
+        python-version: ["3.12", "3.13"]
+
     runs-on: ubuntu-latest
     steps:
-      - name: Set environment variables
-        run: echo YEAR_MONTH=$(date +"%Y-%m") >>$GITHUB_ENV
-      - uses: actions/setup-python@v2
-        id: setup-python
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}-${{ env.YEAR_MONTH }}
-      - name: Create Python virtual environment
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install dependencies
         run: |
-          python -m venv venv
-          venv/bin/pip install -U pip wheel
-          echo $PWD/venv/bin >>$GITHUB_PATH
-      - name: Install
-        run: pip install -e .[dev] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-      - name: Install Coverage
-        run: pip install 'coverage<7.0.0'
-      - name: Test
-        run: JAX_PLATFORM_NAME=cpu coverage run -m pytest
-      - name: Upload to Codecov
-        run: bash <(curl -s https://codecov.io/bash)
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Run tests
+        run: |
+          pytest --cov=deepqmc --cov-report=xml
+        env:
+          JAX_PLATFORM_NAME: cpu
+          JAX_ENABLE_X64: "True"
+      - uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true

@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Optional, Protocol, cast
+from typing import Literal, Optional, cast
 
 import jax
 import jax.numpy as jnp
@@ -28,6 +28,7 @@ from .energy import (
     compute_mean_energy,
     compute_mean_energy_tangent,
 )
+from .base import LossFunction
 from .overlap import (
     OverlapGradientScaleFactory,
     compute_mean_overlap,
@@ -40,40 +41,13 @@ from .overlap import (
 )
 from .spin import (
     compute_mean_spin,
+    compute_mean_spin_raising_tangent,
     compute_mean_spin_tangent,
     compute_spin_contributions,
+    compute_spin_raising_contributions,
 )
 
 __all__ = ()
-
-
-class LossFunction(Protocol):
-    def __call__(
-        self,
-        params: list[Params],
-        rng: KeyArray,
-        batch: Batch,
-    ) -> tuple[jax.Array, tuple[Energy, Optional[jax.Array], Stats]]: ...
-
-
-class LossFunctionFactory(Protocol):
-    def __call__(
-        self,
-        hamil: MolecularHamiltonian,
-        ansatz: Ansatz,
-    ) -> LossFunction: ...
-
-
-class LossAndGradFunction(Protocol):
-    def __call__(
-        self,
-        params: list[Params],
-        rng: KeyArray,
-        batch: Batch,
-    ) -> tuple[
-        tuple[jax.Array, tuple[Energy, Optional[jax.Array], Stats]],
-        tuple[jax.Array, tuple[Energy, Optional[jax.Array], Stats]],
-    ]: ...
 
 
 def compute_log_psi_tangent(
@@ -90,7 +64,7 @@ def compute_log_psi_tangent(
     for i, (state_params, state_params_tangent) in enumerate(
         zip(params, params_tangent)
     ):
-        flat_phys_conf = jax.tree_util.tree_map(
+        flat_phys_conf = jax.tree.map(
             partial(lambda i, x: x[:, i].reshape(-1, *x.shape[n_batch_dims:]), i),
             phys_conf,
         )
@@ -108,6 +82,28 @@ def compute_log_psi_tangent(
     return log_psi_tangent
 
 
+def create_idle_loss_fn(
+    hamil: MolecularHamiltonian, ansatz: Ansatz, **kwargs
+) -> LossFunction:
+    @jax.custom_jvp
+    def loss_fn(
+        params: list[Params], rng: KeyArray, batch: Batch
+    ) -> tuple[jax.Array, tuple[None, Optional[jax.Array], Stats]]:
+        return jnp.array(0.0), (None, None, {})
+
+    @loss_fn.defjvp
+    def loss_fn_jvp(
+        primals: tuple[list[Params], KeyArray, Batch],
+        tangents: tuple[list[Params], KeyArray, Batch],
+    ) -> tuple[
+        tuple[jax.Array, tuple[None, Optional[jax.Array], Stats]],
+        tuple[jax.Array, tuple[None, Optional[jax.Array], Stats]],
+    ]:
+        return (jnp.array(0.0), (None, None, {})), (jnp.array(0.0), (None, None, {}))  # type: ignore
+
+    return loss_fn
+
+
 def create_loss_fn(
     hamil: MolecularHamiltonian,
     ansatz: Ansatz,
@@ -115,9 +111,12 @@ def create_loss_fn(
     clip_mask_overlap_fn: Optional[PsiRatioClipAndMaskFn] = None,
     alpha: Optional[float] = None,
     spin_penalty: Optional[float] = None,
+    spin_penalty_type: Literal['raising', 'squared'] = 'squared',
+    spin_penalty_states: Optional[list[int]] = None,
     scale_overlap_by: Optional[str] = None,
     sort_states_by: Optional[str] = None,
     min_gap_scale_factor: float = 0.1,
+    local_energy_batch_size: int | None = None,
 ) -> LossFunction:
     overlap_scale_factory = {
         None: no_scaling,
@@ -143,15 +142,21 @@ def create_loss_fn(
     def loss_fn(
         params: list[Params], rng: KeyArray, batch: Batch
     ) -> tuple[jax.Array, tuple[Energy, Optional[jax.Array], Stats]]:
-        phys_conf, weight, data = batch
+        phys_conf, weight, _ = batch
         stacked_params = tree_stack(params)
+        rng, rng_energy = jax.random.split(rng)
         local_energy, hamil_stats = compute_local_energy(
-            rng, hamil, ansatz.apply, stacked_params, phys_conf
+            rng_energy,
+            hamil,
+            ansatz.apply,
+            stacked_params,
+            phys_conf,
+            local_energy_batch_size,
         )
         loss, energy_stats = compute_mean_energy(local_energy, weight)
         stats = hamil_stats | energy_stats
         if phys_conf.batch_shape[1] > 1:
-            assert alpha is not None
+            assert alpha is not None, 'alpha must be set for overlap loss'
             psi_ratio, psi_stats = compute_psi_ratio(ansatz, stacked_params, phys_conf)
             overlap_loss, overlap_stats = compute_mean_overlap(psi_ratio, weight)
             loss += alpha * overlap_loss
@@ -159,10 +164,24 @@ def create_loss_fn(
         else:
             psi_ratio = None
         if spin_penalty is not None:
-            spin_contributions = compute_spin_contributions(
-                hamil, ansatz, stacked_params, phys_conf
+            if spin_penalty_type == 'squared':
+                spin_contributions = compute_spin_contributions(
+                    hamil, ansatz, stacked_params, phys_conf, spin_penalty_states
+                )
+            else:
+                rng, rng_spin_raising = jax.random.split(rng)
+                spin_contributions = compute_spin_raising_contributions(
+                    rng_spin_raising,
+                    hamil,
+                    ansatz,
+                    phys_conf,
+                    stacked_params,
+                    local_energy_batch_size,
+                    spin_penalty_states,
+                )
+            spin, spin_stats = compute_mean_spin(
+                spin_contributions, weight, spin_penalty_states
             )
-            spin, spin_stats = compute_mean_spin(spin_contributions, weight)
             loss += spin_penalty * spin
             stats |= spin_stats
         local_energy = jax.lax.all_gather(local_energy, PMAP_AXIS_NAME)
@@ -185,8 +204,14 @@ def create_loss_fn(
         )
 
         stacked_params = tree_stack(params)
+        rng, rng_energy = jax.random.split(rng)
         local_energy, hamil_stats = compute_local_energy(
-            rng, hamil, ansatz.apply, stacked_params, phys_conf
+            rng_energy,
+            hamil,
+            ansatz.apply,
+            stacked_params,
+            phys_conf,
+            local_energy_batch_size,
         )
         loss, energy_stats = compute_mean_energy(local_energy, weight)
         stats = hamil_stats | energy_stats
@@ -223,14 +248,51 @@ def create_loss_fn(
             psi_ratio = None
 
         if spin_penalty is not None:
-            spin_contributions = compute_spin_contributions(
-                hamil, ansatz, stacked_params, phys_conf
-            )
-            spin, spin_stats = compute_mean_spin(spin_contributions, weight)
+            if spin_penalty_type == 'squared':
+                spin_contributions = compute_spin_contributions(
+                    hamil, ansatz, stacked_params, phys_conf, spin_penalty_states
+                )
+                spin, spin_stats = compute_mean_spin(
+                    spin_contributions, weight, spin_penalty_states
+                )
+                spin_tangent = compute_mean_spin_tangent(
+                    spin_contributions,
+                    weight,
+                    log_psi_tangent,
+                    gradient_mask,
+                    spin_penalty_states,
+                )
+            else:
+                rng, rng_spin_raising = jax.random.split(rng)
+                stacked_params_tangent = tree_stack(params_tangent)
+                spin_raising, spin_raising_tangent = jax.jvp(
+                    partial(
+                        compute_spin_raising_contributions,
+                        rng_spin_raising,
+                        hamil,
+                        ansatz,
+                        phys_conf,
+                        batch_size=local_energy_batch_size,
+                        states=spin_penalty_states,
+                    ),
+                    (stacked_params,),
+                    (stacked_params_tangent,),
+                )
+                clipped_spin_raising, spin_raising_gradient_mask = clip_local_energy(
+                    clip_mask_fn, spin_raising
+                )
+                spin, spin_stats = compute_mean_spin(
+                    spin_raising, weight, spin_penalty_states
+                )
+                spin_tangent = compute_mean_spin_raising_tangent(
+                    clipped_spin_raising,
+                    spin_raising_tangent,
+                    weight,
+                    log_psi_tangent,
+                    spin_raising_gradient_mask,
+                    spin_penalty_states,
+                )
             stats |= spin_stats
-            spin_tangent = compute_mean_spin_tangent(
-                spin_contributions, weight, log_psi_tangent, gradient_mask
-            )
             loss += spin_penalty * spin
             loss_tangent += spin_penalty * spin_tangent
 

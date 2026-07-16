@@ -1,7 +1,6 @@
 import os
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from xml.etree import ElementTree
-from typing import Callable
 
 import jax
 import jax.numpy as jnp
@@ -10,7 +9,8 @@ import numpy as np
 
 import deepqmc
 
-from ..physics import LaplacianFactory, Potential, pairwise_distance
+from ..geom import pairwise_distance
+from ..physics import LaplacianFactory, Potential
 from ..types import Energy, PhysicalConfiguration, WaveFunction
 
 ELEMENTS_WITH_EXISTING_PH = {
@@ -151,9 +151,9 @@ def apply_functions_to_columns(
     r"""Compute :math:`f^J_(x_{iJ})`.
 
     Args:
-        functions (Iterable[Callable[[jax.Array], jax.Array]]):
+        functions (~collections.abc.Iterable[~collections.abc.Callable[[~jax.Array], ~jax.Array]]):
             functions to apply, iterable of length ``n_funcs``.
-        x (jax.Array): input to the functions. Shape: ``(input_dim, n_funcs)``.
+        x (~jax.Array): input to the functions. Shape: ``(input_dim, n_funcs)``.
     """
     fx = jnp.stack([fn(xx) for fn, xx in zip(functions, x.T, strict=True)], axis=1)
     return fx
@@ -164,7 +164,7 @@ class PseudoHamiltonian(Potential):
     Class for the pseudo Hamiltonian.
 
     The pseudo Hamiltonian which is fully local unlike the ECP significantly speeding-up
-    the computation. The PHs are taken from [Ichibha23] and [Fu25].
+    the computation. The PHs are taken from [Ichibha23] and [Fu26].
     """
 
     def __init__(self, charges: jax.Array, ecp_type: str, ecp_mask: jax.Array):

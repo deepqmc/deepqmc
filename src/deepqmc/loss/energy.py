@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 
 from ..hamil import MolecularHamiltonian
@@ -11,7 +13,7 @@ from ..types import (
     Stats,
     Weight,
 )
-from ..utils import masked_mean
+from ..utils import batched_vmap, masked_mean
 
 
 def compute_local_energy(
@@ -20,6 +22,7 @@ def compute_local_energy(
     ansatz: ParametrizedWaveFunction,
     params: Params,
     phys_conf: PhysicalConfiguration,
+    batch_size: int | None = None,
 ) -> tuple[Energy, Stats]:
     r"""Compute a batch of local energies.
 
@@ -38,15 +41,22 @@ def compute_local_energy(
             statistics.
     """
     rng = jax.random.split(rng, phys_conf.batch_shape)
+    electron_axis_mapper = (
+        jax.vmap
+        if batch_size is None
+        else partial(batched_vmap, batch_size=batch_size // jax.device_count())
+    )
 
     local_energy, hamil_stats = jax.vmap(  # molecule_batch
         jax.vmap(  # electronic_state
-            jax.vmap(hamil.local_energy(ansatz), (0, None, 0))  # electron_batch
+            electron_axis_mapper(
+                hamil.local_energy(ansatz), in_axes=(0, None, 0)
+            )  # electron_batch
         ),
         (0, None, 0),
     )(rng, params, phys_conf)
 
-    stats = jax.tree_util.tree_map(lambda x: x.mean(axis=-1), hamil_stats)
+    stats = jax.tree.map(lambda x: x.mean(axis=-1), hamil_stats)
     return local_energy, stats
 
 
@@ -75,12 +85,12 @@ def compute_mean_energy_tangent(
     Args:
         local_energy (~deepqmc.types.Energy): a batch of local energies.
         weight (~deepqmc.types.Weight): the weights of each sample in the batch.
-        log_psi_tangent (jax.Array): the jvp of the WF values with respect to the Ansatz
+        log_psi_tangent (~jax.Array): the jvp of the WF values with respect to the Ansatz
             parameters.
-        gradient_mask (jax.Array): a boolean samplewise mask to apply to the gradients.
+        gradient_mask (~jax.Array): a boolean samplewise mask to apply to the gradients.
 
     Returns:
-        jax.Array: the jvp of the mean energy with respect to the Ansatz parameters.
+        ~jax.Array: the jvp of the mean energy with respect to the Ansatz parameters.
     """
     per_mol_state_mean_energy = all_device_mean(
         local_energy * weight, axis=-1, keepdims=True

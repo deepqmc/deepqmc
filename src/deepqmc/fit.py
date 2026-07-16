@@ -1,15 +1,16 @@
 import operator
 from collections.abc import Generator, Iterable
 from functools import reduce
-from typing import Type
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
 
 from .ewm import init_multi_mol_multi_state_ewm
+from .hamil import MolecularHamiltonian
 from .loss import LossFunctionFactory
 from .observable import ObservableMonitor
-from .optimizer import NoOptimizer, Optimizer
+from .optimizer import NoOptimizer, pmap_merge_states
 from .parallel import (
     local_slice,
     pexp_normalize_mean,
@@ -20,7 +21,11 @@ from .parallel import (
     select_one_device,
     split_on_devices,
 )
-from .types import Ansatz, DataDict, KeyArray, Stats, TrainState
+from .sampling.combined_samplers import (
+    MoleculeIdxSampler,
+    MultiNuclearGeometrySampler,
+)
+from .types import Ansatz, DataDict, KeyArray, OptimizerFactory, Stats, TrainState
 from .utils import split_dict
 
 __all__ = ()
@@ -28,13 +33,14 @@ __all__ = ()
 
 def fit_wf(  # noqa: C901
     rng: KeyArray,
-    hamil,
+    hamil: MolecularHamiltonian,
     ansatz: Ansatz,
-    optimizer_factory: Type[Optimizer],
-    molecule_idx_sampler,
-    sampler,
+    optimizer_factory: OptimizerFactory,
+    molecule_idx_sampler: MoleculeIdxSampler,
+    sampler: MultiNuclearGeometrySampler,
     steps: Iterable,
     train_state: TrainState,
+    merge_keys: Optional[list[str]],
     loss_function_factory: LossFunctionFactory,
     observable_monitors: list[ObservableMonitor],
 ) -> Generator[tuple[int, TrainState, jax.Array, Stats, dict]]:
@@ -57,7 +63,7 @@ def fit_wf(  # noqa: C901
         smpl_state, params, opt_state = train_state
         rng_sample, rng_kfac = split_on_devices(rng, 2)
         mol_idxs = molecule_idx_sampler.sample()
-        data = jax.tree_util.tree_map(lambda x: x[:, mol_idxs[0]], data)
+        data = jax.tree.map(lambda x: x[:, mol_idxs[0]], data)
         smpl_state, phys_conf, smpl_stats = sample_wf(
             rng_sample, smpl_state, params, mol_idxs
         )
@@ -72,9 +78,13 @@ def fit_wf(  # noqa: C901
             opt_state,
             (phys_conf, weight, data),
         )
+        params = pmap_merge_states(
+            params, tuple(merge_keys) if merge_keys is not None else None
+        )
         # E_loc and ratios have been `all_gather`ed in the loss function
         # because KFAC only returns their mean over the devices
-        E_loc = E_loc[0, local_slice()]
+        if E_loc is not None:
+            E_loc = E_loc[0, local_slice()]
         if ratios is not None:
             ratios = ratios[0, local_slice()]
         if not isinstance(opt, NoOptimizer):
@@ -84,9 +94,19 @@ def fit_wf(  # noqa: C901
             operator.or_,
             (
                 monitor(
-                    step, params, phys_conf, smpl_state['elec']['psi'], E_loc, ratios
+                    step,
+                    rng_monitor,
+                    params,
+                    phys_conf,
+                    jax.tree.map(
+                        lambda x: x[:, mol_idxs[0]], smpl_state['elec']['psi']
+                    ),
+                    E_loc,
+                    ratios,
                 )
-                for monitor in observable_monitors
+                for rng_monitor, monitor in zip(
+                    split_on_devices(rng, len(observable_monitors)), observable_monitors
+                )
             ),
             stats | smpl_stats,
         )
@@ -107,7 +127,7 @@ def fit_wf(  # noqa: C901
     if opt_state is None:
         rng, rng_sample, rng_opt = split_on_devices(rng, 3)
         idxs = molecule_idx_sampler.sample()
-        data = jax.tree_util.tree_map(lambda x: x[:, idxs[0]], data)
+        data = jax.tree.map(lambda x: x[:, idxs[0]], data)
         _, init_phys_conf, _ = sample_wf(rng_sample, smpl_state, params, idxs)
         opt_state = opt.init(
             rng_opt,
@@ -123,17 +143,20 @@ def fit_wf(  # noqa: C901
         stats = select_one_device(pmap_pmean(stats))
         mol_idxs = select_one_device(mol_idxs)
 
-        ewm_state = update_ewm(stats['local_energy/mean'], ewm_state, mol_idxs)
-        std_ewm_state = update_ewm(stats['local_energy/std'], std_ewm_state, mol_idxs)
+        if stats.get('local_energy/mean') is not None:
+            ewm_state = update_ewm(stats['local_energy/mean'], ewm_state, mol_idxs)
+            std_ewm_state = update_ewm(
+                stats['local_energy/std'], std_ewm_state, mol_idxs
+            )
 
-        data = {
-            'energy_ewm': replicate_on_devices(ewm_state.mean),
-            'std_ewm': replicate_on_devices(std_ewm_state.mean),
-        }
-        stats |= {
-            'energy/ewm': ewm_state.mean[mol_idxs],
-            'energy/ewm_error': jnp.sqrt(ewm_state.sqerr[mol_idxs]),
-            'energy/std_ewm': std_ewm_state.mean[mol_idxs],
-        }
+            data = {
+                'energy_ewm': replicate_on_devices(ewm_state.mean),
+                'std_ewm': replicate_on_devices(std_ewm_state.mean),
+            }
+            stats |= {
+                'energy/ewm': ewm_state.mean[mol_idxs],
+                'energy/ewm_error': jnp.sqrt(ewm_state.sqerr[mol_idxs]),
+                'energy/std_ewm': std_ewm_state.mean[mol_idxs],
+            }
 
         yield step, train_state, mol_idxs, stats, observable_samples

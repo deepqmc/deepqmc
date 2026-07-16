@@ -4,16 +4,17 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'deepqmc'
-version = '1.2.0'
+version = '1.2.1'
 description = 'Deep-learning quantum Monte Carlo for electrons in real space'
 authors = [
     {name = "Jan Hermann"},
     {name = "Zeno Schätzle", email = "zeno.schaetzle@fu-berlin.de"},
     {name = "Péter Bernát Szabó", email = "peter.bernat.szabo@fu-berlin.de"},
+    {name = "Matěj Mezera", email = "m.mezera@fu-berlin.de"},
 ]
 maintainers = [
     {name = "Zeno Schätzle", email = "zeno.schaetzle@fu-berlin.de"},
-    {name = "Péter Bernát Szabó", email = "peter.bernat.szabo@fu-berlin.de"},
+    {name = "Matěj Mezera", email = "m.mezera@fu-berlin.de"},
 ]
 readme = 'README.md'
 license = {text = 'MIT'}
@@ -27,16 +28,17 @@ classifiers = [
     'Topic :: Scientific/Engineering :: Artificial Intelligence',
     'Topic :: Scientific/Engineering :: Chemistry',
     'Topic :: Scientific/Engineering :: Physics',
-    'Programming Language :: Python :: 3.10',
-    'Programming Language :: Python :: 3.11',
+    'License :: OSI Approved :: MIT License',
     'Programming Language :: Python :: 3.12',
+    'Programming Language :: Python :: 3.13',
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
-    'dm-haiku>0.0.9',
+    'dm-haiku',
+    'folx',
     'h5py',
     'hydra-core',
-    'jax',
+    'jax<0.9.0',
     'jaxlib',
     'jax-dataclasses',
     'kfac-jax',
@@ -48,21 +50,16 @@ dependencies = [
     'tqdm',
     'uncertainties',
     'chex<1.0.0',
-    'folx',
+    'jaxtyping'
 ]
 
 [project.optional-dependencies]
 dev = [
     'pytest',
     'pytest-regressions',
+    'pytest-cov',
     'black',
     'codespell',
-    'flake8',
-    'flake8-bugbear',
-    'flake8-comprehensions',
-    'flake8-quotes',
-    'isort',
-    'mypy',
     'pep8-naming',
     'pre-commit',
     'pydocstyle',
@@ -75,9 +72,15 @@ doc = [
     'toml',
     'docutils',
     'pydata-sphinx-theme',
+    'nbsphinx',
+]
+notebooks = [
+    'jupyter',
+    'ipykernel',
 ]
 
 [project.urls]
+homepage = 'https://deepqmc.github.io'
 repository = 'https://github.com/deepqmc/deepqmc'
 documentation = 'https://deepqmc.github.io'
 
@@ -88,13 +91,28 @@ deepqmc = 'deepqmc.app:cli'
 where = ["src"]
 
 [tool.setuptools.package-data]
-"*" = ["*.yaml"]
+"*" = ["*.yaml", "*.xml", "LICENCE"]
 
 [tool.black]
-target-version = ['py310']
+target-version = ['py312']
 skip-string-normalization = true
 preview = true
 
+[tool.ruff.lint]
+ignore = ["E741", "E731"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/deepqmc/types.py" = ["F821"]
+
 [tool.pyright]
-exclude = ['tests']
-reportMissingImports = false
+include = ["src"]
+typeCheckingMode = "standard"
+pythonVersion = "3.12"
+useLibraryCodeForTypes = true
+reportGeneralTypeIssues = "error"
+reportOptionalMemberAccess = "warning"
+reportOptionalSubscript = "warning"
+reportOptionalCall = "warning"
+reportUnusedImport = "error"
+reportUnusedVariable = "error"
+reportMissingImports = "error"

@@ -1,0 +1,2 @@
+_target_: deepqmc.sampling.nuclei_samplers.no_elec_warp
+_partial_: true
