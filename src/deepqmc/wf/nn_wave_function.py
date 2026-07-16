@@ -44,8 +44,8 @@ class NeuralNetworkWaveFunction(hk.Module):
     Implements the neural network wave function.
 
     Configuration files to obtain the PauliNet [HermannNC20]_, FermiNet [PfauPRR20]_,
-    and Psiformer [Glehn23]_ architectures are provided. For a detailed description
-    of the implemented architecture see [Schaetzle23]_.
+    Psiformer [Glehn23]_ and LapNet [Li24]_ architectures are provided. For a detailed
+    description of the implemented architecture see [Schaetzle23]_.
 
     Args:
         hamil (~deepqmc.hamil.MolecularHamiltonian): the Hamiltonian of the system.

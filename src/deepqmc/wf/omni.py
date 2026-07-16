@@ -115,10 +115,10 @@ class OmniNet(hk.Module):
             :class:`Jastrow` instance.
         backflow_factory (~collections.abc.Callable): function that returns a
             :class:`Backflow` instance.
-        use_attentive_stream (bool): if :data:`True`, the GNN uses an two streams
-            (individual and attentive) as introduced in LapNet architecture. The
-            embedding dimension is doubled in this case. And after the GNN pass,
-            one half of the features is discarded.
+        use_attentive_stream (bool): if :data:`True`, the GNN uses two streams
+            (individual and attentive) as introduced in the LapNet architecture. In this
+            case, the embedding dimension is doubled. After the GNN pass, one half of
+            the features is discarded.
     """
 
     def __init__(
