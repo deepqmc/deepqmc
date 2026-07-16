@@ -25,12 +25,14 @@ class UpdateFeature(hk.Module):
         n_down: int,
         two_particle_stream_dim: int,
         node_edge_mapping: NodeEdgeMapping,
+        is_last_layer: bool = False,
     ):
         super().__init__()
         self.n_up = n_up
         self.n_down = n_down
         self.node_edge_mapping = node_edge_mapping
         self.two_particle_stream_dim = two_particle_stream_dim
+        self.is_last_layer = is_last_layer
 
     @property
     def names(self) -> list[str]:
@@ -376,7 +378,6 @@ class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
                 indiv_mlp_out = self.indiv_mlp_residual(g, indiv_mlp_out)
         else:
             indiv_mlp_out = jnp.zeros_like(g)
-
         h_combined = jnp.concatenate([indiv_mlp_out, attn_mlp_out], axis=-1)
         return [GraphNodes(None, h_combined)]
 

@@ -127,11 +127,15 @@ class ElectronGNNLayer(hk.Module):
                 }
             )
         self.update_features = [
-            uf(self.n_up, self.n_down, two_particle_stream_dim, self.mapping)
+            uf(
+                self.n_up,
+                self.n_down,
+                two_particle_stream_dim,
+                self.mapping,
+                self.last_layer,
+            )
             for uf in update_features
         ]
-        for uf in self.update_features:
-            uf.is_last_layer = self.last_layer
         self.g_factory = subnet_factory_by_lbl['g']
         self.g = (
             self.g_factory(
