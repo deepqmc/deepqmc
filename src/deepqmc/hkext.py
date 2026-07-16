@@ -215,10 +215,21 @@ class SparseMultiHeadAttention(hk.MultiHeadAttention):
     def __call__(self, query, key, value, mask=None):
         assert mask is None, 'mask not supported in this minimal subclass'
 
+        # copy of hk.MultiHeadAttention._linear_projection, which pyright cannot type
+        def linear_projection(x, head_size, name):
+            y = hk.Linear(
+                self.num_heads * head_size,
+                w_init=self.w_init,
+                with_bias=self.with_bias,
+                b_init=self.b_init,
+                name=name,
+            )(x)
+            return y.reshape(*y.shape[:-1], self.num_heads, head_size)
+
         # --- project to Q/K/V via hk.Linear (folx handles default) ---
-        q = self._linear_projection(query, self.key_size, 'query')  # (..., N, H, K)
-        k = self._linear_projection(key, self.key_size, 'key')
-        v = self._linear_projection(value, self.value_size, 'value')  # (..., N, H, V)
+        q = linear_projection(query, self.key_size, 'query')  # (..., N, H, K)
+        k = linear_projection(key, self.key_size, 'key')
+        v = linear_projection(value, self.value_size, 'value')  # (..., N, H, V)
 
         # Move H axis next to N for sparse_attention's contract
         # (..., N, H, K) -> (..., H, N, K)
