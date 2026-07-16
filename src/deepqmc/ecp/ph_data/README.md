@@ -4,4 +4,4 @@ The data for transition metals (Cr to Zn) are from *Ichibha et al., Locality Err
 
 The data for S atom come from *Fu et al., Empowering Neural Network-Based Quantum Monte Carlo with Local Pseudopotentials. Nature Computational Science 2026, 1–10. https://doi.org/10.1038/s43588-026-01008-7.*
 
-The data files in this folder were copied from the open-source project [JaQMC](https://github.com/bytedance/jaqmc/tree/8a9b066c78e0097f6c028849d9d51bf1762e1127/jaqmc/pp/ph/raw_data), with [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0), see `LICENSE` in this directory for the full license text.
+The data files in this folder were copied from the open-source project [JaQMC](https://github.com/bytedance/jaqmc/tree/45273327ec0e7cb57d6dfa520e2329f4ad168229/src/jaqmc/estimator/ph/raw_data), with [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0), see `LICENSE` in this directory for the full license text.
