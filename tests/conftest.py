@@ -95,6 +95,20 @@ class Helpers:
             )
 
     @staticmethod
+    def batch_phys_conf(hamil=None, mol_batch=1, n_states=1, elec_batch=1):
+        hamil = hamil or Helpers.hamil()
+        flat_pc = Helpers.phys_conf(hamil, n=mol_batch * n_states * elec_batch)
+        n_elec = flat_pc.r.shape[-2]
+        r = flat_pc.r.reshape(mol_batch, n_states, elec_batch, n_elec, 3)
+        R = jax.numpy.broadcast_to(
+            hamil.mol.coords, (mol_batch, n_states, elec_batch, *hamil.mol.coords.shape)
+        )
+        mol_idx = jax.numpy.zeros((mol_batch, n_states, elec_batch))
+        phys_conf = PhysicalConfiguration(R=R, r=r, mol_idx=mol_idx)
+        weight = jax.numpy.ones((mol_batch, n_states, elec_batch))
+        return phys_conf, weight
+
+    @staticmethod
     def transform_model(model, *model_args, **model_kwargs):
         return hk.without_apply_rng(
             hk.transform(
