@@ -40,7 +40,11 @@ def sampling_error(
 
 
 def clipped_mean_and_sampling_error(
-    samples, lower, upper, iteration_axis=0, walker_axis=1
+    samples: jax.Array,
+    lower: float = -jnp.inf,
+    upper: float = jnp.inf,
+    iteration_axis: int = 0,
+    walker_axis: int = 1,
 ):
     r"""Compute the mean and sampling error of samples clipped to a given range.
 
