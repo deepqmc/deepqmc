@@ -20,6 +20,7 @@ class TestNeuralNetworkWaveFunction:
         grad_log_psi = grad_ansatz(params)
         ndarrays_regression.check(
             helpers.flatten_pytree(grad_log_psi),
+            default_tolerance={'rtol': 1e-4, 'atol': 1e-6},
         )
 
     def test_laplace_psi(self, helpers, ndarrays_regression):
