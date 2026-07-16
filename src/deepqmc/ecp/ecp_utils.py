@@ -50,7 +50,7 @@ def single_quadrature_point(
     """
     diff_vector = electron_coordinate - nucleus_coordinate
     radius = jnp.linalg.norm(diff_vector, axis=-1)
-    theta = jnp.arccos(jnp.clip(diff_vector[2] / radius, a_min=-1.0, a_max=1.0))
+    theta = jnp.arccos(jnp.clip(diff_vector[2] / radius, min=-1.0, max=1.0))
     phi = jnp.arctan2(diff_vector[1], diff_vector[0])
     phi_random = jax.random.uniform(rng, (), minval=0, maxval=jnp.pi / 5)
     return (
