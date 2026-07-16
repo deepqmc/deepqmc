@@ -286,7 +286,7 @@ ______
 
 The hyperparameters of the training and the wave function ansatz are specified through hydra config files. Predefined ansatzes can be found in ``.../deepqmc/src/deepqmc/conf/ansatz`` and selected via::
 
-    $ deepqmc ansatz=psiformer
+    $ deepqmc ansatz=ferminet
 
 The hyperparameters of such a predefined ansatz can also be overwritten at the command line::
 

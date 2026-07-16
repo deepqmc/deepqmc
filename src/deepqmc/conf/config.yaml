@@ -2,8 +2,8 @@ defaults:
   - _self_
   - optional .@_here_: deepqmc
   - task: train
-  - ansatz: default
-  - hamil: qc
+  - ansatz: psiformer
+  - hamil: qc_forward_laplacian
   - override hydra/job_logging: custom
   - override hydra/help: custom
 hydra:
