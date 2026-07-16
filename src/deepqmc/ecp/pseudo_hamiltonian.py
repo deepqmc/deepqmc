@@ -1,6 +1,7 @@
 import os
 from collections.abc import Callable, Iterable
 from xml.etree import ElementTree
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
@@ -13,15 +14,18 @@ from ..geom import pairwise_distance
 from ..physics import LaplacianFactory, Potential
 from ..types import Energy, PhysicalConfiguration, WaveFunction
 
+# default suffix per OPH23 selection from [Ichibha23]
 ELEMENTS_WITH_EXISTING_PH = {
-    16: 'S',
-    24: 'Cr',
-    25: 'Mn',
-    26: 'Fe',
-    27: 'Co',
-    28: 'Ni',
-    29: 'Cu',
-    30: 'Zn',
+    15: ('P', 'cc'),
+    16: ('S', 'cc'),
+    17: ('Cl', 'cc'),
+    24: ('Cr', 'cc'),
+    25: ('Mn', 'hf'),
+    26: ('Fe', 'cc'),
+    27: ('Co', 'cc'),
+    28: ('Ni', 'hf'),
+    29: ('Cu', 'hf'),
+    30: ('Zn', 'cc'),
 }
 
 
@@ -67,7 +71,7 @@ def parse_xml(xml_file):
 
 
 def load_PH_functions(
-    charges: jax.Array, ecp_mask: jax.Array, ph_file_suffix: str = 'cc'
+    charges: jax.Array, ecp_mask: jax.Array, ph_file_suffix: Optional[str] = None
 ):
     """Loads the pseudo Hamiltonian functions from reference."""
     ns_valence = []
@@ -81,13 +85,12 @@ def load_PH_functions(
                 atomic_number in ELEMENTS_WITH_EXISTING_PH
             ), f'Pseudo-Hamiltonian for atomic number {atomic_number} not found \
                 (probably does not exist!).'
-            atom_name = ELEMENTS_WITH_EXISTING_PH[atomic_number]
+            atom_name, default_suffix = ELEMENTS_WITH_EXISTING_PH[atomic_number]
             if atom_name not in PH_functions:
+                suffix = ph_file_suffix or default_suffix
                 # Load the PH functions from the XML file
                 dqmc_dir_name = os.path.dirname(deepqmc.__file__)
-                xml_file = (
-                    f'{dqmc_dir_name}/ecp/ph_data/{atom_name}.{ph_file_suffix}.xml'
-                )
+                xml_file = f'{dqmc_dir_name}/ecp/ph_data/{atom_name}.{suffix}.xml'
                 loc_data, l2_data, n_valence = parse_xml(xml_file)
                 rx = jnp.linspace(0, 10.0, 10001)
                 PH_functions[atom_name] = {
@@ -169,8 +172,9 @@ class PseudoHamiltonian(Potential):
 
     def __init__(self, charges: jax.Array, ecp_type: str, ecp_mask: jax.Array):
         self.ecp_mask = ecp_mask
+        ph_file_suffix = str(ecp_type).removeprefix('PH') or None
         self.ns_valence, self.a, self.rV_loc, self.rV_L2 = load_PH_functions(
-            charges, ecp_mask
+            charges, ecp_mask, ph_file_suffix
         )
 
     def local_potential(self, phys_conf: PhysicalConfiguration) -> Energy:
