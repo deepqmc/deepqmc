@@ -81,9 +81,10 @@ If `Pip <https://pip.pypa.io/en/stable/quickstart/>`_ complains about ``setup.py
 The above installation will result in the CPU version of JAX. However, running DeepQMC on the GPU is highly recommended. To enable GPU support make sure to upgrade JAX to match the CUDA and cuDNN versions of your system. For most users this can be achieved with::
 
     $ # CUDA 12 installation
-    $ pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+    $ pip install "jax[cuda12]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
-If issues arise during the installation of JAX, or if errors related to CUDA or cuDNN occur at runtime, please visit the `JAX Install Guide <https://github.com/google/jax#installation>`_.
+If issues arise during the installation of JAX, or if errors related to CUDA or cuDNN occur at runtime, please visit the `JAX Install Guide <https://github.com/google/jax#installation>`_. Note that the latest JAX version may not be compatible with DeepQMC, see dependencies in `pyproject.toml
+<https://github.com/deepqmc/deepqmc/blob/master/pyproject.toml>`_.
 
 To validate your installation run::
 

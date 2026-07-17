@@ -40,7 +40,7 @@ The above installation will result in the CPU version of JAX. However, running D
 
 ```
 # CUDA 12 installation
-pip install --upgrade "jax[cuda12]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install "jax[cuda12]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 ```
 
 For further help setting up JAX, visit the [JAX Install Guide](https://github.com/google/jax#installation).
