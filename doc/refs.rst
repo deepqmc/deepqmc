@@ -30,6 +30,11 @@ References
     Learning Representations, ICLR 2023
     <https://openreview.net/forum?id=xveTeHVlF7j>`_ (2023).
 
+.. [Gerard22] L. Gerard, M. Scherbela, P. Marquetand, P. Grohs, Gold-standard
+    solutions to the Schrödinger equation using deep learning: How much
+    physics do we need? `Advances in Neural Information Processing Systems 35,
+    10282-10294 <https://doi.org/10.48550/arXiv.2205.09438>`_ (2022).
+
 .. [Burkatzki07] M. Burkatzki, C. Filippi, and M. Dolg, Energy-consistent
     pseudopotentials for quantum Monte Carlo calculations. `Journal of Chemical
     Physics 126, 234105
