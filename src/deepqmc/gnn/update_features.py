@@ -3,7 +3,7 @@ from collections.abc import Mapping, Sequence
 import haiku as hk
 import jax.numpy as jnp
 
-from ..hkext import Identity
+from ..hkext import Identity, SparseMultiHeadAttention
 from .graph import GraphEdges, GraphNodes
 from .utils import NodeEdgeMapping
 
@@ -25,12 +25,14 @@ class UpdateFeature(hk.Module):
         n_down: int,
         two_particle_stream_dim: int,
         node_edge_mapping: NodeEdgeMapping,
+        is_last_layer: bool = False,
     ):
         super().__init__()
         self.n_up = n_up
         self.n_down = n_down
         self.node_edge_mapping = node_edge_mapping
         self.two_particle_stream_dim = two_particle_stream_dim
+        self.is_last_layer = is_last_layer
 
     @property
     def names(self) -> list[str]:
@@ -282,6 +284,102 @@ class NodeAttentionElectronUpdateFeature(UpdateFeature):
         if self.mlp_residual:
             mlp_out = self.mlp_residual(attended, mlp_out)
         return [GraphNodes(None, mlp_out)]
+
+
+class SparseDerivativeNodeAttentionElectronUpdateFeature(UpdateFeature):
+    r"""LapNet-style dual-stream attention block as an electron update feature.
+
+    Implements one Transformer-like layer of the LapNet ansatz.  The electron
+    embedding is the concatenation of **two streams** of equal width, split along the
+    feature axis:
+
+      * the *individual* stream ``g`` — a per-electron embedding whose forward-Laplacian
+        Jacobian stays sparse. Used as the queries and keys for attention.
+      * the *attentive* stream ``h`` — a per-electron embedding whose Jacobian densifies
+        once attention mixes contributions from all electrons. Used as the values for
+        attention.
+
+    The attentive stream is updated by sparse multi-head attention (``g``→Q/K, ``h``→V)
+    followed by an MLP, both with optional residual connections.  The individual stream
+    is updated by its own MLP, except on the last layer (``is_last_layer``), where it is
+    zeroed out since only the attentive stream feeds the downstream determinant.  The
+    two updated streams are concatenated back into a single array on output.
+
+    Args:
+        n_up (int):  number of spin-up electrons
+        n_down (int):  number of spin-down electrons
+        two_particle_stream_dim (int):  dimension of the two-particle stream, unused
+            here
+        node_edge_mapping (~deepqmc.gnn.utils.NodeEdgeMapping):  node/edge
+            mapping, unused here
+        num_heads (int):  number of attention heads.  ``num_heads`` must
+            divide the attentive embedding dimension; ``D_per_head =
+            h.shape[-1] // num_heads``.
+        indiv_mlp_factory (~typing.Type[~deepqmc.hkext.MLP]):  factory for the
+            MLP applied to the individual stream
+        attn_mlp_factory (~typing.Type[~deepqmc.hkext.MLP]):  factory for the
+            MLP applied to the attention output
+        attention_residual (Optional[~deepqmc.hkext.ResidualConnection]):  optional
+            residual connection wrapping the attention call
+        attn_mlp_residual (Optional[~deepqmc.hkext.ResidualConnection]):  optional
+            residual connection wrapping ``attn_mlp``
+        indiv_mlp_residual (Optional[~deepqmc.hkext.ResidualConnection]):  optional
+            residual connection wrapping ``indiv_mlp``
+    """
+
+    def __init__(
+        self,
+        *args,
+        num_heads,
+        indiv_mlp_factory,
+        attn_mlp_factory,
+        attention_residual,
+        attn_mlp_residual,
+        indiv_mlp_residual,
+    ):
+        super().__init__(*args)
+        self.num_heads = num_heads
+        self.attention_residual = attention_residual
+        self.attn_mlp_residual = attn_mlp_residual
+        self.indiv_mlp_residual = indiv_mlp_residual
+        self.attn_mlp_factory = attn_mlp_factory
+        self.indiv_mlp_factory = indiv_mlp_factory
+
+    def __call__(
+        self, nodes: GraphNodes, edges: Mapping[str, GraphEdges]
+    ) -> Sequence[GraphNodes]:
+        h_combined = nodes.electrons
+        # split the node features into individual and attentive streams
+        # g.shape = h.shape = (n_el, embedding_dim)
+        g, h = jnp.split(h_combined, 2, axis=-1)
+
+        # update attentive stream
+        heads_dim = h.shape[-1] // self.num_heads
+        assert heads_dim * self.num_heads == h.shape[-1]
+        attention_layer = SparseMultiHeadAttention(
+            self.num_heads,
+            heads_dim,
+            w_init=hk.initializers.VarianceScaling(1, 'fan_in', 'normal'),
+            with_bias=False,
+        )
+        attn_mlp = self.attn_mlp_factory(h.shape[-1], name='mlp_attn')
+        attended = attention_layer(g, g, h)
+        if self.attention_residual:
+            attended = self.attention_residual(h, attended)
+        attn_mlp_out = attn_mlp(attended)
+        if self.attn_mlp_residual:
+            attn_mlp_out = self.attn_mlp_residual(attended, attn_mlp_out)
+
+        # update individual stream (except for the last layer)
+        if not self.is_last_layer:
+            indiv_mlp = self.indiv_mlp_factory(g.shape[-1], name='mlp_indiv')
+            indiv_mlp_out = indiv_mlp(g)
+            if self.indiv_mlp_residual:
+                indiv_mlp_out = self.indiv_mlp_residual(g, indiv_mlp_out)
+        else:
+            indiv_mlp_out = jnp.zeros_like(g)
+        h_combined = jnp.concatenate([indiv_mlp_out, attn_mlp_out], axis=-1)
+        return [GraphNodes(None, h_combined)]
 
 
 class CombinedNodeAttentionUpdateFeature(UpdateFeature):

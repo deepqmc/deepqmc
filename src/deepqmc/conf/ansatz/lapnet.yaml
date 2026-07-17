@@ -1,0 +1,115 @@
+_target_: deepqmc.wf.NeuralNetworkWaveFunction
+_partial_: true
+envelope:
+  _target_: deepqmc.wf.env.ExponentialEnvelopes
+  _partial_: true
+  isotropic: true
+  per_shell: false
+  per_orbital_exponent: true
+  spin_restricted: false
+  init_to_ones: true
+  softplus_zeta: false
+backflow_op:
+  _target_: deepqmc.wf.nn_wave_function.BackflowOp
+  _partial_: true
+  mult_act: '${eval:"lambda x: x"}'
+n_determinants: 16
+full_determinant: true
+cusp_electrons:
+  _target_: deepqmc.wf.cusp.ElectronicCuspAsymptotic
+  _partial_: true
+  same_scale: 0.25
+  anti_scale: 0.5
+  alpha: 1.0
+  trainable_alpha: true
+  cusp_function:
+    _target_: deepqmc.wf.cusp.PsiformerCusp
+cusp_nuclei: false
+backflow_transform: mult
+conf_coeff:
+  _target_: deepqmc.hkext.SumPool
+  _partial_: true
+omni_factory:
+  _target_: deepqmc.wf.omni.OmniNet
+  _partial_: true
+  embedding_dim: 256
+  jastrow_factory: null
+  backflow_factory:
+    _target_: deepqmc.wf.omni.Backflow
+    _partial_: true
+    subnet_factory:
+      _target_: deepqmc.hkext.MLP
+      _partial_: true
+      hidden_layers: ['log', 1]
+      bias: true # LapNet uses bias here, while Psiformer does not
+      last_linear: true
+      activation: null
+      init: ferminet
+  nuclear_gnn_head: null
+  use_attentive_stream: true
+  gnn_factory:
+    _target_: deepqmc.gnn.ElectronGNN
+    _partial_: true
+    n_interactions: 4
+    nuclei_embedding: null
+    electron_embedding:
+      _target_: deepqmc.gnn.electron_gnn.ElectronEmbedding
+      _partial_: true
+      positional_embeddings:
+        ne:
+          _target_: deepqmc.gnn.edge_features.CombinedEdgeFeature
+          features:
+          - _target_: deepqmc.gnn.edge_features.DistancePowerEdgeFeature
+            powers: [1]
+            log_rescale: true
+          - _target_: deepqmc.gnn.edge_features.DifferenceEdgeFeature
+            log_rescale: true
+      use_spin: true
+      project_to_embedding_dim: true
+    two_particle_stream_dim: 32 # not used, irrelevant
+    self_interaction: true
+    edge_features: null
+    layer_factory:
+      _target_: deepqmc.gnn.electron_gnn.ElectronGNNLayer
+      _partial_: true
+      subnet_factory:
+        _target_: deepqmc.hkext.Identity
+        _partial_: true
+      electron_residual: false
+      nucleus_residual: false
+      two_particle_residual: false
+      deep_features: false
+      update_rule: concatenate
+      update_features:
+      - _target_: deepqmc.gnn.update_features.SparseDerivativeNodeAttentionElectronUpdateFeature
+        _partial_: true
+        num_heads: 4
+        indiv_mlp_factory:
+          _target_: deepqmc.hkext.MLP
+          _partial_: true
+          hidden_layers: ['log', 2] # LapNet from [Li et al. 2024] uses just 1 dense layer here, we keep 2 layers for better direct comparison with Psiformer
+          bias: true
+          last_linear: false
+          activation:
+            _target_: jax.numpy.tanh
+            _partial_: true
+          init: ferminet
+        attn_mlp_factory:
+          _target_: deepqmc.hkext.MLP
+          _partial_: true
+          hidden_layers: ['log', 2] # LapNet from [Li et al. 2024] uses just 1 dense layer here, we keep 2 layers for better direct comparison with Psiformer
+          bias: true
+          last_linear: false
+          activation:
+            _target_: jax.numpy.tanh
+            _partial_: true
+          init: ferminet
+        attention_residual:
+          _target_: deepqmc.hkext.ResidualConnection
+          normalize: false
+        attn_mlp_residual:
+          _target_: deepqmc.hkext.ResidualConnection
+          normalize: false
+        indiv_mlp_residual:
+          _target_: deepqmc.hkext.ResidualConnection
+          normalize: false

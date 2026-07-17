@@ -7,6 +7,8 @@ import jax.numpy as jnp
 from haiku.initializers import VarianceScaling
 from jax.nn import sigmoid, softplus
 
+from .folxext import sparse_attention
+
 
 def ssp(x: jax.Array) -> jax.Array:
     r"""Compute the shifted softplus activation function.
@@ -198,3 +200,54 @@ class GLU(hk.Module):
             x = hk.LayerNorm(-1, False, False)(x)
             y = hk.LayerNorm(-1, False, False)(y)
         return self.activation(self.activated_linear(x)) * self.linear(y)
+
+
+class SparseMultiHeadAttention(hk.MultiHeadAttention):
+    """Drop-in subclass of hk.MultiHeadAttention.
+
+    Identical interface to the parent: just override __call__ to route the
+    scaled-dot-product through `sparse_attention`, so folx picks up the
+    wide-scope rule.  Q/K/V projections and the output projection use Haiku's
+    standard hk.Linear (folx's default rule handles those fine, since they're
+    per-electron Linears that preserve weak structure).
+    """
+
+    def __call__(self, query, key, value, mask=None):
+        assert mask is None, 'mask not supported in this minimal subclass'
+
+        # copy of hk.MultiHeadAttention._linear_projection, which pyright cannot type
+        def linear_projection(x, head_size, name):
+            y = hk.Linear(
+                self.num_heads * head_size,
+                w_init=self.w_init,
+                with_bias=self.with_bias,
+                b_init=self.b_init,
+                name=name,
+            )(x)
+            return y.reshape(*y.shape[:-1], self.num_heads, head_size)
+
+        # --- project to Q/K/V via hk.Linear (folx handles default) ---
+        q = linear_projection(query, self.key_size, 'query')  # (..., N, H, K)
+        k = linear_projection(key, self.key_size, 'key')
+        v = linear_projection(value, self.value_size, 'value')  # (..., N, H, V)
+
+        # Move H axis next to N for sparse_attention's contract
+        # (..., N, H, K) -> (..., H, N, K)
+        q = jnp.swapaxes(q, -2, -3)
+        k = jnp.swapaxes(k, -2, -3)
+        v = jnp.swapaxes(v, -2, -3)
+
+        # --- wide-scope sparse attention (folx routes to our custom rule) ---
+        attn_out = sparse_attention(q, k, v)  # (..., H, N, V)
+
+        # Reshape & final projection
+        attn_out = jnp.swapaxes(attn_out, -2, -3)  # (..., N, H, V)
+        attn_out = attn_out.reshape(*attn_out.shape[:-2], -1)  # (..., N, H·V)
+        final = hk.Linear(
+            self.model_size,
+            w_init=self.w_init,
+            with_bias=self.with_bias,
+            b_init=self.b_init,
+            name='linear',
+        )
+        return final(attn_out)

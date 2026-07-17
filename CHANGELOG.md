@@ -13,12 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Geometrically transferable training, allowing a single ansatz to be optimized jointly across multiple molecular configurations (`task=train_transferable`). The underlying mechanism has been in place since 1.1.0 but was never documented until now:
     - `TransPsiformer`, a transferable extension of Psiformer that explicitly accounts for changes in the nuclear geometry
     - Dynamic sampling of the nuclear geometry directly in internal (bond length/angle/dihedral) coordinates throughout training, enabling continuous potential energy surfaces and ab initio geometry optimization
-- Pseudo-Hamiltonians, a local alternative to effective core potentials, for S, Cr, Mn, Fe, Co, Ni, Cu and Zn
+- Pseudo-Hamiltonians, a local alternative to effective core potentials, for P, S, Cl, Cr, Mn, Fe, Co, Ni, Cu and Zn
 - Antithetic-sampling variance reduction for Hellmann-Feynman force estimators
 - Spin-exchange proposal for electron sampling
 - Spin penalty applicable to a subset of electronic states, with linear scaling
 - `deepqmc.postprocess`, a module for loading checkpoints, reinstantiating trained ansatzes, and computing Monte Carlo sampling statistics from a finished run
 - Support for specifying observable monitors by name in config files
+- LapNet ansatz (`ansatz=lapnet`) from [Li et al. 2024](https://www.nature.com/articles/s42256-024-00794-x), a Psiformer-based architecture designed for efficient forward-Laplacian evaluation
 
 ### Changed
 
