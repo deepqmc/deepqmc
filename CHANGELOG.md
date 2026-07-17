@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased]
+## [1.3.0] - 2026-07-17
 
 ### Added
 
@@ -14,9 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `TransPsiformer`, a transferable extension of Psiformer that explicitly accounts for changes in the nuclear geometry
     - Dynamic sampling of the nuclear geometry directly in internal (bond length/angle/dihedral) coordinates throughout training, enabling continuous potential energy surfaces and ab initio geometry optimization
 - Pseudo-Hamiltonians, a local alternative to effective core potentials, for P, S, Cl, Cr, Mn, Fe, Co, Ni, Cu and Zn
-- Antithetic-sampling variance reduction for Hellmann-Feynman force estimators
+- Implementation of a variety of Hellmann-Feynman force estimators
 - Spin-exchange proposal for electron sampling
-- Spin penalty applicable to a subset of electronic states, with linear scaling
+- Spin penalty applicable to a subset of electronic states
+- Linear scaling spin penalty added
 - `deepqmc.postprocess`, a module for loading checkpoints, reinstantiating trained ansatzes, and computing Monte Carlo sampling statistics from a finished run
 - Support for specifying observable monitors by name in config files
 - LapNet ansatz (`ansatz=lapnet`) from [Li et al. 2024](https://www.nature.com/articles/s42256-024-00794-x), a Psiformer-based architecture designed for efficient forward-Laplacian evaluation
@@ -206,6 +207,7 @@ At this moment, DeepQMC should be still considered a research code.
 - Core functionality to run variational quantum Monte Carlo with Pytorch
 - PauliNet, a deep neural network ansatz
 
+[1.3.0]: https://github.com/deepqmc/deepqmc/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/deepqmc/deepqmc/compare/1.1.2...1.2.0
 [1.1.2]: https://github.com/deepqmc/deepqmc/compare/1.1.1...1.1.2
 [1.1.1]: https://github.com/deepqmc/deepqmc/compare/1.1.0...1.1.1
