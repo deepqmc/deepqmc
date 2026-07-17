@@ -231,7 +231,7 @@ Therefore, if the ``molecule_batch_size`` is significantly smaller than the numb
 
 After a shared optimization the transferable ansatz can be evaluated on the geometries of interest independently:
 
-    $ deepqmc hydra.run.dir=workdir_eval task=evaluate task.restdir=workdir_transferable/training task.molecule_batch_size=1 hamil/mol=from_file hamil.mol.directory=mols_dir/LiH_eq
+    $ deepqmc hydra.run.dir=workdir_eval task=evaluate task.restdir=workdir_transferable/training +task.molecule_batch_size=1 hamil/mol=from_file hamil.mol.file=mols_dir/LiH_eq
 
 Dynamic geometry sampling
 ~~~~~~~~~~~~~~~~~~~~~~~~~
