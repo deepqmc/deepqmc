@@ -214,7 +214,7 @@ Here we generate a dataset composed of two configurations of the LiH molecule::
 
 We then run a transferable DeepQMC simulation::
 
-    $ deepqmc hydra.run.dir=workdir_transferable task=train_transferable ansatz=transpsiformer task.molecule_batch_size=2 hamil/mol=LiH task.mols.directory=mols_dir
+    $ deepqmc hydra.run.dir=workdir_transferable task=train_transferable  task.seed=42 ansatz=transpsiformer task.molecule_batch_size=2 hamil/mol=LiH task.mols.directory=mols_dir
 
 Additional to providing the mols directory the molecule in the Hamiltonian needs to be set accordingly (this molecule is used for determining shapes of the wave function etc.).
 Note that all the molecule configurations in ``mols_dir`` as well as the molecule specified in the Hamiltonian need to have the same charges, total charge, spin, etc. that is have to be equivalent up to their geometry.
@@ -258,7 +258,7 @@ For example, the following configuration continuously stretches and compresses t
               atom_idxs: [0, null, null]
               distribution_factories:
                 - _target_: deepqmc.geom.zmatrix.ClippedNormalDistributionFactory
-                  scale: 1.0
+                  scale: 2.0
                   low: 1.5
                 - null
                 - null
@@ -270,7 +270,7 @@ Other distributions, such as :class:`~deepqmc.geom.zmatrix.CenteredUniformDistri
 
 The dynamic sampler is then enabled with::
 
-        $ deepqmc hamil/mol=LiH ansatz=transpsiformer task/sampler_factory/nuc_sampler=LiH_zmat task/sampler_factory/elec_warp_fn=nn_elec_warp +task.sampler_factory.update_nuc_period=1
+        $ deepqmc hydra.run.dir=workdir_transferable_continous task=train_transferable task.seed=42 ansatz=transpsiformer task.molecule_batch_size=1 hamil/mol=LiH task.mols.directory=null task/sampler_factory/nuc_sampler=LiH_zmat task/sampler_factory/elec_warp_fn=nn_elec_warp +task.sampler_factory.update_nuc_period=10
 
 ``update_nuc_period`` sets how often, in training steps, a new geometry is drawn.
 Since it is not part of the default sampler configuration it needs to be added with the ``+`` prefix.
