@@ -3,6 +3,7 @@ __pycache__/
 /pip-wheel-metadata/
 /src/*.egg-info/
 /dist/
+/build/
 /htmlcov/
 /.coverage
 /doc/build/
