@@ -288,6 +288,15 @@ The hyperparameters of the training and the wave function ansatz are specified t
 
     $ deepqmc ansatz=ferminet
 
+The following predefined ansatzes are implemented:
+
+- ``default``: DeepQMC's general-purpose graph-neural-network-based wave function, from which the other predefined ansatzes are derived by adjusting hyperparameters
+- ``ferminet``: FermiNet [PfauPRR20]_
+- ``psiformer``: Psiformer, a self-attention ansatz [Glehn23]_
+- ``deeperwin``: DeepErwin [Gerard22]_
+- ``lapnet``: LapNet, a Psiformer-based architecture designed for efficient forward-Laplacian evaluation [Li24]_
+- ``transpsiformer``: a transferable extension of Psiformer that explicitly accounts for changes in the nuclear geometry [Schaetzle25]_
+
 The hyperparameters of such a predefined ansatz can also be overwritten at the command line::
 
     $ deepqmc ansatz=psiformer ansatz.omni_factory.gnn_factory.n_interactions=2
