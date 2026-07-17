@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from .kfacext import batch_size_extractor
+from .kfacext import batch_size_extractor, layer_tag_to_block_ctor
 from .loss import LossAndGradFunction
 from .parallel import PMAP_AXIS_NAME, pmap, pmean
 from .types import Batch, Energy, KeyArray, OptState, Params, Stats
@@ -184,6 +184,7 @@ class KFACOptimizer(Optimizer):
             multi_device=True,
             pmap_axis_name=PMAP_AXIS_NAME,
             batch_size_extractor=batch_size_extractor,
+            layer_tag_to_block_ctor=layer_tag_to_block_ctor,
         )
 
     def init(self, rng: KeyArray, params: Params, batch: Batch) -> OptState:
