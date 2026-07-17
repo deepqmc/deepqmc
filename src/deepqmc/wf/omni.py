@@ -199,7 +199,7 @@ class NuclearGNNHead(hk.Module):
             return glu_out + hk.get_parameter(
                 f'{key}_bias_{spin}',
                 glu_out.shape,
-                init=lambda s, d: 2 * jnp.ones(s, d),
+                init=lambda s, d: 2 * jnp.ones(s),
             )
 
         return readout

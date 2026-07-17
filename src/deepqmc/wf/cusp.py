@@ -39,7 +39,7 @@ class CuspAsymptotic(hk.Module):
             hk.get_parameter(
                 f'{name}_alpha',
                 (),
-                init=lambda s, d: jnp.array(value, dtype=d).reshape(s),
+                init=lambda s, d: jnp.array(value).reshape(s),
             )
             if self.trainable_alpha
             else jnp.array(value, dtype=float)
