@@ -87,6 +87,7 @@ html_sidebars = {
     ]
 }
 html_static_path = ['_static']
+html_css_files = ['custom.css']
 
 autodoc_default_options = {'members': True}
 autodoc_inherit_docstrings = False

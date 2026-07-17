@@ -1,1 +1,8 @@
 .katex { font-size: 1em; }
+
+/* Wrap long lines in code/command blocks instead of showing a horizontal
+   scrollbar. */
+div.highlight pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
