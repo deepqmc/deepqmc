@@ -69,7 +69,7 @@ Pseudo-Hamiltonians
 ~~~~~~~~~~~~~~~~~~~~
 
 A local alternative to effective core potentials, avoiding the nonlocal potential's
-stochastic quadrature evaluation, currently available for S, Cr, Mn, Fe, Co, Ni, Cu
+stochastic quadrature evaluation, currently available for P, S, Cl, Cr, Mn, Fe, Co, Ni, Cu
 and Zn.
 
 .. autoclass:: deepqmc.ecp.pseudo_hamiltonian.PseudoHamiltonian
