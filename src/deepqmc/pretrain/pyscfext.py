@@ -35,7 +35,7 @@ def extend_basis(hamil: MolecularHamiltonian, basis: str) -> Mapping[int, str]:
         assert hamil.ecp_type is not None
 
         ecp_type = filter_string(hamil.ecp_type)
-        if ecp_type == 'ph':
+        if ecp_type.startswith('ph'):
             ecp_type = 'ccecp'
             log.info(
                 'PH is enabled. Trying to find ccECP variant of pretraining basis.'
@@ -106,7 +106,7 @@ def pyscf_from_hamil(  # type: ignore
 
     hamil_as_pyscf = hamil.as_pyscf(coords=coords)
     for k, v in hamil_as_pyscf['ecp'].items():
-        if filter_string(v) == 'ph':
+        if filter_string(v).startswith('ph'):
             hamil_as_pyscf['ecp'][k] = 'ccECP'
             log.info(f'Pretraining {ELEMENTS[int(k)]} with PH against ccECP target.')
 
