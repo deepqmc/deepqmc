@@ -153,6 +153,7 @@ class NeuralNetworkWaveFunction(hk.Module):
         # the exp-normalize trick, to avoid over/underflow of the exponential
         xs_shift = jnp.where(~jnp.isinf(xs_shift), xs_shift, jnp.zeros_like(xs_shift))
         # replace -inf shifts, to avoid running into nans (see sloglindet)
+        xs_shift = jax.lax.stop_gradient(xs_shift)
         xs = sign * jnp.exp(xs - xs_shift)
         psi = self.conf_coeff(xs).squeeze()
         log_psi = jnp.log(jnp.abs(psi)) + xs_shift
