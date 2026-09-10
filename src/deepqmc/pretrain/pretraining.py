@@ -125,16 +125,22 @@ def pretrain(  # noqa: C901
             opt_state,
             phys_config,
         )
-        return params, opt_state, per_sample_losses
+        return params, opt_state, smpl_state, per_sample_losses
+
+    @partial(jax.pmap, axis_name='device_axis')
+    def update_sampler(smpl_state, params):
+        return sampler.update(smpl_state, params)
 
     for step, rng in zip(steps, rng_iterator(rng)):
         mol_idxs = molecule_idx_sampler.sample()
-        params, opt_state, per_sample_losses = pretrain_step(
+        params, opt_state, smpl_state, per_sample_losses = pretrain_step(
             rng, params, smpl_state, opt_state, mol_idxs
         )
         params = pmap_merge_states(
             params, tuple(merge_keys) if merge_keys is not None else None
         )
+        # Parameters changed; refresh cached wave function values (and forces).
+        smpl_state = update_sampler(smpl_state, params)
         yield step, params, gather_electrons_on_one_device(
             per_sample_losses
         ), select_one_device(mol_idxs)
