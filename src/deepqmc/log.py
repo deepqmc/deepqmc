@@ -90,13 +90,31 @@ class CheckpointStore:
         workdir (str): path where checkpoints are stored.
         size (int): maximum number of checkpoints stored at any time.
         interval (int): number of steps between two checkpoints.
+        overwrite (bool): if :data:`False` (default), refuse to start in a directory
+            that already contains checkpoints, to avoid destroying the results of a
+            previous run.
     """
 
     PATTERN = 'chkpt-{}.pt'
 
-    def __init__(self, workdir: str, *, size: int = sys.maxsize, interval: int = 1000):
+    def __init__(
+        self,
+        workdir: str,
+        *,
+        size: int = sys.maxsize,
+        interval: int = 1000,
+        overwrite: bool = False,
+    ):
         self.workdir = Path(workdir)
-        for p in self.workdir.glob(self.PATTERN.format('*')):
+        existing = sorted(self.workdir.glob(self.PATTERN.format('*')))
+        if existing and not overwrite:
+            raise FileExistsError(
+                f'Refusing to overwrite {len(existing)} existing checkpoint(s) in'
+                f' {self.workdir}. Run in a fresh working directory'
+                ' (hydra.run.dir=...), or pass +task.chkpt_constructor.overwrite=true'
+                ' to delete the old checkpoints.'
+            )
+        for p in existing:
             p.unlink()
         self.size = size
         self.interval = interval
