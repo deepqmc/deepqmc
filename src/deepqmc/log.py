@@ -18,6 +18,7 @@ import numpy as np
 from tensorboardX import SummaryWriter
 
 from .parallel import (
+    all_processes_agree,
     gather_electrons_on_one_device,
     pmap_pmean,
     replicate_on_devices,
@@ -128,13 +129,16 @@ class CheckpointStore:
         return step, state
 
     def close(self):
-        if all(self.buffer) and not tree_any(
-            jax.tree.map(lambda x: x.is_deleted(), self.buffer[1])
-        ):
-            self.dump()
         # If the training crashes KFAC might have already freed the buffers and the
         # state can no longer be dumped. Preventing this by keeping a copy significantly
         # impacts the performance and is therefore omitted.
+        can_dump = bool(all(self.buffer)) and not tree_any(
+            jax.tree.map(lambda x: x.is_deleted(), self.buffer[1])
+        )
+        # dump() collects data from all processes, so either all of them call it or
+        # none can.
+        if all_processes_agree(can_dump):
+            self.dump()
 
     @property
     def last(self) -> tuple[int, TrainState]:

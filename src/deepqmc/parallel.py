@@ -4,8 +4,9 @@ from functools import partial
 from typing import Optional, TypeVar
 
 import jax
+import numpy as np
 from jax._src.distributed import initialize
-from jax.experimental.multihost_utils import broadcast_one_to_all
+from jax.experimental.multihost_utils import broadcast_one_to_all, process_allgather
 
 from .types import KeyArray
 
@@ -234,6 +235,17 @@ def all_device_quantile(x, quantile, axis_name=PMAP_AXIS_NAME):
         axis_name: optional, name of pmap-ed axis.
     """
     return jax.numpy.quantile(jax.lax.all_gather(x, axis_name), quantile)
+
+
+def all_processes_agree(value: bool) -> bool:
+    r"""Reduce a per-process boolean with a logical AND over all processes.
+
+    Use this to decide whether to enter a collective when the condition may differ
+    between processes.
+    """
+    if jax.process_count() == 1:
+        return bool(value)
+    return bool(np.asarray(process_allgather(bool(value))).all())
 
 
 @partial(jax.pmap, axis_name='gather_axis')
