@@ -2,9 +2,9 @@ defaults:
   - default
 formatters:
   simple:
-    format: '[{asctime}.{msecs:03.0f}] {levelname}:{name}: {message}'
+    format: '[%(asctime)s.%(msecs)03.0f] %(levelname)s:%(name)s: %(message)s'
     datefmt: '%Y-%m-%d %H:%M:%S'
-    style: '{'
+    style: '%'
 handlers:
   console:
     stream: ext://deepqmc.app.TqdmStream
