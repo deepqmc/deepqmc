@@ -19,6 +19,7 @@ class TestApp:
         result = subprocess.run(
             [*self.ARGS, f'hydra.run.dir={tmpdir}'],
             cwd=tmpdir,
+            capture_output=True,
             check=True,
         )
         files = os.listdir(tmpdir)
