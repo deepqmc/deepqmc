@@ -92,6 +92,9 @@ class MolecularHamiltonian(Hamiltonian):
             of the spread of electrons around the nuclei.
         laplacian_factory (~deepqmc.physics.LaplacianFactory): creates a function that
             returns a tuple containing the laplacian and gradient of the wave function.
+        ecp_nonlocal_electrons (int | None): optional, if given, only this many
+            electrons closest to each nucleus contribute to the non-local part of
+            Gaussian-type ECPs. If :data:`None` (default), all electrons contribute.
     """
 
     mol: Molecule
@@ -113,6 +116,7 @@ class MolecularHamiltonian(Hamiltonian):
         ecp_mask: Optional[list[bool]] = None,
         elec_std: float = 1.0,
         laplacian_factory: LaplacianFactory = reverse_forward_laplacian,
+        ecp_nonlocal_electrons: Optional[int] = None,
     ):
         self.mol = mol
         self.elec_std = elec_std
@@ -135,7 +139,9 @@ class MolecularHamiltonian(Hamiltonian):
             if 'PH' in str(self.ecp_type):
                 self.pot = PseudoHamiltonian(mol.charges, self.ecp_type, self.ecp_mask)
             else:
-                self.pot = GaussianTypeECP(mol.charges, self.ecp_type, self.ecp_mask)
+                self.pot = GaussianTypeECP(
+                    mol.charges, self.ecp_type, self.ecp_mask, ecp_nonlocal_electrons
+                )
         else:
             self.pot = NuclearCoulombPotential(mol.charges)
 
