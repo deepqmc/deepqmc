@@ -111,10 +111,26 @@ class GaussianTypeECP(Potential):
 
     .. math::
         V_\text{nl}(r) = \sum_{k=1}^{2} \beta_{lk} \text{e}^{-\alpha_k r^2}
+
+    Args:
+        charges (~jax.Array): the atomic numbers of the nuclei.
+        ecp_type (str): the type of the ECP to load from pyscf.
+        ecp_mask (~jax.Array): whether to use an ECP for each nucleus.
+        n_nonlocal_electrons (int | None): optional, if given, only this many
+            electrons closest to each ECP nucleus contribute to its non-local term,
+            the Gaussian radial functions make the contribution of farther electrons
+            negligible. If :data:`None` (default), all electrons contribute.
     """
 
-    def __init__(self, charges: jax.Array, ecp_type: str, ecp_mask: jax.Array):
+    def __init__(
+        self,
+        charges: jax.Array,
+        ecp_type: str,
+        ecp_mask: jax.Array,
+        n_nonlocal_electrons: Optional[int] = None,
+    ):
         self.ecp_mask = ecp_mask
+        self.n_nonlocal_electrons = n_nonlocal_electrons
         self.ns_valence, self.loc_params, self.nl_params = (
             parse_gaussian_type_ecp_params(charges, ecp_type, ecp_mask)
         )
@@ -158,6 +174,24 @@ class GaussianTypeECP(Potential):
 
         return effective_coulomb_potential + effective_core_potential
 
+    def closest_electrons(self, dists: jax.Array) -> jax.Array:
+        r"""Return the indices of the electrons contributing to a non-local term.
+
+        Args:
+            dists (~jax.Array): electron distances from the nucleus, shape
+                ``(N_el, 1)``.
+
+        Returns:
+            ~jax.Array: all electron indices if :attr:`n_nonlocal_electrons` is
+            :data:`None`, otherwise the indices of the
+            ``min(n_nonlocal_electrons, N_el)`` closest electrons, sorted by
+            increasing distance.
+        """
+        if self.n_nonlocal_electrons is None:
+            return jnp.arange(dists.shape[0])
+        n_closest = min(self.n_nonlocal_electrons, dists.shape[0])
+        return jnp.argsort(dists[:, 0])[:n_closest]
+
     def nonloc_potential(
         self,
         rng: Optional[KeyArray],
@@ -173,6 +207,9 @@ class GaussianTypeECP(Potential):
         the index of the rotated electron. This causes roughly 10% slowdown compared
         to plain vmap, but avoids OOM issues. Further OOM errors could be resolved by
         replacing the remaining vmap with fori_loop over the 12 quadrature points.
+        If :attr:`n_nonlocal_electrons` is set, only that many electrons closest to
+        each nucleus are included, the contributions of the other electrons are
+        neglected.
 
         Args:
             rng (~deepqmc.types.KeyArray): key used for PRNG.
@@ -234,10 +271,13 @@ class GaussianTypeECP(Potential):
                 )  # shape ()
                 return val + nl_potential_one_e
 
+            closest_electrons = self.closest_electrons(dists)
             nl_potential_for_one_nucleus = jax.lax.fori_loop(
                 0,
-                phys_conf.r.shape[-2],
-                nl_potential_for_one_nucleus_and_one_electron,
+                len(closest_electrons),
+                lambda k, val: nl_potential_for_one_nucleus_and_one_electron(
+                    closest_electrons[k], val
+                ),
                 0.0,
             )
             return val + nl_potential_for_one_nucleus
@@ -321,10 +361,13 @@ class GaussianTypeECP(Potential):
 
                 return val + nl_potential_one_e
 
+            closest_electrons = self.closest_electrons(dists)
             nl_potential_for_one_nucleus = jax.lax.fori_loop(
                 0,
-                phys_conf.r.shape[-2],
-                nl_potential_for_one_nucleus_and_one_electron,
+                len(closest_electrons),
+                lambda k, val: nl_potential_for_one_nucleus_and_one_electron(
+                    closest_electrons[k], val
+                ),
                 jnp.zeros(3),
             )
             return val.at[nucleus_index].set(nl_potential_for_one_nucleus)
