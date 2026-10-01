@@ -318,7 +318,7 @@ class GaussianTypeECP(Potential):
                 nl_potential_for_one_nucleus_and_one_electron,
                 jnp.zeros(3),
             )
-            return val.at[j].set(nl_potential_for_one_nucleus)
+            return val.at[nucleus_index].set(nl_potential_for_one_nucleus)
 
         grad_nl_potential = jax.lax.fori_loop(
             0,
