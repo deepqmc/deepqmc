@@ -283,15 +283,17 @@ class GaussianTypeECP(Potential):
             def nl_potential_for_one_nucleus_and_one_electron(
                 i,
                 val,
+                j=j,
                 nucleus_index=nucleus_index,
                 legendre_values=legendre_values,
                 coefs=coefs,
                 nl_pot_coefs=nl_pot_coefs,
                 nl_pot_coefs_grad=nl_pot_coefs_grad,
             ):
-
+                # same quadrature rotation as in nonloc_potential for the same rng
+                rng_quadrature = jax.random.fold_in(jax.random.fold_in(rng, j), i)
                 wf_ratio, wf_ratio_grad = make_wf_ratio_and_grad(wf)(
-                    params, rng, nucleus_index, i, phys_conf
+                    params, rng_quadrature, nucleus_index, i, phys_conf
                 )
                 wf_ratio_tile = wf_ratio[..., None] * legendre_values
                 wf_ratio_tile_grad = (
