@@ -299,16 +299,16 @@ class GaussianTypeECP(Potential):
                     * legendre_values[:, None, :]
                 )
 
+                # shapes: (l_max + 1,) and (3, l_max + 1)
                 num_integral_one_e = jnp.sum(wf_ratio_tile, axis=0)
                 num_integral_one_e_wfgrad = jnp.sum(wf_ratio_tile_grad, axis=0)
-                coef = coefs[i]
-                nl_pot_coefs = nl_pot_coefs[i]
-                nl_pot_coefs_grad = nl_pot_coefs_grad[i]
-                nl_potential_one_e = nl_pot_coefs_grad * jnp.sum(
-                    coef[None] * num_integral_one_e, axis=(-1,)
-                ) + nl_pot_coefs * jnp.sum(
-                    coef[None] * num_integral_one_e_wfgrad, axis=(-1,)
-                )
+                coef = coefs[i]  # (l_max + 1,)
+                nl_pot_coefs = nl_pot_coefs[i]  # (l_max + 1,)
+                nl_pot_coefs_grad = nl_pot_coefs_grad[i]  # (l_max + 1, 3)
+                # product rule, summed over the angular momentum channels
+                nl_potential_one_e = jnp.sum(
+                    (coef * num_integral_one_e)[:, None] * nl_pot_coefs_grad, axis=0
+                ) + jnp.sum(nl_pot_coefs * (coef * num_integral_one_e_wfgrad), axis=-1)
 
                 return val + nl_potential_one_e
 

@@ -14,7 +14,10 @@ from .ecp_utils import (
 def compute_nl_pot_coefs_and_grad_analytical(
     dsit_vec: jax.Array, dists: jax.Array, nl_params: jax.Array
 ):
-    """Compute the coeffs for the nl potentials according to the derivative type."""
+    """Compute the nl potential coeffs and their gradients wrt. the nucleus position.
+
+    Returns arrays of shapes ``(N_el, l_max + 1)`` and ``(N_el, l_max + 1, 3)``.
+    """
 
     exp_term = jnp.exp(-jnp.einsum('ij,kj->ikj', (dists**2), nl_params[:, 0, :]))
     nl_pot_coefs = jnp.einsum(
@@ -24,12 +27,12 @@ def compute_nl_pot_coefs_and_grad_analytical(
     )
 
     nl_pot_coefs_grad = -2 * (
-        dsit_vec[:, :, None]
+        dsit_vec[:, None, :, None]
         * jnp.einsum(
             'kj,ikj->ikj',
             nl_params[:, 0, :] * nl_params[:, 1, :],
             exp_term,
-        )
+        )[:, :, None, :]
     ).sum(axis=-1)
     return nl_pot_coefs, nl_pot_coefs_grad
 
