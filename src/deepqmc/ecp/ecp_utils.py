@@ -31,6 +31,27 @@ def get_unit_icosahedron_sph():
     return jnp.array(unit_icosahedron_sph)
 
 
+def get_unit_quadrature(atomic_number):
+    r"""Return the unit quadrature grid.
+
+    Using 4 points for first-row elements, 6 points for second-row elements, and 12
+    points for heavier elements.
+
+    Args:
+        atomic_number (int): the atomic number of the element.
+
+    Returns:
+        the quadrature points on the unit sphere, shape ``(n_points, 3)``.
+    """
+    if atomic_number <= 10:
+        return jnp.array(
+            [[1.0, 1.0, 1.0], [1.0, -1.0, -1.0], [-1.0, 1.0, -1.0], [-1.0, -1.0, 1.0]]
+        ) / math.sqrt(3)
+    if atomic_number <= 18:
+        return jnp.concatenate([jnp.eye(3), -jnp.eye(3)])
+    return sph2cart(get_unit_icosahedron_sph())
+
+
 def random_rotation(rng):
     r"""Sample a rotation matrix uniformly (Haar measure) from SO(3).
 
@@ -52,7 +73,7 @@ def single_quadrature_point(
 ):
     r"""Compute a single quadrature point (electron position).
 
-    The complete quadrature is a randomly rotated icosahedron centered on
+    The complete quadrature is a randomly rotated unit quadrature centered on
     ``nucleus_coordinate``, with radius given by the distance of
     ``electron_coordinate`` and ``nucleus_coordinate``. The rotation is drawn
     uniformly from SO(3), independently of the electron position.
@@ -62,7 +83,7 @@ def single_quadrature_point(
         electron_coordinate: the coordinates  of the electron.
         nucleus_coordinate: the coordinates of the nucleus.
         unit_quadrature_coordinate: the coordinates of one point of the unit
-            icosahedron, determines which quadrature point to compute.
+            quadrature, determines which quadrature point to compute.
     """
     radius = jnp.linalg.norm(electron_coordinate - nucleus_coordinate, axis=-1)
     return (

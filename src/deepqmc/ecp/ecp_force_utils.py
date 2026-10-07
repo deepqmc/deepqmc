@@ -3,12 +3,7 @@ import jax.numpy as jnp
 import jax_dataclasses as jdc
 
 from ..types import KeyArray, ParametrizedWaveFunction, Params, PhysicalConfiguration
-from .ecp_utils import (
-    compute_wf_ratio,
-    get_unit_icosahedron_sph,
-    single_quadrature_phys_conf,
-    sph2cart,
-)
+from .ecp_utils import compute_wf_ratio, single_quadrature_phys_conf
 
 
 def compute_nl_pot_coefs_and_grad_analytical(
@@ -37,7 +32,7 @@ def compute_nl_pot_coefs_and_grad_analytical(
     return nl_pot_coefs, nl_pot_coefs_grad
 
 
-def make_wf_ratio_and_grad(wf: ParametrizedWaveFunction):
+def make_wf_ratio_and_grad(wf: ParametrizedWaveFunction, unit_quadrature: jax.Array):
     r"""Constructs the function computing the WF ratio and its gradient.
 
     The gradient is the Hellmann-Feynman derivative of the non-local operator: only the
@@ -45,7 +40,6 @@ def make_wf_ratio_and_grad(wf: ParametrizedWaveFunction):
     explicit dependence on the nuclear coordinates is not differentiated. This version uses a vmapped value_and_grad function to efficiently
     compute the WF ratio and its gradient.
     """
-    unit_icosahedron = sph2cart(get_unit_icosahedron_sph())
 
     def wf_ratio_and_grad_fn(
         params: Params,
@@ -67,6 +61,6 @@ def make_wf_ratio_and_grad(wf: ParametrizedWaveFunction):
 
         single_wf_ratio_grad_fn = jax.value_and_grad(single_wf_ratio_fn)
         whole_quadrature_wf_ratio_grad_fn = jax.vmap(single_wf_ratio_grad_fn, (None, 0))
-        return whole_quadrature_wf_ratio_grad_fn(phys_conf.R, unit_icosahedron)
+        return whole_quadrature_wf_ratio_grad_fn(phys_conf.R, unit_quadrature)
 
     return wf_ratio_and_grad_fn
