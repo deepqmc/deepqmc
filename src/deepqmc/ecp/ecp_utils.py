@@ -3,8 +3,8 @@ import math
 import jax
 import jax.numpy as jnp
 import jax_dataclasses as jdc
+from scipy.special import legendre
 
-from ..geom.general import rot_y, rot_z
 from ..types import Psi
 
 
@@ -31,32 +31,71 @@ def get_unit_icosahedron_sph():
     return jnp.array(unit_icosahedron_sph)
 
 
+def random_rotation(rng):
+    r"""Sample a rotation matrix uniformly (Haar measure) from SO(3).
+
+    Built from a uniformly distributed unit quaternion.
+    """
+    q = jax.random.normal(rng, (4,))
+    w, x, y, z = q / jnp.linalg.norm(q)
+    return jnp.array(
+        [
+            [1 - 2 * (y**2 + z**2), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x**2 + z**2), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x**2 + y**2)],
+        ]
+    )
+
+
 def single_quadrature_point(
     rng, electron_coordinate, nucleus_coordinate, unit_quadrature_coordinate
 ):
     r"""Compute a single quadrature point (electron position).
 
-    The complete quadrature is a rotated icosahedron centered on
-    ``nucleus_coordinate``, with radius and orientation determined by the relative
-    positions of ``electron_coordinate`` and ``nucleus_coordinate``. A random rotation
-    around the Z axis is also applied to the icosahedron.
+    The complete quadrature is a randomly rotated icosahedron centered on
+    ``nucleus_coordinate``, with radius given by the distance of
+    ``electron_coordinate`` and ``nucleus_coordinate``. The rotation is drawn
+    uniformly from SO(3), independently of the electron position.
 
     Args:
-        rng: random seed.
+        rng: random seed, determines the rotation of the quadrature.
         electron_coordinate: the coordinates  of the electron.
         nucleus_coordinate: the coordinates of the nucleus.
         unit_quadrature_coordinate: the coordinates of one point of the unit
             icosahedron, determines which quadrature point to compute.
     """
-    diff_vector = electron_coordinate - nucleus_coordinate
-    radius = jnp.linalg.norm(diff_vector, axis=-1)
-    theta = jnp.arctan2(jnp.linalg.norm(diff_vector[:2], axis=-1), diff_vector[2])
-    phi = jnp.arctan2(diff_vector[1], diff_vector[0])
-    phi_random = jax.random.uniform(rng, (), minval=0, maxval=jnp.pi / 5)
+    radius = jnp.linalg.norm(electron_coordinate - nucleus_coordinate, axis=-1)
     return (
-        radius
-        * (rot_z(phi) @ rot_y(theta) @ rot_z(phi_random) @ unit_quadrature_coordinate)
+        radius * (random_rotation(rng) @ unit_quadrature_coordinate)
         + nucleus_coordinate
+    )
+
+
+def quadrature_legendre_values(
+    rng, electron_coordinate, nucleus_coordinate, unit_quadrature, l_max_p1
+):
+    r"""Evaluate the Legendre polynomials at the quadrature points.
+
+    Computes :math:`P_l(\cos\theta_k)`, where :math:`\theta_k` is the angle between
+    the electron and the :math:`k`-th (rotated) quadrature point, as seen from the
+    nucleus.
+
+    Args:
+        rng: random seed, must be the same as in :func:`single_quadrature_point`.
+        electron_coordinate: the coordinates  of the electron.
+        nucleus_coordinate: the coordinates of the nucleus.
+        unit_quadrature: the points of the unit quadrature, shape ``(n_points, 3)``.
+        l_max_p1 (int): the number of angular momentum channels.
+
+    Returns:
+        the Legendre values, shape ``(n_points, l_max_p1)``.
+    """
+    diff_vector = electron_coordinate - nucleus_coordinate
+    cos_theta = (unit_quadrature @ random_rotation(rng).T) @ (
+        diff_vector / jnp.linalg.norm(diff_vector, axis=-1)
+    )
+    return jnp.stack(
+        [jnp.polyval(legendre(l).coef, cos_theta) for l in range(l_max_p1)], axis=-1
     )
 
 

@@ -1,10 +1,10 @@
+from functools import partial
 from typing import Optional
 
 import jax
 import jax.numpy as jnp
 from pyscf.gto.basis import load_ecp
 from pyscf.lib.parameters import ELEMENTS
-from scipy.special import legendre
 
 from ..geom.general import pairwise_distance
 from ..physics import Potential
@@ -24,6 +24,7 @@ from .ecp_utils import (
     compute_wf_ratio,
     get_unit_icosahedron_sph,
     pad_list_of_3D_arrays_to_one_array,
+    quadrature_legendre_values,
     single_quadrature_phys_conf,
     sph2cart,
 )
@@ -122,7 +123,6 @@ class GaussianTypeECP(Potential):
 
         unit_icosahedron_sph = get_unit_icosahedron_sph()
         self.unit_icosahedron = sph2cart(unit_icosahedron_sph)
-        self.quadrature_thetas = unit_icosahedron_sph[:, 0]
 
     def local_potential(self, phys_conf: PhysicalConfiguration) -> Energy:
         dists = pairwise_distance(phys_conf.r, phys_conf.R)
@@ -190,14 +190,6 @@ class GaussianTypeECP(Potential):
             nl_params = self.nl_params[nucleus_index]
             l_max_p1 = nl_params.shape[0]  # l_max_p1 = l_max + 1
 
-            legendre_values = jnp.stack(
-                [
-                    jnp.polyval(legendre(l).coef, jnp.cos(self.quadrature_thetas))
-                    for l in range(l_max_p1)
-                ],
-                axis=-1,
-            )
-
             # (2l+1)/12 coefficient
             coefs = jnp.tile(
                 (jnp.arange(l_max_p1) * 2 + 1) / 12, (len(phys_conf), 1)
@@ -213,7 +205,6 @@ class GaussianTypeECP(Potential):
             def nl_potential_for_one_nucleus_and_one_electron(
                 i,
                 val,
-                legendre_values=legendre_values,
                 coefs=coefs,
                 nl_pot_coefs=nl_pot_coefs,
             ):
@@ -222,6 +213,13 @@ class GaussianTypeECP(Potential):
                 quadrature_phys_conf = jax.vmap(
                     single_quadrature_phys_conf, (None, None, None, None, 0)
                 )(rng_quadrature, i, nucleus_index, phys_conf, self.unit_icosahedron)
+                legendre_values = quadrature_legendre_values(
+                    rng_quadrature,
+                    phys_conf.r[i],
+                    phys_conf.R[nucleus_index],
+                    self.unit_icosahedron,
+                    l_max_p1,
+                )  # shape (12, l_max + 1)
                 numerator = jax.vmap(wf)(quadrature_phys_conf)  # shape (12,)
                 wf_ratio = compute_wf_ratio(numerator, denominator)
                 wf_ratio_tile = (
@@ -266,13 +264,6 @@ class GaussianTypeECP(Potential):
             nucleus_index = self.nuc_with_nl_pot[j]
             nl_params = self.nl_params[nucleus_index]
             l_max_p1 = nl_params.shape[0]
-            legendre_values = jnp.stack(
-                [
-                    jnp.polyval(legendre(l).coef, jnp.cos(self.quadrature_thetas))
-                    for l in range(l_max_p1)
-                ],
-                axis=-1,
-            )
             coefs = jnp.tile((jnp.arange(l_max_p1) * 2 + 1) / 12, (len(phys_conf), 1))
             dists = pairwise_distance(phys_conf.r, phys_conf.R[nucleus_index, None])
             dsit_vec = phys_conf.R[nucleus_index, None] - phys_conf.r
@@ -285,7 +276,6 @@ class GaussianTypeECP(Potential):
                 val,
                 j=j,
                 nucleus_index=nucleus_index,
-                legendre_values=legendre_values,
                 coefs=coefs,
                 nl_pot_coefs=nl_pot_coefs,
                 nl_pot_coefs_grad=nl_pot_coefs_grad,
@@ -295,10 +285,27 @@ class GaussianTypeECP(Potential):
                 wf_ratio, wf_ratio_grad = make_wf_ratio_and_grad(wf)(
                     params, rng_quadrature, nucleus_index, i, phys_conf
                 )
+                # P_l(cos theta_k) depends on the nucleus position via the electron
+                # direction, shapes: (12, l_max + 1) and (12, l_max + 1, 3)
+                legendre_fn = partial(
+                    quadrature_legendre_values,
+                    rng_quadrature,
+                    phys_conf.r[i],
+                    unit_quadrature=self.unit_icosahedron,
+                    l_max_p1=l_max_p1,
+                )
+                legendre_values = legendre_fn(phys_conf.R[nucleus_index])
+                legendre_values_grad = jax.jacfwd(legendre_fn)(
+                    phys_conf.R[nucleus_index]
+                )
                 wf_ratio_tile = wf_ratio[..., None] * legendre_values
+                # product rule, shape (12, 3, l_max + 1)
                 wf_ratio_tile_grad = (
                     wf_ratio_grad[:, nucleus_index, :][..., None]
                     * legendre_values[:, None, :]
+                )
+                wf_ratio_tile_grad += wf_ratio[:, None, None] * jnp.swapaxes(
+                    legendre_values_grad, -1, -2
                 )
 
                 # shapes: (l_max + 1,) and (3, l_max + 1)
