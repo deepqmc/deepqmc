@@ -234,7 +234,7 @@ def train(  # noqa: C901
                     ewm_state = update_ewm(per_mol_state_losses, ewm_state, mol_idxs)
                     pretrain_stats = {
                         'MSE': per_mol_state_losses,
-                        'MSE/ewm': ewm_state.mean,
+                        'MSE/ewm': ewm_state.mean[mol_idxs],
                     }
                     mse_rep = '|'.join(
                         '(' + '|'.join(f'{mses:0.2e}' for mses in msem) + ')'
