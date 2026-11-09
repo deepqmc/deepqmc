@@ -1,5 +1,7 @@
 from functools import partial
 
+import jax
+
 import jax.numpy as jnp
 import pytest
 
@@ -14,7 +16,11 @@ from deepqmc.sampling.electron_sample_initializers import (
     ShellBasedDistribution,
 )
 from deepqmc.sampling.sampling_utils import chain
-from deepqmc.sampling.nuclei_samplers import IdleNucleiSampler, no_elec_warp
+from deepqmc.sampling.nuclei_samplers import (
+    IdleNucleiSampler,
+    PermutationNucleiSampler,
+    no_elec_warp,
+)
 
 
 @pytest.fixture(scope='class')
@@ -160,3 +166,17 @@ class TestMultimoleculeSampling:
             helpers.flatten_pytree({'smpl_state': smpl_state, 'stats': stats}),
             default_tolerance={'rtol': 5e-4, 'atol': 1e-6},
         )
+
+
+class TestPermutationNucleiSampler:
+    def test_nuclear_types_are_permuted_independently(self):
+        # C2H2-like: C at 0, 1 and H at 2, 3
+        sampler = PermutationNucleiSampler(jnp.array([6, 6, 1, 1]))
+        perms = jax.vmap(sampler.permutation)(
+            jax.random.split(jax.random.PRNGKey(0), 100)
+        )
+        swaps = {(bool(p[0] == 1), bool(p[2] == 3)) for p in perms}
+        assert swaps == {(False, False), (False, True), (True, False), (True, True)}
+        # only nuclei of the same type are exchanged
+        assert jnp.all(jnp.sort(perms[:, :2], axis=1) == jnp.array([0, 1]))
+        assert jnp.all(jnp.sort(perms[:, 2:], axis=1) == jnp.array([2, 3]))
