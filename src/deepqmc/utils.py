@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Iterable, MutableMapping, Sequence
 from functools import partial
 from typing import Optional, TypeVar
@@ -12,6 +13,8 @@ from jax.scipy.special import gammaln
 from jaxtyping import PyTree
 
 from .types import Stats
+
+log = logging.getLogger(__name__)
 
 __all__ = ()
 
@@ -319,6 +322,12 @@ def batched_vmap(func, batch_size: int, in_axes: int | tuple = 0, out_axis: int 
             initializer=None,
         )
         assert arg_size is not None, 'At least one argument must be mapped'
+        if arg_size % batch_size:
+            log.warning(
+                f'The mapped axis size ({arg_size}) is not divisible by the batch '
+                f'size ({batch_size}), the last {arg_size % batch_size} elements '
+                'are dropped.'
+            )
 
         outs = []
         for i_batch in range(arg_size // batch_size):
