@@ -27,12 +27,9 @@ def validate_pretrain_kwargs(cfg: DictConfig) -> None:
         )
 
     if (
-        cfg.get('electronic_states', 1) > 1
-        and cfg.get('pretrain_steps', 0) > 0
-        and (
-            not cfg.get('pretrain_kwargs', False)
-            or not cfg['pretrain_kwargs']['scf_kwargs'].get('cas', None)
-        )
+        (cfg.get('electronic_states') or 1) > 1
+        and cfg.get('pretrain_steps')
+        and not scf_kwargs.get('cas')
     ):
         log.warning(
             'No CAS specified, all electronic states '
