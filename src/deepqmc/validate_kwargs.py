@@ -117,9 +117,22 @@ def validate_mols_consistency(cfg: DictConfig) -> None:
         )
 
 
+def validate_spin_polarization(cfg: DictConfig) -> None:
+    """Warn about fully spin-polarized systems, which are not supported."""
+
+    hamil = call(cfg['hamil'])
+    if hamil.n_down == 0:
+        log.warning(
+            f'The system has no spin-down electrons (n_up={hamil.n_up}, '
+            'n_down=0). Fully spin-polarized systems are not supported and the '
+            'calculation is expected to fail.'
+        )
+
+
 def validate_kwargs(cfg: DictConfig) -> None:
     """Check that the combinations of configuration options are sensible."""
 
+    validate_spin_polarization(cfg)
     validate_pretrain_kwargs(cfg)
     validate_overlap_scaling(cfg)
     validate_batch_size(cfg)
