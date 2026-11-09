@@ -247,10 +247,6 @@ def task_from_workdir(
     try:
         if chkpt == 'LAST':
             chkpts = workdir.glob(CheckpointStore.PATTERN.format('*'))
-            if not chkpts:
-                chkpts = (workdir / 'training').glob(
-                    CheckpointStore.PATTERN.format('*')
-                )
             chkpt_path = sorted(
                 chkpts,
                 key=lambda path: CheckpointStore.extract_step_from_filename(path.name),
