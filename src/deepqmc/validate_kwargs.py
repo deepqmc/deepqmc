@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Mapping
 
 import jax
 import jax.numpy as jnp
@@ -36,6 +37,33 @@ def validate_pretrain_kwargs(cfg: DictConfig) -> None:
         log.warning(
             'No CAS specified, all electronic states '
             'will be pretrained to HF ground state.'
+        )
+
+
+def validate_overlap_scaling(cfg: DictConfig) -> None:
+    """Warn if the energy-based overlap scaling or state sorting has no energies."""
+
+    loss_kwargs = cfg.get('loss_function_factory') or {}
+    energy_options = [
+        option
+        for option in ('scale_overlap_by', 'sort_states_by')
+        if loss_kwargs.get(option)
+    ]
+    monitors = cfg.get('observable_monitors') or []
+    has_energy_monitor = any(
+        monitor == 'local_energy'
+        or (
+            isinstance(monitor, Mapping)
+            and str(monitor.get('_target_', '')).endswith('EnergyMonitor')
+        )
+        for monitor in monitors
+    )
+    if energy_options and not has_energy_monitor:
+        log.warning(
+            f'{" and ".join(energy_options)} relies on the energy moving averages, '
+            'which are only updated with a local_energy observable monitor. Add '
+            'local_energy to observable_monitors, otherwise the default values '
+            'are used.'
         )
 
 
@@ -93,5 +121,6 @@ def validate_kwargs(cfg: DictConfig) -> None:
     """Check that the combinations of configuration options are sensible."""
 
     validate_pretrain_kwargs(cfg)
+    validate_overlap_scaling(cfg)
     validate_batch_size(cfg)
     validate_mols_consistency(cfg)

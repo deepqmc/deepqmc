@@ -65,6 +65,7 @@ h5_logger_constructor:
     - 'overlap/pairwise'
     - 'time'
 observable_monitors:
+  - local_energy
   - _target_: deepqmc.observable.SpinMonitor
     save_samples: False
     period: 1
