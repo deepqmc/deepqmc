@@ -306,8 +306,6 @@ class ElectronGNN(hk.Module):
             the instance that creates the initial electron embeddings.
         layer_factory (type[~deepqmc.gnn.electron_gnn.ElectronGNNLayer]): a
             callable that generates a layer of the GNN.
-        ghost_coords (~jax.Array): optional, specifies the coordinates of one or more
-            ghost atoms, useful for breaking spatial symmetries of the nuclear geometry.
     """
 
     def __init__(
@@ -322,18 +320,11 @@ class ElectronGNN(hk.Module):
         nuclei_embedding,
         electron_embedding,
         layer_factory,
-        ghost_coords=None,
     ):
         super().__init__()
         n_nuc, n_up, n_down = hamil.n_nuc, hamil.n_up, hamil.n_down
         n_atom_types = hamil.mol.n_atom_types
         charges = hamil.mol.charges
-        self.ghost_coords = None
-        if ghost_coords is not None:
-            charges = jnp.concatenate([charges, jnp.zeros(len(ghost_coords))])
-            n_nuc += len(ghost_coords)
-            n_atom_types += 1
-            self.ghost_coords = jnp.asarray(ghost_coords)
         self.n_nuc, self.n_up, self.n_down = n_nuc, n_up, n_down
         self.embedding_dim = embedding_dim
         self.node_data = {
@@ -412,16 +403,6 @@ class ElectronGNN(hk.Module):
             the final electron and nuclear embeddings, bundled as a ``GraphNodes``
             named tuple.
         """
-        if self.ghost_coords is not None:
-            phys_conf = phys_conf._replace(
-                R=jnp.concatenate(
-                    [
-                        phys_conf.R,
-                        jnp.tile(self.ghost_coords[None], (len(phys_conf.R), 1, 1)),
-                    ],
-                    axis=-2,
-                )
-            )
         graph_edges = self.edge_factory(phys_conf)
         graph_nodes = self.node_factory(phys_conf)
         graph = Graph(graph_nodes, graph_edges)
