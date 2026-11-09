@@ -12,13 +12,13 @@ log = logging.getLogger(__name__)
 def validate_pretrain_kwargs(cfg: DictConfig) -> None:
     """Catch the most common misconfigurations in pretraining."""
 
+    loss_kwargs = cfg.get('loss_function_factory') or {}
+    scf_kwargs = (cfg.get('pretrain_kwargs') or {}).get('scf_kwargs') or {}
     if (
-        cfg.get('fit_fn', {})
-        .get('loss_function_factory', {})
-        .get('spin_penalty', False)
-        and cfg.get('pretrain_steps', False)
-        and cfg['pretrain_kwargs']['scf_kwargs'].get('cas', False)
-        and not cfg['pretrain_kwargs']['scf_kwargs'].get('fix_spin', False)
+        loss_kwargs.get('spin_penalty')
+        and cfg.get('pretrain_steps')
+        and scf_kwargs.get('cas')
+        and scf_kwargs.get('fix_spin') is None
     ):
         log.warning(
             'Variational training involves spin penalty. Consider adding the fix_spin'
