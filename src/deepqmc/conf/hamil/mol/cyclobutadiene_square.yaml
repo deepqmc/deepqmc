@@ -9,4 +9,4 @@ coords: [[ 0.0     ,  0.0     , 0.0 ],
 charges: [6, 6, 6, 6, 1, 1, 1, 1]
 charge: 0
 spin: 0
-unit: angstrom
+unit: bohr
