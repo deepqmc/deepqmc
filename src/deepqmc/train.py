@@ -161,7 +161,7 @@ def train(  # noqa: C901
         chkpts = (chkpt_constructor or CheckpointStore)(workdir)
         log.debug('Setting up metric_logger...')
         metric_logger = (metric_logger_constructor or TensorboardMetricLogger)(
-            workdir, molecule_batch_size
+            workdir, len(mols)
         )
         log.debug('Setting up h5_logger...')
         h5_logger = (h5_logger_constructor or H5Logger)(
