@@ -76,28 +76,17 @@ def init_ewm(
             state.params['decay_alpha'],
             state.params['alpha'],
         )
-        if state.mean is None:
-            state.params['alpha'] = state.params['alpha'].at[0].set(1.0)
-            return state._replace(
-                buffer=state.buffer.at[0].set(x),
-                step=0,
-                mean=x,
-                var=jnp.array(1.0),
-                sqerr=jnp.array(1.0),
-                median=jnp.array(1.0),
-            )
         buffer = jnp.concatenate([x[None], state.buffer[:-1]])
+        is_first = state.step == 0
+        new_alpha = jnp.where(
+            is_first,
+            1.0,
+            jnp.maximum(1 - max_alpha, 1 / (2 + state.step / decay_alpha)),
+        )
         alpha = jax.lax.cond(
             state.step + 1 >= len(alpha),
             lambda: alpha,
-            lambda: jnp.concatenate(
-                [
-                    jnp.maximum(1 - max_alpha, 1 / (2 + state.step / decay_alpha))[
-                        None
-                    ],
-                    alpha[:-1],
-                ]
-            ),
+            lambda: jnp.concatenate([new_alpha[None], alpha[:-1]]),
         )
         beta = jnp.concatenate([jnp.array([1.0]), jnp.cumprod(1 - alpha[:-1])])
         weights = alpha * beta
@@ -109,8 +98,8 @@ def init_ewm(
             step=state.step + 1,
             buffer=buffer,
             mean=mean,
-            var=variance.sum(),
-            sqerr=(weights * variance).sum(),
+            var=jnp.where(is_first, jnp.inf, variance.sum()),
+            sqerr=jnp.where(is_first, jnp.inf, (weights * variance).sum()),
         )
 
     return state, update

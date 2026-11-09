@@ -41,7 +41,7 @@ class ConstraintNucleiSampler:
     Samples nuclear positions around a fixed geometry.
 
     Args:
-        charges (~jax.Array): the nuclear charges of the molecule (:math:`N_\text{nuc}`).
+        charges (~jax.Array): nuclear charges of the molecule (:math:`N_\text{nuc}`).
         noise_fn (~collections.abc.Callable | list[~collections.abc.Callable]): a noise
             distribution (or per-coordinate list of distributions) to sample
             displacements from. Each callable must have the signature
@@ -110,7 +110,7 @@ class PermutationNucleiSampler:
     Nuclei sampler that permutes nuclei with the same atomic number.
 
     Args:
-        charges (~jax.Array): the nuclear charges of the molecule (:math:`N_\text{nuc}`).
+        charges (~jax.Array): nuclear charges of the molecule (:math:`N_\text{nuc}`).
     """
 
     def __init__(self, charges: jax.Array):
@@ -123,8 +123,10 @@ class PermutationNucleiSampler:
 
     def permutation(self, rng: KeyArray) -> jax.Array:
         idx = jnp.arange(self.n_nuc)
-        for nuc_type_idx in self.nuc_type_idxs:
-            idx = idx.at[nuc_type_idx].set(jax.random.permutation(rng, nuc_type_idx))
+        for i, nuc_type_idx in enumerate(self.nuc_type_idxs):
+            idx = idx.at[nuc_type_idx].set(
+                jax.random.permutation(jax.random.fold_in(rng, i), nuc_type_idx)
+            )
         return idx
 
     def init(self, nuc_coords: jax.Array, *args, **kwargs) -> SamplerState:
@@ -146,7 +148,7 @@ class ZMatrixSampler:
     Nuclei sampler sampling nuclei positions using a Z-matrix.
 
     Args:
-        charges (~jax.Array): the nuclear charges of the molecule (:math:`N_\text{nuc}`).
+        charges (~jax.Array): nuclear charges of the molecule (:math:`N_\text{nuc}`).
         z_matrix_template (~deepqmc.geom.zmatrix.StochasticZMatrixTemplate): the
             template defining the Z-matrix connectivity and the noise distribution
             from which new internal coordinates are sampled.

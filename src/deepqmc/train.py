@@ -161,7 +161,7 @@ def train(  # noqa: C901
         chkpts = (chkpt_constructor or CheckpointStore)(workdir)
         log.debug('Setting up metric_logger...')
         metric_logger = (metric_logger_constructor or TensorboardMetricLogger)(
-            workdir, molecule_batch_size
+            workdir, len(mols)
         )
         log.debug('Setting up h5_logger...')
         h5_logger = (h5_logger_constructor or H5Logger)(
@@ -193,7 +193,7 @@ def train(  # noqa: C901
             )
             if pretrain_steps and mode == 'training':
                 log.info('Pretraining wrt. baseline wave function')
-                rng, rng_pretrain = jax.random.split(rng)
+                rng, rng_pretrain, rng_pretrain_smpl_init = jax.random.split(rng, 3)
                 pretrain_kwargs = pretrain_kwargs or {}
                 pretrain_dataset = compute_scf_solution(
                     mols,
@@ -209,11 +209,8 @@ def train(  # noqa: C901
                     shape=(len(mols), electronic_states), decay_alpha=1.0
                 )
                 mse_rep = None
-                _, rng_pretrain_smpl_init = split_on_devices(
-                    split_rng_key_to_devices(rng), 2
-                )
                 pretrain_smpl_state = initialize_sampler_state(
-                    rng_pretrain_smpl_init,
+                    split_rng_key_to_devices(rng_pretrain_smpl_init),
                     sampler,
                     params,
                     electron_batch_size,
@@ -237,7 +234,7 @@ def train(  # noqa: C901
                     ewm_state = update_ewm(per_mol_state_losses, ewm_state, mol_idxs)
                     pretrain_stats = {
                         'MSE': per_mol_state_losses,
-                        'MSE/ewm': ewm_state.mean,
+                        'MSE/ewm': ewm_state.mean[mol_idxs],
                     }
                     mse_rep = '|'.join(
                         '(' + '|'.join(f'{mses:0.2e}' for mses in msem) + ')'
@@ -297,9 +294,9 @@ def train(  # noqa: C901
         loss_function_factory = loss_function_factory or partial(
             create_loss_fn, clip_mask_fn=median_log_squeeze_and_mask
         )
-        best_ene = None
         step = init_step
         ewm_energies = len(mols) * [electronic_states * [ufloat(jnp.nan, 1)]]
+        rng, rng_restart = split_on_devices(rng, 2)
         for attempt in range(max_restarts):
             try:
                 pbar = trange(
@@ -332,9 +329,7 @@ def train(  # noqa: C901
                         for observable in observables
                     ],
                 ):
-                    ewm_energies, best_ene = update_progress(
-                        pbar, best_ene, ewm_energies, mol_idxs, stats
-                    )
+                    ewm_energies = update_progress(pbar, ewm_energies, mol_idxs, stats)
                     if jnp.isnan(observable_samples['psi/samples']['log']).any():
                         raise NanError()
                     if workdir:
@@ -361,7 +356,9 @@ def train(  # noqa: C901
                 log.warning(f'Restarting due to {type(e).__name__}...')
                 if attempt < max_restarts and chkpts is not None:
                     init_step, train_state = chkpts.last
-                    (rng,) = split_on_devices(rng, 1)
+                    rng, rng_restart = split_on_devices(rng_restart, 2)
+                    if h5_logger:
+                        h5_logger.rewind(init_step)
         log.warning(
             f'The {mode} has crashed before all steps were completed ({step}/{steps})!'
         )
@@ -377,8 +374,8 @@ def train(  # noqa: C901
             h5_logger.close()
 
 
-def update_progress(pbar, best_ene, ewm_energies, mol_idxs, stats):
-    r"""Update the tqdm progress bar, maybe print progress message."""
+def update_progress(pbar, ewm_energies, mol_idxs, stats):
+    r"""Update the tqdm progress bar with the EWM energies."""
     if stats.get('energy/ewm') is not None:
         for i, mol_idx in enumerate(mol_idxs):
             ewm_energies[mol_idx] = [
@@ -391,11 +388,4 @@ def update_progress(pbar, best_ene, ewm_energies, mol_idxs, stats):
             '(' + '|'.join(f'{es:S}' for es in em) + ')' for em in ewm_energies
         )
         pbar.set_postfix(E=energies)
-        if best_ene is None or jnp.any(
-            jnp.array(
-                jax.tree.map(lambda x, y: x.s < 0.5 * y.s, ewm_energies, best_ene)
-            )
-        ):
-            best_ene = ewm_energies
-            log.info(f'Progress: {pbar.n + 1}/{pbar.total}, energy = {energies}')
-    return ewm_energies, best_ene
+    return ewm_energies
