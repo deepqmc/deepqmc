@@ -61,7 +61,7 @@ def fit_wf(  # noqa: C901
         rng: KeyArray, step: int, data: DataDict, train_state: TrainState
     ) -> tuple[TrainState, jax.Array, Stats]:
         smpl_state, params, opt_state = train_state
-        rng_sample, rng_kfac = split_on_devices(rng, 2)
+        rng_sample, rng_kfac, rng_monitors = split_on_devices(rng, 3)
         mol_idxs = molecule_idx_sampler.sample()
         data = jax.tree.map(lambda x: x[:, mol_idxs[0]], data)
         smpl_state, phys_conf, smpl_stats = sample_wf(
@@ -105,7 +105,8 @@ def fit_wf(  # noqa: C901
                     ratios,
                 )
                 for rng_monitor, monitor in zip(
-                    split_on_devices(rng, len(observable_monitors)), observable_monitors
+                    split_on_devices(rng_monitors, len(observable_monitors)),
+                    observable_monitors,
                 )
             ),
             stats | smpl_stats,

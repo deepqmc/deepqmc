@@ -193,7 +193,7 @@ def train(  # noqa: C901
             )
             if pretrain_steps and mode == 'training':
                 log.info('Pretraining wrt. baseline wave function')
-                rng, rng_pretrain = jax.random.split(rng)
+                rng, rng_pretrain, rng_pretrain_smpl_init = jax.random.split(rng, 3)
                 pretrain_kwargs = pretrain_kwargs or {}
                 pretrain_dataset = compute_scf_solution(
                     mols,
@@ -209,11 +209,8 @@ def train(  # noqa: C901
                     shape=(len(mols), electronic_states), decay_alpha=1.0
                 )
                 mse_rep = None
-                _, rng_pretrain_smpl_init = split_on_devices(
-                    split_rng_key_to_devices(rng), 2
-                )
                 pretrain_smpl_state = initialize_sampler_state(
-                    rng_pretrain_smpl_init,
+                    split_rng_key_to_devices(rng_pretrain_smpl_init),
                     sampler,
                     params,
                     electron_batch_size,
@@ -300,6 +297,7 @@ def train(  # noqa: C901
         best_ene = None
         step = init_step
         ewm_energies = len(mols) * [electronic_states * [ufloat(jnp.nan, 1)]]
+        rng, rng_restart = split_on_devices(rng, 2)
         for attempt in range(max_restarts):
             try:
                 pbar = trange(
@@ -361,7 +359,7 @@ def train(  # noqa: C901
                 log.warning(f'Restarting due to {type(e).__name__}...')
                 if attempt < max_restarts and chkpts is not None:
                     init_step, train_state = chkpts.last
-                    (rng,) = split_on_devices(rng, 1)
+                    rng, rng_restart = split_on_devices(rng_restart, 2)
                     if h5_logger:
                         h5_logger.rewind(init_step)
         log.warning(
