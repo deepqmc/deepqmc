@@ -245,7 +245,12 @@ class H5Logger:
         for k, v in (aux_data or {}).items():
             self.h5file.attrs.create(k, v)
         self.table = H5LogTable(self.h5file)
+        # A result file that already holds data is indexed by absolute step, a new
+        # one starts its first row at init_step.
+        has_data = bool(self.h5file.keys())
         self.table.resize(init_step)
+        self.init_step = init_step
+        self.init_row = init_step if has_data else 0
         self.flush()
 
     def update(self, single_device_data: Stats):
@@ -267,6 +272,17 @@ class H5Logger:
         for k, v in data_filtered.items():
             self.write(k, v)
 
+        self.flush()
+
+    def rewind(self, step: int):
+        r"""Discard all rows logged at or after ``step``.
+
+        Args:
+            step (int): the step to rewind to, e.g. the step of the checkpoint
+                from which the training is resumed after a restart.
+        """
+        assert step >= self.init_step, 'Cannot rewind before the initial step.'
+        self.table.resize(self.init_row + step - self.init_step)
         self.flush()
 
     def write(self, key: str, data: jax.Array):

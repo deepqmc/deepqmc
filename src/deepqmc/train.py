@@ -362,6 +362,8 @@ def train(  # noqa: C901
                 if attempt < max_restarts and chkpts is not None:
                     init_step, train_state = chkpts.last
                     (rng,) = split_on_devices(rng, 1)
+                    if h5_logger:
+                        h5_logger.rewind(init_step)
         log.warning(
             f'The {mode} has crashed before all steps were completed ({step}/{steps})!'
         )
