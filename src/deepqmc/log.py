@@ -355,6 +355,10 @@ class TensorboardMetricLogger:
             all_mean = pmap_pmean(multi_device_stats)
             multi_device_stats = select_one_device(all_mean)
         stats = {**multi_device_stats, **single_device_stats}
+        # single host transfer, everything below operates on numpy arrays
+        stats, mol_idxs = jax.device_get((stats, mol_idxs))
+        stats = {k: np.asarray(v) for k, v in stats.items()}
+        mol_idxs = np.asarray(mol_idxs).tolist()
         if self.n_mol <= 100:
             self.write_in_full_dataset_format(step, stats, mol_idxs, prefix)
         else:
@@ -436,7 +440,7 @@ class TensorboardMetricLogger:
     ):
         prefix = prefix or ''
         for i, v_i in zip(mol_idxs, v):
-            for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
+            for j, l in zip(*np.triu_indices(v.shape[2], k=1)):
                 self.writer.add_scalar(f'{prefix}{k}/{i}/{l}-{j}', v_i[j, l], step)
 
     def write_in_full_dataset_format(
@@ -517,7 +521,7 @@ class TensorboardMetricLogger:
                     # Per molecule per state pairwise statistic (upper triangular)
                     v_mean = v.mean(axis=0)
                     v_std = v.std(axis=0)
-                    for j, l in zip(*jnp.triu_indices(v.shape[2], k=1)):
+                    for j, l in zip(*np.triu_indices(v.shape[2], k=1)):
                         self.writer.add_scalar(
                             f'{prefix}{k}/mean/{l}-{j}', v_mean[j, l], step
                         )
