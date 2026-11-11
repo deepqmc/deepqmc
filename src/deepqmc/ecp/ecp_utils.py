@@ -8,48 +8,41 @@ from scipy.special import legendre
 from ..types import Psi
 
 
-@jax.vmap
-def sph2cart(sph, r=1):
-    """This function transforms from spherical to cartesian coordinates."""
-    theta = sph[0]
-    phi = sph[1]
-    rsin_theta = r * jnp.sin(theta)
-    x = rsin_theta * jnp.cos(phi)
-    y = rsin_theta * jnp.sin(phi)
-    z = r * jnp.cos(theta)
-    return jnp.array([x, y, z])
+def get_unit_icosahedron():
+    """The 12 vertices of a regular icosahedron, cyclic permutations of (0, ±1, ±φ)."""
+    phi = (1 + math.sqrt(5)) / 2  # golden ratio
+    vertices = jnp.array([[0.0, s1, s2 * phi] for s1 in (-1, 1) for s2 in (-1, 1)])
+    vertices = jnp.concatenate([jnp.roll(vertices, k, axis=1) for k in range(3)])
+    return vertices / math.sqrt(1 + phi**2)
 
 
-def get_unit_icosahedron_sph():
-    """Basic definition of unit icosahedron vertices in spherical coordinates."""
-    unit_icosahedron_sph = []
-    unit_icosahedron_sph.append([0, 0])
-    unit_icosahedron_sph.append([math.pi, 0])
-    for j in range(5):
-        unit_icosahedron_sph.append([math.atan(2), math.pi / 5 * 2 * j])
-        unit_icosahedron_sph.append([math.pi - math.atan(2), math.pi / 5 * (2 * j - 1)])
-    return jnp.array(unit_icosahedron_sph)
-
-
-def get_unit_quadrature(atomic_number):
+def get_unit_quadrature(atomic_number, quadrature='by_row'):
     r"""Return the unit quadrature grid.
-
-    Using 4 points for first-row elements, 6 points for second-row elements, and 12
-    points for heavier elements.
 
     Args:
         atomic_number (int): the atomic number of the element.
+        quadrature (str): ``'tetrahedron'`` (4 points), ``'octahedron'`` (6 points),
+            ``'icosahedron'`` (12 points) or ``'by_row'``.
 
     Returns:
         the quadrature points on the unit sphere, shape ``(n_points, 3)``.
     """
-    if atomic_number <= 10:
+    if quadrature not in ('by_row', 'icosahedron', 'octahedron', 'tetrahedron'):
+        raise ValueError(f'Unknown ECP quadrature {quadrature!r}.')
+    if quadrature == 'by_row':
+        quadrature = (
+            'tetrahedron'
+            if atomic_number <= 10
+            else 'octahedron' if atomic_number <= 18 else 'icosahedron'
+        )
+    if quadrature == 'tetrahedron':
         return jnp.array(
             [[1.0, 1.0, 1.0], [1.0, -1.0, -1.0], [-1.0, 1.0, -1.0], [-1.0, -1.0, 1.0]]
         ) / math.sqrt(3)
-    if atomic_number <= 18:
+    if quadrature == 'octahedron':
         return jnp.concatenate([jnp.eye(3), -jnp.eye(3)])
-    return sph2cart(get_unit_icosahedron_sph())
+    else:
+        return get_unit_icosahedron()
 
 
 def random_rotation(rng):

@@ -115,10 +115,14 @@ class GaussianTypeECP(Potential):
         charges (~jax.Array): the atomic numbers of the nuclei.
         ecp_type (str): the type of the ECP to load from pyscf.
         ecp_mask (~jax.Array): whether to use an ECP for each nucleus.
-        n_nonlocal_electrons (int | None): optional, if given, only this many
-            electrons closest to each ECP nucleus contribute to its non-local term,
-            the Gaussian radial functions make the contribution of farther electrons
-            negligible. If :data:`None` (default), all electrons contribute.
+        ecp_nonlocal_electrons (int | None): optional, if given, only this many
+            electrons closest to each ECP nucleus contribute to its non-local term.
+            This is an approximation that neglects the contributions of the farther
+            electrons, which are very small due to the Gaussian radial functions.
+            If :data:`None` (default), all electrons contribute.
+        ecp_quadrature (str): the angular quadrature grid of the non-local term,
+            ``'by_row'`` (default), ``'icosahedron'``, ``'octahedron'`` or
+            ``'tetrahedron'``, see :func:`~deepqmc.ecp.ecp_utils.get_unit_quadrature`.
     """
 
     def __init__(
@@ -126,10 +130,15 @@ class GaussianTypeECP(Potential):
         charges: jax.Array,
         ecp_type: str,
         ecp_mask: jax.Array,
-        n_nonlocal_electrons: Optional[int] = None,
+        ecp_nonlocal_electrons: Optional[int] = None,
+        ecp_quadrature: str = 'by_row',
     ):
+        assert (
+            ecp_nonlocal_electrons is None or ecp_nonlocal_electrons >= 1
+        ), 'ecp_nonlocal_electrons must be a positive integer or None.'
         self.ecp_mask = ecp_mask
-        self.n_nonlocal_electrons = n_nonlocal_electrons
+        self.ecp_nonlocal_electrons = ecp_nonlocal_electrons
+        self.ecp_quadrature = ecp_quadrature
         self.ns_valence, self.loc_params, self.nl_params = (
             parse_gaussian_type_ecp_params(charges, ecp_type, ecp_mask)
         )
@@ -140,7 +149,9 @@ class GaussianTypeECP(Potential):
         # non-local terms of each group are evaluated in a separate fori_loop
         groups: dict = {}  # n_points: (unit_quadrature, nucleus indices)
         for nucleus_index in self.nuc_with_nl_pot.tolist():
-            unit_quadrature = get_unit_quadrature(int(charges[nucleus_index]))
+            unit_quadrature = get_unit_quadrature(
+                int(charges[nucleus_index]), ecp_quadrature
+            )
             groups.setdefault(len(unit_quadrature), (unit_quadrature, []))[1].append(
                 nucleus_index
             )
@@ -191,14 +202,14 @@ class GaussianTypeECP(Potential):
                 ``(N_el, 1)``.
 
         Returns:
-            ~jax.Array: all electron indices if :attr:`n_nonlocal_electrons` is
+            ~jax.Array: all electron indices if :attr:`ecp_nonlocal_electrons` is
             :data:`None`, otherwise the indices of the
-            ``min(n_nonlocal_electrons, N_el)`` closest electrons, sorted by
+            ``min(ecp_nonlocal_electrons, N_el)`` closest electrons, sorted by
             increasing distance.
         """
-        if self.n_nonlocal_electrons is None:
+        if self.ecp_nonlocal_electrons is None:
             return jnp.arange(dists.shape[0])
-        n_closest = min(self.n_nonlocal_electrons, dists.shape[0])
+        n_closest = min(self.ecp_nonlocal_electrons, dists.shape[0])
         return jnp.argsort(dists[:, 0])[:n_closest]
 
     def nonloc_potential(
@@ -216,7 +227,7 @@ class GaussianTypeECP(Potential):
         the index of the rotated electron. This causes roughly 10% slowdown compared
         to plain vmap, but avoids OOM issues. Further OOM errors could be resolved by
         replacing the remaining vmap with fori_loop over the quadrature points.
-        If :attr:`n_nonlocal_electrons` is set, only that many electrons closest to
+        If :attr:`ecp_nonlocal_electrons` is set, only that many electrons closest to
         each nucleus are included, the contributions of the other electrons are
         neglected.
 
