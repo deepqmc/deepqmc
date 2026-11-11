@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable
 from functools import partial
 from itertools import count
@@ -27,6 +28,8 @@ from .types import (
 )
 
 __all__ = ['MolecularHamiltonian']
+
+log = logging.getLogger(__name__)
 
 
 def get_shell(z):
@@ -92,6 +95,15 @@ class MolecularHamiltonian(Hamiltonian):
             of the spread of electrons around the nuclei.
         laplacian_factory (~deepqmc.physics.LaplacianFactory): creates a function that
             returns a tuple containing the laplacian and gradient of the wave function.
+        ecp_nonlocal_electrons (int | None): optional, if given, only this many
+            electrons closest to each nucleus contribute to the non-local part of
+            Gaussian-type ECPs. If :data:`None` (default), all electrons contribute.
+        ecp_quadrature (str): the angular quadrature grid of the non-local part of
+            Gaussian-type ECPs, ``'by_row'`` (default; 4 points for first-row,
+            6 points for second-row and 12 points for heavier elements),
+            ``'tetrahedron'`` (4 points), ``'octahedron'`` (6 points) or
+            ``'icosahedron'`` (12 points). Using fewer grid points increases the
+            variance, but is cheaper.
     """
 
     mol: Molecule
@@ -113,6 +125,8 @@ class MolecularHamiltonian(Hamiltonian):
         ecp_mask: Optional[list[bool]] = None,
         elec_std: float = 1.0,
         laplacian_factory: LaplacianFactory = reverse_forward_laplacian,
+        ecp_nonlocal_electrons: Optional[int] = None,
+        ecp_quadrature: str = 'by_row',
     ):
         self.mol = mol
         self.elec_std = elec_std
@@ -133,15 +147,30 @@ class MolecularHamiltonian(Hamiltonian):
                 self.ecp_type is not None
             ), 'ECP type must be specified if ECPs are used.'
             if 'PH' in str(self.ecp_type):
+                if ecp_nonlocal_electrons is not None:
+                    log.warning(
+                        'ecp_nonlocal_electrons is ignored for PseudoHamiltonians'
+                        f' ({self.ecp_type!r}), which have no non-local term.'
+                    )
                 self.pot = PseudoHamiltonian(mol.charges, self.ecp_type, self.ecp_mask)
             else:
-                self.pot = GaussianTypeECP(mol.charges, self.ecp_type, self.ecp_mask)
+                self.pot = GaussianTypeECP(
+                    mol.charges,
+                    self.ecp_type,
+                    self.ecp_mask,
+                    ecp_nonlocal_electrons,
+                    ecp_quadrature,
+                )
         else:
             self.pot = NuclearCoulombPotential(mol.charges)
 
         n_elec = int(sum(self.pot.ns_valence) - mol.charge)
         assert not (n_elec + mol.spin) % 2
         assert n_elec > 1, 'The system must contain at least two active electrons.'
+        assert ecp_nonlocal_electrons is None or ecp_nonlocal_electrons <= n_elec, (
+            f'ecp_nonlocal_electrons ({ecp_nonlocal_electrons}) must not exceed the'
+            f' number of valence electrons ({n_elec}).'
+        )
 
         self.n_nuc = len(mol.charges)
         self.n_up = (n_elec + mol.spin) // 2

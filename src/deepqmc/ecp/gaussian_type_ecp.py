@@ -22,11 +22,10 @@ from .ecp_force_utils import (
 )
 from .ecp_utils import (
     compute_wf_ratio,
-    get_unit_icosahedron_sph,
+    get_unit_quadrature,
     pad_list_of_3D_arrays_to_one_array,
     quadrature_legendre_values,
     single_quadrature_phys_conf,
-    sph2cart,
 )
 
 
@@ -111,18 +110,55 @@ class GaussianTypeECP(Potential):
 
     .. math::
         V_\text{nl}(r) = \sum_{k=1}^{2} \beta_{lk} \text{e}^{-\alpha_k r^2}
+
+    Args:
+        charges (~jax.Array): the atomic numbers of the nuclei.
+        ecp_type (str): the type of the ECP to load from pyscf.
+        ecp_mask (~jax.Array): whether to use an ECP for each nucleus.
+        ecp_nonlocal_electrons (int | None): optional, if given, only this many
+            electrons closest to each ECP nucleus contribute to its non-local term.
+            This is an approximation that neglects the contributions of the farther
+            electrons, which are very small due to the Gaussian radial functions.
+            If :data:`None` (default), all electrons contribute.
+        ecp_quadrature (str): the angular quadrature grid of the non-local term,
+            ``'by_row'`` (default), ``'icosahedron'``, ``'octahedron'`` or
+            ``'tetrahedron'``, see :func:`~deepqmc.ecp.ecp_utils.get_unit_quadrature`.
     """
 
-    def __init__(self, charges: jax.Array, ecp_type: str, ecp_mask: jax.Array):
+    def __init__(
+        self,
+        charges: jax.Array,
+        ecp_type: str,
+        ecp_mask: jax.Array,
+        ecp_nonlocal_electrons: Optional[int] = None,
+        ecp_quadrature: str = 'by_row',
+    ):
+        assert (
+            ecp_nonlocal_electrons is None or ecp_nonlocal_electrons >= 1
+        ), 'ecp_nonlocal_electrons must be a positive integer or None.'
         self.ecp_mask = ecp_mask
+        self.ecp_nonlocal_electrons = ecp_nonlocal_electrons
+        self.ecp_quadrature = ecp_quadrature
         self.ns_valence, self.loc_params, self.nl_params = (
             parse_gaussian_type_ecp_params(charges, ecp_type, ecp_mask)
         )
         # to filter out masked nuclei:
         self.nuc_with_nl_pot = jnp.unique(jnp.nonzero(self.nl_params)[0])
 
-        unit_icosahedron_sph = get_unit_icosahedron_sph()
-        self.unit_icosahedron = sph2cart(unit_icosahedron_sph)
+        # group the nuclei by their angular quadrature (see get_unit_quadrature), the
+        # non-local terms of each group are evaluated in a separate fori_loop
+        groups: dict = {}  # n_points: (unit_quadrature, nucleus indices)
+        for nucleus_index in self.nuc_with_nl_pot.tolist():
+            unit_quadrature = get_unit_quadrature(
+                int(charges[nucleus_index]), ecp_quadrature
+            )
+            groups.setdefault(len(unit_quadrature), (unit_quadrature, []))[1].append(
+                nucleus_index
+            )
+        self.quadrature_groups = [
+            (unit_quadrature, jnp.array(nucleus_indices))
+            for unit_quadrature, nucleus_indices in groups.values()
+        ]
 
     def local_potential(self, phys_conf: PhysicalConfiguration) -> Energy:
         dists = pairwise_distance(phys_conf.r, phys_conf.R)
@@ -158,6 +194,24 @@ class GaussianTypeECP(Potential):
 
         return effective_coulomb_potential + effective_core_potential
 
+    def closest_electrons(self, dists: jax.Array) -> jax.Array:
+        r"""Return the indices of the electrons contributing to a non-local term.
+
+        Args:
+            dists (~jax.Array): electron distances from the nucleus, shape
+                ``(N_el, 1)``.
+
+        Returns:
+            ~jax.Array: all electron indices if :attr:`ecp_nonlocal_electrons` is
+            :data:`None`, otherwise the indices of the
+            ``min(ecp_nonlocal_electrons, N_el)`` closest electrons, sorted by
+            increasing distance.
+        """
+        if self.ecp_nonlocal_electrons is None:
+            return jnp.arange(dists.shape[0])
+        n_closest = min(self.ecp_nonlocal_electrons, dists.shape[0])
+        return jnp.argsort(dists[:, 0])[:n_closest]
+
     def nonloc_potential(
         self,
         rng: Optional[KeyArray],
@@ -172,7 +226,10 @@ class GaussianTypeECP(Potential):
         The current implementation is using jax.lax.fori_loop instead of vmap over
         the index of the rotated electron. This causes roughly 10% slowdown compared
         to plain vmap, but avoids OOM issues. Further OOM errors could be resolved by
-        replacing the remaining vmap with fori_loop over the 12 quadrature points.
+        replacing the remaining vmap with fori_loop over the quadrature points.
+        If :attr:`ecp_nonlocal_electrons` is set, only that many electrons closest to
+        each nucleus are included, the contributions of the other electrons are
+        neglected.
 
         Args:
             rng (~deepqmc.types.KeyArray): key used for PRNG.
@@ -185,14 +242,15 @@ class GaussianTypeECP(Potential):
         # get value of the denominator (which is constant)
         denominator = wf(phys_conf)
 
-        def add_nl_potential_for_one_nucleus(j, val):
-            nucleus_index = self.nuc_with_nl_pot[j]
+        def add_nl_potential_for_one_nucleus(j, val, unit_quadrature, nucleus_indices):
+            nucleus_index = nucleus_indices[j]
             nl_params = self.nl_params[nucleus_index]
             l_max_p1 = nl_params.shape[0]  # l_max_p1 = l_max + 1
 
-            # (2l+1)/12 coefficient
+            # (2l+1)/n_points coefficient
             coefs = jnp.tile(
-                (jnp.arange(l_max_p1) * 2 + 1) / 12, (len(phys_conf), 1)
+                (jnp.arange(l_max_p1) * 2 + 1) / len(unit_quadrature),
+                (len(phys_conf), 1),
             )  # shape: (N,l_max)
 
             dists = pairwise_distance(phys_conf.r, phys_conf.R[nucleus_index, None])
@@ -209,23 +267,25 @@ class GaussianTypeECP(Potential):
                 nl_pot_coefs=nl_pot_coefs,
             ):
                 # numerator
-                rng_quadrature = jax.random.fold_in(jax.random.fold_in(rng, j), i)
+                rng_quadrature = jax.random.fold_in(
+                    jax.random.fold_in(rng, nucleus_index), i
+                )
                 quadrature_phys_conf = jax.vmap(
                     single_quadrature_phys_conf, (None, None, None, None, 0)
-                )(rng_quadrature, i, nucleus_index, phys_conf, self.unit_icosahedron)
+                )(rng_quadrature, i, nucleus_index, phys_conf, unit_quadrature)
                 legendre_values = quadrature_legendre_values(
                     rng_quadrature,
                     phys_conf.r[i],
                     phys_conf.R[nucleus_index],
-                    self.unit_icosahedron,
+                    unit_quadrature,
                     l_max_p1,
-                )  # shape (12, l_max + 1)
-                numerator = jax.vmap(wf)(quadrature_phys_conf)  # shape (12,)
+                )  # shape (n_points, l_max + 1)
+                numerator = jax.vmap(wf)(quadrature_phys_conf)  # shape (n_points,)
                 wf_ratio = compute_wf_ratio(numerator, denominator)
                 wf_ratio_tile = (
                     wf_ratio[..., None] * legendre_values
-                )  # shape (12,l_max)
-                # sum over 12 "virtual" electron configurations
+                )  # shape (n_points,l_max)
+                # sum over n_points "virtual" electron configurations
                 num_integral_one_e = jnp.sum(wf_ratio_tile, axis=-2)  # shape (1,)
                 coef = coefs[i]  # shape (l_max,)
                 nl_pot_coef = nl_pot_coefs[i]  # shape (1,)
@@ -234,21 +294,29 @@ class GaussianTypeECP(Potential):
                 )  # shape ()
                 return val + nl_potential_one_e
 
+            closest_electrons = self.closest_electrons(dists)
             nl_potential_for_one_nucleus = jax.lax.fori_loop(
                 0,
-                phys_conf.r.shape[-2],
-                nl_potential_for_one_nucleus_and_one_electron,
+                len(closest_electrons),
+                lambda k, val: nl_potential_for_one_nucleus_and_one_electron(
+                    closest_electrons[k], val
+                ),
                 0.0,
             )
             return val + nl_potential_for_one_nucleus
 
-        total_nl_potential = (
-            jax.lax.fori_loop(
-                0, len(self.nuc_with_nl_pot), add_nl_potential_for_one_nucleus, 0.0
+        total_nl_potential = jnp.array(0.0)
+        for unit_quadrature, nucleus_indices in self.quadrature_groups:
+            total_nl_potential = jax.lax.fori_loop(
+                0,
+                len(nucleus_indices),
+                partial(
+                    add_nl_potential_for_one_nucleus,
+                    unit_quadrature=unit_quadrature,
+                    nucleus_indices=nucleus_indices,
+                ),
+                total_nl_potential,
             )
-            if len(self.nuc_with_nl_pot) > 0
-            else jnp.array(0.0)
-        )
 
         return total_nl_potential
 
@@ -259,12 +327,15 @@ class GaussianTypeECP(Potential):
         phys_conf: PhysicalConfiguration,
         params: Params,
     ) -> jax.Array:
-        def add_nl_potential_for_one_nucleus(j, val):
+        def add_nl_potential_for_one_nucleus(j, val, unit_quadrature, nucleus_indices):
 
-            nucleus_index = self.nuc_with_nl_pot[j]
+            nucleus_index = nucleus_indices[j]
             nl_params = self.nl_params[nucleus_index]
             l_max_p1 = nl_params.shape[0]
-            coefs = jnp.tile((jnp.arange(l_max_p1) * 2 + 1) / 12, (len(phys_conf), 1))
+            coefs = jnp.tile(
+                (jnp.arange(l_max_p1) * 2 + 1) / len(unit_quadrature),
+                (len(phys_conf), 1),
+            )
             dists = pairwise_distance(phys_conf.r, phys_conf.R[nucleus_index, None])
             dsit_vec = phys_conf.R[nucleus_index, None] - phys_conf.r
             nl_pot_coefs, nl_pot_coefs_grad = compute_nl_pot_coefs_and_grad_analytical(
@@ -274,24 +345,25 @@ class GaussianTypeECP(Potential):
             def nl_potential_for_one_nucleus_and_one_electron(
                 i,
                 val,
-                j=j,
                 nucleus_index=nucleus_index,
                 coefs=coefs,
                 nl_pot_coefs=nl_pot_coefs,
                 nl_pot_coefs_grad=nl_pot_coefs_grad,
             ):
                 # same quadrature rotation as in nonloc_potential for the same rng
-                rng_quadrature = jax.random.fold_in(jax.random.fold_in(rng, j), i)
-                wf_ratio, wf_ratio_grad = make_wf_ratio_and_grad(wf)(
+                rng_quadrature = jax.random.fold_in(
+                    jax.random.fold_in(rng, nucleus_index), i
+                )
+                wf_ratio, wf_ratio_grad = make_wf_ratio_and_grad(wf, unit_quadrature)(
                     params, rng_quadrature, nucleus_index, i, phys_conf
                 )
                 # P_l(cos theta_k) depends on the nucleus position via the electron
-                # direction, shapes: (12, l_max + 1) and (12, l_max + 1, 3)
+                # direction, shapes: (n_points, l_max + 1) and (n_points, l_max + 1, 3)
                 legendre_fn = partial(
                     quadrature_legendre_values,
                     rng_quadrature,
                     phys_conf.r[i],
-                    unit_quadrature=self.unit_icosahedron,
+                    unit_quadrature=unit_quadrature,
                     l_max_p1=l_max_p1,
                 )
                 legendre_values = legendre_fn(phys_conf.R[nucleus_index])
@@ -299,7 +371,7 @@ class GaussianTypeECP(Potential):
                     phys_conf.R[nucleus_index]
                 )
                 wf_ratio_tile = wf_ratio[..., None] * legendre_values
-                # product rule, shape (12, 3, l_max + 1)
+                # product rule, shape (n_points, 3, l_max + 1)
                 wf_ratio_tile_grad = (
                     wf_ratio_grad[:, nucleus_index, :][..., None]
                     * legendre_values[:, None, :]
@@ -321,19 +393,28 @@ class GaussianTypeECP(Potential):
 
                 return val + nl_potential_one_e
 
+            closest_electrons = self.closest_electrons(dists)
             nl_potential_for_one_nucleus = jax.lax.fori_loop(
                 0,
-                phys_conf.r.shape[-2],
-                nl_potential_for_one_nucleus_and_one_electron,
+                len(closest_electrons),
+                lambda k, val: nl_potential_for_one_nucleus_and_one_electron(
+                    closest_electrons[k], val
+                ),
                 jnp.zeros(3),
             )
             return val.at[nucleus_index].set(nl_potential_for_one_nucleus)
 
-        grad_nl_potential = jax.lax.fori_loop(
-            0,
-            len(self.nuc_with_nl_pot),
-            add_nl_potential_for_one_nucleus,
-            jnp.zeros_like(phys_conf.R),
-        )
+        grad_nl_potential = jnp.zeros_like(phys_conf.R)
+        for unit_quadrature, nucleus_indices in self.quadrature_groups:
+            grad_nl_potential = jax.lax.fori_loop(
+                0,
+                len(nucleus_indices),
+                partial(
+                    add_nl_potential_for_one_nucleus,
+                    unit_quadrature=unit_quadrature,
+                    nucleus_indices=nucleus_indices,
+                ),
+                grad_nl_potential,
+            )
 
         return grad_nl_potential
