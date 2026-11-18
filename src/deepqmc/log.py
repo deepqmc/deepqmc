@@ -37,6 +37,8 @@ __all__ = [
 ]
 log = logging.getLogger(__name__)
 
+logging.getLogger('tensorboardX.x2num').setLevel(logging.ERROR)
+
 
 class Checkpoint(NamedTuple):
     step: int
