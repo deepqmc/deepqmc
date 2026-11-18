@@ -169,6 +169,7 @@ def train(  # noqa: C901
             init_step,
             [observable.name for observable in observables],
             aux_data={f'mol-{i}': m.coords for i, m in enumerate(mols)},
+            periods={observable.name: observable.period for observable in observables},
         )
         init_time = time.time()
     else:
