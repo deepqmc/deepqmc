@@ -322,12 +322,9 @@ def batched_vmap(func, batch_size: int, in_axes: int | tuple = 0, out_axis: int 
             initializer=None,
         )
         assert arg_size is not None, 'At least one argument must be mapped'
-        if arg_size % batch_size:
-            log.warning(
-                f'The mapped axis size ({arg_size}) is not divisible by the batch '
-                f'size ({batch_size}), the last {arg_size % batch_size} elements '
-                'are dropped.'
-            )
+        assert (
+            arg_size % batch_size == 0
+        ), 'Mapped axis size must be divisible by batch_size'
 
         outs = []
         for i_batch in range(arg_size // batch_size):
