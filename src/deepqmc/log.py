@@ -5,6 +5,7 @@ import os
 import pickle
 import re
 import sys
+from collections.abc import Callable
 from copy import deepcopy
 from functools import partial
 from itertools import product
@@ -173,14 +174,19 @@ class CheckpointStore:
         return int(match.groups()[0])
 
 
-def resize_if_dataset(size: int, name: str, obj: h5py.Dataset | h5py.Group):
+def resize_if_dataset(
+    size: int | Callable[[h5py.Dataset], int],
+    name: str,
+    obj: h5py.Dataset | h5py.Group,
+):
     r"""Resize dataset objects of HDF5 files.
 
     A ``partial`` of this function can be used as the visitor function argument of
-    ``h5py.File.visititems``.
+    ``h5py.File.visititems``. ``size`` is either the new length of all datasets, or
+    a function that returns the new length of a given dataset.
     """
     if isinstance(obj, h5py.Dataset):
-        obj.resize(size, axis=0)
+        obj.resize(size(obj) if callable(size) else size, axis=0)
 
 
 class H5LogTable:
@@ -192,7 +198,7 @@ class H5LogTable:
     def __getitem__(self, label):
         return self._group[label] if label in self._group else []
 
-    def resize(self, size: int):
+    def resize(self, size: int | Callable[[h5py.Dataset], int]):
         self._group.visititems(partial(resize_if_dataset, size))
 
     # mimicking Pytables API
@@ -235,9 +241,11 @@ class H5Logger:
 
     Args:
         workdir (str): directory in which ``result.h5`` is created.
-        init_step (int): initial training step; existing datasets in the file
-            are resized to this length, enabling seamless resumption from a
-            checkpoint.
+        init_step (int): initial training step. A new file stores it as its
+            ``first_step`` attribute, the step of its first row. Existing datasets
+            in the file are truncated to the rows logged before ``init_step``,
+            enabling seamless resumption from a checkpoint. Files without the
+            attribute are assumed to start at step 0.
         additional_keys_to_whitelist (Optional[list[str]]): extra key
             substrings to append to the default whitelist.
         aux_data (Optional[dict]): key-value pairs stored as HDF5 file
@@ -246,6 +254,12 @@ class H5Logger:
         keys_whitelist (Optional[list[str]]): overrides the default whitelist
             entirely when provided; ``additional_keys_to_whitelist`` is still
             appended on top.
+        periods (Optional[dict[str, int]]): the logging period of the entries
+            under a top-level key, e.g. ``{'spin': 10}`` for an observable monitor
+            evaluated at every tenth step. It is stored as the ``period`` attribute
+            of the datasets, which then hold one row per period (at the steps that
+            are multiples of it). Datasets without the attribute hold one row per
+            step.
     """
 
     def __init__(
@@ -256,7 +270,9 @@ class H5Logger:
         aux_data: Optional[dict] = None,
         *,
         keys_whitelist: Optional[list[str]] = None,
+        periods: Optional[dict[str, int]] = None,
     ):
+        self.periods = periods or {}
         self.keys_whitelist = (
             keys_whitelist if keys_whitelist is not None else ['local_energy']
         ) + (additional_keys_to_whitelist or [])
@@ -265,13 +281,26 @@ class H5Logger:
         for k, v in (aux_data or {}).items():
             self.h5file.attrs.create(k, v)
         self.table = H5LogTable(self.h5file)
-        # A result file that already holds data is indexed by absolute step, a new
-        # one starts its first row at init_step.
-        has_data = bool(self.h5file.keys())
-        self.table.resize(init_step)
+        if self.h5file.keys():
+            self.first_step = int(self.h5file.attrs.get('first_step', 0))
+            assert (
+                init_step >= self.first_step
+            ), f'The result file starts at step {self.first_step} > {init_step}.'
+        else:
+            self.first_step = init_step
+            self.h5file.attrs['first_step'] = init_step
         self.init_step = init_step
-        self.init_row = init_step if has_data else 0
+        self.table.resize(partial(self.n_rows, init_step))
         self.flush()
+
+    def n_rows(self, step: int, dataset: h5py.Dataset) -> int:
+        r"""Return the number of rows of ``dataset`` that were logged before ``step``.
+
+        A dataset with the ``period`` attribute holds rows only for the steps that
+        are multiples of its period.
+        """
+        period = int(dataset.attrs.get('period', 1))
+        return -(-step // period) - -(-self.first_step // period)
 
     def update(self, single_device_data: Stats):
         r"""Write a new row of whitelisted entries to the HDF5 file.
@@ -302,11 +331,14 @@ class H5Logger:
                 from which the training is resumed after a restart.
         """
         assert step >= self.init_step, 'Cannot rewind before the initial step.'
-        self.table.resize(self.init_row + step - self.init_step)
+        self.table.resize(partial(self.n_rows, step))
         self.flush()
 
     def write(self, key: str, data: jax.Array):
+        is_new = key not in self.h5file
         self.table.row[key] = data
+        if is_new and (period := self.periods.get(key.split('/')[0])):
+            self.h5file[key].attrs['period'] = period
 
     def flush(self):
         self.h5file.flush()

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import h5py
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 import deepqmc.train as train_module
 from deepqmc.log import H5Logger
@@ -51,6 +52,115 @@ class TestH5Logger:
         np.testing.assert_array_equal(
             samples, [0, 1, 2, 3, 4, 5.25, 6.25, 7.5, 8.5, 9.5]
         )
+        logger.close()
+
+
+class TestH5LoggerFirstStep:
+    def write_steps(self, logger, steps, offset=0.0):
+        for step in steps:
+            row = {'local_energy': {'mean': step + offset}}
+            if step % 10 == 0:
+                row['spin'] = {'mean': step + offset}
+            logger.update(row)
+
+    def test_first_step_attribute(self, tmp_path):
+        logger = H5Logger(str(tmp_path), 100)
+        self.write_steps(logger, range(100, 103))
+        assert logger.h5file.attrs['first_step'] == 100
+        logger.close()
+        # reopening keeps the step of the first row
+        logger = H5Logger(str(tmp_path), 101)
+        assert logger.h5file.attrs['first_step'] == 100
+        logger.close()
+
+    def test_reopen_file_started_at_later_step(self, tmp_path):
+        logger = H5Logger(str(tmp_path), 45, ['spin'], periods={'spin': 10})
+        self.write_steps(logger, range(45, 77))
+        logger.close()
+        logger = H5Logger(str(tmp_path), 65, ['spin'], periods={'spin': 10})
+        assert logger.h5file['local_energy/mean'].shape == (20,)
+        assert logger.h5file['spin/mean'].shape == (2,)
+        self.write_steps(logger, range(65, 80), offset=0.5)
+        logger.rewind(72)
+        self.write_steps(logger, range(72, 80), offset=0.75)
+        energies = logger.h5file['local_energy/mean'][:]
+        np.testing.assert_array_equal(energies[:20], np.arange(45, 65))
+        np.testing.assert_array_equal(energies[20:27], np.arange(65, 72) + 0.5)
+        np.testing.assert_array_equal(energies[27:], np.arange(72, 80) + 0.75)
+        np.testing.assert_array_equal(logger.h5file['spin/mean'][:], [50, 60, 70.5])
+        logger.close()
+
+    def test_old_file_without_attribute_starts_at_zero(self, tmp_path):
+        logger = H5Logger(str(tmp_path), 0)
+        self.write_steps(logger, range(10))
+        del logger.h5file.attrs['first_step']
+        logger.close()
+        logger = H5Logger(str(tmp_path), 5)
+        assert logger.h5file['local_energy/mean'].shape == (5,)
+        logger.close()
+
+    def test_reopen_before_first_step_fails(self, tmp_path):
+        logger = H5Logger(str(tmp_path), 100)
+        self.write_steps(logger, range(100, 103))
+        logger.close()
+        with pytest.raises(AssertionError):
+            H5Logger(str(tmp_path), 50)
+
+
+class TestH5LoggerPeriodicEntries:
+    def write_steps(self, logger, steps, offset=0.0):
+        for step in steps:
+            row = {'local_energy': {'mean': step + offset}}
+            if step % 10 == 0:
+                row['spin'] = {'mean': step + offset}
+            logger.update(row)
+
+    def test_period_attribute(self, tmp_path):
+        logger = H5Logger(str(tmp_path), 0, ['spin'], periods={'spin': 10})
+        self.write_steps(logger, range(3))
+        assert logger.h5file['spin/mean'].attrs['period'] == 10
+        assert 'period' not in logger.h5file['local_energy/mean'].attrs
+        logger.close()
+
+    def test_rewind(self, tmp_path):
+        logger = H5Logger(str(tmp_path), 0, ['spin'], periods={'spin': 10})
+        self.write_steps(logger, range(57))
+        logger.rewind(50)
+        assert logger.h5file['local_energy/mean'].shape == (50,)
+        assert logger.h5file['spin/mean'].shape == (5,)
+        self.write_steps(logger, range(50, 70), offset=0.5)
+        np.testing.assert_array_equal(
+            logger.h5file['spin/mean'][:], [0, 10, 20, 30, 40, 50.5, 60.5]
+        )
+        assert logger.h5file['local_energy/mean'].shape == (70,)
+        logger.close()
+
+    def test_rewind_to_multiple_of_period(self, tmp_path):
+        logger = H5Logger(str(tmp_path), 0, ['spin'], periods={'spin': 10})
+        self.write_steps(logger, range(57))
+        logger.rewind(51)
+        assert logger.h5file['spin/mean'].shape == (6,)
+        logger.close()
+
+    def test_reopen_existing_result_file(self, tmp_path):
+        logger = H5Logger(str(tmp_path), 0, ['spin'], periods={'spin': 10})
+        self.write_steps(logger, range(57))
+        logger.close()
+        logger = H5Logger(str(tmp_path), 45, ['spin'], periods={'spin': 10})
+        assert logger.h5file['spin/mean'].shape == (5,)
+        self.write_steps(logger, range(45, 70), offset=0.5)
+        np.testing.assert_array_equal(
+            logger.h5file['spin/mean'][:], [0, 10, 20, 30, 40, 50.5, 60.5]
+        )
+        logger.close()
+
+    def test_rewind_in_new_workdir_of_restarted_run(self, tmp_path):
+        # the first row of a new result.h5 is at step 45, spin is first logged at 50
+        logger = H5Logger(str(tmp_path), 45, ['spin'], periods={'spin': 10})
+        self.write_steps(logger, range(45, 77))
+        logger.rewind(65)
+        assert logger.h5file['local_energy/mean'].shape == (20,)
+        np.testing.assert_array_equal(logger.h5file['spin/mean'][:], [50, 60])
         logger.close()
 
 
