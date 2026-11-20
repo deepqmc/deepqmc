@@ -53,7 +53,8 @@ Potentials
 interaction as a :class:`~deepqmc.physics.Potential`, selected via its ``ecp_type``
 argument: plain Coulomb attraction by default, or, if ``ecp_type`` is set, a
 Gaussian-type effective core potential (as implemented in :mod:`pyscf`) or a local
-pseudo-Hamiltonian.
+pseudo-Hamiltonian. If ``ecp_type`` maps elements to both kinds, the two are combined
+in a :class:`~deepqmc.ecp.composite_potential.CompositePotential`.
 
 .. autoclass:: deepqmc.physics.Potential
    :members:
@@ -73,6 +74,11 @@ stochastic quadrature evaluation, currently available for P, S, Cl, Cr, Mn, Fe, 
 and Zn.
 
 .. autoclass:: deepqmc.ecp.pseudo_hamiltonian.PseudoHamiltonian
+
+Combining effective core potentials and pseudo-Hamiltonians
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: deepqmc.ecp.composite_potential.CompositePotential
 
 Training and evaluation
 -----------------------
