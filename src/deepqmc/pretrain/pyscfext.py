@@ -105,14 +105,13 @@ def pyscf_from_hamil(  # type: ignore
     if isinstance(basis, str):
         basis = extend_basis(hamil, basis)
 
-    hamil_as_pyscf = hamil.as_pyscf(coords=coords)
-    for k, v in hamil_as_pyscf['ecp'].items():
-        if filter_string(v).startswith('ph'):
-            hamil_as_pyscf['ecp'][k] = 'ccECP'
-            log.info(f'Pretraining {ELEMENTS[int(k)]} with PH against ccECP target.')
+    ecp_types = {int(c): t for c, t in zip(hamil.mol.charges, hamil.ecp_types)}
+    for charge, ecp_type in ecp_types.items():
+        if ecp_type is not None and 'PH' in ecp_type:
+            log.info(f'Pretraining {ELEMENTS[charge]} with PH against ccECP target.')
 
     mol = gto.M(
-        **hamil_as_pyscf,
+        **hamil.as_pyscf(coords=coords),
         basis=basis,
         cart=True,
         parse_arg=False,

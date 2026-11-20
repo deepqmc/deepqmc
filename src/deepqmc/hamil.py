@@ -268,6 +268,8 @@ class MolecularHamiltonian(Hamiltonian):
     def as_pyscf(self, *, coords: Optional[jax.Array] = None) -> dict[str, Any]:
         r"""Return the hamiltonian parameters in format pyscf can parse.
 
+        PseudoHamiltonians are not available in pyscf, they are replaced by ccECP.
+
         Args:
             coords (~jax.Array): optional, nuclear coordinates (:math:`N_\text{nuc}`, 3).
         """
@@ -276,7 +278,11 @@ class MolecularHamiltonian(Hamiltonian):
             'atom': [(int(c), r.tolist()) for c, r in zip(self.mol.charges, coords)],
             'charge': self.mol.charge,
             'spin': self.mol.spin,
-            'ecp': {int(c): t for c, t in zip(self.mol.charges, self.ecp_types) if t},
+            'ecp': {
+                int(c): 'ccECP' if 'PH' in t else t
+                for c, t in zip(self.mol.charges, self.ecp_types)
+                if t
+            },
             'unit': 'bohr',
         }
         return pyscf_kwargs
