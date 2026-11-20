@@ -1,12 +1,14 @@
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import partial
 from itertools import count
-from typing import Any, Optional, Protocol
+from typing import Any, Optional, Protocol, Union
 
 import jax
 import jax.numpy as jnp
+from pyscf.lib.parameters import ELEMENTS
 
+from .ecp.composite_potential import CompositePotential
 from .ecp.gaussian_type_ecp import GaussianTypeECP
 from .ecp.pseudo_hamiltonian import PseudoHamiltonian
 from .molecule import Molecule
@@ -42,6 +44,44 @@ def get_shell(z):
             break
         max_elec += 2 * (1 + n) ** 2
     return n
+
+
+def per_nucleus_ecp_types(
+    charges: jax.Array,
+    ecp_type: Optional[Union[str, Mapping[Union[str, int], str]]],
+    ecp_mask: Optional[list[bool]],
+) -> list[Optional[str]]:
+    r"""Return the ECP type of each nucleus, :data:`None` for all-electron nuclei.
+
+    Args:
+        charges (~jax.Array): the atomic numbers of the nuclei.
+        ecp_type (str | ~collections.abc.Mapping[str | int, str] | None): a single
+            ECP type, or a mapping from element symbols or atomic numbers to ECP
+            types, see :class:`MolecularHamiltonian`.
+        ecp_mask (list[bool] | None): whether to use an ECP for each nucleus, only
+            used if :data:`ecp_type` is a string. Defaults to the atoms larger than
+            He.
+    """
+    if ecp_type is None:
+        return [None] * len(charges)
+    if isinstance(ecp_type, Mapping):
+        assert ecp_mask is None, (
+            "'ecp_mask' cannot be used if 'ecp_type' is a mapping, the mapping"
+            ' selects the nuclei with an ECP.'
+        )
+        types_by_charge: dict[int, str] = {}
+        for element, element_ecp_type in ecp_type.items():
+            charge = element if isinstance(element, int) else ELEMENTS.index(element)
+            assert (
+                charge not in types_by_charge
+            ), f'ECP type of {ELEMENTS[charge]} specified more than once.'
+            types_by_charge[charge] = element_ecp_type
+        return [types_by_charge.get(int(c)) for c in charges]
+    if ecp_mask is None:
+        # use ECP only for atoms larger than He
+        ecp_mask = list(charges > 2)
+    assert len(ecp_mask) == len(charges), "Incompatible shape of 'ecp_mask'!"
+    return [ecp_type if m else None for m in ecp_mask]
 
 
 class Hamiltonian(Protocol):
@@ -82,15 +122,21 @@ class MolecularHamiltonian(Hamiltonian):
 
     Args:
         mol (~deepqmc.molecule.Molecule): the molecule to consider
-        ecp_type (str): If set, use the appropriate pseudopotential or effective core
-            potential (ECP). The string is passed to :func:`pyscf.gto.M()` as
-            :data:`'ecp'` argument.
+        ecp_type (str | ~collections.abc.Mapping[str | int, str]): If set, use the
+            appropriate pseudopotential or effective core potential (ECP). The string
+            is passed to :func:`pyscf.gto.M()` as :data:`'ecp'` argument.
             Supports ECPs that are implemented in the pyscf package, e.g. :data:`'bfd'`
             [Burkatzki et al. 2007] or :data:`'ccECP'` [Bennett et al. 2017].
             Supports PseudoHamiltonians from [Ichibha23] and [Fu26], e.g. :data:`'PHcc'`
             or :data:`'PHhf'`.
+            A mapping from element symbols or atomic numbers to ECP types, e.g.
+            :data:`{'Fe': 'PHcc', 'O': 'ccECP'}`, selects the ECP per element.
+            Elements not in the mapping are treated with all electrons, and
+            Gaussian-type ECPs and PseudoHamiltonians can be combined this way.
+            At most one Gaussian-type ECP and one PseudoHamiltonian type can be used.
         ecp_mask (list[bool]): list of True and False values (:math:`N_\text{nuc}`)
-            specifying whether to use an ECP for each nucleus.
+            specifying whether to use an ECP for each nucleus. Only used if
+            :data:`ecp_type` is a string.
         elec_std (float): optional, a default value of the scaling factor
             of the spread of electrons around the nuclei.
         laplacian_factory (~deepqmc.physics.LaplacianFactory): creates a function that
@@ -107,7 +153,8 @@ class MolecularHamiltonian(Hamiltonian):
     """
 
     mol: Molecule
-    ecp_type: Optional[str]
+    ecp_type: Optional[Union[str, Mapping[Union[str, int], str]]]
+    ecp_types: list[Optional[str]]
     ecp_mask: jax.Array
     elec_std: float
     lap_factory: LaplacianFactory
@@ -121,7 +168,7 @@ class MolecularHamiltonian(Hamiltonian):
         self,
         *,
         mol: Molecule,
-        ecp_type: Optional[str] = None,
+        ecp_type: Optional[Union[str, Mapping[Union[str, int], str]]] = None,
         ecp_mask: Optional[list[bool]] = None,
         elec_std: float = 1.0,
         laplacian_factory: LaplacianFactory = reverse_forward_laplacian,
@@ -131,36 +178,44 @@ class MolecularHamiltonian(Hamiltonian):
         self.mol = mol
         self.elec_std = elec_std
         self.ecp_type = ecp_type
+        self.ecp_types = per_nucleus_ecp_types(mol.charges, ecp_type, ecp_mask)
 
-        if ecp_type is None:
-            ecp_mask = [False] * len(mol.charges)
-        elif ecp_mask is None:
-            # use ECP only for atoms larger than He
-            ecp_mask = list(mol.charges > 2)
-        assert len(ecp_mask) == len(mol.charges), "Incompatible shape of 'ecp_mask'!"
-
-        self.ecp_mask = jnp.array(ecp_mask)
+        ph_mask = jnp.array([t is not None and 'PH' in str(t) for t in self.ecp_types])
+        self.ecp_mask = jnp.array([t is not None for t in self.ecp_types])
+        gto_mask = self.ecp_mask & ~ph_mask
+        ph_types = {t for t, m in zip(self.ecp_types, ph_mask) if m}
+        gto_types = {t for t, m in zip(self.ecp_types, gto_mask) if m}
+        assert len(ph_types) <= 1, f'Only one PseudoHamiltonian type, got {ph_types}.'
+        assert len(gto_types) <= 1, f'Only one Gaussian-type ECP, got {gto_types}.'
 
         self.lap_factory = laplacian_factory
-        if self.ecp_mask.any():
-            assert (
-                self.ecp_type is not None
-            ), 'ECP type must be specified if ECPs are used.'
-            if 'PH' in str(self.ecp_type):
-                if ecp_nonlocal_electrons is not None:
-                    log.warning(
-                        'ecp_nonlocal_electrons is ignored for PseudoHamiltonians'
-                        f' ({self.ecp_type!r}), which have no non-local term.'
-                    )
-                self.pot = PseudoHamiltonian(mol.charges, self.ecp_type, self.ecp_mask)
-            else:
-                self.pot = GaussianTypeECP(
-                    mol.charges,
-                    self.ecp_type,
-                    self.ecp_mask,
-                    ecp_nonlocal_electrons,
-                    ecp_quadrature,
-                )
+        if ph_mask.any() and not gto_mask.any() and ecp_nonlocal_electrons is not None:
+            log.warning(
+                'ecp_nonlocal_electrons is ignored for PseudoHamiltonians'
+                f' ({ph_types}), which have no non-local term.'
+            )
+        gaussian_type_ecp = (
+            GaussianTypeECP(
+                mol.charges,
+                gto_types.pop(),
+                gto_mask,
+                ecp_nonlocal_electrons,
+                ecp_quadrature,
+            )
+            if gto_mask.any()
+            else None
+        )
+        pseudo_hamiltonian = (
+            PseudoHamiltonian(mol.charges, ph_types.pop(), ph_mask)
+            if ph_mask.any()
+            else None
+        )
+        if gaussian_type_ecp is not None and pseudo_hamiltonian is not None:
+            self.pot = CompositePotential(gaussian_type_ecp, pseudo_hamiltonian)
+        elif gaussian_type_ecp is not None:
+            self.pot = gaussian_type_ecp
+        elif pseudo_hamiltonian is not None:
+            self.pot = pseudo_hamiltonian
         else:
             self.pot = NuclearCoulombPotential(mol.charges)
 
@@ -223,7 +278,7 @@ class MolecularHamiltonian(Hamiltonian):
             'atom': [(int(c), r.tolist()) for c, r in zip(self.mol.charges, coords)],
             'charge': self.mol.charge,
             'spin': self.mol.spin,
-            'ecp': {int(c): self.ecp_type for c in self.mol.charges[self.ecp_mask]},
+            'ecp': {int(c): t for c, t in zip(self.mol.charges, self.ecp_types) if t},
             'unit': 'bohr',
         }
         return pyscf_kwargs
