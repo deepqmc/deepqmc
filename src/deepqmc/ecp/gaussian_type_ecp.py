@@ -7,7 +7,7 @@ from pyscf.gto.basis import load_ecp
 from pyscf.lib.parameters import ELEMENTS
 
 from ..geom.general import pairwise_distance
-from ..physics import Potential
+from ..physics import NuclearCoulombPotential, Potential
 from ..types import (
     Energy,
     KeyArray,
@@ -142,6 +142,8 @@ class GaussianTypeECP(Potential):
         self.ns_valence, self.loc_params, self.nl_params = (
             parse_gaussian_type_ecp_params(charges, ecp_type, ecp_mask)
         )
+        # Coulomb attraction to all nuclei with their effective charges
+        self.coulomb = NuclearCoulombPotential(self.ns_valence)
         # to filter out masked nuclei:
         self.nuc_with_nl_pot = jnp.unique(jnp.nonzero(self.nl_params)[0])
 
@@ -161,9 +163,15 @@ class GaussianTypeECP(Potential):
         ]
 
     def local_potential(self, phys_conf: PhysicalConfiguration) -> Energy:
+        return self.coulomb.local_potential(phys_conf) + self.core_potential(phys_conf)
+
+    def core_potential(self, phys_conf: PhysicalConfiguration) -> Energy:
+        r"""Compute the local ECP correction to the effective Coulomb potential.
+
+        Only the nuclei with an ECP contribute. The full local potential is the sum of
+        this term and the effective Coulomb attraction to all nuclei.
+        """
         dists = pairwise_distance(phys_conf.r, phys_conf.R)
-        Z_eff = self.ns_valence  # effective charge of the nuclei
-        effective_coulomb_potential = -(Z_eff / dists).sum(axis=(-1, -2))
         idxs = self.ecp_mask  # indices of atoms for whom we use ECP
 
         r_en = dists[:, idxs]  # electron-nucleus distances for all the particles
@@ -188,11 +196,7 @@ class GaussianTypeECP(Potential):
         # - individual cores in the molecule (idxs dimension)
         # - individual electrons (1st dimension of 'dists')
         # - potentially over different coeffs for the term of the same type (ccECP case)
-        effective_core_potential = (coulomb_term + const_term + linear_term).sum(
-            axis=(-1, -2, -3)
-        )
-
-        return effective_coulomb_potential + effective_core_potential
+        return (coulomb_term + const_term + linear_term).sum(axis=(-1, -2, -3))
 
     def closest_electrons(self, dists: jax.Array) -> jax.Array:
         r"""Return the indices of the electrons contributing to a non-local term.

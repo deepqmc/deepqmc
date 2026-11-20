@@ -11,7 +11,7 @@ import numpy as np
 import deepqmc
 
 from ..geom import pairwise_distance
-from ..physics import LaplacianFactory, Potential
+from ..physics import LaplacianFactory, NuclearCoulombPotential, Potential
 from ..types import Energy, PhysicalConfiguration, WaveFunction
 
 # default suffix per OPH23 selection from [Ichibha23]
@@ -176,23 +176,26 @@ class PseudoHamiltonian(Potential):
         self.ns_valence, self.a, self.rV_loc, self.rV_L2 = load_PH_functions(
             charges, ecp_mask, ph_file_suffix
         )
+        # Coulomb attraction to all nuclei with their effective charges
+        self.coulomb = NuclearCoulombPotential(self.ns_valence)
 
     def local_potential(self, phys_conf: PhysicalConfiguration) -> Energy:
         """Computes the zeroth-order local PseudoHamiltonian term."""
+        return self.coulomb.local_potential(phys_conf) + self.core_potential(phys_conf)
+
+    def core_potential(self, phys_conf: PhysicalConfiguration) -> Energy:
+        r"""Compute the local PH correction to the effective Coulomb potential.
+
+        Only the nuclei with a PH contribute. The full local potential is the sum of
+        this term and the effective Coulomb attraction to all nuclei.
+        """
         dists = pairwise_distance(
             phys_conf.r, phys_conf.R
         )  # |r - R|, shape = (N_el, N_nuc)
-        Z_eff = self.ns_valence  # effective nuclear charge
-        V_Coul_eff = -(Z_eff / dists).sum(
-            axis=(-1, -2)
-        )  # effective Coulomb repulsion, summed for all nuclei
-
         dists_PH = dists[:, self.ecp_mask]  # (N_el, N_nuc_ph,)
         rVph_loc = apply_functions_to_columns(self.rV_loc, dists_PH)
         Vph_loc = rVph_loc / dists_PH  # (N_el, N_nuc_ph,)
-        Vph_loc = Vph_loc.sum(axis=(-2, -1))  # Sum over all electrons & nuclei
-
-        return V_Coul_eff + Vph_loc
+        return Vph_loc.sum(axis=(-2, -1))  # Sum over all electrons & nuclei
 
     def compute_coefficients_of_differential_operators(
         self, phys_conf: PhysicalConfiguration
