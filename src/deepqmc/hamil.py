@@ -153,7 +153,6 @@ class MolecularHamiltonian(Hamiltonian):
     """
 
     mol: Molecule
-    ecp_type: Optional[Union[str, Mapping[Union[str, int], str]]]
     ecp_types: list[Optional[str]]
     ecp_mask: jax.Array
     elec_std: float
@@ -177,7 +176,6 @@ class MolecularHamiltonian(Hamiltonian):
     ):
         self.mol = mol
         self.elec_std = elec_std
-        self.ecp_type = ecp_type
         self.ecp_types = per_nucleus_ecp_types(mol.charges, ecp_type, ecp_mask)
 
         ph_mask = jnp.array([t is not None and 'PH' in str(t) for t in self.ecp_types])

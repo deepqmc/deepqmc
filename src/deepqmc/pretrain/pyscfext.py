@@ -29,38 +29,39 @@ def filter_string(string: str):
 
 
 def extend_basis(hamil: MolecularHamiltonian, basis: str) -> Mapping[int, str]:
-    """Takes a basis set string and checks for compatibility with ECPs."""
-    basis_dict = {}
+    """Takes a basis set string and checks for compatibility with ECPs.
+
+    For each element with an ECP, the ECP variant of the basis set is used if pyscf
+    provides it. PseudoHamiltonians are pretrained against the ccECP target.
+    """
     if any(hamil.ecp_mask):
-        assert hamil.ecp_type is not None
-
-        ecp_type = filter_string(hamil.ecp_type)
-        if ecp_type.startswith('ph'):
-            ecp_type = 'ccecp'
-            log.info(
-                'PH is enabled. Trying to find ccECP variant of pretraining basis.'
-            )
-
         basis = filter_string(basis)
-        ecp_basis = ecp_type + basis
-        if ecp_basis in PYSCF_BASIS_SETS.keys():
-            basis_dict = {
-                int(c): ecp_basis if m else basis
-                for c, m in zip(hamil.mol.charges, hamil.ecp_mask)
-            }
-            log.info(f'{ecp_basis} employed for atoms with effective core potential')
-        else:
-            log.warning(
-                f'No ecp variant of {basis} basis found, but ecps are used. This may'
-                ' lead to an inaccurate pretraining target. Consider manually'
-                ' specifying a basis set for each atom.'
-            )
+    basis_dict = {}
+    ecp_types = {int(c): t for c, t in zip(hamil.mol.charges, hamil.ecp_types)}
+    for charge, ecp_type in ecp_types.items():
+        element_basis = basis
+        if ecp_type is not None:
+            ecp_type = filter_string(ecp_type)
+            if ecp_type.startswith('ph'):
+                ecp_type = 'ccecp'
+            ecp_basis = ecp_type + basis
+            if ecp_basis in PYSCF_BASIS_SETS.keys():
+                element_basis = ecp_basis
+            else:
+                log.warning(
+                    f'No ecp variant of {basis} basis found for'
+                    f' {ELEMENTS[charge]}, but an ecp is used. This may lead to an'
+                    ' inaccurate pretraining target. Consider manually specifying'
+                    ' a basis set for each atom.'
+                )
+        if element_basis != basis:
+            log.info(f'{element_basis} employed for {ELEMENTS[charge]}')
+        basis_dict[charge] = element_basis
     if any(~hamil.ecp_mask) and ('ecp' in basis or 'bfd' in basis):
         log.warning(
             f'Using the {basis} for atoms without ECP may result in'
             ' inaccurate pretraining target.'
         )
-    basis_dict = basis_dict or {int(c): basis for c in hamil.mol.charges}
     return basis_dict
 
 
