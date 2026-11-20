@@ -184,4 +184,8 @@ DeepQMC currently supports ``bfd`` [Burkatzki07]_ and ``ccECP`` [Bennett17]_ pse
     )
     H = MolecularHamiltonian(mol=mol, ecp_type='ccECP', ecp_mask=[True,False], elec_std=0.1)
 
+Alternatively, ``ecp_type`` can map elements (symbols or atomic numbers) to pseudopotential types. Elements not in the mapping are treated with all electrons. This also allows combining a pseudo Hamiltonian with a Gaussian-type pseudopotential, e.g. for an iron oxide with a pseudo Hamiltonian on iron and ccECP on oxygen::
+
+    H = MolecularHamiltonian(mol=mol, ecp_type={'Fe': 'PHcc', 'O': 'ccECP'})
+
 Systems containing heavier atoms sometimes tend to produce NaN errors. To avoid these issues, it was found useful to use a smaller variance for the initial distribution of electrons around the nuclei (via the ``elec_std`` argument) and a larger decorrelation length for sampling.

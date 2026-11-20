@@ -46,7 +46,6 @@ class CompositePotential(Potential):
         ), 'A nucleus cannot have both a Gaussian-type ECP and a pseudo Hamiltonian.'
         self.gaussian_type_ecp = gaussian_type_ecp
         self.pseudo_hamiltonian = pseudo_hamiltonian
-        self.ecp_mask = gaussian_type_ecp.ecp_mask | pseudo_hamiltonian.ecp_mask
         # each part holds the full nuclear charge for the nuclei outside its mask
         self.ns_valence = jnp.where(
             gaussian_type_ecp.ecp_mask,

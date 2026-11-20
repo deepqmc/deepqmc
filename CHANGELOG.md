@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+### Added
+
+- Per-element selection of pseudopotentials: `ecp_type` accepts a mapping from elements to pseudopotential types (e.g. `{Fe: PHcc, O: ccECP}`), which also allows combining pseudo-Hamiltonians with Gaussian-type effective core potentials in one molecule
+
+### Fixed
+
+- Restoring the PySCF checkpoints of runs with pseudo-Hamiltonians
+
 ## [1.3.0] - 2026-07-17
 
 ### Added

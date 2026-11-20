@@ -7,6 +7,9 @@ import numpy as np
 import optax
 import pytest
 
+from deepqmc.hamil import MolecularHamiltonian
+from deepqmc.molecule import Molecule
+from deepqmc.pretrain.pyscfext import compute_scf_solution, extend_basis
 from deepqmc.types import PhysicalConfiguration
 
 pretraining = importlib.import_module('deepqmc.pretrain.pretraining')
@@ -92,3 +95,44 @@ def test_pretrain_sampler_state(monkeypatch, check_cache, merge_params, expected
     np.testing.assert_allclose(
         [np.asarray(row[2]).mean() for row in rows], expected, rtol=1e-5
     )
+
+
+CLF = Molecule(
+    coords=[[0.0, 0.0, 0.0], [3.08, 0.0, 0.0]],
+    charges=[17, 9],
+    charge=0,
+    spin=0,
+    unit='bohr',
+)
+
+
+@pytest.mark.parametrize(
+    'ecp_type,basis,expected',
+    [
+        (None, 'cc-pVDZ', {17: 'cc-pVDZ', 9: 'cc-pVDZ'}),
+        ({'Cl': 'PHcc'}, 'cc-pVDZ', {17: 'ccecpccpvdz', 9: 'ccpvdz'}),
+        (
+            {'Cl': 'PHcc', 'F': 'ccECP'},
+            'cc-pVDZ',
+            {17: 'ccecpccpvdz', 9: 'ccecpccpvdz'},
+        ),
+        ({'Cl': 'PHcc', 'F': 'bfd'}, 'vdz', {17: 'vdz', 9: 'bfdvdz'}),
+    ],
+    ids=['all-electron', 'ph', 'ph+ccecp', 'no-ccecp-variant'],
+)
+def test_extend_basis(ecp_type, basis, expected):
+    hamil = MolecularHamiltonian(mol=CLF, ecp_type=ecp_type)
+    assert extend_basis(hamil, basis) == expected
+
+
+@pytest.mark.parametrize(
+    'ecp_type',
+    ['ccECP', {'Cl': 'PHcc'}, {'Cl': 'PHcc', 'F': 'ccECP'}],
+    ids=['ccecp', 'ph', 'ph+ccecp'],
+)
+def test_restore_scf_solution(tmp_path, ecp_type):
+    hamil = MolecularHamiltonian(mol=CLF, ecp_type=ecp_type)
+    kwargs = {'basis': 'cc-pVDZ', 'workdir': str(tmp_path)}
+    dataset = compute_scf_solution(CLF, hamil, 1, **kwargs)
+    restored = compute_scf_solution(CLF, hamil, 1, **kwargs)
+    assert np.allclose(dataset['mo_coeffs'], restored['mo_coeffs'])

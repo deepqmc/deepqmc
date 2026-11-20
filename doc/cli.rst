@@ -115,6 +115,10 @@ For the pseudohamiltonians use `ecp_type=PH`::
 
         $ deepqmc hamil/mol='Fe' +hamil.ecp_type='PH'
 
+To choose the pseudopotential per element, pass a mapping from elements to types. Elements not listed are treated with all electrons, and pseudopotentials and pseudohamiltonians can be combined this way::
+
+        $ deepqmc hamil/mol=from_file hamil.mol.file=FeO4.yaml '+hamil.ecp_type={Fe:PHcc,O:ccECP}'
+
 DeepQMC supports the Gaussian-type pseudopotentials from PySCF as well and provides pseudohamiltonians for S, Cr, Mn, Fe, Co, Ni, Cu and Zn.
 
 Furthermore, DeepQMC uses the `folx <https://github.com/microsoft/folx>`_ package to utilize the forward laplacian framework [Li24]_.
