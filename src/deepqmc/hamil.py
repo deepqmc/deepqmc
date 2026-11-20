@@ -178,11 +178,11 @@ class MolecularHamiltonian(Hamiltonian):
         self.elec_std = elec_std
         self.ecp_types = per_nucleus_ecp_types(mol.charges, ecp_type, ecp_mask)
 
-        ph_mask = jnp.array([t is not None and 'PH' in str(t) for t in self.ecp_types])
-        self.ecp_mask = jnp.array([t is not None for t in self.ecp_types])
-        gto_mask = self.ecp_mask & ~ph_mask
-        ph_types = {t for t, m in zip(self.ecp_types, ph_mask) if m}
-        gto_types = {t for t, m in zip(self.ecp_types, gto_mask) if m}
+        ph_types = {t for t in self.ecp_types if t is not None and 'PH' in t}
+        gto_types = {t for t in self.ecp_types if t is not None and 'PH' not in t}
+        ph_mask = jnp.array([t in ph_types for t in self.ecp_types])
+        gto_mask = jnp.array([t in gto_types for t in self.ecp_types])
+        self.ecp_mask = ph_mask | gto_mask
         assert len(ph_types) <= 1, f'Only one PseudoHamiltonian type, got {ph_types}.'
         assert len(gto_types) <= 1, f'Only one Gaussian-type ECP, got {gto_types}.'
 
